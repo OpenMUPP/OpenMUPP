@@ -58,9 +58,7 @@ The libraries are Git submodules in `dependencies/`:
 
 - `libArT`: core library (streams, logging, USB device stack).
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. The `dev` branch has the STM32F1 support.
-- `libart-stm32`: STM32 adapters for libArT.
-  The build configures it, but does not compile or link it yet.
-  The reason is that it does not build for STM32F1 (embedded-libraries/libart-stm32#14).
+- `libart-stm32`: STM32 adapters for libArT. The `dev` branch has the STM32F1 support.
 
 Clone with the submodules:
 

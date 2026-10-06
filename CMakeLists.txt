@@ -123,11 +123,8 @@ if (CMAKE_CROSSCOMPILING)
     if (NOT TARGET system-stm32)
         add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32")
     endif ()
-    # libart-stm32 does not build for STM32F1 yet (embedded-libraries/libart-stm32#14).
-    # Configure it, but keep it out of the default build and do not link it
-    # until that issue is closed.
     if (NOT TARGET art::stm32)
-        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libart-stm32" EXCLUDE_FROM_ALL)
+        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libart-stm32")
     endif ()
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
@@ -152,7 +149,7 @@ if (CMAKE_CROSSCOMPILING)
     set_target_properties(versaloon-next-gen.elf PROPERTIES LINK_DEPENDS
             "${PROJECT_SOURCE_DIR}/ldscripts/${VSL_MEMORY_LDSCRIPT};${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld")
     target_include_directories(versaloon-next-gen.elf PUBLIC ${PROJECT_INCLUDE_DIRS})
-    target_link_libraries(versaloon-next-gen.elf PUBLIC art::core system-stm32)
+    target_link_libraries(versaloon-next-gen.elf PUBLIC art::core art::stm32 system-stm32)
 
     ADD_DUMP_TARGET(versaloon-next-gen.elf)
     PRINT_SIZE_OF_TARGETS(versaloon-next-gen.elf)
