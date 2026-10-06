@@ -19,6 +19,31 @@ All boards use an STM32F103x8 or STM32F103xB.
 CMSIS has one device define (`STM32F103xB`) for both parts.
 The build sets `SYSTEM_STM32_HSE_VALUE` of system-stm32 from the board crystal.
 
+### Board definitions
+
+Each board has one `constexpr` board definition in `src/board/boards/`.
+The board definition holds all board-specific data:
+
+- The pin map: JTAG and SWD, UART, Vref sense, power switch, LEDs, key and USB pull-up.
+- The crystal frequency.
+- The JTAG fast path. It is only available when the board links TCK (PB13) to PB3.
+- The hardware ID that `VERSALOON_GET_HARDWARE` returns.
+
+`src/board/BoardDefinition.h` defines the types. It does not use CMSIS, so the host unit tests check all boards.
+CMake defines `VSL_BOARD_<BOARD>` (for example `VSL_BOARD_MINI`), and `src/board/Board.h` selects `board::current` from it.
+The protocol and the engines read board data only through `board::current`.
+`src/board/BoardPins.h` maps a board pin to the system-stm32 `GpioPin` and `FastPin` drivers.
+
+The build fails when a board definition is not valid.
+Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
+
+To add a board:
+
+1. Add a header with the board definition in `src/board/boards/`.
+2. Add the board to `src/board/Board.h`.
+3. Add the board and its crystal to `VSL_BOARDS` and `SYSTEM_STM32_HSE_VALUE` in `CMakeLists.txt`.
+4. Add a build job to `.gitlab-ci.yml` and a test to `tests/TestBoards.cpp`.
+
 ## Dependencies
 
 The libraries are Git submodules in `dependencies/`:

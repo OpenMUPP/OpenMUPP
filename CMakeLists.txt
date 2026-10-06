@@ -88,7 +88,8 @@ if (CMAKE_CROSSCOMPILING)
     set(STM32_DEVICE "STM32F103xB" CACHE STRING "STM32 device define for CMSIS" FORCE)
     # system-stm32 gives HSE_VALUE to the CMSIS SystemCoreClockUpdate() and the
     # Rcc clock recipes. With a wrong value the core clock and the ADC clock
-    # are computed wrong.
+    # are computed wrong. src/board/BoardChecks.cpp checks that this value is
+    # the crystal of the board definition.
     if (BOARD STREQUAL "stlinkv2")
         set(SYSTEM_STM32_HSE_VALUE "8000000" CACHE STRING "HSE crystal frequency in Hz" FORCE)
     else ()
@@ -101,7 +102,9 @@ if (CMAKE_CROSSCOMPILING)
         set(VSL_MEMORY_LDSCRIPT mem-f103.ld)
     endif ()
 
-    set(PROJECT_DEFINES BOARD_NAME="${BOARD}")
+    # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
+    string(TOUPPER "${BOARD}" BOARD_UPPER)
+    set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER})
     set(CXX_OPTIONS -fno-exceptions -fno-rtti -fno-use-cxa-atexit -Wno-volatile)
     set(COMMON_OPTIONS -Os -ffunction-sections -fdata-sections -g -fno-common -fmessage-length=0 -fsigned-char -Werror=odr --specs=nano.specs --specs=nosys.specs)
     set(C_OPTIONS -std=gnu11)
