@@ -21,13 +21,19 @@ add_executable(vsl-tests
         TestBoards.cpp
         TestHeartbeat.cpp
         TestUsbDescriptors.cpp
+        TestUsbEnumeration.cpp
+        ../src/usb/VersaloonFunction.cpp
+        # USB device stack of libArT (no ETL needed), for the enumeration test
+        ../dependencies/libArT/src/usb/Device.cpp
+        ../dependencies/libArT/src/usb/VendorBulkFunction.cpp
 )
 
 target_compile_options(vsl-tests PRIVATE -O0 -g -Wall -Wextra)
 target_include_directories(vsl-tests PRIVATE
         ../src
         ${PROJECT_BINARY_DIR}                 # Version.h
-        ../dependencies/libArT/src            # USB descriptor builder (header-only)
+        ../dependencies/libArT/src            # USB device stack
+        ../dependencies/libArT/tests/usb      # FakeDeviceController.h
 )
 target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING)
 target_link_libraries(vsl-tests PRIVATE doctest::doctest)
