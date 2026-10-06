@@ -123,6 +123,7 @@ A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
 Interface 0 is a placeholder in the current firmware.
 It sends each OUT packet back without change, with the same size (`src/usb/VersaloonFunction.cpp`).
 The Versaloon command protocol replaces this echo in a later version.
+The only exception is the command `VERSALOON_FW_UPDATE` (see [Firmware update](#firmware-update)).
 
 The serial port is the [UART bridge](#uart-bridge).
 In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](#debug-log-over-the-serial-port)).
@@ -257,6 +258,59 @@ python3 -m unittest discover -s tools -p "test_*.py"
 
 Status: the host tests pass. The test on a Mini and an OtherUse is not done yet.
 
+## Firmware update
+
+The firmware runs behind `versaloon-bootloader`.
+The bootloader is a USB CDC serial port with the ID `0483:5740`.
+It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
+
+### Start the bootloader
+
+Use one of these methods:
+
+- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`.
+- Hold the key (PB9) down and reset the board.
+
+The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
+
+| Status | Meaning |
+|---|---|
+| `0x00` | Accepted. The firmware starts the bootloader. |
+| `0x01` | Refused. The second byte is not the key `0xAA`, or the firmware is linked without the bootloader (`VSL_BOOTLOADER=OFF`). The firmware continues to run. |
+
+After the reply, the firmware does these steps:
+
+1. It waits 10 ms, so the host can read the reply. The firmware does not wait for the host to read the reply.
+2. It enables the `PWR` and `BKP` clocks and the write access to the backup domain.
+3. It writes the boot request `0xB007` to the backup register `BKP->DR1`.
+4. It resets the MCU with `NVIC_SystemReset()`. The host sees a USB disconnect.
+
+After the reset, the bootloader finds the boot request, clears it and stays in bootloader mode.
+The next reset starts the firmware again.
+`src/boot/BootloaderEntry.h` and `src/boot/Bootloader.cpp` have the code.
+
+### Write the firmware
+
+1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` with the ID `0483:5740` shows.
+2. Write the `.bin` file of a build with `VSL_BOOTLOADER=ON` at `0x08002800`:
+
+   ```sh
+   stm32flash -w versaloon-next-gen.bin -v -S 0x08002800 /dev/ttyACM0
+   ```
+
+3. Reset the board, or disconnect it and connect it again. The firmware starts.
+
+Do not write a build with `VSL_BOOTLOADER=OFF` through the bootloader.
+That build is linked at `0x08000000`, so it does not start at `0x08002800`.
+
+### Start-up behind the bootloader
+
+The bootloader starts the firmware after a system reset.
+Thus all peripherals are in their reset state when the firmware starts.
+The bootloader sets `VTOR` to the firmware vector table at `0x08002800`.
+The system-stm32 start-up code sets `VTOR` again from the linker script.
+The firmware initializes its DATA and BSS sections. It does not use RAM content from the bootloader.
+
 ## Dependencies
 
 The libraries are Git submodules in `dependencies/`:
@@ -306,7 +360,7 @@ The CMake options are:
 | Option | Default | Description |
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
-| `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. |
+| `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. The firmware then refuses `VERSALOON_FW_UPDATE`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [Board definitions](#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [Debug log](#debug-log-over-the-serial-port)). Not allowed in a `Release` build. |
@@ -329,7 +383,7 @@ The link fails when less than the full main stack is free.
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink and the line coding map of the UART bridge.
+They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink, the line coding map of the UART bridge and the bootloader entry.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 The UART bridge tests run the bridge with the CDC-ACM function of libArT, the fake USB controller and a fake UART.
 Configure without the toolchain file:
