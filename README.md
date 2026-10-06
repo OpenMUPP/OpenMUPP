@@ -5,7 +5,8 @@ The firmware is compatible with the original Versaloon USB protocol, so unmodifi
 It also has a USB-CDC (Communication Device Class) serial port, which is bridged to a UART.
 
 The project is at an early stage. The current firmware sets up the board, shows a heartbeat on an LED and enumerates as a USB composite device.
-The Versaloon protocol and the UART bridge are not available yet (see [USB device](#usb-device)).
+It bridges the serial port to the UART (see [UART bridge](#uart-bridge)).
+The Versaloon protocol is not available yet (see [USB device](#usb-device)).
 See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
 ## Boards
@@ -75,7 +76,7 @@ This function does these steps:
 The JTAG, SWD, UART and Vref pins stay inputs until their drivers configure them.
 
 `main()` starts the USB device when the clock comes from the crystal (see [USB device](#usb-device)).
-The main loop runs the USB device. It shows a heartbeat on the state LED:
+The main loop runs the USB device and the UART bridge. It shows a heartbeat on the state LED:
 
 | State LED | Meaning |
 |---|---|
@@ -119,13 +120,12 @@ The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
 A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
 
-The current firmware has placeholders for the two functions:
+Interface 0 is a placeholder in the current firmware.
+It sends each OUT packet back without change, with the same size (`src/usb/VersaloonFunction.cpp`).
+The Versaloon command protocol replaces this echo in a later version.
 
-- Interface 0 sends each OUT packet back without change, with the same size (`src/usb/VersaloonFunction.cpp`).
-  The Versaloon command protocol replaces this echo in a later version.
-- The serial port sends the received data back.
-  The UART bridge replaces this loopback in a later version.
-  In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](#debug-log-over-the-serial-port)).
+The serial port is the [UART bridge](#uart-bridge).
+In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](#debug-log-over-the-serial-port)).
 
 ### Check the enumeration
 
@@ -136,7 +136,7 @@ On Linux:
 
 1. Run `lsusb -v -d 0483:a038`. Make sure that the output shows the interfaces and endpoints of the tables above, and the IAD.
 2. Make sure that the kernel log (`dmesg`) shows a new `/dev/ttyACM*` port.
-3. Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
+3. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini). Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
 4. Run OpenOCD with `-f interface/vsllink.cfg`. OpenOCD finds the device, but fails at the protocol, because the protocol is not available yet.
 
 On Windows 10 or later:
@@ -144,6 +144,49 @@ On Windows 10 or later:
 1. Make sure that the Device Manager shows a new COM port under "Ports (COM & LPT)", with the built-in CDC driver (`usbser.sys`).
 2. Make sure that interface 0 shows as a separate device ("Versaloon").
    OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
+
+### UART bridge
+
+The serial port (interfaces 1 and 2) is a USB-to-UART bridge.
+It uses the UART of the board definition: USART1 on PA9 (TX) and PA10 (RX) on the Mini and the OtherUse.
+The UART has no flow control lines.
+
+- `src/uart/UartBridge.h` moves the data between the serial port and two ring buffers of 1 KB each.
+  This code does not use the hardware, so the host unit tests check it.
+- `src/uart/UartPort.cpp` runs the USART with interrupts. The interrupt fills the RX ring buffer and empties the TX ring buffer.
+  Thus the serial port does not lose data when the main loop is busy for a long time.
+  A ring buffer holds about 89 ms of data at 115200 baud.
+- `src/uart/SerialBridge.cpp` connects the two parts. The main loop runs the bridge after the USB device.
+
+The bridge uses the line coding that the host sets (SET_LINE_CODING).
+`src/uart/FrameFormat.h` maps it to the UART:
+
+| Data bits | Parity | Stop bits |
+|---|---|---|
+| 8 | none, odd or even | 1, 1.5 or 2 |
+| 7 | odd or even | 1, 1.5 or 2 |
+
+- The baud rate must be in the range of the baud rate generator. For USART1 at 72 MHz, this is 1099 baud to 4.5 Mbaud.
+- The real baud rate must be within 2 % of the requested baud rate. Above 2.88 Mbaud, only some baud rates are in this limit.
+- The bridge refuses all other line codings: 5, 6 or 16 data bits, 7 data bits without parity, and mark or space parity.
+  The device then stalls the request, and the UART keeps its old line coding.
+- Until the host sets a line coding, the UART uses 115200 baud, 8 data bits, no parity and 1 stop bit (8N1).
+- A new line coding takes effect after the UART has sent all data that the host sent before the change.
+
+Flow control and data loss:
+
+- Host to UART: when the TX ring buffer is full, the bridge reads no more data from the serial port.
+  The USB OUT endpoint then sends NAK, and the host waits. No data is lost.
+- UART to host: when the RX ring buffer is full, the interrupt drops the new bytes.
+  The bridge counts the dropped bytes (`UartBridge::rxDropped()`).
+- The bridge also counts the bytes that the UART lost in an overrun (`UartBridge::rxOverruns()`).
+  An overrun occurs when the interrupt reads a byte too late, for example at very high baud rates.
+- The bridge counts the received bytes with a framing, noise or parity error (`UartBridge::rxErrors()`).
+  These bytes still go to the host. Many errors usually show a wrong baud rate or parity setting.
+- When the host has not configured the device, the bridge drops the received UART data.
+
+The bridge stores the DTR and RTS state of the host. It does not drive a pin with this state.
+It does not support SEND_BREAK: the device stalls this request.
 
 ### Debug log over the serial port
 
@@ -193,7 +236,7 @@ The build also needs:
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
-- Internet access at configure time: CMake FetchContent downloads CMSIS and doctest.
+- Internet access at configure time: CMake FetchContent downloads CMSIS, ETL and doctest.
 
 ## Build the firmware
 
@@ -243,8 +286,9 @@ The link fails when less than the full main stack is free.
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the heartbeat, the version, the USB descriptors and the log sink.
+They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink and the line coding map of the UART bridge.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
+The UART bridge tests run the bridge with the CDC-ACM function of libArT, the fake USB controller and a fake UART.
 Configure without the toolchain file:
 
 ```sh

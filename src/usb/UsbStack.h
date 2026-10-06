@@ -55,9 +55,6 @@ class UsbStack {
 
    static void setPullUp(void *context, bool enable);
 
-   // Placeholder until the UART bridge: sends the received data back.
-   void loopBackSerialPort();
-
    // VSL_DEBUG_CDC: the CDC port carries the log, so received data is
    // dropped.
    void discardSerialInput();
