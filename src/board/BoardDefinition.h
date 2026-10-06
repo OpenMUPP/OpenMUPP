@@ -31,6 +31,11 @@ struct Signal {
    Pin pin;
    Active active;
 
+   // Pin level (true: high) for the asserted or the released signal.
+   [[nodiscard]] constexpr bool levelFor(bool asserted) const {
+      return (active == Active::High) == asserted;
+   }
+
    constexpr bool operator==(const Signal &) const = default;
 };
 
