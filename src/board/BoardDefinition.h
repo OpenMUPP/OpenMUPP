@@ -61,13 +61,38 @@ struct Uart {
    Pin rx;
 };
 
-// Target voltage (Vref) sense on an external ADC channel (0-15):
-// Vref = ADC input voltage * divider.
+// Target voltage (Vref) sense: Vref = ADC input voltage * divider.
+// The pin must have an ADC channel (see adcChannelOf()).
 struct VrefSense {
    Pin pin;
-   uint8_t adcChannel;
    uint8_t divider;
 };
+
+// ADC1/ADC2 input channel of a pin on the STM32F103 (RM0008 11.3.1):
+// PA0-PA7 are channels 0-7, PB0-PB1 are 8-9 and PC0-PC5 are 10-15.
+// Empty when the pin has no ADC input.
+constexpr std::optional<uint8_t> adcChannelOf(Pin pin) {
+   switch(pin.port) {
+   case Port::A:
+      if(pin.number <= 7) {
+         return pin.number;
+      }
+      break;
+   case Port::B:
+      if(pin.number <= 1) {
+         return static_cast<uint8_t>(8 + pin.number);
+      }
+      break;
+   case Port::C:
+      if(pin.number <= 5) {
+         return static_cast<uint8_t>(10 + pin.number);
+      }
+      break;
+   case Port::D:
+      break;
+   }
+   return std::nullopt;
+}
 
 // Target power switch. Drive the pin to the active level to switch on.
 // To switch off, the pin floats (input).
@@ -148,7 +173,8 @@ constexpr std::array<std::optional<Pin>, 18> allPins(const Definition &def) {
 } // namespace detail
 
 // True when the pins of the definition are valid: pin numbers 0-15, no pin
-// used twice (TMS out and in can be one pin), no reserved pin, and the fixed fast
+// used twice (TMS out and in can be one pin), no reserved pin, a Vref pin
+// with an ADC channel, and the fixed fast
 // path pins when the board has the JTAG fast path. Each board header checks
 // its definition with a static_assert.
 constexpr bool isValid(const Definition &def) {
@@ -178,7 +204,7 @@ constexpr bool isValid(const Definition &def) {
          return false;
       }
    }
-   if(def.vref && (def.vref->adcChannel > 15 || def.vref->divider == 0)) {
+   if(def.vref && (!adcChannelOf(def.vref->pin) || def.vref->divider == 0)) {
       return false;
    }
    return def.hseFrequency >= 4'000'000 && def.hseFrequency <= 16'000'000;

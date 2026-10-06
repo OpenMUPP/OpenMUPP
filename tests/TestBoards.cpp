@@ -36,7 +36,7 @@ TEST_CASE("Versaloon Mini board definition has the documented pins") {
 
    REQUIRE(mini.vref);
    CHECK(mini.vref->pin == Pin{ Port::B, 0 });
-   CHECK(mini.vref->adcChannel == 8);
+   CHECK(board::adcChannelOf(mini.vref->pin) == 8);
    CHECK(mini.vref->divider == 2);
 
    REQUIRE(mini.powerSwitch);
@@ -132,14 +132,27 @@ TEST_CASE("isValid checks the JTAG fast path pins") {
    CHECK(board::isValid(def));
 }
 
-TEST_CASE("isValid checks the crystal and the Vref ADC channel") {
+TEST_CASE("adcChannelOf gives the STM32F103 ADC channel of a pin") {
+   CHECK(board::adcChannelOf({ Port::A, 0 }) == 0);
+   CHECK(board::adcChannelOf({ Port::A, 7 }) == 7);
+   CHECK(board::adcChannelOf({ Port::B, 0 }) == 8);
+   CHECK(board::adcChannelOf({ Port::B, 1 }) == 9);
+   CHECK(board::adcChannelOf({ Port::C, 0 }) == 10);
+   CHECK(board::adcChannelOf({ Port::C, 5 }) == 15);
+   CHECK_FALSE(board::adcChannelOf({ Port::A, 8 }));
+   CHECK_FALSE(board::adcChannelOf({ Port::B, 2 }));
+   CHECK_FALSE(board::adcChannelOf({ Port::C, 6 }));
+   CHECK_FALSE(board::adcChannelOf({ Port::D, 0 }));
+}
+
+TEST_CASE("isValid checks the crystal and the Vref pin") {
    Definition def = board::mini;
 
    SUBCASE("crystal too fast") {
       def.hseFrequency = 25'000'000;
    }
-   SUBCASE("internal ADC channel") {
-      def.vref->adcChannel = 16;
+   SUBCASE("Vref pin without an ADC channel") {
+      def.vref->pin = Pin{ Port::A, 8 };
    }
    SUBCASE("no divider") {
       def.vref->divider = 0;

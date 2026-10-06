@@ -28,7 +28,7 @@ inline constexpr Definition stLinkV2{
    },
    .jtagFastPath = std::nullopt,
    .uart = Uart{ .usart = 2, .tx{ Port::A, 2 }, .rx{ Port::A, 3 } },
-   .vref = VrefSense{ .pin{ Port::A, 0 }, .adcChannel = 0, .divider = 2 },
+   .vref = VrefSense{ .pin{ Port::A, 0 }, .divider = 2 },
    .powerSwitch = std::nullopt,
    .leds{
    .power = std::nullopt,

@@ -23,7 +23,7 @@ inline constexpr Definition mini{
    },
    .jtagFastPath = JtagFastPath{ .tckLink{ Port::B, 3 } },
    .uart = Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } },
-   .vref = VrefSense{ .pin{ Port::B, 0 }, .adcChannel = 8, .divider = 2 },
+   .vref = VrefSense{ .pin{ Port::B, 0 }, .divider = 2 },
    .powerSwitch = PowerSwitch{ .pin{ Port::B, 8 }, .on = Active::Low },
    .leds{
    .power = Signal{ { Port::A, 15 }, Active::Low },
