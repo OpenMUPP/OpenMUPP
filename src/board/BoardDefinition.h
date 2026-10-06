@@ -95,6 +95,8 @@ struct Definition {
    std::optional<Signal> key;
    // Software-controlled USB D+ pull-up. Empty: the pull-up is fixed.
    std::optional<Signal> usbPullUp;
+   // Add each new pin field to detail::allPins() too, else isValid() does
+   // not check it.
 
    [[nodiscard]] constexpr bool hasJtagFastPath() const {
       return jtagFastPath.has_value();
@@ -118,11 +120,13 @@ constexpr bool isValidPin(const Pin &pin) {
 }
 
 // All pins of a definition. Unused optional pins are empty.
-constexpr std::array<std::optional<Pin>, 17> allPins(const Definition &def) {
+constexpr std::array<std::optional<Pin>, 18> allPins(const Definition &def) {
    auto pinOf = [](const auto &opt) -> std::optional<Pin> { return opt ? std::optional<Pin>(opt->pin) : std::nullopt; };
    return { {
    def.debug.tck,
-   def.debug.tmsOut, // tmsIn is checked separately: it can be the same pin as tmsOut.
+   def.debug.tmsOut,
+   // tmsIn can be the same pin as tmsOut (one bidirectional SWDIO pin).
+   def.debug.tmsIn != def.debug.tmsOut ? std::optional<Pin>(def.debug.tmsIn) : std::nullopt,
    def.debug.tdi,
    def.debug.tdo,
    def.debug.trst,
@@ -144,7 +148,7 @@ constexpr std::array<std::optional<Pin>, 17> allPins(const Definition &def) {
 } // namespace detail
 
 // True when the pins of the definition are valid: pin numbers 0-15, no pin
-// used twice (except TMS out and in), no reserved pin, and the fixed fast
+// used twice (TMS out and in can be one pin), no reserved pin, and the fixed fast
 // path pins when the board has the JTAG fast path. Each board header checks
 // its definition with a static_assert.
 constexpr bool isValid(const Definition &def) {
@@ -166,13 +170,6 @@ constexpr bool isValid(const Definition &def) {
             return false;
          }
       }
-      // tmsIn may only share a pin with tmsOut.
-      if(*pins[i] == def.debug.tmsIn && *pins[i] != def.debug.tmsOut) {
-         return false;
-      }
-   }
-   if(!detail::isValidPin(def.debug.tmsIn)) {
-      return false;
    }
    if(def.jtagFastPath) {
       const auto &d = def.debug;

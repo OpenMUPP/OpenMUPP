@@ -100,6 +100,9 @@ TEST_CASE("isValid rejects pin conflicts") {
    SUBCASE("TMS input on another signal") {
       def.debug.tmsIn = def.debug.tdo;
    }
+   SUBCASE("TMS input on a USB data pin") {
+      def.debug.tmsIn = Pin{ Port::A, 11 };
+   }
    SUBCASE("USB data pin") {
       def.key = Signal{ { Port::A, 12 }, Active::Low };
    }
