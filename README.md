@@ -234,11 +234,18 @@ The default run tests all combinations of these settings:
 - Data bits and parity: 8N, 8E, 8O, 7E and 7O (the formats of the UART, see [UART bridge](#uart-bridge)).
 - Stop bits: 1, 1.5 and 2.
 
-The script prints PASS, FAIL or SKIP for each combination.
+The script prints PASS, FAIL, SKIP or ERROR for each combination.
 It exits with 0 when no combination fails and at least one passes.
-SKIP means that the host driver cannot set the combination. The Linux pyserial cannot set 1.5 stop bits.
+SKIP means that the host cannot make the combination.
+Only Windows can make 1.5 stop bits. On other hosts, pyserial sets 2 stop bits instead, so the script skips 1.5 there.
+ERROR means that the port failed, for example because the dongle reset or was unplugged. The script then stops.
 
-Useful options: `--bauds`, `--formats`, `--stop-bits`, `--size` (bytes for each combination) and `--repeat` (number of runs).
+The script also fails a combination when the data comes back faster than the baud rate allows.
+This finds a bridge that ignores the baud rate.
+A loopback cannot check the data bits and the parity, because TX and RX use the same setting.
+A second, reference serial adapter on the UART pins is necessary for that check.
+
+Useful options: `--bauds`, `--formats`, `--stop-bits`, `--size` (bytes for each combination, 1 or more) and `--repeat` (number of runs, 1 or more).
 To test the serial port during a long JTAG or SWD transfer, start the transfer with OpenOCD, and run the script with a large `--repeat` at the same time.
 Use `loop://` as the port to run the script without a dongle (pyserial loopback).
 
@@ -360,8 +367,8 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests.
-- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
+- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
 - `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
   The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files as artifacts.
 
