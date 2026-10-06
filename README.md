@@ -281,6 +281,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests.
 - `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
+- `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
   The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files as artifacts.
 
 ## Branches
