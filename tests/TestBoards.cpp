@@ -149,3 +149,24 @@ TEST_CASE("isValid checks the crystal and the Vref pin") {
 
    CHECK_FALSE(board::isValid(def));
 }
+
+TEST_CASE("swjConfig frees the debug port pins that the board uses") {
+   // PA14 (SWCLK) is the USB LED of the Mini and the OtherUse.
+   CHECK(board::swjConfig(board::mini) == board::SwjConfig::Disabled);
+   CHECK(board::swjConfig(board::otherUse) == board::SwjConfig::Disabled);
+   // The ST-Link/V2 uses no debug port pin.
+   CHECK(board::swjConfig(board::stLinkV2) == board::SwjConfig::Full);
+
+   Definition def = board::mini;
+   def.leds.usb.reset();
+   // PA15 (JTDI) is still the power LED, and PB3/PB4 are the fast path and TMS.
+   CHECK(board::swjConfig(def) == board::SwjConfig::NoJtag);
+
+   def = board::stLinkV2;
+   def.leds.power = Signal{ { Port::A, 13 }, Active::Low };
+   CHECK(board::swjConfig(def) == board::SwjConfig::Disabled);
+
+   def = board::stLinkV2;
+   def.key = Signal{ { Port::B, 3 }, Active::Low };
+   CHECK(board::swjConfig(def) == board::SwjConfig::NoJtag);
+}

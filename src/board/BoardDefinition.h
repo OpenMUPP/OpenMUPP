@@ -132,8 +132,8 @@ struct Definition {
    std::optional<Signal> key;
    // Software-controlled USB D+ pull-up. Empty: the pull-up is fixed.
    std::optional<Signal> usbPullUp;
-   // Add each new pin field to detail::allPins() too, else isValid() does
-   // not check it.
+   // Add each new pin field to detail::allPins() too, else isValid() and
+   // swjConfig() do not see it.
 
    [[nodiscard]] constexpr bool hasJtagFastPath() const {
       return jtagFastPath.has_value();
@@ -222,6 +222,37 @@ constexpr bool isValid(const Definition &def) {
       return false;
    }
    return def.hseFrequency >= 4'000'000 && def.hseFrequency <= 16'000'000;
+}
+
+// Serial wire JTAG (SWJ) debug port of the dongle MCU, as AFIO_MAPR.SWJ_CFG
+// sets it (RM0008 9.3.5). The JTAG-DP uses PA15 (JTDI), PB3 (JTDO) and PB4
+// (NJTRST); the SW-DP uses PA13 (SWDIO) and PA14 (SWCLK).
+enum class SwjConfig : uint8_t {
+   Full,    // JTAG-DP and SW-DP on
+   NoJtag,  // SW-DP only: frees PA15, PB3 and PB4
+   Disabled // no debug port: frees PA13 and PA14 too
+};
+
+// The SWJ configuration that frees all pins of the definition and keeps as
+// much of the debug port as possible.
+constexpr SwjConfig swjConfig(const Definition &def) {
+   constexpr std::array<Pin, 2> swdPins{ { { Port::A, 13 }, { Port::A, 14 } } };
+   constexpr std::array<Pin, 3> jtagOnlyPins{ { { Port::A, 15 }, { Port::B, 3 }, { Port::B, 4 } } };
+   bool usesJtagOnlyPin = false;
+   for(const auto &pin : detail::allPins(def)) {
+      if(!pin) {
+         continue;
+      }
+      for(const auto &swd : swdPins) {
+         if(*pin == swd) {
+            return SwjConfig::Disabled;
+         }
+      }
+      for(const auto &jtag : jtagOnlyPins) {
+         usesJtagOnlyPin = usesJtagOnlyPin || *pin == jtag;
+      }
+   }
+   return usesJtagOnlyPin ? SwjConfig::NoJtag : SwjConfig::Full;
 }
 
 } // namespace board

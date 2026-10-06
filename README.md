@@ -34,6 +34,14 @@ CMake defines `VSL_BOARD_<BOARD>` (for example `VSL_BOARD_MINI`), and `src/board
 The protocol and the engines read board data only through `board::current`.
 `src/board/BoardPins.h` maps a board pin to the system-stm32 `GpioPin` and `FastPin` drivers.
 
+Some functions come from the pin map, not from a separate field:
+
+- `board::adcChannelOf()` gives the ADC channel of the Vref pin.
+- `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
+  The setting frees all debug port pins that the board uses, and keeps the rest.
+  The Mini and the OtherUse use PA14 for an LED, so they disable the debug port.
+  The ST-Link/V2 keeps JTAG and SWD.
+
 The build fails when a board definition is not valid.
 Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
 
