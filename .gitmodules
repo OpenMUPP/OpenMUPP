@@ -1,0 +1,12 @@
+[submodule "dependencies/libArT"]
+	path = dependencies/libArT
+	url = ssh://git@gitlab.vandertogt.org:3022/embedded-libraries/libArT.git
+	branch = dev
+[submodule "dependencies/libart-stm32"]
+	path = dependencies/libart-stm32
+	url = ssh://git@gitlab.vandertogt.org:3022/embedded-libraries/libart-stm32.git
+	branch = dev
+[submodule "dependencies/system-stm32"]
+	path = dependencies/system-stm32
+	url = ssh://git@gitlab.vandertogt.org:3022/embedded-libraries/system-stm32.git
+	branch = dev
