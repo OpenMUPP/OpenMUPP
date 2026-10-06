@@ -42,6 +42,9 @@ Some functions come from the pin map, not from a separate field:
   The setting frees all debug port pins that the board uses, and keeps the rest.
   The Mini and the OtherUse use PA14 for an LED, so they disable the debug port.
   The ST-Link/V2 keeps JTAG and SWD.
+- `board::withSwd()` gives the board of a debug build with `VSL_DEBUG_SWD`.
+  It removes the LEDs on the SWD pins (PA13, PA14), so the debug port keeps SWD.
+  On the Mini and the OtherUse, the USB LED (PA14) is then not available.
 
 The build fails when a board definition is not valid.
 Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
@@ -61,6 +64,8 @@ This function does these steps:
 1. It sets the system clock to 72 MHz from the board crystal, and the SysTick to 1 ms.
 2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
    The Mini and the OtherUse disable the debug port. A debug probe can then connect only under reset.
+   With `VSL_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
+   Then a debug probe can run and step the firmware.
 3. It puts the board pins into a safe state:
    - All LEDs are off, but the power LED is on.
    - The USB pull-up is off, so the host does not see the device.
@@ -79,6 +84,7 @@ The main loop runs the USB device. It shows a heartbeat on the state LED:
 | On or off all the time | The main loop does not run. |
 
 The USB LED is on when the host has configured the USB device.
+A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
 
 ## USB device
 
@@ -216,6 +222,7 @@ The CMake options are:
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
 | `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
+| `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [Board definitions](#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [Debug log](#debug-log-over-the-serial-port)). Not allowed in a `Release` build. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
