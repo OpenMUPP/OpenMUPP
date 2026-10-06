@@ -33,6 +33,7 @@ add_executable(vsl-tests
         TestUsbEnumeration.cpp
         TestLogSink.cpp
         TestFrameFormat.cpp
+        TestUartBridge.cpp
         ../src/usb/VersaloonFunction.cpp
         # Logger and printf of libArT, for the log sink test
         ../dependencies/libArT/src/logging/LogManager.cpp
@@ -41,6 +42,8 @@ add_executable(vsl-tests
         # USB device stack of libArT (no ETL needed), for the enumeration test
         ../dependencies/libArT/src/usb/Device.cpp
         ../dependencies/libArT/src/usb/VendorBulkFunction.cpp
+        # CDC-ACM function of libArT, for the UART bridge test
+        ../dependencies/libArT/src/usb/CdcAcmFunction.cpp
 )
 
 target_compile_options(vsl-tests PRIVATE -O0 -g -Wall -Wextra)
