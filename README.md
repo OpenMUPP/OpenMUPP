@@ -179,6 +179,10 @@ Flow control and data loss:
   The USB OUT endpoint then sends NAK, and the host waits. No data is lost.
 - UART to host: when the RX ring buffer is full, the interrupt drops the new bytes.
   The bridge counts the dropped bytes (`UartBridge::rxDropped()`).
+- The bridge also counts the bytes that the UART lost in an overrun (`UartBridge::rxOverruns()`).
+  An overrun occurs when the interrupt reads a byte too late, for example at very high baud rates.
+- The bridge counts the received bytes with a framing, noise or parity error (`UartBridge::rxErrors()`).
+  These bytes still go to the host. Many errors usually show a wrong baud rate or parity setting.
 - When the host has not configured the device, the bridge drops the received UART data.
 
 The bridge stores the DTR and RTS state of the host. It does not drive a pin with this state.

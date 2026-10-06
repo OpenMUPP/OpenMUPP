@@ -127,10 +127,24 @@ void UartPort::startTx() {
 }
 
 void UartPort::handleInterrupt() {
-   // RXNE, and on USART v1 also an overrun (ORE) with RXNE set. The SR read
-   // here and the DR read in getData() clear both.
-   if(usart_.isRxRegisterNotEmpty()) {
-      buffers_.received(usart_.getData());
+   // One SR read for all receive flags. On USART v1 the receive interrupt
+   // fires for RXNE and for an overrun (ORE). ORE can come without RXNE:
+   // the next byte completes between the SR read and the DR read of an
+   // earlier pass. Only the SR read followed by a DR read clears ORE (RM0008
+   // 27.6.1), so the DR read is done for ORE too. Otherwise the interrupt
+   // fires again and again until the next byte arrives.
+   const uint32_t status = usart_.returnStatusFlag();
+   if((status & (USART_SR_RXNE | USART_SR_ORE)) != 0) {
+      const uint8_t byte = usart_.getData();
+      if((status & USART_SR_ORE) != 0) {
+         buffers_.overrun();
+      }
+      if((status & USART_SR_RXNE) != 0) {
+         if((status & (USART_SR_FE | USART_SR_NE | USART_SR_PE)) != 0) {
+            buffers_.receiveError();
+         }
+         buffers_.received(byte);
+      }
    }
    if(usart_.isTxEmptyInterruptEnabled() && usart_.isTxRegisterEmpty()) {
       uint8_t byte = 0;

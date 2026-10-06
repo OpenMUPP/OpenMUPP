@@ -22,6 +22,9 @@
 //   endpoint NAKs and the host waits. No byte is dropped.
 // - UART to host: the UART has no flow control lines. When the RX ring is
 //   full, the interrupt drops the new byte and counts it (rxDropped()).
+//   The interrupt also counts the bytes that the UART lost in an overrun
+//   (rxOverruns()), and the bytes with a framing, noise or parity error
+//   (rxErrors()). A byte with an error still goes to the host.
 //   While the host has not configured the device, poll() discards the
 //   received bytes, so old data does not wait in the ring.
 //
@@ -64,12 +67,29 @@ struct UartBuffers {
    // Received bytes that the interrupt dropped because rx was full. Only
    // the interrupt writes it.
    volatile uint32_t rxDropped = 0;
+   // Received bytes that the UART lost because the interrupt read the data
+   // register too late (overrun). Only the interrupt writes it.
+   volatile uint32_t rxOverruns = 0;
+   // Received bytes with a framing, noise or parity error. Only the
+   // interrupt writes it.
+   volatile uint32_t rxErrors = 0;
 
    // Interrupt side: stores a received byte.
    void received(uint8_t byte) {
       if(!rx.try_push(byte)) {
          rxDropped = rxDropped + 1;
       }
+   }
+
+   // Interrupt side: the UART lost a byte (overrun).
+   void overrun() {
+      rxOverruns = rxOverruns + 1;
+   }
+
+   // Interrupt side: the last received byte had a framing, noise or parity
+   // error.
+   void receiveError() {
+      rxErrors = rxErrors + 1;
    }
 
    // Interrupt side: the next byte to send. False when tx is empty.
@@ -135,6 +155,14 @@ class UartBridge final : public art::usb::CdcAcmEvents {
 
    [[nodiscard]] uint32_t rxDropped() const {
       return buffers_.rxDropped;
+   }
+
+   [[nodiscard]] uint32_t rxOverruns() const {
+      return buffers_.rxOverruns;
+   }
+
+   [[nodiscard]] uint32_t rxErrors() const {
+      return buffers_.rxErrors;
    }
 
    // CdcAcmEvents

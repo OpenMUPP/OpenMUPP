@@ -324,6 +324,26 @@ TEST_CASE("UartBridge drops new UART data when the RX ring is full and counts it
    CHECK(bench.hostReceives() == std::vector<uint8_t>(data.begin(), data.begin() + ringCapacity));
 }
 
+TEST_CASE("UartBridge counts the overruns and the receive errors of the UART") {
+   Bench bench;
+   bench.enumerate();
+   CHECK(bench.bridge().rxOverruns() == 0);
+   CHECK(bench.bridge().rxErrors() == 0);
+
+   // As UartPort::handleInterrupt() reports them: a byte with an error
+   // still goes to the host, an overrun adds no byte.
+   bench.buffers.receiveError();
+   bench.buffers.received(0x41);
+   bench.buffers.overrun();
+   bench.buffers.overrun();
+   bench.buffers.received(0x42);
+   bench.bridge().poll();
+   CHECK(bench.hostReceives() == std::vector<uint8_t>{ 0x41, 0x42 });
+   CHECK(bench.bridge().rxOverruns() == 2);
+   CHECK(bench.bridge().rxErrors() == 1);
+   CHECK(bench.bridge().rxDropped() == 0);
+}
+
 TEST_CASE("UartBridge discards UART data while the device is not configured") {
    Bench bench;
    bench.buffers.received(0x55);
