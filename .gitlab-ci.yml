@@ -57,7 +57,8 @@ run-tool-tests:
 # Build linked behind versaloon-bootloader (0x08002800, 54 KB). Release by
 # default; a Debug build has the debug log on the CDC port and SWD on.
 # The linker script fails the link when the image does not fit; the size
-# check reports the size and fails on the same limit.
+# check reports the size and fails on the same limit. The default target
+# also builds versaloon-bootloader for the Mini and the OtherUse.
 .build-board-template:
   stage: build
   variables:
@@ -75,7 +76,7 @@ run-tool-tests:
       -G "Unix Makefiles"
       -S .
       -B "${BUILDDIR}"
-    - cmake --build ${BUILDDIR} --target versaloon-next-gen.elf -- -j`nproc`
+    - cmake --build ${BUILDDIR} -- -j`nproc`
     - ci/check-size.sh ${BUILDDIR}/versaloon-next-gen.bin ${FLASH_LIMIT_BYTES}
   artifacts:
     name: "versaloon-next-gen-${BOARD}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
@@ -84,6 +85,7 @@ run-tool-tests:
       - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen-*.bin
       - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen.elf
       - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen.map
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-bootloader/versaloon-bootloader-*
 
 build-mini:
   extends: .build-board-template

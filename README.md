@@ -446,8 +446,9 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `run-unit-tests`: builds and runs the host unit tests.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
 - `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
+  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` for the board.
 - `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
-  The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files as artifacts.
+  The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files and the bootloader images as artifacts.
 
 ## Branches
 
