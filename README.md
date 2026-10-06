@@ -4,7 +4,8 @@ Firmware for the Versaloon Mini and OtherUse debug adapters (STM32F103C8/CB, 12 
 The firmware is compatible with the original Versaloon USB protocol, so unmodified OpenOCD can use it.
 It also has a USB-CDC (Communication Device Class) serial port, which is bridged to a UART.
 
-The project is at an early stage. The current firmware is an empty skeleton: it starts and idles.
+The project is at an early stage. The current firmware sets up the board and shows a heartbeat on an LED.
+USB is not available yet.
 See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
 ## Boards
@@ -52,15 +53,37 @@ To add a board:
 3. Add the board and its crystal to `VSL_BOARDS` and `SYSTEM_STM32_HSE_VALUE` in `CMakeLists.txt`.
 4. Add a build job to `.gitlab-ci.yml` and a test to `tests/TestBoards.cpp`.
 
+### Start-up and LEDs
+
+The system-stm32 start-up code calls `os_startup_initialize_hardware()` (`src/initialize_hardware.cpp`) before `main()`.
+This function does these steps:
+
+1. It sets the system clock to 72 MHz from the board crystal, and the SysTick to 1 ms.
+2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
+   The Mini and the OtherUse disable the debug port. A debug probe can then connect only under reset.
+3. It puts the board pins into a safe state:
+   - All LEDs are off, but the power LED is on.
+   - The USB pull-up is off, so the host does not see the device.
+   - The target power is off (the switch pin floats).
+   - The key pin has a pull resistor to the released level.
+
+The JTAG, SWD, UART and Vref pins stay inputs until their drivers configure them.
+
+The main loop shows a heartbeat on the state LED:
+
+| State LED | Meaning |
+|---|---|
+| Short flash, one time each second | The firmware runs. The clock comes from the crystal. |
+| Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. |
+| On or off all the time | The main loop does not run. |
+
 ## Dependencies
 
 The libraries are Git submodules in `dependencies/`:
 
 - `libArT`: core library (streams, logging, USB device stack).
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. The `dev` branch has the STM32F1 support.
-- `libart-stm32`: STM32 adapters for libArT.
-  The build configures it, but does not compile or link it yet.
-  The reason is that it does not build for STM32F1 (embedded-libraries/libart-stm32#14).
+- `libart-stm32`: STM32 adapters for libArT. The `dev` branch has the STM32F1 support.
 
 Clone with the submodules:
 

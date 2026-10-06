@@ -170,3 +170,13 @@ TEST_CASE("swjConfig frees the debug port pins that the board uses") {
    def.key = Signal{ { Port::B, 3 }, Active::Low };
    CHECK(board::swjConfig(def) == board::SwjConfig::NoJtag);
 }
+
+TEST_CASE("Signal::levelFor gives the pin level of the signal state") {
+   constexpr Signal activeLow{ { Port::A, 15 }, Active::Low };
+   constexpr Signal activeHigh{ { Port::C, 13 }, Active::High };
+
+   CHECK(activeLow.levelFor(true) == false);
+   CHECK(activeLow.levelFor(false) == true);
+   CHECK(activeHigh.levelFor(true) == true);
+   CHECK(activeHigh.levelFor(false) == false);
+}
