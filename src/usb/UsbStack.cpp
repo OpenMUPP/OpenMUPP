@@ -1,6 +1,5 @@
 #include "usb/UsbStack.h"
 
-#include <algorithm>
 #include <array>
 #include <peripherals/Rcc.h>
 #include <peripherals/Uid.h>
@@ -67,10 +66,10 @@ void UsbStack::start() {
 
 void UsbStack::poll() {
    controller_.poll();
+   // Without VSL_DEBUG_CDC the UART bridge reads the serial port
+   // (uart/SerialBridge.h).
    if constexpr(debug::cdcLog) {
       discardSerialInput();
-   } else {
-      loopBackSerialPort();
    }
 }
 
@@ -78,16 +77,6 @@ void UsbStack::setPullUp(void * /*context*/, bool enable) {
    if(const auto pullUp = board::current.usbPullUp) {
       board::write(*pullUp, enable);
    }
-}
-
-void UsbStack::loopBackSerialPort() {
-   std::array<uint8_t, cdcDataPacketSize> chunk{};
-   const std::size_t count = std::min({ serialPort_.readAvailable(), serialPort_.writeAvailable(), chunk.size() });
-   if(count == 0) {
-      return;
-   }
-   const std::size_t received = serialPort_.read(art::span<uint8_t>(chunk.data(), count));
-   serialPort_.write(art::span<const uint8_t>(chunk.data(), received));
 }
 
 void UsbStack::discardSerialInput() {

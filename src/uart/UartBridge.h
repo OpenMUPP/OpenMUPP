@@ -100,7 +100,8 @@ class UartBridge final : public art::usb::CdcAcmEvents {
    UartBridge &operator=(const UartBridge &) = delete;
 
    // Sets the UART to the default format and receives the class requests
-   // of the port. Call it once, before the first poll().
+   // of the port. Call it once, before the USB device starts: the port
+   // then still has the default line coding.
    void start() {
       uart_.setFormat(format_);
       port_.setEventHandler(this);
