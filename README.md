@@ -108,7 +108,11 @@ cmake --build build/tests --target clangformat
 ```
 
 `etc/pre-commit.hook` formats the staged C and C++ files before each commit.
-To use it, copy it to `.git/hooks/pre-commit`.
+To use it, install it as an executable hook:
+
+```sh
+install -m 755 etc/pre-commit.hook "$(git rev-parse --git-path hooks)/pre-commit"
+```
 
 ## Version
 

@@ -1,19 +1,19 @@
 #!/bin/sh
 # This is a helper script for always performing a clang-format before committing.
 
-for FILE in $(git diff --cached --name-only); do
-   echo ${FILE}
+git diff --cached --name-only | while IFS= read -r FILE; do
    # Only format existing files
    if [ ! -f "$FILE" ]; then
-      echo "$FILE does not exist."
       continue
    fi
    # Only format C++ files
-   if ! [[ "$FILE" =~ \.(c|h|cpp|cc|hpp)$ ]]; then
-      continue
-   fi
-   clang-format -i -style=file $FILE
+   case "$FILE" in
+   *.c | *.h | *.cpp | *.cc | *.hpp) ;;
+   *) continue ;;
+   esac
+   echo "$FILE"
+   clang-format -i -style=file "$FILE"
 
    # Ensure the formatted files are added
-   git add $FILE
+   git add "$FILE"
 done
