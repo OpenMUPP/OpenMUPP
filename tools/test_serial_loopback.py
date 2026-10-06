@@ -17,7 +17,8 @@ import serial_loopback_test as slt  # noqa: E402
 class FakePort:
     """A loopback port. It rejects some settings and can corrupt the data."""
 
-    def __init__(self, reject_stop_bits=(), corrupt_at=None, drop_after=None, speed=1.0, fail_with=None):
+    def __init__(self, reject_stop_bits=(), corrupt_at=None, drop_after=None, speed=1.0, fail_with=None, reject_with=ValueError):
+        self._reject_with = reject_with
         self._speed = speed
         self._fail_with = fail_with
         self._reject_stop_bits = reject_stop_bits
@@ -38,7 +39,7 @@ class FakePort:
     @stopbits.setter
     def stopbits(self, value):
         if value in self._reject_stop_bits:
-            raise ValueError("Not a valid stop bit size: %r" % value)
+            raise self._reject_with("Not a valid stop bit size: %r" % value)
         self._stopbits = value
         self.settings.append((self.baudrate, self.bytesize, self.parity, value))
 
@@ -157,6 +158,11 @@ class CaseTest(unittest.TestCase):
         self.assertEqual(result, slt.SKIP)
         self.assertEqual(port.settings, [])
 
+    def test_driver_error_on_setting_is_skipped(self):
+        port = FakePort(reject_stop_bits=(1.5,), reject_with=OSError)
+        result, _ = slt.run_case(port, 9600, "8N", 1.5, 100)
+        self.assertEqual(result, slt.SKIP)
+
     def test_unsupported_setting_is_skipped(self):
         port = FakePort(reject_stop_bits=(1.5,))
         result, _ = slt.run_case(port, 9600, "8N", 1.5, 100)
@@ -186,6 +192,12 @@ class MainTest(unittest.TestCase):
         code, out = self.run_main(FakePort(reject_stop_bits=(1.5,)), "--bauds", "9600")
         self.assertEqual(code, 0)
         self.assertIn("5 skipped", out)
+
+    def test_driver_error_on_setting_continues_run(self):
+        port = FakePort(reject_stop_bits=(1.5,), reject_with=OSError)
+        code, out = self.run_main(port, "--bauds", "9600")
+        self.assertEqual(code, 0)
+        self.assertIn("5 skipped, 0 port errors", out)
 
     def test_port_error_stops_run(self):
         port = FakePort(fail_with=OSError("gone"))

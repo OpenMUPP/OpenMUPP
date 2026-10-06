@@ -93,7 +93,11 @@ def set_line_coding(port, baud, data_bits, parity, stop_bits):
         port.bytesize = data_bits
         port.parity = parity
         port.stopbits = stop_bits
-    except ValueError as error:
+    except (ValueError, OSError) as error:
+        # The setters only reconfigure the port. A failure means that the
+        # host driver cannot make the setting (pyserial raises
+        # SerialException, an OSError, on Windows). A port that is really gone
+        # gives an ERROR in the next exchange.
         return str(error)
     return None
 
