@@ -119,6 +119,7 @@ The current firmware has placeholders for the two functions:
   The Versaloon command protocol replaces this echo in a later version.
 - The serial port sends the received data back.
   The UART bridge replaces this loopback in a later version.
+  In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](#debug-log-over-the-serial-port)).
 
 ### Check the enumeration
 
@@ -137,6 +138,32 @@ On Windows 10 or later:
 1. Make sure that the Device Manager shows a new COM port under "Ports (COM & LPT)", with the built-in CDC driver (`usbser.sys`).
 2. Make sure that interface 0 shows as a separate device ("Versaloon").
    OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
+
+### Debug log over the serial port
+
+The CMake option `VSL_DEBUG_CDC` sends the libArT log to the CDC-ACM serial port.
+The option is `ON` by default in a `Debug` build.
+A `Release` build with `VSL_DEBUG_CDC=ON` fails at configure time.
+The USB descriptors are the same in both builds.
+
+With the option, these rules apply:
+
+- The serial port carries only the log. The UART bridge is not built, and USART1 stays unused.
+  The device ignores the data that the host sends to the port.
+- Code logs with the libArT macros, for example `LOG_INFO(debug::appLog, "text %u", value)` (`src/debug/DebugLog.h`).
+- A log line has the uptime in seconds, the topic and the level, for example `1.234 [usb][INFO] configured`.
+- The log goes into a 1 KB ring buffer in RAM (`src/debug/LogSink.h`). The firmware does not use the heap.
+- The main loop moves the log to the port. Logging never waits for the host.
+- The firmware sends the log only when a terminal has the port open (DTR on).
+  Until then, the log stays in the ring buffer, so the start-up lines are not lost.
+- When the ring buffer is full, the firmware drops the new log bytes and keeps the old bytes.
+  When there is room again, a line such as `[log: 120 bytes dropped]` shows the number of dropped bytes.
+- Log only from the main loop, not from an interrupt handler.
+
+Without the option, CMake defines `LOGGING_DISABLED`.
+Then the `LOG_*` macros expand to nothing, and the firmware has no log code.
+
+To read the log on Linux, open the port, for example with `picocom /dev/ttyACM0`.
 
 ## Dependencies
 
@@ -189,6 +216,7 @@ The CMake options are:
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
 | `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
+| `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [Debug log](#debug-log-over-the-serial-port)). Not allowed in a `Release` build. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
 ### Flash layout and size limit
@@ -208,7 +236,7 @@ The link fails when less than the full main stack is free.
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the heartbeat, the version and the USB descriptors.
+They check the board definitions, the heartbeat, the version, the USB descriptors and the log sink.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 Configure without the toolchain file:
 

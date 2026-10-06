@@ -7,6 +7,7 @@
 
 #include "board/Board.h"
 #include "board/BoardPins.h"
+#include "debug/DebugLog.h"
 #include "usb/UsbDescriptors.h"
 
 namespace usb {
@@ -66,7 +67,11 @@ void UsbStack::start() {
 
 void UsbStack::poll() {
    controller_.poll();
-   loopBackSerialPort();
+   if constexpr(debug::cdcLog) {
+      discardSerialInput();
+   } else {
+      loopBackSerialPort();
+   }
 }
 
 void UsbStack::setPullUp(void * /*context*/, bool enable) {
@@ -83,6 +88,12 @@ void UsbStack::loopBackSerialPort() {
    }
    const std::size_t received = serialPort_.read(art::span<uint8_t>(chunk.data(), count));
    serialPort_.write(art::span<const uint8_t>(chunk.data(), received));
+}
+
+void UsbStack::discardSerialInput() {
+   std::array<uint8_t, cdcDataPacketSize> chunk{};
+   while(serialPort_.read(art::span<uint8_t>(chunk.data(), chunk.size())) != 0) {
+   }
 }
 
 } // namespace usb
