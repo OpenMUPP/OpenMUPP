@@ -1,0 +1,13 @@
+#pragma once
+
+#define VERSION_MAJOR ${VERSION_MAJOR}
+#define VERSION_MINOR ${VERSION_MINOR}
+#define VERSION_BUILD ${VERSION_BUILD}
+#define VERSION_BUILDREV "${VERSION_BUILDREV}"
+#define VERSION_HAVE_BUILDREV ${VERSION_HAVE_BUILDREV}
+
+#if VERSION_HAVE_BUILDREV
+constexpr const char *versionString = "v${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}-${VERSION_BUILDREV}";
+#else
+constexpr const char *versionString = "v${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}";
+#endif
