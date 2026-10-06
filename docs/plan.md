@@ -28,7 +28,7 @@ The dongle also has a USB-CDC serial port, which is bridged to USART1.
 | libart-stm32 | `embedded-libraries/libart-stm32` | STM32 adapters for libArT (serial, USB controller) |
 
 The three libraries are Git submodules in `dependencies/`.
-The build system and the CI follow the universal oven controller firmware.
+The build system and the CI follow the [universal oven controller firmware](https://gitlab.vandertogt.org/ht-oven/universal-oven-controller-firmware).
 
 ## Phases and milestones
 
@@ -45,10 +45,10 @@ The estimates are in person-days (low-high).
 
 | Issue | Work item | Estimate | Depends on |
 |---|---|---|---|
-| #1 | A0: STM32F1 support in system-stm32 (tracking issue) | 9.75-17.75 | system-stm32#9-#16 |
+| #1 | A0: STM32F1 support in system-stm32 (tracking issue) | 9.75-17.75 | system-stm32#9 to system-stm32#16 |
 | #2 | B1: Project skeleton: CMake, submodules, CI, linker scripts | 1.5-2 | system-stm32#9 |
 | #3 | B7: Board abstraction (Mini, OtherUse, compile-only ST-Link/V2) | 1-1.5 | #2 |
-| #4 | B2: Board bring-up: clocks, LEDs, logger, heartbeat | 0.5-1.5 | #3, system-stm32#10, #11 |
+| #4 | B2: Board bring-up: clocks, LEDs, logger, heartbeat | 0.5-1.5 | #3, system-stm32#10, system-stm32#11 |
 | #5 | B3: USB composite device: Versaloon vendor interface and CDC-ACM | 1-2 | #4, system-stm32#15, libart#49 |
 | #6 | B5: USB-CDC to UART bridge | 1.5-3 | #5, system-stm32#12, libart#49 |
 | #7 | B6: Serial port test script | 0.5-1 | #6 |
@@ -67,12 +67,11 @@ The estimates are in person-days (low-high).
 ## Dependencies
 
 The diagram shows the dependencies between the work items of this project.
-Phase A (#1) is a dependency of all phase B items.
+Some work items depend on single system-stm32 issues. The table lists them. #1 tracks all of them.
 
 ```mermaid
 flowchart LR
-    A0["#1 A0 F1 platform"] --> B1["#2 B1 skeleton"]
-    B1 --> B7["#3 B7 boards"]
+    B1["#2 B1 skeleton"] --> B7["#3 B7 boards"]
     B7 --> B2["#4 B2 bring-up"]
     B2 --> B3["#5 B3 USB composite"]
     B3 --> B5["#6 B5 serial bridge"]
