@@ -145,6 +145,9 @@ if (CMAKE_CROSSCOMPILING)
     target_link_libraries(versaloon-next-gen.elf PUBLIC art-build-config)
     # Per-target map file name
     target_link_options(versaloon-next-gen.elf PUBLIC -Wl,-Map,versaloon-next-gen.map)
+    # Relink when a linker script changes
+    set_target_properties(versaloon-next-gen.elf PROPERTIES LINK_DEPENDS
+            "${PROJECT_SOURCE_DIR}/ldscripts/${VSL_MEMORY_LDSCRIPT};${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld")
     target_include_directories(versaloon-next-gen.elf PUBLIC ${PROJECT_INCLUDE_DIRS})
     target_link_libraries(versaloon-next-gen.elf PUBLIC art::core system-stm32)
 
