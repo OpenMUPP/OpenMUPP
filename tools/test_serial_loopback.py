@@ -17,7 +17,9 @@ import serial_loopback_test as slt  # noqa: E402
 class FakePort:
     """A loopback port. It rejects some settings and can corrupt the data."""
 
-    def __init__(self, reject_stop_bits=(), corrupt_at=None, drop_after=None):
+    def __init__(self, reject_stop_bits=(), corrupt_at=None, drop_after=None, speed=1.0, fail_with=None):
+        self._speed = speed
+        self._fail_with = fail_with
         self._reject_stop_bits = reject_stop_bits
         self._corrupt_at = corrupt_at
         self._drop_after = drop_after
@@ -41,6 +43,12 @@ class FakePort:
         self.settings.append((self.baudrate, self.bytesize, self.parity, value))
 
     def write(self, data):
+        if self._fail_with:
+            raise self._fail_with
+        # The bytes need their time on the wire. speed > 1 is a dongle that
+        # uses a wrong, faster baud rate.
+        bits = slt.frame_bits(self.bytesize, self.parity, self.stopbits)
+        FakeClock.now += len(data) * bits / self.baudrate / self._speed
         for byte in data:
             if self._drop_after is not None and self._total >= self._drop_after:
                 continue
@@ -51,6 +59,8 @@ class FakePort:
         return len(data)
 
     def read(self, size=1):
+        if self._fail_with:
+            raise self._fail_with
         data = bytes(self._buffer[:size])
         del self._buffer[:size]
         return data
@@ -62,9 +72,23 @@ class FakePort:
         self.closed = True
 
 
+class FakeClock:
+    """Replaces the time module: no waits, and a clock that FakePort moves."""
+
+    now = 0.0
+
+    @classmethod
+    def sleep(cls, seconds):
+        pass
+
+    @classmethod
+    def monotonic(cls):
+        return cls.now
+
+
 def setUpModule():
-    # The tests need no settle time of a real port.
-    slt.time = type("NoSleep", (), {"sleep": staticmethod(lambda seconds: None)})
+    slt.time = FakeClock
+    slt.ONE_AND_HALF_STOP_BITS_SUPPORTED = True
 
 
 class PatternTest(unittest.TestCase):
@@ -112,6 +136,27 @@ class CaseTest(unittest.TestCase):
         self.assertEqual(result, slt.FAIL)
         self.assertIn("received 100 of 600 bytes", message)
 
+    def test_too_fast_fails(self):
+        result, message = slt.run_case(FakePort(speed=12.0), 9600, "8N", 1, 600)
+        self.assertEqual(result, slt.FAIL)
+        self.assertIn("too fast", message)
+
+    def test_port_error(self):
+        port = FakePort(fail_with=OSError("device disappeared"))
+        result, message = slt.run_case(port, 9600, "8N", 1, 600)
+        self.assertEqual(result, slt.ERROR)
+        self.assertIn("device disappeared", message)
+
+    def test_one_and_half_stop_bits_skipped_when_host_cannot(self):
+        slt.ONE_AND_HALF_STOP_BITS_SUPPORTED = False
+        try:
+            port = FakePort()
+            result, _ = slt.run_case(port, 9600, "8N", 1.5, 100)
+        finally:
+            slt.ONE_AND_HALF_STOP_BITS_SUPPORTED = True
+        self.assertEqual(result, slt.SKIP)
+        self.assertEqual(port.settings, [])
+
     def test_unsupported_setting_is_skipped(self):
         port = FakePort(reject_stop_bits=(1.5,))
         result, _ = slt.run_case(port, 9600, "8N", 1.5, 100)
@@ -129,7 +174,7 @@ class MainTest(unittest.TestCase):
         port = FakePort()
         code, out = self.run_main(port, "--bauds", "9600", "2000000", "--repeat", "2")
         self.assertEqual(code, 0)
-        self.assertIn("60 passed, 0 failed, 0 skipped", out)
+        self.assertIn("60 passed, 0 failed, 0 skipped, 0 port errors", out)
         self.assertTrue(port.closed)
 
     def test_failure_exit_code(self):
@@ -141,6 +186,20 @@ class MainTest(unittest.TestCase):
         code, out = self.run_main(FakePort(reject_stop_bits=(1.5,)), "--bauds", "9600")
         self.assertEqual(code, 0)
         self.assertIn("5 skipped", out)
+
+    def test_port_error_stops_run(self):
+        port = FakePort(fail_with=OSError("gone"))
+        code, out = self.run_main(port, "--bauds", "9600", "115200")
+        self.assertEqual(code, 1)
+        self.assertEqual(out.count("ERROR"), 1)
+        self.assertIn("1 port errors", out)
+
+    def test_invalid_arguments(self):
+        for args in (["--size", "0"], ["--size", "-5"], ["--repeat", "0"], ["--timeout", "0"],
+                     ["--bauds", "0"], ["--stop-bits", "3"], ["--formats", "9N"]):
+            with self.subTest(args=args), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    slt.parse_args(["fake", *args])
 
     def test_nothing_tested_fails(self):
         code, _ = self.run_main(FakePort(reject_stop_bits=(1,)), "--bauds", "9600", "--stop-bits", "1")
