@@ -4,8 +4,8 @@ Firmware for the Versaloon Mini and OtherUse debug adapters (STM32F103C8/CB, 12 
 The firmware is compatible with the original Versaloon USB protocol, so unmodified OpenOCD can use it.
 It also has a USB-CDC (Communication Device Class) serial port, which is bridged to a UART.
 
-The project is at an early stage. The current firmware sets up the board and shows a heartbeat on an LED.
-USB is not available yet.
+The project is at an early stage. The current firmware sets up the board, shows a heartbeat on an LED and enumerates as a USB composite device.
+The Versaloon protocol and the UART bridge are not available yet (see [USB device](#usb-device)).
 See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
 ## Boards
@@ -69,13 +69,74 @@ This function does these steps:
 
 The JTAG, SWD, UART and Vref pins stay inputs until their drivers configure them.
 
-The main loop shows a heartbeat on the state LED:
+`main()` starts the USB device when the clock comes from the crystal (see [USB device](#usb-device)).
+The main loop runs the USB device. It shows a heartbeat on the state LED:
 
 | State LED | Meaning |
 |---|---|
 | Short flash, one time each second | The firmware runs. The clock comes from the crystal. |
 | Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. |
 | On or off all the time | The main loop does not run. |
+
+The USB LED is on when the host has configured the USB device.
+
+## USB device
+
+The dongle is a USB full-speed composite device with the USB identity of the original Versaloon firmware.
+Thus unmodified OpenOCD (`vsllink` driver) finds it.
+`src/usb/UsbDescriptors.h` has the descriptors.
+
+| Item | Value |
+|---|---|
+| VID:PID | `0x0483:0xA038` (the OpenOCD default) |
+| Device class | `0xEF/0x02/0x01` (miscellaneous, with interface association descriptors) |
+| Manufacturer string | `Versaloon` |
+| Product string | `Versaloon`. OpenOCD looks for this word. |
+| Serial number string | The 96-bit chip UID in hexadecimal, 24 digits |
+| Maximum power | 200 mA, bus-powered |
+
+| Interface | Class | Endpoints | Function |
+|---|---|---|---|
+| 0 | Vendor-specific (`0xFF`) | bulk OUT `0x03`, bulk IN `0x82`, 64 bytes | Versaloon protocol (OpenOCD) |
+| 1 | CDC (`0x02`), ACM | interrupt IN `0x81`, 16 bytes | Serial port, control interface |
+| 2 | CDC data (`0x0A`) | bulk OUT `0x04`, bulk IN `0x84`, 64 bytes | Serial port, data interface |
+
+An interface association descriptor (IAD) groups the interfaces 1 and 2.
+The Call Management descriptor points to data interface 2.
+The original firmware has the wrong value 1 there.
+There is one serial port only.
+
+`src/usb/UsbStack.cpp` runs the libArT USB device stack on the STM32F1 USB peripheral.
+The USB interrupt only puts the events into a queue.
+The main loop runs the USB protocol.
+The board definition supplies the USB D+ pull-up pin.
+The device connects when `main()` starts the USB device.
+A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
+
+The current firmware has placeholders for the two functions:
+
+- Interface 0 sends each OUT packet back without change, with the same size (`src/usb/VersaloonFunction.cpp`).
+  The Versaloon command protocol replaces this echo in a later version.
+- The serial port sends the received data back.
+  The UART bridge replaces this loopback in a later version.
+
+### Check the enumeration
+
+The host unit tests check the descriptors.
+To check the device on the hardware, connect the dongle and do these steps.
+
+On Linux:
+
+1. Run `lsusb -v -d 0483:a038`. Make sure that the output shows the interfaces and endpoints of the tables above, and the IAD.
+2. Make sure that the kernel log (`dmesg`) shows a new `/dev/ttyACM*` port.
+3. Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
+4. Run OpenOCD with `-f interface/vsllink.cfg`. OpenOCD finds the device, but fails at the protocol, because the protocol is not available yet.
+
+On Windows 10 or later:
+
+1. Make sure that the Device Manager shows a new COM port under "Ports (COM & LPT)", with the built-in CDC driver (`usbser.sys`).
+2. Make sure that interface 0 shows as a separate device ("Versaloon").
+   OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
 
 ## Dependencies
 
@@ -147,6 +208,8 @@ The link fails when less than the full main stack is free.
 ## Unit tests
 
 The unit tests use doctest and run on the host.
+They check the board definitions, the heartbeat, the version and the USB descriptors.
+The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 Configure without the toolchain file:
 
 ```sh
