@@ -39,7 +39,7 @@ In an existing clone, run `git submodule update --init --recursive`.
 The build also needs:
 
 - CMake 3.20 or later.
-- The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1.
+- The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
 - Internet access at configure time: CMake FetchContent downloads CMSIS and doctest.
@@ -82,6 +82,7 @@ This is a hard limit for all boards.
 
 - `ldscripts/mem-f103-bootloader.ld` has a 54 KB FLASH region at `0x08002800`. The link fails when the application is too large.
 - `ldscripts/mem-f103.ld` has a 64 KB FLASH region at `0x08000000` (`VSL_BOOTLOADER=OFF`).
+- CI reports the image size with `ci/check-size.sh` and fails when the `.bin` file is larger than 54 KB.
 
 The main stack is 2 KB (`ldscripts/sections.ld`), because the STM32F103 has only 20 KB RAM.
 The link fails when less than the full main stack is free.
@@ -113,6 +114,15 @@ To use it, copy it to `.git/hooks/pre-commit`.
 `cmake/generate_version.cmake` writes `Version.h` from `git describe`.
 A tag `vMAJOR.MINOR.BUILD` sets the version numbers.
 Without such a tag, the version is `0.0.0`, and the `git describe` output is the build revision.
+
+## Continuous integration
+
+`.gitlab-ci.yml` runs these jobs:
+
+- `lint-code`: fails when `clangformat` changes a file.
+- `run-unit-tests`: builds and runs the host unit tests.
+- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
+  The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files as artifacts.
 
 ## Branches
 
