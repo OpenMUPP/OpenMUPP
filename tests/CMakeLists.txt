@@ -18,6 +18,7 @@ include(doctest)
 add_executable(vsl-tests
         test_main.cpp
         TestVersion.cpp
+        TestBoards.cpp
 )
 
 target_compile_options(vsl-tests PRIVATE -O0 -g -Wall -Wextra)
