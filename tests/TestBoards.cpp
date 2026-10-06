@@ -56,21 +56,10 @@ TEST_CASE("OtherUse differs from the Mini only in the name and the USB pull-up")
    CHECK(otherUse.name == "otheruse");
    CHECK(otherUse.usbPullUp == Signal{ { Port::A, 2 }, Active::High });
 
-   const Definition &expected = board::mini;
-
-   CHECK(otherUse.hseFrequency == expected.hseFrequency);
-   CHECK(otherUse.hardwareId == expected.hardwareId);
-   CHECK(otherUse.debug.tck == expected.debug.tck);
-   CHECK(otherUse.debug.tmsOut == expected.debug.tmsOut);
-   CHECK(otherUse.debug.tmsIn == expected.debug.tmsIn);
-   CHECK(otherUse.debug.tdi == expected.debug.tdi);
-   CHECK(otherUse.debug.tdo == expected.debug.tdo);
-   CHECK(otherUse.debug.trst == expected.debug.trst);
-   CHECK(otherUse.debug.srst == expected.debug.srst);
-   CHECK(otherUse.debug.rtck == expected.debug.rtck);
-   CHECK(otherUse.hasJtagFastPath());
-   CHECK(otherUse.leds.power == expected.leds.power);
-   CHECK(otherUse.key == expected.key);
+   Definition expected = board::mini;
+   expected.name = "otheruse";
+   expected.usbPullUp = Signal{ { Port::A, 2 }, Active::High };
+   CHECK(otherUse == expected);
 }
 
 TEST_CASE("ST-Link/V2 has an 8 MHz crystal and no JTAG fast path") {

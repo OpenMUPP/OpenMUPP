@@ -45,6 +45,8 @@ struct DebugPins {
    std::optional<Pin> trst;
    Pin srst;
    std::optional<Pin> rtck;
+
+   constexpr bool operator==(const DebugPins &) const = default;
 };
 
 // The JTAG fast path (SPI and DMA) needs TCK on SPI2 SCK (PB13), TDI on
@@ -53,12 +55,16 @@ struct DebugPins {
 // link to the remapped SPI1 SCK (PB3).
 struct JtagFastPath {
    Pin tckLink;
+
+   constexpr bool operator==(const JtagFastPath &) const = default;
 };
 
 struct Uart {
    uint8_t usart; // USARTn
    Pin tx;
    Pin rx;
+
+   constexpr bool operator==(const Uart &) const = default;
 };
 
 // Target voltage (Vref) sense: Vref = ADC input voltage * divider.
@@ -66,6 +72,8 @@ struct Uart {
 struct VrefSense {
    Pin pin;
    uint8_t divider;
+
+   constexpr bool operator==(const VrefSense &) const = default;
 };
 
 // ADC1/ADC2 input channel of a pin on the STM32F103 (RM0008 11.3.1):
@@ -99,12 +107,16 @@ constexpr std::optional<uint8_t> adcChannelOf(Pin pin) {
 struct PowerSwitch {
    Pin pin;
    Active on;
+
+   constexpr bool operator==(const PowerSwitch &) const = default;
 };
 
 struct Leds {
    std::optional<Signal> power;
    std::optional<Signal> state;
    std::optional<Signal> usb;
+
+   constexpr bool operator==(const Leds &) const = default;
 };
 
 struct Definition {
@@ -126,6 +138,8 @@ struct Definition {
    [[nodiscard]] constexpr bool hasJtagFastPath() const {
       return jtagFastPath.has_value();
    }
+
+   constexpr bool operator==(const Definition &) const = default;
 };
 
 // Pins that no board signal can use: USB D- and D+ (PA11, PA12) and the
