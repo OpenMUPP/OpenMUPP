@@ -20,12 +20,14 @@ add_executable(vsl-tests
         TestVersion.cpp
         TestBoards.cpp
         TestHeartbeat.cpp
+        TestUsbDescriptors.cpp
 )
 
 target_compile_options(vsl-tests PRIVATE -O0 -g -Wall -Wextra)
 target_include_directories(vsl-tests PRIVATE
         ../src
         ${PROJECT_BINARY_DIR}                 # Version.h
+        ../dependencies/libArT/src            # USB descriptor builder (header-only)
 )
 target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING)
 target_link_libraries(vsl-tests PRIVATE doctest::doctest)
