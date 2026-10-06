@@ -289,6 +289,19 @@ After the reset, the bootloader finds the boot request, clears it and stays in b
 The next reset starts the firmware again.
 `src/boot/BootloaderEntry.h` and `src/boot/Bootloader.cpp` have the code.
 
+### Install the bootloader
+
+A new board needs the bootloader one time.
+The firmware build makes the bootloader image `versaloon-bootloader/versaloon-bootloader-<board>.hex` (see [Build the firmware](#build-the-firmware)).
+Write it at `0x08000000` with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "program versaloon-bootloader/versaloon-bootloader-mini.hex verify reset exit"
+```
+
+Then write the firmware through the bootloader (see below).
+
 ### Write the firmware
 
 1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` with the ID `0483:5740` shows.
@@ -318,6 +331,7 @@ The libraries are Git submodules in `dependencies/`:
 - `libArT`: core library (streams, logging, USB device stack).
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. The `dev` branch has the STM32F1 support.
 - `libart-stm32`: STM32 adapters for libArT. The `dev` branch has the STM32F1 support.
+- `versaloon-bootloader`: the USB bootloader (see [Firmware update](#firmware-update)). The `master` branch has the CMake build and the boot request in `BKP->DR1`.
 
 Clone with the submodules:
 
@@ -329,7 +343,7 @@ In an existing clone, run `git submodule update --init --recursive`.
 
 The build also needs:
 
-- CMake 3.20 or later.
+- CMake 3.20 or later. The `versaloon-bootloader` build needs CMake 3.21 or later.
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
@@ -354,6 +368,14 @@ The build writes these files into the build directory:
 - Copies of the `.hex` and `.bin` files with the board, the link variant, the build type and the version in the name.
   An example is `versaloon-next-gen-mini-bootloader-Release-v0.1.0.hex`.
 - `versaloon-next-gen.map`, the linker map.
+- `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board (see below).
+
+For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
+The target is `versaloon-bootloader`.
+`cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
+Thus the firmware options and the build type do not change the bootloader image.
+The bootloader build uses the compiler of the firmware build.
+There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BOOTLOADER` or `VSL_BUILD_BOOTLOADER` is `OFF`.
 
 The CMake options are:
 
@@ -361,6 +383,7 @@ The CMake options are:
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
 | `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. The firmware then refuses `VERSALOON_FW_UPDATE`. |
+| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse, and only with `VSL_BOOTLOADER=ON`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [Board definitions](#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [Debug log](#debug-log-over-the-serial-port)). Not allowed in a `Release` build. |

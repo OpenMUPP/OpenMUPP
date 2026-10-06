@@ -72,6 +72,9 @@ set_property(CACHE BOARD PROPERTY STRINGS ${VSL_BOARDS})
 # Link the application behind versaloon-bootloader (0x08002800, 54 KB) or
 # at the start of FLASH (0x08000000) for development without a bootloader.
 option(VSL_BOOTLOADER "Link the application behind versaloon-bootloader at 0x08002800" ON)
+# Build versaloon-bootloader (dependencies/versaloon-bootloader, cmake/Bootloader.cmake)
+# for the board. Only for boards that the bootloader supports, and only with VSL_BOOTLOADER.
+option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
@@ -196,6 +199,12 @@ if (CMAKE_CROSSCOMPILING)
             COMMAND ${CMAKE_COMMAND} -E copy versaloon-next-gen.hex ${HEX_FILE}
             COMMAND ${CMAKE_COMMAND} -E copy versaloon-next-gen.bin ${BIN_FILE}
             COMMENT "Building ${HEX_FILE} \nBuilding ${BIN_FILE}")
+
+    include(Bootloader)
+    if (VSL_BUILD_BOOTLOADER AND VSL_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
+        vsl_add_bootloader()
+        MESSAGE(STATUS "Building versaloon-bootloader for board " ${BOARD} " into " ${VSL_BOOTLOADER_DIR})
+    endif ()
 else ()
     enable_testing()
     add_subdirectory(tests)
