@@ -22,13 +22,20 @@ add_executable(vsl-tests
         TestHeartbeat.cpp
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
+        TestLogSink.cpp
         ../src/usb/VersaloonFunction.cpp
+        # Logger and printf of libArT, for the log sink test
+        ../dependencies/libArT/src/logging/LogManager.cpp
+        ../dependencies/libArT/src/streams/Writable.cpp
+        ../dependencies/libArT/src/utils/tfp_printf.cpp
         # USB device stack of libArT (no ETL needed), for the enumeration test
         ../dependencies/libArT/src/usb/Device.cpp
         ../dependencies/libArT/src/usb/VendorBulkFunction.cpp
 )
 
 target_compile_options(vsl-tests PRIVATE -O0 -g -Wall -Wextra)
+# libArT code: not the code under test, keep its warnings out of the test build
+set_source_files_properties(../dependencies/libArT/src/utils/tfp_printf.cpp PROPERTIES COMPILE_OPTIONS -Wno-unused-function)
 target_include_directories(vsl-tests PRIVATE
         ../src
         ${PROJECT_BINARY_DIR}                 # Version.h
