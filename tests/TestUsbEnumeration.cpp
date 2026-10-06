@@ -1,6 +1,7 @@
 // The descriptors and the Versaloon function on the libArT USB device stack,
 // with the fake controller of libArT as the host.
 
+#include "boot/BootloaderEntry.h"
 #include "usb/UsbDescriptors.h"
 #include "usb/VersaloonFunction.h"
 
@@ -35,8 +36,10 @@ std::vector<uint8_t> bytes(const auto &descriptor) {
 // endpoints.
 class Bench {
    public:
-   Bench()
-      : device_(controller_, descriptors_)
+   // bootloader: the bootloader entry of FW_UPDATE, nullptr for none.
+   explicit Bench(boot::BootloaderEntry *bootloader = nullptr)
+      : versaloon(bootloader)
+      , device_(controller_, descriptors_)
       , cdc_(usb::cdcControlInterface, 2) {
       const std::array<uint8_t, usb::uidBytes> uid{ 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
                                                     0xDE, 0xF0, 0x01, 0x02, 0x03, 0x04 };
@@ -170,5 +173,59 @@ TEST_CASE("The Versaloon function echoes a full packet without a ZLP, and a ZLP 
 
    REQUIRE(controller.sendOut(0x03, art::span<const uint8_t>()));
    CHECK(controller.takeIn(0x82) == std::vector<uint8_t>{});
+   CHECK(controller.isArmed(0x03));
+}
+
+TEST_CASE("FW_UPDATE with the key replies and requests the bootloader") {
+   boot::BootloaderEntry bootloader;
+   Bench bench(&bootloader);
+   bench.enumerate();
+   auto &controller = bench.controller();
+
+   const std::vector<uint8_t> command{ usb::versaloonFwUpdate, usb::versaloonFwUpdateKey };
+   REQUIRE(controller.sendOut(0x03, art::span<const uint8_t>(command.data(), command.size())));
+   CHECK(bootloader.isRequested());
+   CHECK(controller.takeIn(0x82) == std::vector<uint8_t>{ usb::fwUpdateAccepted });
+   CHECK(controller.isArmed(0x03));
+}
+
+TEST_CASE("FW_UPDATE requests the bootloader also when the host does not read the reply") {
+   boot::BootloaderEntry bootloader;
+   Bench bench(&bootloader);
+   bench.enumerate();
+   auto &controller = bench.controller();
+
+   const std::vector<uint8_t> command{ usb::versaloonFwUpdate, usb::versaloonFwUpdateKey };
+   REQUIRE(controller.sendOut(0x03, art::span<const uint8_t>(command.data(), command.size())));
+   CHECK(bootloader.isRequested());
+   CHECK_FALSE(bootloader.isDue(0));
+   CHECK(bootloader.isDue(boot::BootloaderEntry::replyDelayMs));
+}
+
+TEST_CASE("FW_UPDATE without the key is refused") {
+   boot::BootloaderEntry bootloader;
+   Bench bench(&bootloader);
+   bench.enumerate();
+   auto &controller = bench.controller();
+
+   const std::vector<uint8_t> wrongKey{ usb::versaloonFwUpdate, 0x55 };
+   REQUIRE(controller.sendOut(0x03, art::span<const uint8_t>(wrongKey.data(), wrongKey.size())));
+   CHECK(controller.takeIn(0x82) == std::vector<uint8_t>{ usb::fwUpdateRefused });
+
+   const std::vector<uint8_t> noKey{ usb::versaloonFwUpdate };
+   REQUIRE(controller.sendOut(0x03, art::span<const uint8_t>(noKey.data(), noKey.size())));
+   CHECK(controller.takeIn(0x82) == std::vector<uint8_t>{ usb::fwUpdateRefused });
+
+   CHECK_FALSE(bootloader.isRequested());
+}
+
+TEST_CASE("FW_UPDATE is refused without a bootloader") {
+   Bench bench;
+   bench.enumerate();
+   auto &controller = bench.controller();
+
+   const std::vector<uint8_t> command{ usb::versaloonFwUpdate, usb::versaloonFwUpdateKey };
+   REQUIRE(controller.sendOut(0x03, art::span<const uint8_t>(command.data(), command.size())));
+   CHECK(controller.takeIn(0x82) == std::vector<uint8_t>{ usb::fwUpdateRefused });
    CHECK(controller.isArmed(0x03));
 }
