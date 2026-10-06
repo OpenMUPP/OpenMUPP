@@ -57,3 +57,7 @@ cmake-build*
 !.vscode/cmake-kits.json
 !.vscode/cmake-variants.json
 /_build/
+
+# Python
+__pycache__/
+*.pyc

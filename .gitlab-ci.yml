@@ -48,6 +48,12 @@ run-unit-tests:
     - cmake --build ${BUILDDIR} --target vsl-tests -- -j`nproc`
     - cd ${BUILDDIR} && ctest --output-on-failure
 
+run-tool-tests:
+  stage: .pre
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - python3 -m unittest discover -s tools -p "test_*.py" -v
+
 # Build linked behind versaloon-bootloader (0x08002800, 54 KB). Release by
 # default; a Debug build has the debug log on the CDC port and SWD on.
 # The linker script fails the link when the image does not fit; the size
