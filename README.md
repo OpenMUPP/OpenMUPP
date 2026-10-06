@@ -5,6 +5,7 @@ The firmware is compatible with the original Versaloon USB protocol, so unmodifi
 It also has a USB-CDC (Communication Device Class) serial port, which is bridged to a UART.
 
 The project is at an early stage. The current firmware is an empty skeleton: it starts and idles.
+See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
 ## Boards
 
