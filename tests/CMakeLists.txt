@@ -10,6 +10,15 @@ FetchContent_Declare(
 set(DOCTEST_NO_INSTALL ON)
 FetchContent_MakeAvailable(doctest)
 
+# ETL, for the CDC-ACM function of libArT (same tag as libArT)
+FetchContent_Declare(
+        etl
+        GIT_REPOSITORY https://github.com/ETLCPP/etl.git
+        GIT_TAG 20.41.7
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(etl)
+
 list(APPEND CMAKE_MODULE_PATH ${doctest_SOURCE_DIR}/scripts/cmake)
 
 # Unit tests
@@ -23,6 +32,7 @@ add_executable(vsl-tests
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
         TestLogSink.cpp
+        TestFrameFormat.cpp
         ../src/usb/VersaloonFunction.cpp
         # Logger and printf of libArT, for the log sink test
         ../dependencies/libArT/src/logging/LogManager.cpp
@@ -43,7 +53,7 @@ target_include_directories(vsl-tests PRIVATE
         ../dependencies/libArT/tests/usb      # FakeDeviceController.h
 )
 target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING)
-target_link_libraries(vsl-tests PRIVATE doctest::doctest)
+target_link_libraries(vsl-tests PRIVATE doctest::doctest etl::etl)
 
 # Discover all tests
 doctest_discover_tests(vsl-tests)
