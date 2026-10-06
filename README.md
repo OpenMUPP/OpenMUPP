@@ -214,6 +214,42 @@ Then the `LOG_*` macros expand to nothing, and the firmware has no log code.
 
 To read the log on Linux, open the port, for example with `picocom /dev/ttyACM0`.
 
+## Serial port test
+
+`tools/serial_loopback_test.py` tests the serial port on the dongle.
+It sends a byte pattern at each line coding and checks that the same bytes come back.
+It needs the pyserial Python package and Python 3.
+
+1. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini and the OtherUse).
+2. Run the script with the serial port of the dongle:
+
+```sh
+python3 tools/serial_loopback_test.py /dev/ttyACM0   # Linux
+py tools\serial_loopback_test.py COM5                # Windows
+```
+
+The default run tests all combinations of these settings:
+
+- Baud rate: 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600, 1000000 and 2000000.
+- Data bits and parity: 8N, 8E, 8O, 7E and 7O (the formats of the UART, see [UART bridge](#uart-bridge)).
+- Stop bits: 1, 1.5 and 2.
+
+The script prints PASS, FAIL or SKIP for each combination.
+It exits with 0 when no combination fails and at least one passes.
+SKIP means that the host driver cannot set the combination. The Linux pyserial cannot set 1.5 stop bits.
+
+Useful options: `--bauds`, `--formats`, `--stop-bits`, `--size` (bytes for each combination) and `--repeat` (number of runs).
+To test the serial port during a long JTAG or SWD transfer, start the transfer with OpenOCD, and run the script with a large `--repeat` at the same time.
+Use `loop://` as the port to run the script without a dongle (pyserial loopback).
+
+The unit tests of the script need no pyserial and no hardware:
+
+```sh
+python3 -m unittest discover -s tools -p "test_*.py"
+```
+
+Status: the host tests pass. The test on a Mini and an OtherUse is not done yet.
+
 ## Dependencies
 
 The libraries are Git submodules in `dependencies/`:
@@ -325,6 +361,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests.
 - `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
+- `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
 - `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
   The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files as artifacts.
 
