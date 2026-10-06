@@ -1,8 +1,10 @@
 /*
  * Copy of ldscripts/sections.ld from the universal-oven-controller-firmware
- * repository (commit 9111e7a), which is the µOS++ default Cortex-M script.
+ * repository (commit 9111e7a), which is the µOS++ default Cortex-M script:
+ * https://gitlab.vandertogt.org/ht-oven/universal-oven-controller-firmware
  * Changed: the main stack is 2 KB instead of 8 KB (STM32F103 has 20 KB RAM),
- * and the link fails when less than the full main stack is free.
+ * the link fails when less than the full main stack is free, and the link
+ * fails when the memory script does not keep the RAM for the vector table.
  *
  * Original header follows.
  */
@@ -12,6 +14,14 @@
  * To make use of the multi-region initialisations, define
  * OS_INCLUDE_STARTUP_INIT_MULTIPLE_RAM_SECTIONS for the _startup.c file.
  */
+
+/*
+ * Interrupt::connectHandler() of system-stm32 copies the vector table to
+ * SRAM_BASE (0x20000000) and the table needs up to 0x100 bytes. The memory
+ * scripts (mem-f103*.ld) start RAM behind it; otherwise the copy overwrites
+ * .data. system-stm32 checks the table size, this checks the RAM origin.
+ */
+ASSERT(ORIGIN(RAM) >= 0x20000100, "keep 0x100 bytes of RAM free for the vector table copy at SRAM_BASE")
 
 /*
  * The '__stack' definition is required by crt0, do not remove it.
