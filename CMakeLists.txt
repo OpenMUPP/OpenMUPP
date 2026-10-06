@@ -102,9 +102,38 @@ if (CMAKE_CROSSCOMPILING)
         set(VSL_MEMORY_LDSCRIPT mem-f103.ld)
     endif ()
 
+    # Debug log over the CDC-ACM port (src/debug/DebugLog.h). The option
+    # disables the UART bridge: the CDC port carries only the log. It is ON by
+    # default in a Debug build. A Release build carries no log code.
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(_VSL_DEBUG_DEFAULT ON)
+    else ()
+        set(_VSL_DEBUG_DEFAULT OFF)
+    endif ()
+    option(VSL_DEBUG_CDC "Send the debug log to the CDC-ACM port instead of the UART bridge" ${_VSL_DEBUG_DEFAULT})
+    if (VSL_DEBUG_CDC AND CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "VSL_DEBUG_CDC is for debug builds: a Release build has no debug log. Set -DVSL_DEBUG_CDC=OFF.")
+    endif ()
+
+    # Keep the SW-DP of the dongle MCU on (plan section 3): the board drops
+    # its LEDs on the SWD pins (board::withSwd() in src/board/BoardDefinition.h).
+    option(VSL_DEBUG_SWD "Keep SWD of the dongle MCU on; drop the LEDs on the SWD pins" ${_VSL_DEBUG_DEFAULT})
+    if (VSL_DEBUG_SWD AND CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "VSL_DEBUG_SWD is for debug builds: a Release build has all LEDs. Set -DVSL_DEBUG_SWD=OFF.")
+    endif ()
+
     # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
     set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER})
+    if (VSL_DEBUG_CDC)
+        list(APPEND PROJECT_DEFINES VSL_DEBUG_CDC)
+    else ()
+        # The libArT LOG_* macros expand to nothing
+        list(APPEND PROJECT_DEFINES LOGGING_DISABLED)
+    endif ()
+    if (VSL_DEBUG_SWD)
+        list(APPEND PROJECT_DEFINES VSL_DEBUG_SWD)
+    endif ()
     set(CXX_OPTIONS -fno-exceptions -fno-rtti -fno-use-cxa-atexit -Wno-volatile)
     set(COMMON_OPTIONS -Os -ffunction-sections -fdata-sections -g -fno-common -fmessage-length=0 -fsigned-char -Werror=odr --specs=nano.specs --specs=nosys.specs)
     set(C_OPTIONS -std=gnu11)
@@ -134,7 +163,7 @@ if (CMAKE_CROSSCOMPILING)
     else ()
         set(VSL_LINK_VARIANT direct)
     endif ()
-    MESSAGE(STATUS "Building versaloon-next-gen version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (" ${VSL_LINK_VARIANT} ", " ${VSL_MEMORY_LDSCRIPT} ")")
+    MESSAGE(STATUS "Building versaloon-next-gen version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (" ${VSL_LINK_VARIANT} ", " ${VSL_MEMORY_LDSCRIPT} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program

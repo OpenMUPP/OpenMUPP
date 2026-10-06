@@ -171,6 +171,38 @@ TEST_CASE("swjConfig frees the debug port pins that the board uses") {
    CHECK(board::swjConfig(def) == board::SwjConfig::NoJtag);
 }
 
+TEST_CASE("withSwd drops the LEDs on the SWD pins and keeps SWD on") {
+   // Mini and OtherUse: PA14 is the USB LED. PA15 (power LED), PB3 and PB4
+   // stay, so the JTAG-DP is off and the SW-DP is on.
+   for(const Definition &board : { board::mini, board::otherUse }) {
+      const Definition debug = board::withSwd(board);
+      CHECK_FALSE(debug.leds.usb.has_value());
+      CHECK(debug.leds.power == board.leds.power);
+      CHECK(debug.leds.state == board.leds.state);
+      CHECK(board::isValid(debug));
+      CHECK(board::swjConfig(debug) == board::SwjConfig::NoJtag);
+
+      // All other fields stay the same
+      Definition expected = board;
+      expected.leds.usb.reset();
+      CHECK(debug == expected);
+   }
+
+   // The ST-Link/V2 uses no SWD pin: no change.
+   CHECK(board::withSwd(board::stLinkV2) == board::stLinkV2);
+
+   // An LED on SWDIO (PA13) goes too.
+   Definition def = board::stLinkV2;
+   def.leds.power = Signal{ { Port::A, 13 }, Active::Low };
+   CHECK_FALSE(board::withSwd(def).leds.power.has_value());
+
+   // A key on an SWD pin stays, and SWD stays off. board/Board.h refuses
+   // such a board in a VSL_DEBUG_SWD build.
+   def = board::stLinkV2;
+   def.key = Signal{ { Port::A, 14 }, Active::Low };
+   CHECK(board::swjConfig(board::withSwd(def)) == board::SwjConfig::Disabled);
+}
+
 TEST_CASE("Signal::levelFor gives the pin level of the signal state") {
    constexpr Signal activeLow{ { Port::A, 15 }, Active::Low };
    constexpr Signal activeHigh{ { Port::C, 13 }, Active::High };

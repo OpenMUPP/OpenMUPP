@@ -48,20 +48,23 @@ run-unit-tests:
     - cmake --build ${BUILDDIR} --target vsl-tests -- -j`nproc`
     - cd ${BUILDDIR} && ctest --output-on-failure
 
-# Release build linked behind versaloon-bootloader (0x08002800, 54 KB).
+# Build linked behind versaloon-bootloader (0x08002800, 54 KB). Release by
+# default; a Debug build has the debug log on the CDC port and SWD on.
 # The linker script fails the link when the image does not fit; the size
 # check reports the size and fails on the same limit.
 .build-board-template:
   stage: build
+  variables:
+    BUILD_TYPE: Release
   script:
     - cd "$CI_PROJECT_DIR"
-    - BUILDDIR=${BOARD}-build
+    - BUILDDIR=${BOARD}-${BUILD_TYPE}-build
     - cmake --no-warn-unused-cli
       -D GCC_TOOLCHAIN_PREFIX:STRING=${GCC_TOOLCHAIN_PREFIX}
       -D BOARD:STRING=${BOARD}
       -D VSL_BOOTLOADER:BOOL=ON
       -D CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
-      -D CMAKE_BUILD_TYPE:STRING=Release
+      -D CMAKE_BUILD_TYPE:STRING=${BUILD_TYPE}
       -D CMAKE_TOOLCHAIN_FILE=${CI_PROJECT_DIR}/cmake/gcc_arm.cmake
       -G "Unix Makefiles"
       -S .
@@ -69,12 +72,12 @@ run-unit-tests:
     - cmake --build ${BUILDDIR} --target versaloon-next-gen.elf -- -j`nproc`
     - ci/check-size.sh ${BUILDDIR}/versaloon-next-gen.bin ${FLASH_LIMIT_BYTES}
   artifacts:
-    name: "versaloon-next-gen-${BOARD}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
+    name: "versaloon-next-gen-${BOARD}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
     paths:
-      - ${BOARD}-build/versaloon-next-gen-*.hex
-      - ${BOARD}-build/versaloon-next-gen-*.bin
-      - ${BOARD}-build/versaloon-next-gen.elf
-      - ${BOARD}-build/versaloon-next-gen.map
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen-*.hex
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen-*.bin
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen.elf
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen.map
 
 build-mini:
   extends: .build-board-template
@@ -90,3 +93,9 @@ build-stlinkv2:
   extends: .build-board-template
   variables:
     BOARD: stlinkv2
+
+build-mini-debug:
+  extends: .build-board-template
+  variables:
+    BOARD: mini
+    BUILD_TYPE: Debug

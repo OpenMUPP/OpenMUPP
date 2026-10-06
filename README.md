@@ -42,6 +42,9 @@ Some functions come from the pin map, not from a separate field:
   The setting frees all debug port pins that the board uses, and keeps the rest.
   The Mini and the OtherUse use PA14 for an LED, so they disable the debug port.
   The ST-Link/V2 keeps JTAG and SWD.
+- `board::withSwd()` gives the board of a debug build with `VSL_DEBUG_SWD`.
+  It removes the LEDs on the SWD pins (PA13, PA14), so the debug port keeps SWD.
+  On the Mini and the OtherUse, the USB LED (PA14) is then not available.
 
 The build fails when a board definition is not valid.
 Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
@@ -61,6 +64,8 @@ This function does these steps:
 1. It sets the system clock to 72 MHz from the board crystal, and the SysTick to 1 ms.
 2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
    The Mini and the OtherUse disable the debug port. A debug probe can then connect only under reset.
+   With `VSL_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
+   Then a debug probe can run and step the firmware.
 3. It puts the board pins into a safe state:
    - All LEDs are off, but the power LED is on.
    - The USB pull-up is off, so the host does not see the device.
@@ -79,6 +84,7 @@ The main loop runs the USB device. It shows a heartbeat on the state LED:
 | On or off all the time | The main loop does not run. |
 
 The USB LED is on when the host has configured the USB device.
+A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
 
 ## USB device
 
@@ -119,6 +125,7 @@ The current firmware has placeholders for the two functions:
   The Versaloon command protocol replaces this echo in a later version.
 - The serial port sends the received data back.
   The UART bridge replaces this loopback in a later version.
+  In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](#debug-log-over-the-serial-port)).
 
 ### Check the enumeration
 
@@ -137,6 +144,32 @@ On Windows 10 or later:
 1. Make sure that the Device Manager shows a new COM port under "Ports (COM & LPT)", with the built-in CDC driver (`usbser.sys`).
 2. Make sure that interface 0 shows as a separate device ("Versaloon").
    OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
+
+### Debug log over the serial port
+
+The CMake option `VSL_DEBUG_CDC` sends the libArT log to the CDC-ACM serial port.
+The option is `ON` by default in a `Debug` build.
+A `Release` build with `VSL_DEBUG_CDC=ON` fails at configure time.
+The USB descriptors are the same in both builds.
+
+With the option, these rules apply:
+
+- The serial port carries only the log. The UART bridge is not built, and USART1 stays unused.
+  The device ignores the data that the host sends to the port.
+- Code logs with the libArT macros, for example `LOG_INFO(debug::appLog, "text %u", value)` (`src/debug/DebugLog.h`).
+- A log line has the uptime in seconds, the topic and the level, for example `1.234 [usb][INFO] configured`.
+- The log goes into a 1 KB ring buffer in RAM (`src/debug/LogSink.h`). The firmware does not use the heap.
+- The main loop moves the log to the port. Logging never waits for the host.
+- The firmware sends the log only when a terminal has the port open (DTR on).
+  Until then, the log stays in the ring buffer, so the start-up lines are not lost.
+- When the ring buffer is full, the firmware drops the new log bytes and keeps the old bytes.
+  When there is room again, a line such as `[log: 120 bytes dropped]` shows the number of dropped bytes.
+- Log only from the main loop, not from an interrupt handler.
+
+Without the option, CMake defines `LOGGING_DISABLED`.
+Then the `LOG_*` macros expand to nothing, and the firmware has no log code.
+
+To read the log on Linux, open the port, for example with `picocom /dev/ttyACM0`.
 
 ## Dependencies
 
@@ -189,6 +222,8 @@ The CMake options are:
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
 | `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
+| `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [Board definitions](#board-definitions)). Not allowed in a `Release` build. |
+| `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [Debug log](#debug-log-over-the-serial-port)). Not allowed in a `Release` build. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
 ### Flash layout and size limit
@@ -208,7 +243,7 @@ The link fails when less than the full main stack is free.
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the heartbeat, the version and the USB descriptors.
+They check the board definitions, the heartbeat, the version, the USB descriptors and the log sink.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 Configure without the toolchain file:
 
@@ -246,6 +281,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests.
 - `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
+- `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
   The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files as artifacts.
 
 ## Branches

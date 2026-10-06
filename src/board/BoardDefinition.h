@@ -238,10 +238,12 @@ enum class SwjConfig : uint8_t {
    Disabled // no debug port: frees PA13 and PA14 too
 };
 
+// SW-DP pins of the dongle MCU: SWDIO (PA13) and SWCLK (PA14).
+inline constexpr std::array<Pin, 2> swdPins{ { { Port::A, 13 }, { Port::A, 14 } } };
+
 // The SWJ configuration that frees all pins of the definition and keeps as
 // much of the debug port as possible.
 constexpr SwjConfig swjConfig(const Definition &def) {
-   constexpr std::array<Pin, 2> swdPins{ { { Port::A, 13 }, { Port::A, 14 } } };
    constexpr std::array<Pin, 3> jtagOnlyPins{ { { Port::A, 15 }, { Port::B, 3 }, { Port::B, 4 } } };
    bool usesJtagOnlyPin = false;
    for(const auto &pin : detail::allPins(def)) {
@@ -258,6 +260,22 @@ constexpr SwjConfig swjConfig(const Definition &def) {
       }
    }
    return usesJtagOnlyPin ? SwjConfig::NoJtag : SwjConfig::Full;
+}
+
+// The definition of a debug build (VSL_DEBUG_SWD): the same board without
+// the LEDs on the SW-DP pins, so swjConfig() keeps SWD on and a debug probe
+// can run and step the firmware. The firmware works without these LEDs.
+// Other signals on the SW-DP pins stay: board/Board.h checks that the
+// result keeps SWD.
+constexpr Definition withSwd(Definition def) {
+   for(auto *led : { &def.leds.power, &def.leds.state, &def.leds.usb }) {
+      for(const auto &swd : swdPins) {
+         if(*led && (*led)->pin == swd) {
+            led->reset();
+         }
+      }
+   }
+   return def;
 }
 
 } // namespace board

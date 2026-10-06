@@ -42,7 +42,8 @@ class UsbStack {
       return device_.isConfigured();
    }
 
-   // The CDC-ACM serial port, for the UART bridge and the logger.
+   // The CDC-ACM serial port: the UART bridge, or the debug log in a
+   // VSL_DEBUG_CDC build (see debug/DebugLog.h).
    art::usb::CdcAcmFunctionBase &serialPort() {
       return serialPort_;
    }
@@ -56,6 +57,10 @@ class UsbStack {
 
    // Placeholder until the UART bridge: sends the received data back.
    void loopBackSerialPort();
+
+   // VSL_DEBUG_CDC: the CDC port carries the log, so received data is
+   // dropped.
+   void discardSerialInput();
 
    hw::UsbDevice hardware_;
    RingBuffer<hw::usb::Event, 16> events_;
