@@ -53,13 +53,12 @@ int main() {
    const bool clockFromCrystal = hardware::isClockFromCrystal();
    const Heartbeat heartbeat{ clockFromCrystal ? Heartbeat::normal : Heartbeat::clockFault };
 
-   // Fails only when the block table is full: a static error that the host
-   // tests catch.
-   static_cast<void>(usbToAll.add(gpioBlock));
-
    debug::startLog();
    // The board names are string literals, so name.data() ends with a NUL.
    LOG_INFO(debug::appLog, "versaloon-next-gen %s, board %s", versionString, board::current.name.data());
+   if(!usbToAll.add(gpioBlock)) {
+      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the GPIO block");
+   }
 
    // USB needs the 48 MHz clock from the PLL. Without the crystal the
    // device stays disconnected, and the UART bridge is off.
