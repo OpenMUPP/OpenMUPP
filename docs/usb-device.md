@@ -131,12 +131,61 @@ The firmware has these blocks:
 |---|---|---|---|
 | `INFO` | `0x7E` | none | `[OK][12-byte capability bitmap]` |
 | `DELAY` | `0x61` | `[delay u16]` | `[OK]`. When bit 15 is set, bits 0-14 are the delay in ms. Else the delay is in µs. |
+| `GPIO` | `0x23` | Sub-commands, see [GPIO block](#gpio-block) | `[status]`, and `[value u16]` for `IN` |
 
 Bit n of the capability bitmap is set when the firmware has block `0x20 + n`.
-The firmware sets the bits of `INFO`, `DELAY` and `USB_TO_ALL`.
-The GPIO, JTAG_RAW, SWD and POWER blocks are not available yet.
+The firmware sets the bits of `GPIO`, `INFO`, `DELAY` and `USB_TO_ALL`.
+The JTAG_RAW, SWD and POWER blocks are not available yet.
 A block that the firmware does not have gets one status byte `CMD_NOT_SUPPORT`.
 OpenOCD then stops with an error.
+
+### GPIO block
+
+OpenOCD controls the reset lines SRST and TRST through the `GPIO` block (`src/protocol/GpioBlock.h`).
+Each bit of a `u16` mask selects one pin of the debug connector:
+
+| Bit | Signal | Mini and OtherUse | ST-Link/V2 |
+|---|---|---|---|
+| `0x0001` | SRST | PB11 | PB0 |
+| `0x0002` | TRST | PB10 | none |
+| `0x0004` | USR1 | none | none |
+| `0x0008` | USR2 | none | none |
+| `0x0010` | TCK | PB13 | PA5 |
+| `0x0020` | TDO (input only) | PB14 | PA6 |
+| `0x0040` | TDI | PB15 | PA7 |
+| `0x0080` | RTCK (input only) | PA8 | none |
+| `0x0100` | TMS | PB4 out, PB6 in | PB14 |
+
+The sub-commands use port index 0. The values are `u16`, little-endian:
+
+| Sub-command | Payload | Reply |
+|---|---|---|
+| `INIT` | none | `[status]` |
+| `FINI` | none | `[status]` |
+| `CONFIG` | `[mask][io][pull_en][pull]` | `[status]` |
+| `OUT` | `[mask][value]` | `[status]` |
+| `IN` | `[mask]` | `[status][value]` |
+
+`CONFIG` sets the mode of each pin in `mask`:
+
+| `io` | `pull_en` | `pull` | Pin mode |
+|---|---|---|---|
+| 1 | 0 | level | Push-pull output at the level |
+| 1 | 1 | level | Open-drain output at the level |
+| 0 | 0 | any | Floating input |
+| 0 | 1 | 1 | Input with pull-up |
+| 0 | 1 | 0 | Input with pull-down |
+
+OpenOCD releases SRST as an input with pull-up, and asserts SRST as a push-pull output at the low level.
+`OUT` writes the output level of the pins in `mask`.
+On an input with pull, the output register selects the pull direction, as in the original firmware.
+`IN` reads the level of the pins in `mask`.
+For TMS on the Mini, `IN` reads PB6. A TMS input also makes PB4 an input.
+
+A pin that the board does not have is ignored, and `IN` reads it as 0.
+Thus OpenOCD can set TRST on the ST-Link/V2.
+These requests get `INVALID_PARA`: a bit above `0x0100`, an output on TDO or RTCK, or a wrong payload size.
+A port index other than 0 gets `INVALID_INDEX`.
 
 The firmware checks the framing of all blocks and sub-commands before it runs the first one.
 When a length in the framing does not fit, the firmware runs nothing and replies with a ZLP.
@@ -162,8 +211,8 @@ On Linux:
 3. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini). Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
 4. Run OpenOCD with `-f interface/vsllink.cfg`.
    Make sure that OpenOCD shows the version text of `GET_INFO`, for example `versaloon-next-gen v0.1.0, board mini`.
-   Make sure that OpenOCD shows the capabilities, `USB_TO_XXX abilities: 0x00000000:0x00000000:0xC0000002`.
-   After this, OpenOCD fails, because the GPIO block is not available yet.
+   Make sure that OpenOCD shows the capabilities, `USB_TO_XXX abilities: 0x00000008:0x00000000:0xC0000002`.
+   After this, OpenOCD fails, because the JTAG_RAW and SWD blocks are not available yet.
 
 On Windows 10 or later:
 

@@ -6,7 +6,8 @@
 // (debug/DebugLog.h), and drives the heartbeat on the
 // state LED and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
 // enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
-// commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h).
+// commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h),
+// with the GPIO block (protocol/GpioBlock.h) on the debug connector pins.
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -15,10 +16,12 @@
 #include "Heartbeat.h"
 #include "Version.h"
 #include "board/Board.h"
+#include "board/BoardGpio.h"
 #include "board/Leds.h"
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
+#include "protocol/GpioBlock.h"
 #include "protocol/UsbToAll.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
@@ -39,6 +42,8 @@ class BusyWaitDelay final : public protocol::Delay {
 
 BusyWaitDelay busyWaitDelay;
 protocol::UsbToAll usbToAll{ busyWaitDelay };
+board::BoardGpio boardGpio;
+protocol::GpioBlock gpioBlock{ boardGpio };
 boot::BootloaderEntry bootloaderEntry;
 usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll };
 
@@ -47,6 +52,10 @@ usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToA
 int main() {
    const bool clockFromCrystal = hardware::isClockFromCrystal();
    const Heartbeat heartbeat{ clockFromCrystal ? Heartbeat::normal : Heartbeat::clockFault };
+
+   // Fails only when the block table is full: a static error that the host
+   // tests catch.
+   static_cast<void>(usbToAll.add(gpioBlock));
 
    debug::startLog();
    // The board names are string literals, so name.data() ends with a NUL.

@@ -7,10 +7,12 @@
 // of a reply matches the rest of the reply. Lines that start with "#" are
 // comments.
 //
-// The GPIO, JTAG_RAW and SWD blocks are fakes here: they reply OK with the
-// data size that OpenOCD expects, and zero data. The real blocks replace
-// them in the tests of their own.
+// The GPIO block is the real block on fake pins. The JTAG_RAW and SWD
+// blocks are fakes here: they reply OK with the data size that OpenOCD
+// expects, and zero data. The real blocks replace them in their own work
+// items.
 
+#include "protocol/GpioBlock.h"
 #include "protocol/UsbToAll.h"
 #include "protocol/UsbToXxx.h"
 
@@ -42,9 +44,23 @@ class NoDelay final : public protocol::Delay {
    uint32_t totalUs{ 0 };
 };
 
-// Replies OK with the data size of the OpenOCD usbtoxxx encoder: GPIO IN 2
-// bytes, JTAG_RAW IN_OUT (bits + 7) / 8 bytes, SWD IN_OUT 5 bytes and SWD
-// IN (bits + 7) / 8 bytes. The other sub-commands have no data.
+// The pins of the Mini; the target drives all inputs low.
+class LowPins final : public protocol::GpioPins {
+   public:
+   [[nodiscard]] uint16_t available() const override {
+      return protocol::gpio::all & ~(protocol::gpio::usr1 | protocol::gpio::usr2);
+   }
+   void configure(uint16_t, protocol::PinMode, bool) override {
+   }
+   void write(uint16_t, uint16_t) override {
+   }
+   [[nodiscard]] uint16_t read(uint16_t) const override {
+      return 0;
+   }
+};
+
+// Replies OK with the data size of the OpenOCD usbtoxxx encoder: JTAG_RAW IN_OUT (bits + 7) / 8 bytes, SWD IN_OUT 5
+// bytes and SWD IN (bits + 7) / 8 bytes. The other sub-commands have no data.
 class OpenOcdFakeBlock final : public protocol::SubCommandBlock {
    public:
    explicit OpenOcdFakeBlock(uint8_t type)
@@ -59,8 +75,6 @@ class OpenOcdFakeBlock final : public protocol::SubCommandBlock {
    private:
    [[nodiscard]] std::size_t dataSize(const SubCommand &command) const {
       switch(type()) {
-      case block::gpio:
-         return command.command == subcommand::in ? 2 : 0;
       case block::jtagRaw:
          if(command.command == subcommand::inOut) {
             REQUIRE(command.payload.size() >= 4);
@@ -134,7 +148,8 @@ std::vector<Transfer> loadTrace(const std::string &name) {
 void replay(const std::string &name) {
    NoDelay delay;
    protocol::UsbToAll usbToAll(delay);
-   OpenOcdFakeBlock gpio(block::gpio);
+   LowPins pins;
+   protocol::GpioBlock gpio(pins);
    OpenOcdFakeBlock jtagRaw(block::jtagRaw);
    OpenOcdFakeBlock swd(block::swd);
    REQUIRE(usbToAll.add(gpio));
