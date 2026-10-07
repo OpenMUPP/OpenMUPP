@@ -1,3 +1,4 @@
+#include "board/VrefScale.h"
 #include "board/boards/Mini.h"
 #include "board/boards/OtherUse.h"
 #include "board/boards/StLinkV2.h"
@@ -211,4 +212,17 @@ TEST_CASE("Signal::levelFor gives the pin level of the signal state") {
    CHECK(activeLow.levelFor(false) == true);
    CHECK(activeHigh.levelFor(true) == true);
    CHECK(activeHigh.levelFor(false) == false);
+}
+
+TEST_CASE("The Vref scale gives the target voltage from the ADC reading") {
+   // Divider 2 and VDDA 3.3 V: 1.65 V at the pin is 3.3 V at the target.
+   CHECK(board::vrefMillivolts(0, 2) == 0);
+   CHECK(board::vrefMillivolts(2048, 2) == 3301);
+   CHECK(board::vrefMillivolts(2047, 2) == 3299);
+   CHECK(board::vrefMillivolts(4095, 2) == 6600);
+   // The threshold of the power switch (1.8 V) is 1117 LSB
+   CHECK(board::vrefMillivolts(1116, 2) == 1799);
+   CHECK(board::vrefMillivolts(1117, 2) == 1800);
+   CHECK(board::vrefMillivolts(4095, 1) == 3300);
+   CHECK(board::vrefMillivolts(4095, 255) == 0xFFFF);
 }
