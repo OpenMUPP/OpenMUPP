@@ -123,6 +123,7 @@ A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
 Interface 0 is a placeholder in the current firmware.
 It sends each OUT packet back without change, with the same size (`src/usb/VersaloonFunction.cpp`).
 The Versaloon command protocol replaces this echo in a later version.
+The only exception is the command `VERSALOON_FW_UPDATE` (see [Firmware update](#firmware-update)).
 
 The serial port is the [UART bridge](#uart-bridge).
 In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](#debug-log-over-the-serial-port)).
@@ -257,6 +258,72 @@ python3 -m unittest discover -s tools -p "test_*.py"
 
 Status: the host tests pass. The test on a Mini and an OtherUse is not done yet.
 
+## Firmware update
+
+The firmware runs behind `versaloon-bootloader`.
+The bootloader is a USB CDC serial port with the ID `0483:5740`.
+It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
+
+### Start the bootloader
+
+Use one of these methods:
+
+- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`.
+- Hold the key (PB9) down and reset the board.
+
+The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
+
+| Status | Meaning |
+|---|---|
+| `0x00` | Accepted. The firmware starts the bootloader. |
+| `0x01` | Refused. The second byte is not the key `0xAA`, the firmware is linked without the bootloader (`VSL_BOOTLOADER=OFF`), or the board has no `versaloon-bootloader` (ST-Link/V2). The firmware continues to run. |
+
+After the reply, the firmware does these steps:
+
+1. It waits 10 ms, so the host can read the reply. The firmware does not wait for the host to read the reply.
+2. It enables the `PWR` and `BKP` clocks and the write access to the backup domain.
+3. It writes the boot request `0xB007` to the backup register `BKP->DR1`.
+4. It resets the MCU with `NVIC_SystemReset()`. The host sees a USB disconnect.
+
+After the reset, the bootloader finds the boot request, clears it and stays in bootloader mode.
+The next reset starts the firmware again.
+`src/boot/BootloaderEntry.h` and `src/boot/Bootloader.cpp` have the code.
+
+### Install the bootloader
+
+A new board needs the bootloader one time.
+The firmware build makes the bootloader image `versaloon-bootloader/versaloon-bootloader-<board>.hex` (see [Build the firmware](#build-the-firmware)).
+Write it at `0x08000000` with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "program versaloon-bootloader/versaloon-bootloader-mini.hex verify reset exit"
+```
+
+Then write the firmware through the bootloader (see below).
+
+### Write the firmware
+
+1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` with the ID `0483:5740` shows.
+2. Write the `.bin` file of a build with `VSL_BOOTLOADER=ON` at `0x08002800`:
+
+   ```sh
+   stm32flash -w versaloon-next-gen.bin -v -S 0x08002800 /dev/ttyACM0
+   ```
+
+3. Reset the board, or disconnect it and connect it again. The firmware starts.
+
+Do not write a build with `VSL_BOOTLOADER=OFF` through the bootloader.
+That build is linked at `0x08000000`, so it does not start at `0x08002800`.
+
+### Start-up behind the bootloader
+
+The bootloader starts the firmware after a system reset.
+Thus all peripherals are in their reset state when the firmware starts.
+The bootloader sets `VTOR` to the firmware vector table at `0x08002800`.
+The system-stm32 start-up code sets `VTOR` again from the linker script.
+The firmware initializes its DATA and BSS sections. It does not use RAM content from the bootloader.
+
 ## Dependencies
 
 The libraries are Git submodules in `dependencies/`:
@@ -264,6 +331,7 @@ The libraries are Git submodules in `dependencies/`:
 - `libArT`: core library (streams, logging, USB device stack).
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. The `dev` branch has the STM32F1 support.
 - `libart-stm32`: STM32 adapters for libArT. The `dev` branch has the STM32F1 support.
+- `versaloon-bootloader`: the USB bootloader (see [Firmware update](#firmware-update)). The `master` branch has the CMake build and the boot request in `BKP->DR1`.
 
 Clone with the submodules:
 
@@ -275,7 +343,7 @@ In an existing clone, run `git submodule update --init --recursive`.
 
 The build also needs:
 
-- CMake 3.20 or later.
+- CMake 3.20 or later. The `versaloon-bootloader` build needs CMake 3.21 or later.
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
@@ -300,13 +368,22 @@ The build writes these files into the build directory:
 - Copies of the `.hex` and `.bin` files with the board, the link variant, the build type and the version in the name.
   An example is `versaloon-next-gen-mini-bootloader-Release-v0.1.0.hex`.
 - `versaloon-next-gen.map`, the linker map.
+- `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board (see below).
+
+For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
+The target is `versaloon-bootloader`.
+`cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
+Thus the firmware options and the build type do not change the bootloader image.
+The bootloader build uses the compiler of the firmware build.
+There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BOOTLOADER` or `VSL_BUILD_BOOTLOADER` is `OFF`.
 
 The CMake options are:
 
 | Option | Default | Description |
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
-| `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. |
+| `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. The firmware then refuses `VERSALOON_FW_UPDATE`. The ST-Link/V2 has no bootloader: its firmware always refuses `VERSALOON_FW_UPDATE`. |
+| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse, and only with `VSL_BOOTLOADER=ON`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [Board definitions](#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [Debug log](#debug-log-over-the-serial-port)). Not allowed in a `Release` build. |
@@ -329,7 +406,7 @@ The link fails when less than the full main stack is free.
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink and the line coding map of the UART bridge.
+They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink, the line coding map of the UART bridge and the bootloader entry.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 The UART bridge tests run the bridge with the CDC-ACM function of libArT, the fake USB controller and a fake UART.
 Configure without the toolchain file:
@@ -369,8 +446,9 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `run-unit-tests`: builds and runs the host unit tests.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
 - `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
+  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` for the board.
 - `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
-  The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files as artifacts.
+  The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files and the bootloader images as artifacts.
 
 ## Branches
 

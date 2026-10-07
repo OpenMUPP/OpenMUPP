@@ -39,9 +39,10 @@ const art::usb::Descriptors descriptors{
 
 } // namespace
 
-UsbStack::UsbStack()
+UsbStack::UsbStack(boot::BootloaderEntry *bootloader)
    : controller_(hardware_, events_)
    , device_(controller_, descriptors)
+   , versaloon_(bootloader)
    , serialPort_(cdcControlInterface, serialPortEndpoints) {
    // Fails only for an interface range that does not fit the device: a
    // static configuration error, which the host tests catch.

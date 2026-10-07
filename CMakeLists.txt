@@ -66,12 +66,17 @@ set(PROJECT_INCLUDE_DIRS
 #   otheruse  OtherUse, 12 MHz crystal
 #   stlinkv2  ST-Link/V2 clone, 8 MHz crystal (compile-only target)
 set(VSL_BOARDS mini otheruse stlinkv2)
+# Boards that versaloon-bootloader supports (cmake/Bootloader.cmake)
+set(VSL_BOOTLOADER_BOARDS mini otheruse)
 set(BOARD "mini" CACHE STRING "Board to build for: ${VSL_BOARDS}")
 set_property(CACHE BOARD PROPERTY STRINGS ${VSL_BOARDS})
 
 # Link the application behind versaloon-bootloader (0x08002800, 54 KB) or
 # at the start of FLASH (0x08000000) for development without a bootloader.
 option(VSL_BOOTLOADER "Link the application behind versaloon-bootloader at 0x08002800" ON)
+# Build versaloon-bootloader (dependencies/versaloon-bootloader, cmake/Bootloader.cmake)
+# for the board. Only for boards that the bootloader supports, and only with VSL_BOOTLOADER.
+option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
@@ -125,6 +130,11 @@ if (CMAKE_CROSSCOMPILING)
     # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
     set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER})
+    # FW_UPDATE enters the bootloader only when the firmware is linked behind
+    # one and the board has one (src/boot/BootloaderEntry.h)
+    if (VSL_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
+        list(APPEND PROJECT_DEFINES VSL_HAS_BOOTLOADER_ENTRY)
+    endif ()
     if (VSL_DEBUG_CDC)
         list(APPEND PROJECT_DEFINES VSL_DEBUG_CDC)
     else ()
@@ -192,6 +202,12 @@ if (CMAKE_CROSSCOMPILING)
             COMMAND ${CMAKE_COMMAND} -E copy versaloon-next-gen.hex ${HEX_FILE}
             COMMAND ${CMAKE_COMMAND} -E copy versaloon-next-gen.bin ${BIN_FILE}
             COMMENT "Building ${HEX_FILE} \nBuilding ${BIN_FILE}")
+
+    include(Bootloader)
+    if (VSL_BUILD_BOOTLOADER AND VSL_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
+        vsl_add_bootloader()
+        MESSAGE(STATUS "Building versaloon-bootloader for board " ${BOARD} " into " ${VSL_BOOTLOADER_DIR})
+    endif ()
 else ()
     enable_testing()
     add_subdirectory(tests)

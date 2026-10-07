@@ -4,7 +4,8 @@
 // each USB interrupt. It runs the USB device, the UART bridge
 // (uart/SerialBridge.h) or, in a VSL_DEBUG_CDC build, the debug log
 // (debug/DebugLog.h), and drives the heartbeat on the
-// state LED and the USB state on the USB LED.
+// state LED and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
+// enters versaloon-bootloader (boot/BootloaderEntry.h).
 #include <cmsis_device.h>
 #include <utils/Timekeeping.h>
 
@@ -13,13 +14,16 @@
 #include "Version.h"
 #include "board/Board.h"
 #include "board/Leds.h"
+#include "boot/Bootloader.h"
+#include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
 namespace {
 
-usb::UsbStack usbStack;
+boot::BootloaderEntry bootloaderEntry;
+usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr };
 
 } // namespace
 
@@ -39,13 +43,17 @@ int main() {
    }
 
    for(;;) {
+      // One SysTick is 1 ms (initialize_hardware.cpp)
+      const auto nowMs = static_cast<uint64_t>(getUptimeTicks());
+      if(bootloaderEntry.isDue(nowMs)) {
+         boot::enterBootloader();
+      }
       if(clockFromCrystal) {
          usbStack.poll();
          debug::pollLog(usbStack);
          uart::pollBridge();
       }
-      // One SysTick is 1 ms (initialize_hardware.cpp)
-      board::setLed(board::Led::State, heartbeat.isOn(static_cast<uint64_t>(getUptimeTicks())));
+      board::setLed(board::Led::State, heartbeat.isOn(nowMs));
       board::setLed(board::Led::Usb, usbStack.isConfigured());
       __WFI();
    }

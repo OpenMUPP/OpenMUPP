@@ -34,6 +34,7 @@ add_executable(vsl-tests
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
+        TestBootloaderEntry.cpp
         ../src/usb/VersaloonFunction.cpp
         # Logger and printf of libArT, for the log sink test
         ../dependencies/libArT/src/logging/LogManager.cpp
