@@ -2,6 +2,7 @@
 
 #include "jtag/JtagBitBang.h"
 
+#include "MockBackground.h"
 #include "MockJtagPins.h"
 
 #include <doctest/doctest.h>
@@ -171,4 +172,83 @@ TEST_CASE("JTAG bit-bang: RTCK that does not follow TCK is a timeout, TCK ends l
    // It gave up after the timeout of 10 ms at 72 MHz.
    CHECK(pins.time - start >= 720'000);
    CHECK(pins.time - start <= 720'010);
+}
+
+namespace {
+
+// Samples the time, the TCK level and the rising edges of the pins.
+vsltest::MockBackground backgroundOf(const Pins &pins) {
+   return vsltest::MockBackground(
+   [&pins] { return vsltest::MockBackground::Call{ pins.time, pins.tckLevel(), pins.rising.size() }; });
+}
+
+// 1 ms at 72 MHz
+constexpr uint32_t msCycles = 72'000;
+
+} // namespace
+
+TEST_CASE("JTAG bit-bang: a long shift services the background between bytes, with TCK low") {
+   for(const uint32_t kHz : { 10u, 0u }) {
+      CAPTURE(kHz);
+      Pins pins;
+      // Adaptive: RTCK follows after 1800 cycles, about 10 kHz.
+      pins.rtckLag = 1800;
+      auto background = backgroundOf(pins);
+      BitBangPort<Pins> port(pins, &background);
+      REQUIRE(port.setSpeed(kHz));
+      const uint32_t start = pins.time;
+      // 64 bytes at 10 kHz: 51 ms
+      const uint32_t bitCount = 512;
+      REQUIRE(shift(port, bitCount, std::vector<uint8_t>(64, 0x5A), std::vector<uint8_t>(64, 0)).ok);
+      REQUIRE(pins.rising.size() == bitCount);
+      // A call at the first byte boundary after each interval: the gap is
+      // 1 ms plus at most one byte (8 bits of 7200 cycles, and some loop
+      // cycles).
+      const uint32_t byteCycles = 8 * 7200 + 1000;
+      REQUIRE_FALSE(background.calls.empty());
+      CHECK(background.calls.front().time - start <= byteCycles);
+      CHECK(pins.time - background.calls.back().time <= msCycles + byteCycles);
+      for(std::size_t i = 0; i < background.calls.size(); ++i) {
+         CAPTURE(i);
+         const auto &call = background.calls[i];
+         CHECK_FALSE(call.clock);
+         CHECK(call.count % 8 == 0);
+         if(i > 0) {
+            const uint32_t gap = call.time - background.calls[i - 1].time;
+            CHECK(gap >= msCycles);
+            CHECK(gap <= msCycles + byteCycles);
+         }
+      }
+   }
+}
+
+TEST_CASE("JTAG bit-bang: with the background, half periods are not shorter than the speed") {
+   Pins pins;
+   auto background = backgroundOf(pins);
+   // The background takes 50000 cycles: about 0.7 ms.
+   background.onService = [&pins] { pins.time += 50'000; };
+   BitBangPort<Pins> port(pins, &background);
+   REQUIRE(port.setSpeed(100));
+   uint32_t last = pins.time;
+   REQUIRE(shift(port, 1024, std::vector<uint8_t>(128, 0x33), std::vector<uint8_t>(128, 0)).ok);
+   REQUIRE_FALSE(background.calls.empty());
+   REQUIRE(pins.edges.size() == 2048);
+   for(const uint32_t edge : pins.edges) {
+      CHECK(edge - last >= 360);
+      last = edge;
+   }
+}
+
+TEST_CASE("JTAG bit-bang: the background interval runs on over short shifts") {
+   Pins pins;
+   auto background = backgroundOf(pins);
+   BitBangPort<Pins> port(pins, &background);
+   REQUIRE(port.setSpeed(1000));
+   const uint32_t start = pins.time;
+   // 400 shifts of 8 bits: about 600 cycles each, 3.3 ms together
+   for(int i = 0; i < 400; ++i) {
+      REQUIRE(shift(port, 8, { 0x01 }, { 0 }).ok);
+   }
+   CHECK(background.calls.size() >= (pins.time - start) / msCycles - 1);
+   CHECK(background.calls.size() <= (pins.time - start) / msCycles + 1);
 }
