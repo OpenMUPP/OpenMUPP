@@ -1,5 +1,6 @@
 # OpenOCD vsllink session in JTAG mode, adapter speed 1000 kHz.
-# Built from the vsllink driver of OpenOCD 0.12.0+dev (vsllink.c, versaloon.c,
+# Built from the vsllink driver of OpenOCD 0.12.0+dev, commit
+# 8da0578d7bce3e134821ccf10911182788debc32 (vsllink.c, versaloon.c,
 # usbtoxxx/*.c), not captured with usbmon: replace it with a capture.
 # '>' is one OUT transfer, '<' the expected IN transfer. '*' matches the
 # rest of the reply. The GPIO, JTAG_RAW and SWD replies are those of the
