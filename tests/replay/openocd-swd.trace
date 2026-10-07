@@ -1,0 +1,55 @@
+# OpenOCD vsllink session in SWD mode, adapter speed 1000 kHz.
+# Built from the vsllink driver of OpenOCD 0.12.0+dev, commit
+# 8da0578d7bce3e134821ccf10911182788debc32 (vsllink.c, versaloon.c,
+# usbtoxxx/*.c), not captured with usbmon: replace it with a capture.
+# '>' is one OUT transfer, '<' the expected IN transfer. '*' matches the
+# rest of the reply. The GPIO, JTAG_RAW and SWD replies are those of the
+# fake blocks of the test: OK and zero data.
+
+# versaloon_init(): GET_INFO
+> 00
+< 00 10 *
+
+# usbtoxxx_init()
+# usbtoinfo_get_abilities()
+> 7f 06 00 7e 03 00
+< 00 08 00 00 00 c0 00 00 00 02 00 00 c0
+
+# versaloon_get_target_voltage(): GET_TVCC
+> 01
+< 00 00
+
+# vsllink_init()
+# gpio.init(0)
+# gpio.config(0, 0x1, 0x0, 0x1, 0x1)
+# delay.delayms(100)
+> 7f 19 00 23 11 00 00 00 00 10 08 00 01 00 00 00 01 00 01 00 61 05 00 64 80
+< 00 00 00
+
+# vsllink_init(), SWD mode
+# gpio.config(0, 0x2, 0x0, 0x2, 0x2)
+# swd.init(0)
+# swd.config(0, 2, 1087, 1)
+# swd.seqout(0, swd_seq_jtag_to_swd, 136)
+> 7f 35 00 23 0e 00 10 08 00 02 00 00 00 02 00 02 00 46 24 00 00 00 00 10 05 00 02 3f 04 01 00 38 13 00 88 00 ff ff ff ff ff ff ff 9e e7 ff ff ff ff ff ff ff 00
+< 00 00 00 00
+
+# vsllink_reset(0, 0)
+# gpio.config(0, 0x1, 0x0, 0x1, 0x1)
+> 7f 11 00 23 0e 00 10 08 00 01 00 00 00 01 00 01 00
+< 00
+
+# DP connect: line reset, read DPIDR, write ABORT, read CTRL/STAT
+# swd.seqout(0, swd_seq_line_reset, 64)
+# swd.transact(0, read DPIDR)
+# swd.transact(0, write ABORT 0x1e)
+# swd.transact(0, read CTRL/STAT)
+> 7f 2b 00 46 28 00 38 0a 00 40 00 ff ff ff ff ff ff ff 00 28 05 00 a5 00 00 00 00 28 05 00 81 1e 00 00 00 28 05 00 8d 00 00 00 00
+< 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+# vsllink_quit()
+# gpio.config(0, 0x3, 0x0, 0x0, 0x3)
+# gpio.fini(0)
+# swd.fini(0)
+> 7f 1a 00 23 11 00 10 08 00 03 00 00 00 00 00 03 00 08 00 00 46 06 00 08 00 00
+< 00 00 00

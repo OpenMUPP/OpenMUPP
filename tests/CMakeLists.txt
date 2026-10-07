@@ -37,8 +37,12 @@ add_executable(vsl-tests
         TestBootloaderEntry.cpp
         TestCommandAssembler.cpp
         TestCommandProcessor.cpp
+        TestUsbToAll.cpp
+        TestReplay.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
+        ../src/protocol/UsbToAll.cpp
+        ../src/protocol/UsbToXxx.cpp
         ../src/usb/VersaloonFunction.cpp
         # Logger and printf of libArT, for the log sink test
         ../dependencies/libArT/src/logging/LogManager.cpp
@@ -60,7 +64,7 @@ target_include_directories(vsl-tests PRIVATE
         ../dependencies/libArT/src            # USB device stack
         ../dependencies/libArT/tests/usb      # FakeDeviceController.h
 )
-target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING)
+target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING VSL_REPLAY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/replay")
 target_link_libraries(vsl-tests PRIVATE doctest::doctest etl::etl)
 
 # Discover all tests
