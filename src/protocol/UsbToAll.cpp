@@ -32,54 +32,73 @@ bool UsbToAll::add(Block &block) {
 }
 
 std::optional<std::size_t> UsbToAll::process(art::span<const uint8_t> command, art::span<uint8_t> reply) {
-   Reply out(reply);
-   // A top-level command other than USB_TO_ALL is one block.
-   std::size_t offset = command[0] == block::all ? blockHeaderSize : 0;
-   while(offset < command.size()) {
-      if(command.size() - offset < blockHeaderSize) {
-         return 0;
-      }
-      const uint8_t type = command[offset];
-      const std::size_t length = getU16(command, offset + 1);
-      if(length < blockHeaderSize || length > command.size() - offset) {
-         return 0;
-      }
-      if(!runBlock(type, command.subspan(offset + blockHeaderSize, length - blockHeaderSize), out)) {
-         return 0;
-      }
-      offset += length;
+   if(!forEachBlock(command, [this](uint8_t type, art::span<const uint8_t> payload) {
+         const Block *const handler = find(type);
+         return handler == nullptr || handler->isWellFormed(payload);
+      })) {
+      return 0;
    }
+   Reply out(reply);
+   static_cast<void>(forEachBlock(command, [this, &out](uint8_t type, art::span<const uint8_t> payload) {
+      runBlock(type, payload, out);
+      return !out.overflow();
+   }));
    if(out.overflow()) {
       return 0;
    }
    return out.size();
 }
 
-bool UsbToAll::runBlock(uint8_t type, art::span<const uint8_t> payload, Reply &reply) {
-   switch(type) {
-   case block::info: {
-      const auto bitmap = capabilities();
-      const auto data = reply.add(Status::Ok, bitmap.size());
-      std::copy_n(bitmap.begin(), data.size(), data.begin());
-      return true;
+template <typename Visit>
+bool UsbToAll::forEachBlock(art::span<const uint8_t> command, Visit visit) {
+   // A top-level command other than USB_TO_ALL is one block.
+   std::size_t offset = command[0] == block::all ? blockHeaderSize : 0;
+   while(offset < command.size()) {
+      if(command.size() - offset < blockHeaderSize) {
+         return false;
+      }
+      const uint8_t type = command[offset];
+      const std::size_t length = getU16(command, offset + 1);
+      if(length < blockHeaderSize || length > command.size() - offset) {
+         return false;
+      }
+      if(!visit(type, command.subspan(offset + blockHeaderSize, length - blockHeaderSize))) {
+         return false;
+      }
+      offset += length;
    }
+   return true;
+}
+
+void UsbToAll::runBlock(uint8_t type, art::span<const uint8_t> payload, Reply &reply) {
+   switch(type) {
+   case block::info:
+      if(auto slot = reply.reserve(capabilityBytes)) {
+         const auto bitmap = capabilities();
+         std::copy(bitmap.begin(), bitmap.end(), slot->data().begin());
+      }
+      return;
    case block::delay:
       runDelay(payload, reply);
-      return true;
+      return;
    default:
       break;
    }
    Block *const handler = find(type);
    if(handler == nullptr) {
       reply.add(Status::CmdNotSupport);
-      return true;
+      return;
    }
-   return handler->run(payload, reply);
+   handler->run(payload, reply);
 }
 
 void UsbToAll::runDelay(art::span<const uint8_t> payload, Reply &reply) {
+   auto slot = reply.reserve();
+   if(!slot) {
+      return;
+   }
    if(payload.size() != 2) {
-      reply.add(Status::InvalidPara);
+      slot->setStatus(Status::InvalidPara);
       return;
    }
    const uint16_t value = getU16(payload, 0);
@@ -88,7 +107,6 @@ void UsbToAll::runDelay(art::span<const uint8_t> payload, Reply &reply) {
    } else {
       delay_.microseconds(value);
    }
-   reply.add(Status::Ok);
 }
 
 std::array<uint8_t, UsbToAll::capabilityBytes> UsbToAll::capabilities() const {

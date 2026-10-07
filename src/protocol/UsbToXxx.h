@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <utils/compat/span.h>
 
 namespace protocol {
@@ -62,16 +63,44 @@ enum class Status : uint8_t {
 inline constexpr std::size_t blockHeaderSize = 3;
 
 // Writes the reply of a USB_TO_ALL command into the reply buffer. A write
-// that does not fit sets overflow(), and the command gets an empty reply.
+// that does not fit sets overflow(). The dispatcher then runs no further
+// sub-command or block, and the command gets an empty reply.
 class Reply {
    public:
+   // The reply of one sub-command: its status byte and its data bytes.
+   class Slot {
+      public:
+      Slot(uint8_t &status, art::span<uint8_t> data)
+         : status_(&status)
+         , data_(data) {
+      }
+
+      void setStatus(Status status) {
+         *status_ = static_cast<uint8_t>(status);
+      }
+
+      // Exactly the data size that reserve() got.
+      [[nodiscard]] art::span<uint8_t> data() const {
+         return data_;
+      }
+
+      private:
+      uint8_t *status_;
+      art::span<uint8_t> data_;
+   };
+
    explicit Reply(art::span<uint8_t> buffer)
       : buffer_(buffer) {
    }
 
-   // Adds the status and dataSize data bytes, set to 0. Returns the data
-   // bytes, for the caller to fill. Empty after an overflow.
-   art::span<uint8_t> add(Status status, std::size_t dataSize = 0);
+   // Reserves the status (set to OK) and dataSize data bytes (set to 0).
+   // Call it before the operation of the sub-command. No value when the
+   // reply does not fit (overflow() is then set): do not run the operation.
+   std::optional<Slot> reserve(std::size_t dataSize = 0);
+
+   // Adds a status without data, for a sub-command that does not run. Same
+   // as reserve(0) and setStatus().
+   void add(Status status);
 
    [[nodiscard]] std::size_t size() const {
       return size_;
@@ -94,9 +123,16 @@ class Block {
       return type_;
    }
 
-   // Runs the payload of one block and adds its reply. Returns false when
-   // the payload is malformed: the command then gets an empty reply.
-   virtual bool run(art::span<const uint8_t> payload, Reply &reply) = 0;
+   // True when the framing of the payload is correct. The dispatcher checks
+   // all blocks of a command before it runs the first one.
+   [[nodiscard]] virtual bool isWellFormed(art::span<const uint8_t> payload) const {
+      static_cast<void>(payload);
+      return true;
+   }
+
+   // Runs the payload of one block (isWellFormed() is true) and adds its
+   // reply. Stops at the first overflow of reply.
+   virtual void run(art::span<const uint8_t> payload, Reply &reply) = 0;
 
    protected:
    explicit Block(uint8_t type)
@@ -119,7 +155,8 @@ struct SubCommand {
 // A block whose payload is a list of sub-commands.
 class SubCommandBlock : public Block {
    public:
-   bool run(art::span<const uint8_t> payload, Reply &reply) final;
+   [[nodiscard]] bool isWellFormed(art::span<const uint8_t> payload) const final;
+   void run(art::span<const uint8_t> payload, Reply &reply) final;
 
    protected:
    explicit SubCommandBlock(uint8_t type)
@@ -127,7 +164,9 @@ class SubCommandBlock : public Block {
    }
    ~SubCommandBlock() = default;
 
-   // Runs one sub-command and adds its status and data to reply.
+   // Runs one sub-command and adds its status and data to reply. It calls
+   // reply.reserve() before it changes the hardware, and does nothing when
+   // reserve() has no value.
    virtual void runSubCommand(const SubCommand &command, Reply &reply) = 0;
 };
 

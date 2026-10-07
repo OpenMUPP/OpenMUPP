@@ -26,7 +26,6 @@
 
 namespace {
 
-using protocol::Status;
 using protocol::SubCommand;
 namespace block = protocol::block;
 namespace subcommand = protocol::subcommand;
@@ -54,7 +53,7 @@ class OpenOcdFakeBlock final : public protocol::SubCommandBlock {
 
    protected:
    void runSubCommand(const SubCommand &command, protocol::Reply &reply) override {
-      reply.add(Status::Ok, dataSize(command));
+      static_cast<void>(reply.reserve(dataSize(command)));
    }
 
    private:

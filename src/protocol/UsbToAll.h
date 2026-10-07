@@ -20,8 +20,15 @@
 //
 // The other blocks are Block objects (GPIO, JTAG_RAW, SWD, POWER), added
 // with add(). A block type without a Block gets one CMD_NOT_SUPPORT status
-// byte. A malformed command (a length that does not fit) or a reply that
-// does not fit the reply buffer gets an empty reply.
+// byte.
+//
+// The dispatcher checks the framing of all blocks and sub-commands before
+// it runs the first one. A malformed command (a length that does not fit)
+// runs nothing and gets an empty reply. A reply that does not fit the reply
+// buffer stops the command at the first sub-command that does not fit: the
+// sub-commands before it have run, and the command gets an empty reply. The
+// host makes no command whose reply is larger than the buffer size of
+// GET_INFO, so this is a host error.
 
 #include <array>
 #include <cstddef>
@@ -61,8 +68,11 @@ class UsbToAll final : public UsbToXxxHandler {
    [[nodiscard]] std::array<uint8_t, capabilityBytes> capabilities() const;
 
    private:
-   // Runs one block. Returns false when it is malformed.
-   bool runBlock(uint8_t type, art::span<const uint8_t> payload, Reply &reply);
+   // Calls visit(type, payload) for each block of command. Returns false
+   // when the framing is wrong, or when visit() returns false.
+   template <typename Visit>
+   static bool forEachBlock(art::span<const uint8_t> command, Visit visit);
+   void runBlock(uint8_t type, art::span<const uint8_t> payload, Reply &reply);
    void runDelay(art::span<const uint8_t> payload, Reply &reply);
    [[nodiscard]] Block *find(uint8_t type) const;
 

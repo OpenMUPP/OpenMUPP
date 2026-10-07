@@ -33,7 +33,7 @@ class FakeDelay final : public protocol::Delay {
    std::vector<std::string> calls;
 };
 
-// Records the sub-commands. Each reply is OK with dataSize bytes 0xD0,
+// Records the sub-commands that run. Each reply is OK with dataSize bytes 0xD0,
 // 0xD1, ...; a sub-command with index 7 fails with INVALID_INDEX and still
 // has its data size.
 class FakeBlock final : public protocol::SubCommandBlock {
@@ -53,10 +53,17 @@ class FakeBlock final : public protocol::SubCommandBlock {
 
    protected:
    void runSubCommand(const SubCommand &command, protocol::Reply &reply) override {
+      auto slot = reply.reserve(dataSize_);
+      if(!slot) {
+         return;
+      }
       recorded.push_back({ command.command, command.index, { command.payload.begin(), command.payload.end() } });
-      const auto data = reply.add(command.index == 7 ? Status::InvalidIndex : Status::Ok, dataSize_);
-      for(std::size_t i = 0; i < data.size(); ++i) {
-         data[i] = static_cast<uint8_t>(0xD0 + i);
+      REQUIRE(slot->data().size() == dataSize_);
+      for(std::size_t i = 0; i < dataSize_; ++i) {
+         slot->data()[i] = static_cast<uint8_t>(0xD0 + i);
+      }
+      if(command.index == 7) {
+         slot->setStatus(Status::InvalidIndex);
       }
    }
 
@@ -242,9 +249,50 @@ TEST_CASE("Malformed commands get an empty reply") {
    SUBCASE("The sub-command length goes past the block") {
       CHECK(bench.run(usbToAll({ { block::gpio, { 0x38, 0x04, 0x00, 0x01, 0x00 } } })) == std::vector<uint8_t>{});
    }
-   SUBCASE("A good block before a malformed one does not reply") {
+   SUBCASE("A good block before a malformed one does not run") {
       CHECK(bench.run(usbToAll({ { block::delay, { 0x01, 0x00 } }, { block::gpio, { 0x00 } } })) == std::vector<uint8_t>{});
    }
+   SUBCASE("A good sub-command before a malformed one does not run") {
+      CHECK(bench.run(usbToAll({ { block::delay, { 0x01, 0x00 } }, { block::gpio, { 0x00, 0x00, 0x00, 0x38, 0x04, 0x00, 0x01 } } })) ==
+            std::vector<uint8_t>{});
+   }
+   SUBCASE("A malformed block after a good one does not run the good one") {
+      CHECK(bench.run({ 0x7F, 0x0D, 0x00, 0x23, 0x06, 0x00, 0x00, 0x00, 0x00, 0x61, 0x02, 0x00, 0x00 }) == std::vector<uint8_t>{});
+   }
+   // Nothing ran.
+   CHECK(bench.delay.calls.empty());
+   CHECK(gpio.recorded.empty());
+}
+
+TEST_CASE("An overflow stops the command at the sub-command that does not fit") {
+   Bench bench;
+   FakeBlock jtag(block::jtagRaw, 100);
+   FakeBlock gpio(block::gpio);
+   REQUIRE(bench.dispatcher.add(jtag));
+   REQUIRE(bench.dispatcher.add(gpio));
+   bench.setReplySize(150);
+
+   SUBCASE("A later sub-command of the same block") {
+      CHECK(bench.runLimited(usbToAll({ { block::jtagRaw, { 0x28, 0x00, 0x00, 0x28, 0x01, 0x00, 0xAA, 0x28, 0x00, 0x00 } },
+                                        { block::delay, { 0x01, 0x00 } } })) == std::vector<uint8_t>{});
+      // The first sub-command ran, the second did not fit.
+      CHECK(jtag.recorded.size() == 1);
+   }
+   SUBCASE("A later block") {
+      CHECK(bench.runLimited(usbToAll({ { block::jtagRaw, { 0x28, 0x00, 0x00 } },
+                                        { block::jtagRaw, { 0x28, 0x00, 0x00 } },
+                                        { block::gpio, { 0x00, 0x00, 0x00 } } })) == std::vector<uint8_t>{});
+      CHECK(jtag.recorded.size() == 1);
+   }
+   SUBCASE("A DELAY that does not fit does not wait") {
+      FakeBlock big(0x30, 149);
+      REQUIRE(bench.dispatcher.add(big));
+      CHECK(bench.runLimited(usbToAll({ { 0x30, { 0x00, 0x00, 0x00 } }, { block::delay, { 0x01, 0x00 } } })) ==
+            std::vector<uint8_t>{});
+      CHECK(big.recorded.size() == 1);
+   }
+   CHECK(bench.delay.calls.empty());
+   CHECK(gpio.recorded.empty());
 }
 
 TEST_CASE("A reply that does not fit the reply buffer is empty") {

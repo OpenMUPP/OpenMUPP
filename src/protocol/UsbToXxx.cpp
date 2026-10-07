@@ -4,19 +4,12 @@
 
 namespace protocol {
 
-art::span<uint8_t> Reply::add(Status status, std::size_t dataSize) {
-   if(overflow_ || buffer_.size() - size_ < 1 + dataSize) {
-      overflow_ = true;
-      return {};
-   }
-   buffer_[size_] = static_cast<uint8_t>(status);
-   const auto data = buffer_.subspan(size_ + 1, dataSize);
-   std::fill(data.begin(), data.end(), 0);
-   size_ += 1 + dataSize;
-   return data;
-}
+namespace {
 
-bool SubCommandBlock::run(art::span<const uint8_t> payload, Reply &reply) {
+// Calls visit(command) for each sub-command of payload. Returns false when
+// the framing is wrong, or when visit() returns false.
+template <typename Visit>
+bool forEachSubCommand(art::span<const uint8_t> payload, Visit visit) {
    std::size_t offset = 0;
    while(offset < payload.size()) {
       if(payload.size() - offset < blockHeaderSize) {
@@ -33,10 +26,44 @@ bool SubCommandBlock::run(art::span<const uint8_t> payload, Reply &reply) {
          .index = static_cast<uint8_t>(first & subcommand::indexMask),
          .payload = payload.subspan(offset, length),
       };
-      runSubCommand(command, reply);
+      if(!visit(command)) {
+         return false;
+      }
       offset += length;
    }
    return true;
+}
+
+} // namespace
+
+std::optional<Reply::Slot> Reply::reserve(std::size_t dataSize) {
+   if(overflow_ || buffer_.size() - size_ < 1 + dataSize) {
+      overflow_ = true;
+      return std::nullopt;
+   }
+   buffer_[size_] = static_cast<uint8_t>(Status::Ok);
+   const auto data = buffer_.subspan(size_ + 1, dataSize);
+   std::fill(data.begin(), data.end(), 0);
+   Slot slot(buffer_[size_], data);
+   size_ += 1 + dataSize;
+   return slot;
+}
+
+void Reply::add(Status status) {
+   if(auto slot = reserve()) {
+      slot->setStatus(status);
+   }
+}
+
+bool SubCommandBlock::isWellFormed(art::span<const uint8_t> payload) const {
+   return forEachSubCommand(payload, [](const SubCommand &) { return true; });
+}
+
+void SubCommandBlock::run(art::span<const uint8_t> payload, Reply &reply) {
+   static_cast<void>(forEachSubCommand(payload, [this, &reply](const SubCommand &command) {
+      runSubCommand(command, reply);
+      return !reply.overflow();
+   }));
 }
 
 } // namespace protocol

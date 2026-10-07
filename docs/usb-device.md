@@ -138,7 +138,11 @@ The GPIO, JTAG_RAW, SWD and POWER blocks are not available yet.
 A block that the firmware does not have gets one status byte `CMD_NOT_SUPPORT`.
 OpenOCD then stops with an error.
 
-The firmware replies with a ZLP when a length in the framing does not fit, or when the reply does not fit the reply buffer.
+The firmware checks the framing of all blocks and sub-commands before it runs the first one.
+When a length in the framing does not fit, the firmware runs nothing and replies with a ZLP.
+When the reply does not fit the reply buffer, the firmware stops at the first sub-command that does not fit, and replies with a ZLP.
+The sub-commands before it have run.
+The host sends no command with a reply that is larger than the buffer size of `GET_INFO`, so this is a host error.
 
 `DELAY` waits in a busy loop, and the main loop stops for this time.
 The longest delay is 32.767 s.
