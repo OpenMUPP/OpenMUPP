@@ -7,12 +7,15 @@
 // of a reply matches the rest of the reply. Lines that start with "#" are
 // comments.
 //
-// The GPIO block is the real block on fake pins. The JTAG_RAW and SWD
-// blocks are fakes here: they reply OK with the data size that OpenOCD
-// expects, and zero data. The real blocks replace them in their own work
-// items.
+// The GPIO block is the real block on fake pins. The JTAG_RAW block is the
+// real block on the bit-bang engine, with fake pins. On the fake pins, the
+// target drives all inputs low. The SWD block is a fake here: it replies
+// OK with the data size that OpenOCD expects, and zero data. The real
+// block replaces it in its own work item.
 
+#include "jtag/JtagBitBang.h"
 #include "protocol/GpioBlock.h"
+#include "protocol/JtagRawBlock.h"
 #include "protocol/UsbToAll.h"
 #include "protocol/UsbToXxx.h"
 
@@ -59,8 +62,45 @@ class LowPins final : public protocol::GpioPins {
    }
 };
 
-// Replies OK with the data size of the OpenOCD usbtoxxx encoder: JTAG_RAW IN_OUT (bits + 7) / 8 bytes, SWD IN_OUT 5
-// bytes and SWD IN (bits + 7) / 8 bytes. The other sub-commands have no data.
+// The JTAG pins of the Mini; the target drives TDO low, and RTCK follows
+// TCK. now() counts one cycle for each call.
+class LowJtagPins {
+   public:
+   static constexpr bool hasRtck = true;
+
+   void init() {
+   }
+   void fini() {
+   }
+   void begin() {
+   }
+   void tck(bool level) {
+      tck_ = level;
+   }
+   void tms(bool) {
+   }
+   void tdi(bool) {
+   }
+   [[nodiscard]] bool tdo() const {
+      return false;
+   }
+   [[nodiscard]] bool rtck() const {
+      return tck_;
+   }
+   uint32_t now() {
+      return time_++;
+   }
+   [[nodiscard]] uint32_t coreHz() const {
+      return 72'000'000;
+   }
+
+   private:
+   bool tck_{ false };
+   uint32_t time_{ 0 };
+};
+
+// Replies OK with the data size of the OpenOCD usbtoxxx encoder: SWD IN_OUT 5 bytes and SWD IN (bits + 7) / 8 bytes.
+// The other sub-commands have no data.
 class OpenOcdFakeBlock final : public protocol::SubCommandBlock {
    public:
    explicit OpenOcdFakeBlock(uint8_t type)
@@ -74,25 +114,14 @@ class OpenOcdFakeBlock final : public protocol::SubCommandBlock {
 
    private:
    [[nodiscard]] std::size_t dataSize(const SubCommand &command) const {
-      switch(type()) {
-      case block::jtagRaw:
-         if(command.command == subcommand::inOut) {
-            REQUIRE(command.payload.size() >= 4);
-            return (protocol::getU32(command.payload, 0) + 7) / 8;
-         }
-         return 0;
-      case block::swd:
-         if(command.command == subcommand::inOut) {
-            return 5;
-         }
-         if(command.command == subcommand::in) {
-            REQUIRE(command.payload.size() >= 2);
-            return (protocol::getU16(command.payload, 0) + 7u) / 8u;
-         }
-         return 0;
-      default:
-         return 0;
+      if(command.command == subcommand::inOut) {
+         return 5;
       }
+      if(command.command == subcommand::in) {
+         REQUIRE(command.payload.size() >= 2);
+         return (protocol::getU16(command.payload, 0) + 7u) / 8u;
+      }
+      return 0;
    }
 };
 
@@ -150,7 +179,9 @@ void replay(const std::string &name) {
    protocol::UsbToAll usbToAll(delay);
    LowPins pins;
    protocol::GpioBlock gpio(pins);
-   OpenOcdFakeBlock jtagRaw(block::jtagRaw);
+   LowJtagPins jtagPins;
+   jtag::BitBangPort<LowJtagPins> jtagPort(jtagPins);
+   protocol::JtagRawBlock jtagRaw(jtagPort);
    OpenOcdFakeBlock swd(block::swd);
    REQUIRE(usbToAll.add(gpio));
    REQUIRE(usbToAll.add(jtagRaw));

@@ -47,7 +47,8 @@ A trace has one transfer on each line:
 
 The current traces come from the code of the OpenOCD `vsllink` driver, not from a capture.
 The GPIO block is the real block, on fake pins.
-The JTAG_RAW and SWD blocks are test fakes. They reply `OK` with the data size that OpenOCD expects, and zero data.
+The JTAG_RAW block is the real block on the bit-bang engine, with fake pins. The target of the fake pins drives TDO low.
+The SWD block is a test fake. It replies `OK` with the data size that OpenOCD expects, and zero data.
 
 To replace a trace with a capture, do these steps:
 
