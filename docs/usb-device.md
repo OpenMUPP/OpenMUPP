@@ -231,6 +231,9 @@ At 115200 baud, the UART receives 11.5 bytes per ms.
 
 The call makes one clock phase longer by the time of the service, some microseconds.
 The clock does not get faster: each half period waits from its clock edge.
+For JTAG in timed mode, the low half period starts again after the call.
+Thus TDI and TMS change a full half period before the next rising edge, as for all other bits.
+For SWD, each bit waits a full half period after the SWDIO write, so SWDIO also keeps its setup time.
 The duty cycle of that one clock period changes.
 The service takes some microseconds in each millisecond, so a shift gets a little slower.
 The time of the service on the target is not measured yet.
@@ -242,6 +245,10 @@ Limits:
 - The `DELAY` block does not call the service (see above).
 - The service runs at a byte boundary. At a very slow clock, the time between two calls is 1 ms plus one byte.
   At 10 kHz TCK, this is 1.8 ms.
+- With adaptive clocking (RTCK), one byte has no such limit.
+  Each of the 16 TCK edges of a byte can wait up to 10 ms for RTCK, so one byte can take up to 160 ms.
+  This is more than the 89 ms of the RX ring buffer.
+  Data loss occurs only when the target replies to each edge after more than about 5.5 ms.
 
 ### JTAG_RAW block
 
