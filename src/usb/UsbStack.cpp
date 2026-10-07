@@ -5,6 +5,7 @@
 #include <peripherals/Uid.h>
 
 #include "Hardware.h"
+#include "Version.h"
 #include "board/Board.h"
 #include "board/BoardPins.h"
 #include "debug/DebugLog.h"
@@ -26,6 +27,12 @@ constexpr art::usb::CdcAcmEndpoints serialPortEndpoints{
 
 SerialNumber serialNumber;
 
+const protocol::DeviceInfo deviceInfo{
+   .version = versionString,
+   .board = board::current.name,
+   .hardwareId = board::current.hardwareId,
+};
+
 const std::array<art::span<const uint8_t>, stringCount> strings{
    desc::asSpan(languageDescriptor),   desc::asSpan(manufacturerDescriptor),
    desc::asSpan(productDescriptor),    serialNumber.bytes(),
@@ -43,7 +50,7 @@ const art::usb::Descriptors descriptors{
 UsbStack::UsbStack(boot::BootloaderEntry *bootloader)
    : controller_(hardware_, events_)
    , device_(controller_, descriptors)
-   , versaloon_(bootloader)
+   , versaloon_(deviceInfo, bootloader)
    , serialPort_(cdcControlInterface, serialPortEndpoints) {
    // Fails only for an interface range that does not fit the device: a
    // static configuration error, which the host tests catch.

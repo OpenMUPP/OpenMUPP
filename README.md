@@ -12,9 +12,10 @@ The project is at an early stage. The current firmware does these functions:
 - It enumerates as a USB composite device with the USB identity of the original Versaloon firmware.
 - It bridges the serial port to the UART.
 - It starts the bootloader on request, for a firmware update.
+- It receives Versaloon commands and replies to the common commands, for example `GET_INFO`.
 
-The Versaloon protocol is not available yet.
-OpenOCD finds the device, but cannot use it.
+The `USB_TO_XXX` commands (JTAG, SWD, GPIO, target power) are not available yet.
+OpenOCD reads the firmware version, but cannot debug a target.
 See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
 ## Boards
@@ -119,7 +120,7 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
 
 - **Debug adapter:** use OpenOCD with `-f interface/vsllink.cfg`.
   On Windows, OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
-  The Versaloon protocol is not available yet (see [Status](#status)).
+  The `USB_TO_XXX` commands are not available yet (see [Status](#status)).
 - **Serial port:** the dongle has a serial port (`/dev/ttyACM*` on Linux, a COM port on Windows).
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini and the OtherUse.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
