@@ -49,6 +49,12 @@ std::optional<std::size_t> UsbToAll::process(art::span<const uint8_t> command, a
    return out.size();
 }
 
+void UsbToAll::hostGone() {
+   for(std::size_t i = 0; i < blockCount_; ++i) {
+      blocks_[i]->hostGone();
+   }
+}
+
 template <typename Visit>
 bool UsbToAll::forEachBlock(art::span<const uint8_t> command, Visit visit) {
    // A top-level command other than USB_TO_ALL is one block.

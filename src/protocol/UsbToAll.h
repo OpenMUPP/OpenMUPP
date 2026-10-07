@@ -64,6 +64,9 @@ class UsbToAll final : public UsbToXxxHandler {
 
    std::optional<std::size_t> process(art::span<const uint8_t> command, art::span<uint8_t> reply) override;
 
+   // Calls Block::hostGone() of each block.
+   void hostGone() override;
+
    // The capability bitmap of the INFO reply
    [[nodiscard]] std::array<uint8_t, capabilityBytes> capabilities() const;
 

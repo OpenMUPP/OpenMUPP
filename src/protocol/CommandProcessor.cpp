@@ -55,6 +55,12 @@ std::optional<std::size_t> CommandProcessor::process(art::span<const uint8_t> co
    }
 }
 
+void CommandProcessor::hostGone() {
+   if(usbToXxx_ != nullptr) {
+      usbToXxx_->hostGone();
+   }
+}
+
 std::size_t CommandProcessor::info(art::span<uint8_t> reply) const {
    putU16(reply, static_cast<uint16_t>(bufferSize));
    uint8_t *const text = reply.data() + 2;

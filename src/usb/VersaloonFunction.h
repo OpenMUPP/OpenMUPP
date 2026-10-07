@@ -15,6 +15,11 @@
 // ZLP: the host reads that size, so its read ends without one, and the ZLP
 // would end the next read.
 //
+// When the host closes the interface (bus reset, deconfigure or suspend),
+// the function tells the USB_TO_XXX handler (UsbToXxxHandler::hostGone()):
+// it releases SRST and TRST, so a target does not stay in reset after
+// OpenOCD stops.
+//
 // A wrong command (length error or overflow) gets an empty reply (a ZLP)
 // at the end of its transfer (see protocol/CommandAssembler.h). The host
 // then sees a reply of the wrong size at once, without a timeout. A reply
@@ -43,6 +48,7 @@ class VersaloonFunction final : public art::usb::VendorBulkFunction {
    bool dataReceived(art::span<const uint8_t> packet) override;
    void transferSent() override;
    void dataPathClosed() override;
+   void suspended() override;
 
    private:
    // Starts the IN transfer of the reply. Returns the value for

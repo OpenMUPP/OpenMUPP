@@ -179,6 +179,11 @@ The sub-commands use port index 0. The values are `u16`, little-endian:
 | 0 | 1 | 0 | Input with pull-down |
 
 OpenOCD releases SRST as an input with pull-up, and asserts SRST as a push-pull output at the low level.
+When the host closes the Versaloon interface, the firmware releases SRST and TRST: they become inputs with pull-up.
+The host closes the interface with a USB bus reset, with `SET_CONFIGURATION 0`, or with a USB suspend.
+For example, this occurs when OpenOCD stops during `reset halt`, or when the cable is disconnected.
+Thus the target does not stay in reset until the next OpenOCD session.
+The original firmware kept the reset lines asserted.
 `OUT` writes the output level of the pins in `mask`.
 On an input with pull, the output register selects the pull direction, as in the original firmware.
 `IN` reads the level of the pins in `mask`.

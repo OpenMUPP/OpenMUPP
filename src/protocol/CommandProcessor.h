@@ -42,6 +42,11 @@ class UsbToXxxHandler {
    // buffer. Returns the size of the reply, or no value for no reply.
    virtual std::optional<std::size_t> process(art::span<const uint8_t> command, art::span<uint8_t> reply) = 0;
 
+   // The host closed the interface (bus reset, deconfigure or suspend),
+   // for example because OpenOCD stopped. Release the target.
+   virtual void hostGone() {
+   }
+
    protected:
    ~UsbToXxxHandler() = default;
 };
@@ -61,6 +66,9 @@ class CommandProcessor {
    // reply buffer, at least maxInfoText + 3 bytes. Returns the size of the
    // reply, or no value for no reply.
    std::optional<std::size_t> process(art::span<const uint8_t> command, art::span<uint8_t> reply);
+
+   // See UsbToXxxHandler::hostGone().
+   void hostGone();
 
    private:
    std::size_t info(art::span<uint8_t> reply) const;
