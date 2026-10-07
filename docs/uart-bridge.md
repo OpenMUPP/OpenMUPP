@@ -34,6 +34,8 @@ Flow control and data loss:
   The bridge counts the dropped bytes (`UartBridge::rxDropped()`).
 - The bridge also counts the bytes that the UART lost in an overrun (`UartBridge::rxOverruns()`).
   An overrun occurs when the interrupt reads a byte too late, for example at very high baud rates.
+  To prevent overruns, the UART interrupt has a higher priority than the USB interrupt (`src/Hardware.h`).
+  At 2 Mbaud, the interrupt must read each byte within 5 µs.
 - The bridge counts the received bytes with a framing, noise or parity error (`UartBridge::rxErrors()`).
   These bytes still go to the host. Many errors usually show a wrong baud rate or parity setting.
 - When the host has not configured the device, the bridge drops the received UART data.
