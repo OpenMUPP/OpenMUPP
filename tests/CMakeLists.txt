@@ -43,6 +43,7 @@ add_executable(vsl-tests
         TestJtagRawBlock.cpp
         TestJtagBitBang.cpp
         TestSwdBlock.cpp
+        TestSwdBitBang.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
         ../src/protocol/GpioBlock.cpp
