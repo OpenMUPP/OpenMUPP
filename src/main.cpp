@@ -5,8 +5,10 @@
 // (uart/SerialBridge.h) or, in a VSL_DEBUG_CDC build, the debug log
 // (debug/DebugLog.h), and drives the heartbeat on the
 // state LED and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
-// enters versaloon-bootloader (boot/BootloaderEntry.h).
+// enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
+// commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h).
 #include <cmsis_device.h>
+#include <delaybusywait.h>
 #include <utils/Timekeeping.h>
 
 #include "Hardware.h"
@@ -17,13 +19,28 @@
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
+#include "protocol/UsbToAll.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
 namespace {
 
+// The DELAY block busy-waits: the main loop stops for the delay, up to
+// 32.767 s. The host waits for the reply in this time.
+class BusyWaitDelay final : public protocol::Delay {
+   public:
+   void microseconds(uint16_t us) override {
+      delayuS(us);
+   }
+   void milliseconds(uint16_t ms) override {
+      delaymS(ms);
+   }
+};
+
+BusyWaitDelay busyWaitDelay;
+protocol::UsbToAll usbToAll{ busyWaitDelay };
 boot::BootloaderEntry bootloaderEntry;
-usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr };
+usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll };
 
 } // namespace
 

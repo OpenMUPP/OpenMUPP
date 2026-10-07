@@ -67,7 +67,7 @@ The common commands are:
 
 The version text has the form `versaloon-next-gen <version>, board <board>`.
 Other common commands have no reply.
-The `USB_TO_XXX` commands have no reply yet.
+The `USB_TO_XXX` commands go to the `USB_TO_ALL` dispatcher (see [USB_TO_ALL](#usb_to_all)).
 
 The reply is one IN transfer.
 When the size of the reply is a multiple of 64 bytes, a zero-length packet (ZLP) follows, so that the host read ends.
@@ -84,13 +84,67 @@ A command is wrong in these cases:
 - A short packet ends the transfer before `length` bytes (a ZLP is a short packet too).
 - A common command, or an unused command code, is in a full packet of 64 bytes.
 - `length` is larger than the command buffer (overflow).
-- The `USB_TO_XXX` code returns a reply that is larger than the reply buffer.
+- The `USB_TO_ALL` framing is malformed, or its reply is larger than the reply buffer (see [USB_TO_ALL](#usb_to_all)).
 
 The ZLP comes at the end of the transfer of the host.
 Thus the next transfer starts as a new command.
 After an error on a full packet, the firmware discards the packets until a short packet ends the transfer.
 If such a transfer ends with a full packet and no ZLP, the firmware also discards the next transfer.
 For an overflow, the firmware discards the packets until `length`.
+
+## USB_TO_ALL
+
+OpenOCD sends all adapter operations in `USB_TO_ALL` commands (`0x7F`).
+`src/protocol/UsbToAll.h` runs them.
+A `USB_TO_ALL` command contains blocks, and most blocks contain sub-commands:
+
+```text
+command:      [0x7F][total length u16][block][block]...
+block:        [type][block length u16][payload]
+sub-command:  [command | index][payload length u16][payload]
+```
+
+The block length includes the 3-byte block header.
+The payload length of a sub-command does not include its header.
+The top 5 bits of a sub-command are the command: `INIT` `0x00`, `FINI` `0x08`, `CONFIG` `0x10`, `IN_OUT` `0x28`, `IN` `0x30` or `OUT` `0x38`.
+The low 3 bits are the port index.
+
+The reply joins the replies of all sub-commands in order: `[status][data]` for each sub-command.
+The host knows the data size of each sub-command.
+It rejects the whole reply when the reply size is not correct.
+Thus a sub-command that fails also sends its full data size.
+The status values are:
+
+| Status | Value |
+|---|---|
+| `OK` | 0 |
+| `FAILED` | 1 |
+| `TIMEOUT` | 2 |
+| `INVALID_INDEX` | 3 |
+| `INVALID_PARA` | 4 |
+| `INVALID_CMD` | 5 |
+| `CMD_NOT_SUPPORT` | 6 |
+
+The firmware has these blocks:
+
+| Block | Type | Request payload | Reply |
+|---|---|---|---|
+| `INFO` | `0x7E` | none | `[OK][12-byte capability bitmap]` |
+| `DELAY` | `0x61` | `[delay u16]` | `[OK]`. When bit 15 is set, bits 0-14 are the delay in ms. Else the delay is in µs. |
+
+Bit n of the capability bitmap is set when the firmware has block `0x20 + n`.
+The firmware sets the bits of `INFO`, `DELAY` and `USB_TO_ALL`.
+The GPIO, JTAG_RAW, SWD and POWER blocks are not available yet.
+A block that the firmware does not have gets one status byte `CMD_NOT_SUPPORT`.
+OpenOCD then stops with an error.
+
+The firmware replies with a ZLP when a length in the framing does not fit, or when the reply does not fit the reply buffer.
+
+`DELAY` waits in a busy loop, and the main loop stops for this time.
+The longest delay is 32.767 s.
+The OUT endpoint NAKs during the delay, and the serial port stops.
+
+A top-level command `0x20`-`0x7E` is one block without the `USB_TO_ALL` header, as in the original firmware.
 
 ## Check the enumeration
 
@@ -104,7 +158,8 @@ On Linux:
 3. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini). Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
 4. Run OpenOCD with `-f interface/vsllink.cfg`.
    Make sure that OpenOCD shows the version text of `GET_INFO`, for example `versaloon-next-gen v0.1.0, board mini`.
-   After this, OpenOCD fails, because the `USB_TO_XXX` commands are not available yet.
+   Make sure that OpenOCD shows the capabilities, `USB_TO_XXX abilities: 0x00000000:0x00000000:0xC0000002`.
+   After this, OpenOCD fails, because the GPIO block is not available yet.
 
 On Windows 10 or later:
 

@@ -25,8 +25,9 @@ namespace usb {
 class UsbStack {
    public:
    // bootloader: the bootloader entry of VERSALOON_FW_UPDATE, nullptr when
-   // the firmware has no bootloader (see usb/VersaloonFunction.h).
-   explicit UsbStack(boot::BootloaderEntry *bootloader);
+   // the firmware has no bootloader. usbToXxx: runs the USB_TO_XXX commands
+   // (see protocol/CommandProcessor.h).
+   UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler &usbToXxx);
 
    UsbStack(const UsbStack &) = delete;
    UsbStack &operator=(const UsbStack &) = delete;

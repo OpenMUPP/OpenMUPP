@@ -23,7 +23,7 @@ There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BOOTLOADE
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry and the Versaloon command protocol.
+They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry, the Versaloon command protocol and the `USB_TO_ALL` dispatcher.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 The UART bridge tests run the bridge with the CDC-ACM function of libArT, the fake USB controller and a fake UART.
 Configure without the toolchain file:
