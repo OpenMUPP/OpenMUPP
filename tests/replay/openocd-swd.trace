@@ -3,8 +3,9 @@
 # 8da0578d7bce3e134821ccf10911182788debc32 (vsllink.c, versaloon.c,
 # usbtoxxx/*.c), not captured with usbmon: replace it with a capture.
 # '>' is one OUT transfer, '<' the expected IN transfer. '*' matches the
-# rest of the reply. The JTAG_RAW and SWD replies are those of the
-# fake blocks of the test: OK and zero data.
+# rest of the reply. The JTAG_RAW replies are those of a target that
+# drives TDO low. The SWD replies are those of the fake block of the
+# test: OK and zero data.
 
 # versaloon_init(): GET_INFO
 > 00

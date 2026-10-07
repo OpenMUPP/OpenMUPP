@@ -40,9 +40,12 @@ add_executable(vsl-tests
         TestUsbToAll.cpp
         TestReplay.cpp
         TestGpioBlock.cpp
+        TestJtagRawBlock.cpp
+        TestJtagBitBang.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
         ../src/protocol/GpioBlock.cpp
+        ../src/protocol/JtagRawBlock.cpp
         ../src/protocol/UsbToAll.cpp
         ../src/protocol/UsbToXxx.cpp
         ../src/usb/VersaloonFunction.cpp

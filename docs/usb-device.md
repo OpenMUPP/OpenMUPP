@@ -132,10 +132,11 @@ The firmware has these blocks:
 | `INFO` | `0x7E` | none | `[OK][12-byte capability bitmap]` |
 | `DELAY` | `0x61` | `[delay u16]` | `[OK]`. When bit 15 is set, bits 0-14 are the delay in ms. Else the delay is in µs. |
 | `GPIO` | `0x23` | Sub-commands, see [GPIO block](#gpio-block) | `[status]`, and `[value u16]` for `IN` |
+| `JTAG_RAW` | `0x47` | Sub-commands, see [JTAG_RAW block](#jtag_raw-block) | `[status]`, and `[TDO n bytes]` for `IN_OUT` |
 
 Bit n of the capability bitmap is set when the firmware has block `0x20 + n`.
-The firmware sets the bits of `GPIO`, `INFO`, `DELAY` and `USB_TO_ALL`.
-The JTAG_RAW, SWD and POWER blocks are not available yet.
+The firmware sets the bits of `GPIO`, `JTAG_RAW`, `INFO`, `DELAY` and `USB_TO_ALL`.
+The SWD and POWER blocks are not available yet.
 A block that the firmware does not have gets one status byte `CMD_NOT_SUPPORT`.
 OpenOCD then stops with an error.
 
@@ -199,6 +200,50 @@ The OUT endpoint NAKs during the delay, and the serial port stops.
 
 A top-level command `0x20`-`0x7E` is one block without the `USB_TO_ALL` header, as in the original firmware.
 
+### JTAG_RAW block
+
+OpenOCD shifts all JTAG bits through the `JTAG_RAW` block (`src/protocol/JtagRawBlock.h`).
+The firmware drives the pins with GPIO bit-bang (`src/jtag/JtagBitBang.h`).
+The pins are TCK, TMS, TDI, TDO and RTCK in the table of the [GPIO block](#gpio-block).
+TRST and SRST stay in the `GPIO` block.
+
+The sub-commands use port index 0. The values are little-endian:
+
+| Sub-command | Payload | Reply |
+|---|---|---|
+| `INIT` | none | `[status]` |
+| `FINI` | none | `[status]` |
+| `CONFIG` | `[kHz u32]` | `[status]` |
+| `IN_OUT` | `[bitlen u32][TDI n bytes][TMS n bytes]` | `[status][TDO n bytes]` |
+
+The byte count n is `ceil(bitlen / 8)`.
+The first bit of a stream is the LSB of the first byte.
+In the last TDO byte, the bits above `bitlen` are 0.
+
+`INIT` makes TCK, TMS and TDI push-pull outputs, with TCK low and TMS and TDI high.
+TDO becomes an input with pull-up, so an open TDO reads 1.
+RTCK becomes an input with pull-down.
+`INIT` also sets TCK to 1000 kHz.
+`FINI` makes TCK, TMS and TDI floating inputs.
+
+`CONFIG` sets the TCK frequency in kHz.
+The firmware rounds the half period up to full core clock cycles (72 MHz), so TCK is never faster than the request.
+A request above the fastest rate of the bit-bang loop gives that fastest rate.
+An interrupt can make a TCK period longer, but not shorter.
+
+`CONFIG` with 0 kHz selects adaptive clocking.
+After each TCK edge, the firmware waits until RTCK has the same level.
+When RTCK does not follow within 10 ms, `IN_OUT` stops with TCK low and replies `TIMEOUT`.
+The original firmware did not report this error.
+A board without RTCK (the ST-Link/V2) replies `INVALID_PARA` to 0 kHz.
+
+For each bit, the firmware writes TDI and TMS while TCK is low, and waits for the low half period.
+Then it reads TDO and sets TCK high: the target samples TDI and TMS at this rising edge.
+After the high half period, TCK goes low, and the target changes TDO.
+
+A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `INVALID_INDEX`.
+`IN_OUT` replies the n TDO bytes also when it fails, as zeros.
+
 ## Check the enumeration
 
 The host unit tests check the descriptors.
@@ -211,8 +256,9 @@ On Linux:
 3. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini). Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
 4. Run OpenOCD with `-f interface/vsllink.cfg`.
    Make sure that OpenOCD shows the version text of `GET_INFO`, for example `versaloon-next-gen v0.1.0, board mini`.
-   Make sure that OpenOCD shows the capabilities, `USB_TO_XXX abilities: 0x00000008:0x00000000:0xC0000002`.
-   After this, OpenOCD fails, because the JTAG_RAW and SWD blocks are not available yet.
+   Make sure that OpenOCD shows the capabilities, `USB_TO_XXX abilities: 0x00000008:0x00000080:0xC0000002`.
+   In JTAG mode, OpenOCD then scans the JTAG chain.
+   In SWD mode, OpenOCD fails, because the SWD block is not available yet.
 
 On Windows 10 or later:
 

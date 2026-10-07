@@ -7,7 +7,9 @@
 // state LED and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
 // enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
 // commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h),
-// with the GPIO block (protocol/GpioBlock.h) on the debug connector pins.
+// with the GPIO block (protocol/GpioBlock.h) on the debug connector pins
+// and the JTAG_RAW block (protocol/JtagRawBlock.h) on the bit-bang JTAG
+// engine (jtag/JtagBitBang.h).
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -17,11 +19,13 @@
 #include "Version.h"
 #include "board/Board.h"
 #include "board/BoardGpio.h"
+#include "board/BoardJtag.h"
 #include "board/Leds.h"
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
 #include "protocol/GpioBlock.h"
+#include "protocol/JtagRawBlock.h"
 #include "protocol/UsbToAll.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
@@ -44,6 +48,9 @@ BusyWaitDelay busyWaitDelay;
 protocol::UsbToAll usbToAll{ busyWaitDelay };
 board::BoardGpio boardGpio;
 protocol::GpioBlock gpioBlock{ boardGpio };
+board::JtagPins jtagPins;
+board::BoardJtag boardJtag{ jtagPins };
+protocol::JtagRawBlock jtagRawBlock{ boardJtag };
 boot::BootloaderEntry bootloaderEntry;
 usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll };
 
@@ -58,6 +65,9 @@ int main() {
    LOG_INFO(debug::appLog, "versaloon-next-gen %s, board %s", versionString, board::current.name.data());
    if(!usbToAll.add(gpioBlock)) {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the GPIO block");
+   }
+   if(!usbToAll.add(jtagRawBlock)) {
+      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the JTAG_RAW block");
    }
 
    // USB needs the 48 MHz clock from the PLL. Without the crystal the
