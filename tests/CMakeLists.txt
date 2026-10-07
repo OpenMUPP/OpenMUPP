@@ -34,6 +34,7 @@ add_executable(vsl-tests
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
+        TestSerialEventQueue.cpp
         TestBootloaderEntry.cpp
         TestCommandAssembler.cpp
         TestCommandProcessor.cpp
@@ -73,6 +74,7 @@ target_include_directories(vsl-tests PRIVATE
         ${PROJECT_BINARY_DIR}                 # Version.h
         ../dependencies/libArT/src            # USB device stack
         ../dependencies/libArT/tests/usb      # FakeDeviceController.h
+        ../dependencies/system-stm32/src      # peripherals/UsbDeviceTypes.h
 )
 target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING VSL_REPLAY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/replay")
 target_link_libraries(vsl-tests PRIVATE doctest::doctest etl::etl)

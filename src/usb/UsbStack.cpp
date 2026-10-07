@@ -84,6 +84,15 @@ void UsbStack::poll() {
    }
 }
 
+void UsbStack::pollSerial() {
+   events_.setSerialOnly(true);
+   controller_.poll();
+   events_.setSerialOnly(false);
+   if constexpr(debug::cdcLog) {
+      discardSerialInput();
+   }
+}
+
 void UsbStack::setPullUp(void * /*context*/, bool enable) {
    if(const auto pullUp = board::current.usbPullUp) {
       board::write(*pullUp, enable);

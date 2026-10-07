@@ -5,15 +5,16 @@
 // usb/UsbDescriptors.h). Target only.
 //
 // The USB interrupt only queues the events. poll() runs the USB protocol in
-// the main loop. The D+ pull-up of the board definition connects the
+// the main loop. pollSerial() runs only the serial port, during a long
+// USB_TO_XXX command (usb/SerialEventQueue.h). The D+ pull-up of the board definition connects the
 // device; a board without one has a fixed pull-up.
 
 #include <cstdint>
 #include <usb/CdcAcmFunction.h>
 #include <usb/Device.h>
 #include <usb/Stm32UsbDeviceController.h>
-#include <utils/RingBuffer.h>
 
+#include "usb/SerialEventQueue.h"
 #include "usb/VersaloonFunction.h"
 
 #if !defined(ART_STM32_HAS_USB_DEVICE_CONTROLLER)
@@ -40,6 +41,11 @@ class UsbStack {
    // Runs the USB protocol. Call it in each main loop iteration.
    void poll();
 
+   // Delivers the serial port events at the front of the queue, and no
+   // other events. Call it during a USB_TO_XXX command (see
+   // protocol/Background.h), not in the main loop.
+   void pollSerial();
+
    // True when the host has configured the device.
    [[nodiscard]] bool isConfigured() const {
       return device_.isConfigured();
@@ -63,7 +69,7 @@ class UsbStack {
    void discardSerialInput();
 
    hw::UsbDevice hardware_;
-   RingBuffer<hw::usb::Event, 16> events_;
+   SerialEventQueue<16> events_;
    Stm32UsbDeviceController controller_;
    art::usb::Device device_;
    VersaloonFunction versaloon_;
