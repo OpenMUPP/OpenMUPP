@@ -57,6 +57,14 @@ void GpioBlock::runSubCommand(const SubCommand &command, Reply &reply) {
    }
 }
 
+void GpioBlock::hostGone() {
+   for(const uint16_t bit : { gpio::srst, gpio::trst }) {
+      if((pins_.available() & bit) != 0) {
+         pins_.configure(bit, PinMode::InputPullUp, true);
+      }
+   }
+}
+
 Status GpioBlock::config(art::span<const uint8_t> payload) {
    if(payload.size() != 8) {
       return Status::InvalidPara;

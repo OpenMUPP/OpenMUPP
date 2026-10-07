@@ -7,6 +7,8 @@
 #include "protocol/GpioBlock.h"
 #include "protocol/UsbToAll.h"
 
+#include "VersaloonBench.h"
+
 #include <doctest/doctest.h>
 
 #include <array>
@@ -161,6 +163,10 @@ class Bench {
                                             art::span<uint8_t>(reply_.data(), replySize_));
       REQUIRE(size.has_value());
       return { reply_.begin(), reply_.begin() + static_cast<std::ptrdiff_t>(*size) };
+   }
+
+   protocol::UsbToAll &dispatcher() {
+      return dispatcher_;
    }
 
    FakeGpioPins pins;
@@ -373,4 +379,76 @@ TEST_CASE("CONFIG of TMS on the ST-Link/V2: one pin for both directions") {
    CHECK(board::gpioPinSettings(pins, gpio::tms, PinMode::InputPullDown) ==
          Settings{ GpioPinSetting{ pb14, PinMode::InputPullDown }, std::nullopt });
    CHECK(board::gpioPinSettings(pins, gpio::trst, PinMode::PushPull) == Settings{});
+}
+
+TEST_CASE("Host gone: the GPIO block releases SRST and TRST with pull-up") {
+   Bench bench;
+   CHECK(bench.run({ config(gpio::srst | gpio::trst | gpio::tck, gpio::srst | gpio::trst | gpio::tck, 0, 0) }) ==
+         std::vector<uint8_t>{ 0 });
+   REQUIRE(bench.pins.state(gpio::srst).mode == PinMode::PushPull);
+   bench.pins.configured.clear();
+
+   protocol::UsbToAll &dispatcher = bench.dispatcher();
+   dispatcher.hostGone();
+   CHECK(bench.pins.configured == std::vector<uint16_t>{ gpio::srst, gpio::trst });
+   CHECK(bench.pins.state(gpio::srst).mode == PinMode::InputPullUp);
+   CHECK(bench.pins.state(gpio::trst).mode == PinMode::InputPullUp);
+   // Other pins stay.
+   CHECK(bench.pins.state(gpio::tck).mode == PinMode::PushPull);
+}
+
+TEST_CASE("Host gone: a board without TRST releases only SRST") {
+   Bench bench(gpio::all & ~(gpio::usr1 | gpio::usr2 | gpio::trst | gpio::rtck));
+   bench.dispatcher().hostGone();
+   CHECK(bench.pins.configured == std::vector<uint16_t>{ gpio::srst });
+}
+
+namespace {
+
+// SRST asserted through the USB function: config(SRST, SRST, 0, 0), a
+// push-pull output at the low level, as OpenOCD asserts it.
+struct UsbGpioBench {
+   UsbGpioBench()
+      : dispatcher(delay)
+      , block(pins)
+      , usb(nullptr, &dispatcher) {
+      REQUIRE(dispatcher.add(block));
+      usb.enumerate();
+      const auto sub = config(gpio::srst, gpio::srst, 0, 0);
+      std::vector<uint8_t> command{
+         protocol::block::all, 0, 0, protocol::block::gpio, static_cast<uint8_t>(sub.size() + 3), 0
+      };
+      command.insert(command.end(), sub.begin(), sub.end());
+      command[1] = static_cast<uint8_t>(command.size());
+      REQUIRE(usb.write(command));
+      REQUIRE(usb.read() == std::vector<uint8_t>{ 0 });
+      REQUIRE(pins.state(gpio::srst).mode == PinMode::PushPull);
+      REQUIRE_FALSE(pins.state(gpio::srst).level);
+   }
+
+   NoDelay delay;
+   protocol::UsbToAll dispatcher;
+   FakeGpioPins pins;
+   protocol::GpioBlock block;
+   vsltest::Bench usb;
+};
+
+} // namespace
+
+TEST_CASE("Host gone: a USB bus reset releases SRST") {
+   UsbGpioBench bench;
+   bench.usb.controller().busReset();
+   CHECK(bench.pins.state(gpio::srst).mode == PinMode::InputPullUp);
+}
+
+TEST_CASE("Host gone: SET_CONFIGURATION 0 releases SRST") {
+   UsbGpioBench bench;
+   bench.usb.request(vsltest::setConfiguration, 0);
+   CHECK(bench.pins.state(gpio::srst).mode == PinMode::InputPullUp);
+}
+
+TEST_CASE("Host gone: a USB suspend releases SRST") {
+   UsbGpioBench bench;
+   bench.usb.controller().busSuspend();
+   CHECK(bench.pins.state(gpio::srst).mode == PinMode::InputPullUp);
 }
