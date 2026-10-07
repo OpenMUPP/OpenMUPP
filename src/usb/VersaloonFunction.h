@@ -15,8 +15,11 @@
 // ZLP: the host reads that size, so its read ends without one, and the ZLP
 // would end the next read.
 //
-// A wrong command (length error or overflow) gets an empty reply (a ZLP).
-// The host then sees a reply of the wrong size at once, without a timeout.
+// A wrong command (length error or overflow) gets an empty reply (a ZLP)
+// at the end of its transfer (see protocol/CommandAssembler.h). The host
+// then sees a reply of the wrong size at once, without a timeout. A reply
+// size from the USB_TO_XXX handler that is larger than the reply buffer
+// gets an empty reply too.
 
 #include <array>
 #include <cstdint>
@@ -45,6 +48,8 @@ class VersaloonFunction final : public art::usb::VendorBulkFunction {
    // Starts the IN transfer of the reply. Returns the value for
    // dataReceived(): false holds the OUT endpoint until the reply is sent.
    bool sendReply(art::span<const uint8_t> reply);
+
+   static_assert(protocol::bufferSize >= protocol::CommandProcessor::maxInfoText + 3, "The reply buffer must hold the GET_INFO reply");
 
    std::array<uint8_t, protocol::bufferSize> command_{};
    std::array<uint8_t, protocol::bufferSize> reply_{};

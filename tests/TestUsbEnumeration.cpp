@@ -41,7 +41,8 @@ class FakeUsbToXxx final : public protocol::UsbToXxxHandler {
    public:
    std::optional<std::size_t> process(art::span<const uint8_t> command, art::span<uint8_t> reply) override {
       commands.emplace_back(command.begin(), command.end());
-      for(std::size_t i = 0; i < replySize; ++i) {
+      // A handler error can return more than the buffer: fill only the buffer.
+      for(std::size_t i = 0; i < std::min(replySize, reply.size()); ++i) {
          reply[i] = static_cast<uint8_t>(i);
       }
       return replySize;
@@ -358,6 +359,22 @@ TEST_CASE("A length error gets an empty reply, and the next command works") {
 
    REQUIRE(bench.write({ protocol::getHardware }));
    CHECK(bench.read() == std::vector<uint8_t>{ 0x15 });
+}
+
+TEST_CASE("A handler reply larger than the reply buffer gets an empty reply") {
+   FakeUsbToXxx handler;
+   Bench bench(nullptr, &handler);
+   bench.enumerate();
+   auto &controller = bench.controller();
+
+   handler.replySize = protocol::bufferSize + 1;
+   REQUIRE(bench.write(usbToXxx(3)));
+   CHECK(bench.read() == std::vector<uint8_t>{});
+   CHECK(controller.isArmed(versaloonOut));
+
+   handler.replySize = 1;
+   REQUIRE(bench.write(usbToXxx(3)));
+   CHECK(bench.read() == std::vector<uint8_t>{ 0x00 });
 }
 
 TEST_CASE("An overflow is read to its end, gets an empty reply, and the next command works") {

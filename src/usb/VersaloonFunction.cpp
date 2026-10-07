@@ -24,6 +24,10 @@ bool VersaloonFunction::dataReceived(art::span<const uint8_t> packet) {
    if(!size) {
       return true;
    }
+   if(*size > reply_.size()) {
+      // A handler error: do not send the RAM after the buffer.
+      return sendReply(art::span<const uint8_t>());
+   }
    return sendReply(art::span<const uint8_t>(reply_.data(), *size));
 }
 
