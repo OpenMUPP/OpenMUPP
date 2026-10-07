@@ -41,6 +41,7 @@ add_executable(vsl-tests
         TestReplay.cpp
         TestGpioBlock.cpp
         TestJtagRawBlock.cpp
+        TestJtagBitBang.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
         ../src/protocol/GpioBlock.cpp
