@@ -4,8 +4,7 @@
 # usbtoxxx/*.c), not captured with usbmon: replace it with a capture.
 # '>' is one OUT transfer, '<' the expected IN transfer. '*' matches the
 # rest of the reply. The JTAG_RAW replies are those of a target that
-# drives TDO low. The SWD replies are those of the fake block of the
-# test: OK and zero data.
+# drives TDO low.
 
 # versaloon_init(): GET_INFO
 > 00
