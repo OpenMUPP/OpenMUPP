@@ -32,6 +32,10 @@ Flow control and data loss:
   The USB OUT endpoint then sends NAK, and the host waits. No data is lost.
 - UART to host: when the RX ring buffer is full, the interrupt drops the new bytes.
   The bridge counts the dropped bytes (`UartBridge::rxDropped()`).
+- A long JTAG or SWD command stops the main loop.
+  During such a command, the JTAG and SWD engines run the bridge each millisecond.
+  Thus the RX ring buffer does not overflow at 115200 baud.
+  See [Serial port during long commands](usb-device.md#serial-port-during-long-commands).
 - The bridge also counts the bytes that the UART lost in an overrun (`UartBridge::rxOverruns()`).
   An overrun occurs when the interrupt reads a byte too late, for example at very high baud rates.
   To prevent overruns, the UART interrupt has a higher priority than the USB interrupt (`src/Hardware.h`).

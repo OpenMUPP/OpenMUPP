@@ -21,7 +21,8 @@ namespace uart {
 void startBridge(usb::UsbStack &usbStack);
 
 // Moves the serial data. Call it in each main loop iteration, after
-// UsbStack::poll().
+// UsbStack::poll(), and in the serial service during a long command
+// (protocol/Background.h), after UsbStack::pollSerial().
 void pollBridge();
 #else
 inline void startBridge(usb::UsbStack & /*usbStack*/) {

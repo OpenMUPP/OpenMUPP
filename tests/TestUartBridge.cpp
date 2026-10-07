@@ -1,10 +1,18 @@
 // The UART bridge with the real CDC-ACM function of libArT on the device
 // with the descriptors of the firmware. The fake controller of libArT is
 // the host, a fake UART with a simulated interrupt is the UART.
+//
+// The last tests run a long JTAG shift on the bit-bang engine with mock
+// pins, with and without the serial service of the firmware
+// (protocol/Background.h).
 
+#include "jtag/JtagBitBang.h"
 #include "uart/UartBridge.h"
 #include "usb/UsbDescriptors.h"
 #include "usb/VersaloonFunction.h"
+
+#include "MockBackground.h"
+#include "MockJtagPins.h"
 
 #include <FakeDeviceController.h>
 #include <doctest/doctest.h>
@@ -472,4 +480,91 @@ TEST_CASE("UartBridge stores the DTR and RTS state of the host") {
    // A bus reset clears the state.
    bench.controller().busReset();
    CHECK(bench.bridge().controlLines() == 0);
+}
+
+namespace {
+
+// The UART receives a byte each 6250 core cycles: 115200 baud at 72 MHz.
+constexpr uint32_t rxByteCycles = 72'000'000 / 11'520;
+
+// The target sends a byte pattern to the UART RX pin, by the time of the
+// mock pins. receiveUntil() runs the RX interrupt for the bytes until now.
+struct SerialTarget {
+   explicit SerialTarget(uint32_t start)
+      : next(start) {
+   }
+
+   uint32_t next;
+   uint8_t value = 0;
+   std::vector<uint8_t> sent;
+
+   void receiveUntil(uint32_t now, uart::UartBuffers<ringSize> &buffers) {
+      while(static_cast<int32_t>(now - next) >= 0) {
+         buffers.received(value);
+         sent.push_back(value);
+         ++value;
+         next += rxByteCycles;
+      }
+   }
+};
+
+using JtagPins = vsltest::MockJtagPins<false>;
+
+// A shift of 512 bits at 10 kHz: 51 ms, 9 times the RX ring of the bench
+// (63 bytes, 5.5 ms). Returns the bytes that the target sent.
+std::vector<uint8_t> shiftWithSerialTraffic(Bench &bench, JtagPins &pins, protocol::Background *background, SerialTarget &target) {
+   jtag::BitBangPort<JtagPins> port(pins, background);
+   REQUIRE(port.setSpeed(10));
+   std::vector<uint8_t> tdi(64, 0xA5);
+   std::vector<uint8_t> tms(64, 0);
+   std::vector<uint8_t> tdo(64, 0);
+   REQUIRE(port.shift(512, art::span<const uint8_t>(tdi.data(), tdi.size()),
+                      art::span<const uint8_t>(tms.data(), tms.size()), art::span<uint8_t>(tdo.data(), tdo.size())));
+   // The main loop runs again after the command.
+   target.receiveUntil(pins.time, bench.buffers);
+   return target.sent;
+}
+
+} // namespace
+
+TEST_CASE("UartBridge loses no UART data during a long JTAG shift with the serial service") {
+   Bench bench;
+   bench.enumerate();
+   JtagPins pins;
+   SerialTarget target(pins.time);
+   std::vector<uint8_t> received;
+   vsltest::MockBackground background([&pins] { return vsltest::MockBackground::Call{ pins.time, pins.tckLevel(), 0 }; });
+   // The serial service: the RX interrupt has run up to now, the bridge
+   // moves the data, and the host reads the IN packets.
+   background.onService = [&] {
+      target.receiveUntil(pins.time, bench.buffers);
+      bench.bridge().poll();
+      const auto data = bench.hostReceives();
+      received.insert(received.end(), data.begin(), data.end());
+   };
+
+   const auto sent = shiftWithSerialTraffic(bench, pins, &background, target);
+   bench.bridge().poll();
+   const auto rest = bench.hostReceives();
+   received.insert(received.end(), rest.begin(), rest.end());
+
+   CHECK(sent.size() > 8 * ringCapacity);
+   // A call each 1 ms plus one byte of 0.8 ms
+   CHECK(background.calls.size() >= 28);
+   CHECK(bench.bridge().rxDropped() == 0);
+   CHECK(received == sent);
+}
+
+TEST_CASE("UartBridge loses UART data during a long JTAG shift without the serial service") {
+   Bench bench;
+   bench.enumerate();
+   JtagPins pins;
+   SerialTarget target(pins.time);
+
+   const auto sent = shiftWithSerialTraffic(bench, pins, nullptr, target);
+   bench.bridge().poll();
+   const auto received = bench.hostReceives();
+
+   CHECK(received.size() == ringCapacity);
+   CHECK(bench.bridge().rxDropped() == sent.size() - ringCapacity);
 }
