@@ -23,7 +23,7 @@ There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BOOTLOADE
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry, the Versaloon command protocol, the `USB_TO_ALL` dispatcher, the `GPIO` block, the `JTAG_RAW` block and the JTAG bit-bang engine (on mock pins).
+They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry, the Versaloon command protocol, the `USB_TO_ALL` dispatcher, the `GPIO` block, the `JTAG_RAW` block, the JTAG bit-bang engine (on mock pins), the `SWD` block, the SWD request and parity encoding, and the SWD bit-bang engine (on mock pins with a mock target).
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 The UART bridge tests run the bridge with the CDC-ACM function of libArT, the fake USB controller and a fake UART.
 Configure without the toolchain file:
@@ -48,7 +48,7 @@ A trace has one transfer on each line:
 The current traces come from the code of the OpenOCD `vsllink` driver, not from a capture.
 The GPIO block is the real block, on fake pins.
 The JTAG_RAW block is the real block on the bit-bang engine, with fake pins. The target of the fake pins drives TDO low.
-The SWD block is a test fake. It replies `OK` with the data size that OpenOCD expects, and zero data.
+The SWD block is the real block on the bit-bang engine, with the mock pins and the mock target of the engine tests. The mock target replies `OK`, and `0x1BA01477` to each read.
 
 To replace a trace with a capture, do these steps:
 

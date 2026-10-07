@@ -42,10 +42,13 @@ add_executable(vsl-tests
         TestGpioBlock.cpp
         TestJtagRawBlock.cpp
         TestJtagBitBang.cpp
+        TestSwdBlock.cpp
+        TestSwdBitBang.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
         ../src/protocol/GpioBlock.cpp
         ../src/protocol/JtagRawBlock.cpp
+        ../src/protocol/SwdBlock.cpp
         ../src/protocol/UsbToAll.cpp
         ../src/protocol/UsbToXxx.cpp
         ../src/usb/VersaloonFunction.cpp

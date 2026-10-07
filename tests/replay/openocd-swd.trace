@@ -3,9 +3,8 @@
 # 8da0578d7bce3e134821ccf10911182788debc32 (vsllink.c, versaloon.c,
 # usbtoxxx/*.c), not captured with usbmon: replace it with a capture.
 # '>' is one OUT transfer, '<' the expected IN transfer. '*' matches the
-# rest of the reply. The JTAG_RAW replies are those of a target that
-# drives TDO low. The SWD replies are those of the fake block of the
-# test: OK and zero data.
+# rest of the reply. The SWD replies are those of the mock target of the
+# test: ACK OK, and 0x1BA01477 for each read.
 
 # versaloon_init(): GET_INFO
 > 00
@@ -46,7 +45,7 @@
 # swd.transact(0, write ABORT 0x1e)
 # swd.transact(0, read CTRL/STAT)
 > 7f 2b 00 46 28 00 38 0a 00 40 00 ff ff ff ff ff ff ff 00 28 05 00 a5 00 00 00 00 28 05 00 81 1e 00 00 00 28 05 00 8d 00 00 00 00
-< 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+< 00 00 01 77 14 a0 1b 00 01 1e 00 00 00 00 01 77 14 a0 1b
 
 # vsllink_quit()
 # gpio.config(0, 0x3, 0x0, 0x0, 0x3)

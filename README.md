@@ -13,11 +13,12 @@ The project is at an early stage. The current firmware does these functions:
 - It bridges the serial port to the UART.
 - It starts the bootloader on request, for a firmware update.
 - It receives Versaloon commands and replies to the common commands, for example `GET_INFO`.
-- It runs the `USB_TO_ALL` command of OpenOCD, with the `INFO`, `DELAY`, `GPIO` and `JTAG_RAW` blocks. OpenOCD controls SRST and TRST through the `GPIO` block.
+- It runs the `USB_TO_ALL` command of OpenOCD, with the `INFO`, `DELAY`, `GPIO`, `JTAG_RAW` and `SWD` blocks. OpenOCD controls SRST and TRST through the `GPIO` block.
 - It shifts JTAG bits with GPIO bit-bang through the `JTAG_RAW` block, with a fixed TCK frequency or with adaptive clocking (RTCK).
+- It runs SWD transfers with GPIO bit-bang through the `SWD` block, at the SWCLK frequencies of the OpenOCD `vsllink` driver.
 
-The SWD and target power blocks are not available yet.
-The JTAG mode needs a test on the hardware.
+The target power block is not available yet.
+The JTAG and SWD modes need a test on the hardware.
 See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
 ## Boards
@@ -122,7 +123,7 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
 
 - **Debug adapter:** use OpenOCD with `-f interface/vsllink.cfg`.
   On Windows, OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
-  The SWD block is not available yet (see [Status](#status)).
+  JTAG and SWD mode are available. They need a test on the hardware (see [Status](#status)).
 - **Serial port:** the dongle has a serial port (`/dev/ttyACM*` on Linux, a COM port on Windows).
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini and the OtherUse.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.

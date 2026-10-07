@@ -9,16 +9,20 @@
 //
 // The GPIO block is the real block on fake pins. The JTAG_RAW block is the
 // real block on the bit-bang engine, with fake pins. On the fake pins, the
-// target drives all inputs low. The SWD block is a fake here: it replies
-// OK with the data size that OpenOCD expects, and zero data. The real
-// block replaces it in its own work item.
+// target drives all inputs low. The SWD block is the real block on the
+// bit-bang engine, with the mock pins and mock target of the engine tests
+// (MockSwdPins.h). The mock target replies OK and swdReadData to each
+// read.
 
 #include "jtag/JtagBitBang.h"
 #include "protocol/GpioBlock.h"
 #include "protocol/JtagRawBlock.h"
+#include "protocol/SwdBlock.h"
 #include "protocol/UsbToAll.h"
 #include "protocol/UsbToXxx.h"
+#include "swd/SwdBitBang.h"
 
+#include "MockSwdPins.h"
 #include "VersaloonBench.h"
 
 #include <doctest/doctest.h>
@@ -31,9 +35,8 @@
 
 namespace {
 
-using protocol::SubCommand;
-namespace block = protocol::block;
-namespace subcommand = protocol::subcommand;
+// The DPIDR of the SW-DP of a Cortex-M3 (STM32F1)
+constexpr uint32_t swdReadData = 0x1BA01477;
 
 class NoDelay final : public protocol::Delay {
    public:
@@ -99,32 +102,6 @@ class LowJtagPins {
    uint32_t time_{ 0 };
 };
 
-// Replies OK with the data size of the OpenOCD usbtoxxx encoder: SWD IN_OUT 5 bytes and SWD IN (bits + 7) / 8 bytes.
-// The other sub-commands have no data.
-class OpenOcdFakeBlock final : public protocol::SubCommandBlock {
-   public:
-   explicit OpenOcdFakeBlock(uint8_t type)
-      : SubCommandBlock(type) {
-   }
-
-   protected:
-   void runSubCommand(const SubCommand &command, protocol::Reply &reply) override {
-      static_cast<void>(reply.reserve(dataSize(command)));
-   }
-
-   private:
-   [[nodiscard]] std::size_t dataSize(const SubCommand &command) const {
-      if(command.command == subcommand::inOut) {
-         return 5;
-      }
-      if(command.command == subcommand::in) {
-         REQUIRE(command.payload.size() >= 2);
-         return (protocol::getU16(command.payload, 0) + 7u) / 8u;
-      }
-      return 0;
-   }
-};
-
 struct Transfer {
    int line;
    std::vector<uint8_t> out;
@@ -182,7 +159,10 @@ void replay(const std::string &name) {
    LowJtagPins jtagPins;
    jtag::BitBangPort<LowJtagPins> jtagPort(jtagPins);
    protocol::JtagRawBlock jtagRaw(jtagPort);
-   OpenOcdFakeBlock swd(block::swd);
+   vsltest::MockSwdPins swdPins;
+   swdPins.readData = swdReadData;
+   swd::BitBangPort<vsltest::MockSwdPins> swdPort(swdPins);
+   protocol::SwdBlock swd(swdPort);
    REQUIRE(usbToAll.add(gpio));
    REQUIRE(usbToAll.add(jtagRaw));
    REQUIRE(usbToAll.add(swd));
@@ -207,6 +187,7 @@ void replay(const std::string &name) {
       }
    }
    CHECK(delay.totalUs == 100000);
+   CHECK(swdPins.contentions == 0);
 }
 
 } // namespace

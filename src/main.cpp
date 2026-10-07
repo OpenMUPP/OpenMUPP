@@ -8,8 +8,9 @@
 // enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
 // commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h),
 // with the GPIO block (protocol/GpioBlock.h) on the debug connector pins
-// and the JTAG_RAW block (protocol/JtagRawBlock.h) on the bit-bang JTAG
-// engine (jtag/JtagBitBang.h).
+// the JTAG_RAW block (protocol/JtagRawBlock.h) on the bit-bang JTAG engine
+// (jtag/JtagBitBang.h), and the SWD block (protocol/SwdBlock.h) on the
+// bit-bang SWD engine (swd/SwdBitBang.h).
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -20,12 +21,14 @@
 #include "board/Board.h"
 #include "board/BoardGpio.h"
 #include "board/BoardJtag.h"
+#include "board/BoardSwd.h"
 #include "board/Leds.h"
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
 #include "protocol/GpioBlock.h"
 #include "protocol/JtagRawBlock.h"
+#include "protocol/SwdBlock.h"
 #include "protocol/UsbToAll.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
@@ -51,6 +54,9 @@ protocol::GpioBlock gpioBlock{ boardGpio };
 board::JtagPins jtagPins;
 board::BoardJtag boardJtag{ jtagPins };
 protocol::JtagRawBlock jtagRawBlock{ boardJtag };
+board::SwdPins swdPins;
+board::BoardSwd boardSwd{ swdPins };
+protocol::SwdBlock swdBlock{ boardSwd };
 boot::BootloaderEntry bootloaderEntry;
 usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll };
 
@@ -68,6 +74,9 @@ int main() {
    }
    if(!usbToAll.add(jtagRawBlock)) {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the JTAG_RAW block");
+   }
+   if(!usbToAll.add(swdBlock)) {
+      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the SWD block");
    }
 
    // USB needs the 48 MHz clock from the PLL. Without the crystal the
