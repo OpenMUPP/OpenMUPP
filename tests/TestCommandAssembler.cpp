@@ -158,6 +158,23 @@ TEST_CASE("Length errors") {
       CHECK(bench.send(usbToXxx(64, 100)) == std::vector<Result>{ Result::Incomplete });
       CHECK(bench.sendPacket({}) == Result::Error);
    }
+   SUBCASE("An error on a full packet drops the rest of the transfer") {
+      // Packets of 64, 64, 64 and 8 bytes: the second goes past the length.
+      CHECK(bench.send(usbToXxx(200, 80)) ==
+            std::vector<Result>{ Result::Incomplete, Result::Incomplete, Result::Incomplete, Result::Error });
+   }
+   SUBCASE("A full packet with a length error drops the rest of the transfer") {
+      CHECK(bench.send(usbToXxx(100, 2)) == std::vector<Result>{ Result::Incomplete, Result::Error });
+   }
+   SUBCASE("An error on a full packet, and a ZLP ends the transfer") {
+      CHECK(bench.send(usbToXxx(128, 80)) == std::vector<Result>{ Result::Incomplete, Result::Incomplete });
+      CHECK(bench.sendPacket({}) == Result::Error);
+   }
+   SUBCASE("A common command in a full packet drops the rest of the transfer") {
+      std::vector<uint8_t> transfer(100, 0x00);
+      transfer[0] = protocol::getInfo;
+      CHECK(bench.send(transfer) == std::vector<Result>{ Result::Incomplete, Result::Error });
+   }
 
    // The assembler is in sync again: the next packet is a new command.
    const auto command = usbToXxx(70);

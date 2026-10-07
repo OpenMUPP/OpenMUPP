@@ -354,11 +354,36 @@ TEST_CASE("A length error gets an empty reply, and the next command works") {
    SUBCASE("The transfer is longer than the length") {
       REQUIRE(bench.write(usbToXxx(100, 80)));
    }
+   SUBCASE("The error is on a packet that is not the last") {
+      // The second of four packets goes past the length.
+      REQUIRE(bench.write(usbToXxx(200, 80)));
+   }
+   SUBCASE("A common command in a transfer of many packets") {
+      std::vector<uint8_t> transfer(150, 0x00);
+      transfer[0] = protocol::getHardware;
+      REQUIRE(bench.write(transfer));
+   }
    CHECK(bench.read() == std::vector<uint8_t>{});
+   CHECK_FALSE(bench.read().has_value());
    CHECK(handler.commands.empty());
 
    REQUIRE(bench.write({ protocol::getHardware }));
    CHECK(bench.read() == std::vector<uint8_t>{ 0x15 });
+}
+
+TEST_CASE("A packet after a length error does not start a command") {
+   boot::BootloaderEntry bootloader;
+   Bench bench(&bootloader);
+   bench.enumerate();
+
+   // The third packet starts with the FW_UPDATE command and its key.
+   auto transfer = usbToXxx(140, 80);
+   transfer[128] = protocol::fwUpdate;
+   transfer[129] = protocol::fwUpdateKey;
+   REQUIRE(bench.write(transfer));
+   CHECK(bench.read() == std::vector<uint8_t>{});
+   CHECK_FALSE(bench.read().has_value());
+   CHECK_FALSE(bootloader.isRequested());
 }
 
 TEST_CASE("A handler reply larger than the reply buffer gets an empty reply") {

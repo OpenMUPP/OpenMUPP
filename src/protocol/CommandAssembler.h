@@ -10,11 +10,19 @@
 // - the header is incomplete, or its length is smaller than the header,
 // - a packet goes past the length,
 // - a short packet (smaller than the packet size, a ZLP included) ends the
-//   transfer before the length.
+//   transfer before the length,
+// - a common command, or an unused command byte, is in a full packet (the
+//   transfer goes on).
+//
+// The assembler gives Error only at the end of the transfer of the host, so
+// that the next transfer starts as a new command again. After an error on a
+// short packet (a ZLP included), Error comes at once. After an error on a
+// full packet, the assembler drops the packets until a short packet ends
+// the transfer, and then gives Error. Note: if that transfer ends with a
+// full packet and no ZLP, the next transfer is dropped too.
 //
 // A command larger than the buffer is an overflow. The assembler then reads
-// and drops its packets until the length, and gives Error at the end. Thus
-// the next transfer starts as a new command again.
+// and drops its packets until the length, and gives Error at the end.
 //
 // After Complete or Error, the next packet starts a new command. A ZLP
 // between two commands is ignored.
@@ -55,11 +63,22 @@ class CommandAssembler {
    void reset();
 
    private:
-   enum class State : uint8_t { Idle, Collecting, Discarding };
+   enum class State : uint8_t {
+      Idle,
+      // A USB_TO_XXX command that fits the buffer
+      Collecting,
+      // A USB_TO_XXX command larger than the buffer: drop it until its length
+      Overflow,
+      // After an error: drop the packets until a short packet
+      Draining,
+   };
 
    Result start(art::span<const uint8_t> packet);
    Result proceed(art::span<const uint8_t> packet);
-   Result fail();
+   Result drain(art::span<const uint8_t> packet);
+   // An error on packet: Error if the packet ends the transfer, else drop
+   // the rest of the transfer first.
+   Result failTransfer(art::span<const uint8_t> packet);
 
    art::span<uint8_t> buffer_;
    std::size_t packetSize_;

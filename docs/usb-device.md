@@ -82,9 +82,15 @@ A command is wrong in these cases:
 - The header is shorter than 3 bytes, or `length` is smaller than 3.
 - The transfer has more bytes than `length`.
 - A short packet ends the transfer before `length` bytes (a ZLP is a short packet too).
+- A common command, or an unused command code, is in a full packet of 64 bytes.
 - `length` is larger than the command buffer (overflow).
-  The firmware reads the packets of the command until `length` and discards them.
-  Then the next transfer starts as a new command.
+- The `USB_TO_XXX` code returns a reply that is larger than the reply buffer.
+
+The ZLP comes at the end of the transfer of the host.
+Thus the next transfer starts as a new command.
+After an error on a full packet, the firmware discards the packets until a short packet ends the transfer.
+If such a transfer ends with a full packet and no ZLP, the firmware also discards the next transfer.
+For an overflow, the firmware discards the packets until `length`.
 
 ## Check the enumeration
 
