@@ -318,6 +318,28 @@ TEST_CASE("Wrong GPIO requests") {
    CHECK(bench.pins.configured.empty());
 }
 
+TEST_CASE("A GPIO sub-command whose reply does not fit changes no pin") {
+   const uint16_t mini = board::gpioAvailable(board::mini.debug);
+
+   SUBCASE("CONFIG that asserts SRST") {
+      // Room for the first status only
+      Bench bench(mini, 1);
+      CHECK(bench.run({ config(gpio::trst, gpio::trst, 0, gpio::trst), config(gpio::srst, gpio::srst, 0, 0) }).empty());
+      CHECK(bench.pins.configured == std::vector<uint16_t>{ gpio::trst });
+      CHECK(bench.pins.state(gpio::srst).mode == PinMode::Input);
+   }
+   SUBCASE("OUT") {
+      Bench bench(mini, 1);
+      CHECK(bench.run({ config(gpio::tck, gpio::tck, 0, 0), out(gpio::tck, gpio::tck) }).empty());
+      CHECK_FALSE(bench.pins.state(gpio::tck).level);
+   }
+   SUBCASE("IN needs 3 bytes") {
+      Bench bench(mini, 2);
+      CHECK(bench.run({ in(gpio::srst) }).empty());
+      CHECK(bench.pins.configured.empty());
+   }
+}
+
 TEST_CASE("CONFIG of TMS on the Mini: PB4 drives, PB6 reads") {
    using board::GpioPinSetting;
    using Settings = std::array<std::optional<GpioPinSetting>, 2>;
