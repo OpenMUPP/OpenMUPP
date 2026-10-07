@@ -16,7 +16,9 @@
 //   sequence, with SWCLK high.
 //
 // The call makes the clock phase at that point longer. The clock does not
-// get faster: each half period waits from its edge. service() must not
+// get faster: each half period waits from its edge. The JTAG engine starts
+// the low half period again after the call, so TDI and TMS have the full
+// setup time before the next rising edge. service() must not
 // start a USB_TO_XXX command (no re-entry into the dispatcher), and must
 // return within some microseconds.
 
@@ -53,16 +55,19 @@ class BackgroundTimer {
       intervalCycles_ = pins.coreHz() / 1000u * backgroundIntervalMs;
    }
 
+   // Returns true when it called the Background.
    template <typename Pins>
-   [[gnu::always_inline]] void poll(Pins &pins) {
+   [[gnu::always_inline]] bool poll(Pins &pins) {
       if(background_ == nullptr) {
-         return;
+         return false;
       }
       // Unsigned difference: correct across the wrap of the counter.
-      if(pins.now() - last_ >= intervalCycles_) {
-         background_->service();
-         last_ = pins.now();
+      if(pins.now() - last_ < intervalCycles_) {
+         return false;
       }
+      background_->service();
+      last_ = pins.now();
+      return true;
    }
 
    private:

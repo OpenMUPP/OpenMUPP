@@ -239,6 +239,25 @@ TEST_CASE("JTAG bit-bang: with the background, half periods are not shorter than
    }
 }
 
+TEST_CASE("JTAG bit-bang: with a slow background, TDI and TMS keep the setup time before the rising edge") {
+   Pins pins;
+   auto background = backgroundOf(pins);
+   // The background takes 50000 cycles, longer than the half period.
+   background.onService = [&pins] { pins.time += 50'000; };
+   BitBangPort<Pins> port(pins, &background);
+   REQUIRE(port.setSpeed(100));
+   REQUIRE(shift(port, 1024, std::vector<uint8_t>(128, 0x33), std::vector<uint8_t>(128, 0x0F)).ok);
+   REQUIRE(background.calls.size() > 5);
+   REQUIRE(pins.rising.size() == 1024);
+   // The half period starts at the falling edge, and the writes come some
+   // steps later: as without a background, the setup time is the half
+   // period less these steps.
+   for(std::size_t i = 0; i < pins.rising.size(); ++i) {
+      CAPTURE(i);
+      CHECK(pins.rising[i].time - pins.rising[i].dataWritten >= 360 - 4);
+   }
+}
+
 TEST_CASE("JTAG bit-bang: the background interval runs on over short shifts") {
    Pins pins;
    auto background = backgroundOf(pins);

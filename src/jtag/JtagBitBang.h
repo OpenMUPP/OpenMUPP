@@ -20,7 +20,10 @@
 //
 // With a protocol::Background, a shift calls Background::service() between
 // bytes, at most once per backgroundIntervalMs (protocol/Background.h).
-// TCK is then low: the call makes that low half period longer.
+// TCK is then low: the call makes that low half period longer. In timed
+// mode, the low half period starts again after the call, so the TDI and
+// TMS writes of the next bit come a full half period before the rising
+// edge.
 //
 // One bit, with TCK low at the start:
 //
@@ -106,9 +109,13 @@ bool shiftBits(Pins &pins,
       edge = pins.now();
    }
    for(uint32_t done = 0; done < bitCount; done += 8) {
-      // TCK is low. The low half period waits from edge, so it is longer,
-      // not shorter, after the call.
-      background.poll(pins);
+      // TCK is low. After a call, the low half period starts again: the
+      // next TDI and TMS writes get their full setup time.
+      if(background.poll(pins)) {
+         if constexpr(C == Clocking::Timed) {
+            edge = pins.now();
+         }
+      }
       const uint32_t bits = std::min<uint32_t>(8, bitCount - done);
       uint32_t tdiByte = *tdi++;
       uint32_t tmsByte = *tms++;

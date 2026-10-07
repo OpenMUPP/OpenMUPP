@@ -16,11 +16,13 @@ class MockJtagPins {
    public:
    static constexpr bool hasRtck = Rtck;
 
-   // The levels of TMS and TDI at a rising edge of TCK, and its time.
+   // The levels of TMS and TDI at a rising edge of TCK, its time, and the
+   // time of the last TMS or TDI write before it.
    struct RisingEdge {
       uint32_t time;
       bool tms;
       bool tdi;
+      uint32_t dataWritten;
    };
 
    explicit MockJtagPins(std::deque<bool> chain = { false })
@@ -46,7 +48,7 @@ class MockJtagPins {
       tckChanged_ = time;
       edges.push_back(time);
       if(level) {
-         rising.push_back({ time, tms_, tdi_ });
+         rising.push_back({ time, tms_, tdi_, dataWritten_ });
          chain_.push_front(tdi_);
          chain_.pop_back();
       } else {
@@ -55,9 +57,11 @@ class MockJtagPins {
    }
    void tms(bool level) {
       tms_ = level;
+      dataWritten_ = time;
    }
    void tdi(bool level) {
       tdi_ = level;
+      dataWritten_ = time;
    }
    [[nodiscard]] bool tdo() const {
       return tdo_;
@@ -101,6 +105,7 @@ class MockJtagPins {
    bool tdi_{ false };
    bool tdo_;
    uint32_t tckChanged_{ 0 };
+   uint32_t dataWritten_{ 0 };
 };
 
 } // namespace vsltest
