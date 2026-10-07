@@ -59,10 +59,16 @@
 // WAIT sets STICKYORUN, and the DP replies FAULT until ABORT.ORUNERRCLR
 // clears it. Thus, before each retry, the host writes ABORT with
 // ORUNERRCLR, as the OpenOCD bitbang driver does.
+//
+// With a protocol::Background, the engine calls Background::service()
+// before each transfer and each retry, and between the bytes of a
+// sequence, at most once per backgroundIntervalMs (protocol/Background.h).
+// SWCLK is then high: the call makes that high half period longer.
 
 #include <array>
 #include <cstdint>
 
+#include "protocol/Background.h"
 #include "protocol/SwdBlock.h"
 
 namespace swd {
@@ -112,8 +118,10 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 template <typename Pins>
 class BitBangPort final : public protocol::SwdPort {
    public:
-   explicit BitBangPort(Pins &pins)
-      : pins_(pins) {
+   // background: serviced during the operations, nullptr for none.
+   explicit BitBangPort(Pins &pins, protocol::Background *background = nullptr)
+      : pins_(pins)
+      , background_(background) {
    }
 
    void init() override {
@@ -135,17 +143,23 @@ class BitBangPort final : public protocol::SwdPort {
       if(bitCount == 0) {
          return;
       }
-      pins_.begin();
+      begin();
       pins_.swdioDrive((data[0] & 1u) != 0);
       for(uint32_t i = 0; i < bitCount; ++i) {
+         if(i % 8 == 0) {
+            background_.poll(pins_);
+         }
          writeBit(((data[i / 8] >> (i % 8)) & 1u) != 0);
       }
    }
 
    void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) override {
-      pins_.begin();
+      begin();
       pins_.swdioRelease();
       for(uint32_t i = 0; i < bitCount; ++i) {
+         if(i % 8 == 0) {
+            background_.poll(pins_);
+         }
          if(readBit()) {
             data[i / 8] = static_cast<uint8_t>(data[i / 8] | 1u << (i % 8));
          }
@@ -153,8 +167,9 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    uint8_t transfer(uint8_t request, uint32_t &data) override {
-      pins_.begin();
+      begin();
       for(uint32_t attempt = 0;; ++attempt) {
+         background_.poll(pins_);
          const uint8_t ack = transferOnce(request, data);
          if(ack != ackWait) {
             return ack;
@@ -173,6 +188,11 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    private:
+   void begin() {
+      pins_.begin();
+      background_.begin(pins_);
+   }
+
    // One transfer. Returns the ACK and the FAULT, ACK error and parity
    // flags.
    uint8_t transferOnce(uint8_t request, uint32_t &data) {
@@ -257,6 +277,7 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    Pins &pins_;
+   protocol::BackgroundTimer background_;
    // INIT of the SWD block sets the configuration.
    uint8_t turnaround_{ defaultTurnaround };
    uint16_t retries_{ defaultRetries };

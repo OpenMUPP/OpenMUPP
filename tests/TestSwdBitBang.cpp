@@ -2,6 +2,7 @@
 
 #include "swd/SwdBitBang.h"
 
+#include "MockBackground.h"
 #include "MockSwdPins.h"
 
 #include <doctest/doctest.h>
@@ -334,4 +335,88 @@ TEST_CASE("SWD bit-bang: a line reset and the JTAG-to-SWD sequence before a tran
    REQUIRE(bench.pins.transfers.size() == 1);
    CHECK(bench.pins.transfers[0].request == readDpidr);
    bench.checkIdle();
+}
+
+namespace {
+
+// Samples the time, the SWCLK level and the rising edges of the pins.
+vsltest::MockBackground backgroundOf(const MockSwdPins &pins) {
+   return vsltest::MockBackground(
+   [&pins] { return vsltest::MockBackground::Call{ pins.time, pins.swclkLevel(), pins.risingEdges.size() }; });
+}
+
+// 1 ms at 72 MHz
+constexpr uint32_t msCycles = 72'000;
+
+} // namespace
+
+TEST_CASE("SWD bit-bang: WAIT retries service the background between the attempts, with SWCLK high") {
+   MockSwdPins pins;
+   auto background = backgroundOf(pins);
+   BitBangPort<MockSwdPins> port(pins, &background);
+   port.init();
+   // delay 20: a half period of 21 us, so each attempt and its ABORT take
+   // about 4.5 ms.
+   port.configure(1, 20, 20);
+   pins.overrunDetect = true;
+   pins.acks = std::deque<uint8_t>(20, pswd::ackWait);
+   pins.readData = 9;
+   uint32_t data = 0;
+   REQUIRE(port.transfer(readApDrw, data) == pswd::ackOk);
+   CHECK(data == 9);
+   REQUIRE(pins.transfers.size() == 41);
+   // A call before each attempt
+   CHECK(background.calls.size() == 21);
+   for(std::size_t i = 0; i < background.calls.size(); ++i) {
+      CAPTURE(i);
+      CHECK(background.calls[i].clock);
+      // Before the attempt and after the ABORT of the last one
+      CHECK(background.calls[i].count == 2 * i * transferEdges(1));
+   }
+   CHECK(pins.contentions == 0);
+   CHECK(pins.desyncs == 0);
+}
+
+TEST_CASE("SWD bit-bang: a long sequence services the background between bytes") {
+   for(const bool out : { true, false }) {
+      CAPTURE(out);
+      MockSwdPins pins;
+      pins.decodes = false;
+      auto background = backgroundOf(pins);
+      BitBangPort<MockSwdPins> port(pins, &background);
+      port.init();
+      port.configure(1, 0, 20);
+      const uint32_t start = pins.time;
+      // 2000 bits of 42 us: 84 ms
+      std::vector<uint8_t> data(250, 0xFF);
+      if(out) {
+         port.sequenceOut(2000, art::span<const uint8_t>(data.data(), data.size()));
+      } else {
+         port.sequenceIn(2000, art::span<uint8_t>(data.data(), data.size()));
+      }
+      REQUIRE(pins.risingEdges.size() == 2000);
+      const uint32_t elapsed = pins.time - start;
+      CHECK(background.calls.size() >= elapsed / msCycles - 1);
+      CHECK(background.calls.size() <= elapsed / msCycles + 1);
+      for(const auto &call : background.calls) {
+         CHECK(call.clock);
+         CHECK(call.count % 8 == 0);
+      }
+   }
+}
+
+TEST_CASE("SWD bit-bang: the background interval runs on over fast transfers") {
+   MockSwdPins pins;
+   auto background = backgroundOf(pins);
+   BitBangPort<MockSwdPins> port(pins, &background);
+   port.init();
+   port.configure(1, 0, 0);
+   const uint32_t start = pins.time;
+   // 300 transfers at 1.85 MHz: about 2000 cycles each, 8 ms together
+   for(int i = 0; i < 300; ++i) {
+      uint32_t data = 0;
+      REQUIRE(port.transfer(readDpidr, data) == pswd::ackOk);
+   }
+   CHECK(background.calls.size() >= (pins.time - start) / msCycles - 1);
+   CHECK(background.calls.size() <= (pins.time - start) / msCycles + 1);
 }
