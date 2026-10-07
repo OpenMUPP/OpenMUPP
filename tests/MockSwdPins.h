@@ -4,7 +4,7 @@
 // target. The target samples SWDIO at the rising edge of SWCLK, and drives
 // its bits right after the rising edge, as ADIv5 specifies. It decodes the
 // requests of the host, replies with the acknowledges of a queue, and
-// records the written data.
+// records the written data. 50 cycles of SWDIO high are a line reset.
 //
 // SWDIO has a pull-up: it reads 1 when nobody drives it. The mock counts
 // the times that the host and the target drive SWDIO at the same time, and
@@ -122,6 +122,8 @@ class MockSwdPins {
    std::vector<RisingEdge> risingEdges;
    std::vector<uint32_t> edges;
    int contentions{ 0 };
+   // Line resets: counted at each cycle from cycle 50 of SWDIO high
+   int lineResets{ 0 };
    int undrivenSamples{ 0 };
    int inits{ 0 };
    int finis{ 0 };
@@ -148,7 +150,14 @@ class MockSwdPins {
       if(!decodes) {
          return;
       }
-      if(!plan_.empty()) {
+      // A line reset: 50 or more cycles with SWDIO high from the host.
+      highCycles_ = hostDrives_ && level ? highCycles_ + 1 : 0;
+      if(highCycles_ >= 50) {
+         plan_.clear();
+         request_ = 0;
+         requestBits_ = 0;
+         ++lineResets;
+      } else if(!plan_.empty()) {
          const Step step = plan_.front();
          plan_.pop_front();
          if(step.action == Action::Sample) {
@@ -235,6 +244,7 @@ class MockSwdPins {
    uint8_t request_{ 0 };
    unsigned requestBits_{ 0 };
    unsigned samples_{ 0 };
+   unsigned highCycles_{ 0 };
 };
 
 } // namespace vsltest

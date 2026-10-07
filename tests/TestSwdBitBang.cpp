@@ -261,3 +261,22 @@ TEST_CASE("SWD bit-bang: after a late edge, the half periods do not get shorter 
       CHECK(edges[i] - edges[i - 1] >= 20 - swd::loopOverheadCycles);
    }
 }
+
+TEST_CASE("SWD bit-bang: a line reset and the JTAG-to-SWD sequence before a transfer") {
+   Bench bench;
+   // swd_seq_jtag_to_swd of OpenOCD (136 bits), then swd_seq_line_reset (64 bits)
+   const std::vector<uint8_t> jtagToSwd{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x9E, 0xE7,
+                                         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
+   const std::vector<uint8_t> lineReset{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
+   bench.port.sequenceOut(136, art::span<const uint8_t>(jtagToSwd.data(), jtagToSwd.size()));
+   bench.port.sequenceOut(64, art::span<const uint8_t>(lineReset.data(), lineReset.size()));
+   CHECK(bench.pins.lineResets > 0);
+   bench.pins.transfers.clear();
+   bench.pins.readData = 0x1BA01477;
+   uint32_t data = 0;
+   CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+   CHECK(data == 0x1BA01477);
+   REQUIRE(bench.pins.transfers.size() == 1);
+   CHECK(bench.pins.transfers[0].request == readDpidr);
+   bench.checkIdle();
+}
