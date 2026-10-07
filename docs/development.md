@@ -34,6 +34,27 @@ cmake --build build/tests -j
 ctest --test-dir build/tests --output-on-failure
 ```
 
+### Replay tests
+
+`tests/TestReplay.cpp` replays the USB traffic of OpenOCD sessions through the Versaloon function and the `USB_TO_ALL` dispatcher.
+The traces are in `tests/replay/`. There is one trace for JTAG mode and one trace for SWD mode.
+A trace has one transfer on each line:
+
+- `> 7f 06 00 7e 03 00` is an OUT transfer of the host.
+- `< 00 08 00 ...` is the IN transfer that the firmware must send.
+  A `*` at the end matches the remaining bytes of the reply.
+- A line that starts with `#` is a comment.
+
+The current traces come from the code of the OpenOCD `vsllink` driver, not from a capture.
+The GPIO, JTAG_RAW and SWD blocks are test fakes. They reply `OK` with the data size that OpenOCD expects, and zero data.
+
+To replace a trace with a capture, do these steps:
+
+1. Build the original Versaloon firmware with `USB_TO_XXX_EN 1` in `app_cfg.h`, and flash it.
+2. Record the traffic with `usbmon`, for example with Wireshark on the `usbmonN` interface of the bus.
+3. Run an OpenOCD session with `-f interface/vsllink.cfg`, in JTAG mode or in SWD mode.
+4. Write the bulk transfers of endpoints `0x03` and `0x82` into the trace format.
+
 ## Code format
 
 `.clang-format` defines the code style. The `clangformat` target formats all sources and tests in place:
