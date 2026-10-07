@@ -9,8 +9,8 @@
 
 include(ExternalProject)
 
-# Boards that versaloon-bootloader supports
-set(VSL_BOOTLOADER_BOARDS mini otheruse)
+# VSL_BOOTLOADER_BOARDS (boards that versaloon-bootloader supports) is set in
+# the top-level CMakeLists.txt.
 # Output directory of the bootloader images
 set(VSL_BOOTLOADER_DIR "${CMAKE_CURRENT_BINARY_DIR}/versaloon-bootloader")
 

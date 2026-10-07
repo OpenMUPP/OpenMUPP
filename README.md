@@ -276,7 +276,7 @@ The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 | Status | Meaning |
 |---|---|
 | `0x00` | Accepted. The firmware starts the bootloader. |
-| `0x01` | Refused. The second byte is not the key `0xAA`, or the firmware is linked without the bootloader (`VSL_BOOTLOADER=OFF`). The firmware continues to run. |
+| `0x01` | Refused. The second byte is not the key `0xAA`, the firmware is linked without the bootloader (`VSL_BOOTLOADER=OFF`), or the board has no `versaloon-bootloader` (ST-Link/V2). The firmware continues to run. |
 
 After the reply, the firmware does these steps:
 
@@ -382,7 +382,7 @@ The CMake options are:
 | Option | Default | Description |
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
-| `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. The firmware then refuses `VERSALOON_FW_UPDATE`. |
+| `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. The firmware then refuses `VERSALOON_FW_UPDATE`. The ST-Link/V2 has no bootloader: its firmware always refuses `VERSALOON_FW_UPDATE`. |
 | `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse, and only with `VSL_BOOTLOADER=ON`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [Board definitions](#board-definitions)). Not allowed in a `Release` build. |

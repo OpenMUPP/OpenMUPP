@@ -66,6 +66,8 @@ set(PROJECT_INCLUDE_DIRS
 #   otheruse  OtherUse, 12 MHz crystal
 #   stlinkv2  ST-Link/V2 clone, 8 MHz crystal (compile-only target)
 set(VSL_BOARDS mini otheruse stlinkv2)
+# Boards that versaloon-bootloader supports (cmake/Bootloader.cmake)
+set(VSL_BOOTLOADER_BOARDS mini otheruse)
 set(BOARD "mini" CACHE STRING "Board to build for: ${VSL_BOARDS}")
 set_property(CACHE BOARD PROPERTY STRINGS ${VSL_BOARDS})
 
@@ -128,9 +130,10 @@ if (CMAKE_CROSSCOMPILING)
     # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
     set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER})
-    # FW_UPDATE enters the bootloader only when there is one (src/boot/BootloaderEntry.h)
-    if (VSL_BOOTLOADER)
-        list(APPEND PROJECT_DEFINES VSL_BOOTLOADER)
+    # FW_UPDATE enters the bootloader only when the firmware is linked behind
+    # one and the board has one (src/boot/BootloaderEntry.h)
+    if (VSL_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
+        list(APPEND PROJECT_DEFINES VSL_HAS_BOOTLOADER_ENTRY)
     endif ()
     if (VSL_DEBUG_CDC)
         list(APPEND PROJECT_DEFINES VSL_DEBUG_CDC)

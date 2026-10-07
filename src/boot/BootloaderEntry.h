@@ -23,9 +23,10 @@ namespace boot {
 // The bootloader defines the same value (BOOT_REQUEST in src/bootutils.h).
 inline constexpr uint16_t bootRequest = 0xB007;
 
-// CMake defines VSL_BOOTLOADER when the firmware is linked behind the
-// bootloader. Without the bootloader, the firmware refuses FW_UPDATE.
-#if defined(VSL_BOOTLOADER)
+// CMake defines VSL_HAS_BOOTLOADER_ENTRY when the firmware is linked behind
+// the bootloader and the board has a bootloader. Otherwise, the firmware
+// refuses FW_UPDATE.
+#if defined(VSL_HAS_BOOTLOADER_ENTRY)
 inline constexpr bool hasBootloader = true;
 #else
 inline constexpr bool hasBootloader = false;
