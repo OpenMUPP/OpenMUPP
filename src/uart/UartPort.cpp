@@ -5,6 +5,7 @@
 #include <peripherals/Rcc.h>
 #include <utils/Interrupt.h>
 
+#include "Hardware.h"
 #include "board/Board.h"
 #include "board/BoardPins.h"
 
@@ -95,6 +96,7 @@ void UartPort::start() {
    board::gpioPin(uartPins.rx).configure(hw::GpioPin::Mode::Input, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::Up);
 
    Interrupt::connectMemberHandler<UartPort, &UartPort::handleInterrupt>(peripheral.irq, *this);
+   NVIC_SetPriority(peripheral.irq, hardware::uartIrqPriority);
    NVIC_ClearPendingIRQ(peripheral.irq);
    NVIC_EnableIRQ(peripheral.irq);
 }

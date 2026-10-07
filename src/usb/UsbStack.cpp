@@ -4,6 +4,7 @@
 #include <peripherals/Rcc.h>
 #include <peripherals/Uid.h>
 
+#include "Hardware.h"
 #include "board/Board.h"
 #include "board/BoardPins.h"
 #include "debug/DebugLog.h"
@@ -61,6 +62,8 @@ void UsbStack::start() {
 
    // USBPRE is set by the 72 MHz clock setup, before the clock is enabled.
    Rcc::enableUSBClock();
+   // Before begin(), which enables the interrupt (Hardware.h)
+   NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, hardware::usbIrqPriority);
    controller_.begin();
    device_.start();
 }
