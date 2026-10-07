@@ -1,46 +1,48 @@
 #include "usb/VersaloonFunction.h"
 
-#include <algorithm>
-
-#include "boot/BootloaderEntry.h"
-
 namespace usb {
 
-VersaloonFunction::VersaloonFunction(boot::BootloaderEntry *bootloader)
+VersaloonFunction::VersaloonFunction(const protocol::DeviceInfo &info, boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler *usbToXxx)
    : VendorBulkFunction(versaloonInterface,
                         art::usb::VendorBulkEndpoints{ .out = versaloonOutEndpoint, .in = versaloonInEndpoint, .maxPacketSize = versaloonPacketSize })
-   , bootloader_(bootloader) {
+   , assembler_(art::span<uint8_t>(command_.data(), command_.size()), versaloonPacketSize)
+   , processor_(info, bootloader, usbToXxx) {
 }
 
 bool VersaloonFunction::dataReceived(art::span<const uint8_t> packet) {
-   if(!packet.empty() && packet[0] == versaloonFwUpdate) {
-      return firmwareUpdate(packet);
+   using Result = protocol::CommandAssembler::Result;
+   switch(assembler_.add(packet)) {
+   case Result::Incomplete:
+   case Result::Ignored:
+      return true;
+   case Result::Error:
+      return sendReply(art::span<const uint8_t>());
+   case Result::Complete:
+      break;
    }
-   const std::size_t size = std::min(packet.size(), echo_.size());
-   std::copy_n(packet.begin(), size, echo_.begin());
-   // One IN packet per OUT packet: no ZLP after a full packet.
-   if(!sendInTransfer(art::span<const uint8_t>(echo_.data(), size), ZeroLengthPacket::Never)) {
-      // Not configured: drop the packet.
+   const auto size = processor_.process(assembler_.command(), art::span<uint8_t>(reply_.data(), reply_.size()));
+   if(!size) {
       return true;
    }
-   // Hold the OUT endpoint until the host has read the echo.
-   return false;
+   if(*size > reply_.size()) {
+      // A handler error: do not send the RAM after the buffer.
+      return sendReply(art::span<const uint8_t>());
+   }
+   return sendReply(art::span<const uint8_t>(reply_.data(), *size));
 }
 
-bool VersaloonFunction::firmwareUpdate(art::span<const uint8_t> packet) {
-   const bool accept = bootloader_ != nullptr && packet.size() >= 2 && packet[1] == versaloonFwUpdateKey;
-   echo_[0] = accept ? fwUpdateAccepted : fwUpdateRefused;
-   const bool queued = sendInTransfer(art::span<const uint8_t>(echo_.data(), 1), ZeroLengthPacket::Never);
-   if(accept) {
-      // The main loop resets after the reply delay, also when the host
-      // does not read the reply.
-      bootloader_->request();
-   }
-   return !queued;
+bool VersaloonFunction::sendReply(art::span<const uint8_t> reply) {
+   const auto zeroLengthPacket = reply.size() < reply_.size() ? ZeroLengthPacket::Auto : ZeroLengthPacket::Never;
+   // Not configured: drop the reply.
+   return !sendInTransfer(reply, zeroLengthPacket);
 }
 
 void VersaloonFunction::transferSent() {
    resumeOut();
+}
+
+void VersaloonFunction::dataPathClosed() {
+   assembler_.reset();
 }
 
 } // namespace usb

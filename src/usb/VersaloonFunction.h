@@ -1,56 +1,60 @@
 #pragma once
 
 // The Versaloon vendor interface (interface 0, bulk OUT 0x03, bulk IN 0x82),
-// which OpenOCD (vsllink) talks to.
+// which OpenOCD (vsllink) talks to. Hardware-independent: the host unit
+// tests run it on a fake controller.
 //
-// Stub until the command protocol (phase C): it sends each OUT packet back
-// unchanged on the IN endpoint, with the same size (a zero-length packet
-// too). While the echo is on its way, the OUT endpoint NAKs, so no packet
-// is lost. Hardware-independent: the host unit tests run it on a fake
-// controller.
+// The function joins the OUT packets of a transfer into one command
+// (protocol/CommandAssembler.h), runs it (protocol/CommandProcessor.h) and
+// sends the reply as one IN transfer. The command buffer and the reply
+// buffer are separate, so a reply can be longer than its command. While
+// the reply is on its way, the OUT endpoint NAKs: the next command waits.
 //
-// The one real command is VERSALOON_FW_UPDATE: [0x0F][0xAA]. The function
-// replies with one status byte and requests the bootloader entry
-// (boot/BootloaderEntry.h). Without a bootloader, or with a wrong key, it
-// replies fwUpdateRefused and the firmware keeps running.
+// A reply whose size is a multiple of the packet size ends with a ZLP, so
+// that the host read ends. A reply of protocol::bufferSize bytes has no
+// ZLP: the host reads that size, so its read ends without one, and the ZLP
+// would end the next read.
+//
+// A wrong command (length error or overflow) gets an empty reply (a ZLP)
+// at the end of its transfer (see protocol/CommandAssembler.h). The host
+// then sees a reply of the wrong size at once, without a timeout. A reply
+// size from the USB_TO_XXX handler that is larger than the reply buffer
+// gets an empty reply too.
 
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <usb/VendorBulkFunction.h>
 
+#include "protocol/CommandAssembler.h"
+#include "protocol/CommandProcessor.h"
+#include "protocol/Versaloon.h"
 #include "usb/UsbDescriptors.h"
-
-namespace boot {
-class BootloaderEntry;
-}
 
 namespace usb {
 
-// VERSALOON_FW_UPDATE and its key, as in OpenOCD (versaloon_internal.h)
-inline constexpr uint8_t versaloonFwUpdate = 0x0F;
-inline constexpr uint8_t versaloonFwUpdateKey = 0xAA;
-
-// Status byte of the FW_UPDATE reply
-inline constexpr uint8_t fwUpdateAccepted = 0x00;
-inline constexpr uint8_t fwUpdateRefused = 0x01;
-
 class VersaloonFunction final : public art::usb::VendorBulkFunction {
    public:
-   // bootloader: the bootloader entry of FW_UPDATE. nullptr: the firmware
-   // has no bootloader and refuses FW_UPDATE.
-   explicit VersaloonFunction(boot::BootloaderEntry *bootloader = nullptr);
+   // See protocol::CommandProcessor for bootloader and usbToXxx.
+   explicit VersaloonFunction(const protocol::DeviceInfo &info,
+                              boot::BootloaderEntry *bootloader = nullptr,
+                              protocol::UsbToXxxHandler *usbToXxx = nullptr);
 
    protected:
    bool dataReceived(art::span<const uint8_t> packet) override;
    void transferSent() override;
+   void dataPathClosed() override;
 
    private:
-   // Queues the FW_UPDATE reply and requests the bootloader entry.
-   bool firmwareUpdate(art::span<const uint8_t> packet);
+   // Starts the IN transfer of the reply. Returns the value for
+   // dataReceived(): false holds the OUT endpoint until the reply is sent.
+   bool sendReply(art::span<const uint8_t> reply);
 
-   boot::BootloaderEntry *bootloader_;
-   std::array<uint8_t, versaloonPacketSize> echo_{};
+   static_assert(protocol::bufferSize >= protocol::CommandProcessor::maxInfoText + 3, "The reply buffer must hold the GET_INFO reply");
+
+   std::array<uint8_t, protocol::bufferSize> command_{};
+   std::array<uint8_t, protocol::bufferSize> reply_{};
+   protocol::CommandAssembler assembler_;
+   protocol::CommandProcessor processor_;
 };
 
 } // namespace usb

@@ -209,7 +209,7 @@ class Bench {
       .strings = art::span<const art::span<const uint8_t>>(strings_.data(), strings_.size()),
    };
    art::usb::Device device_;
-   usb::VersaloonFunction versaloon_;
+   usb::VersaloonFunction versaloon_{ protocol::DeviceInfo{ .version = "v0.0.0", .board = "test", .hardwareId = 0 } };
    // The queue sizes of the firmware (usb/UsbStack.h)
    art::usb::CdcAcmFunction<256, 256> serialPort_;
    uart::UartBridge<FakeUart, ringSize> bridge_;
