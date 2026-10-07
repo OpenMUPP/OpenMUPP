@@ -73,4 +73,9 @@ void os_startup_initialize_hardware() {
    hw::Afio::setSwjConfig(board::afioSwjConfig(board::swjConfig(board::current)));
 
    configurePins();
+
+   // versaloon-bootloader jumps to the firmware with PRIMASK set (cpsid i).
+   // Nothing else clears it, so without this the SysTick and USB interrupts
+   // never run behind the bootloader.
+   __enable_irq();
 }

@@ -322,6 +322,9 @@ The bootloader starts the firmware after a system reset.
 Thus all peripherals are in their reset state when the firmware starts.
 The bootloader sets `VTOR` to the firmware vector table at `0x08002800`.
 The system-stm32 start-up code sets `VTOR` again from the linker script.
+The bootloader jumps to the firmware with all interrupts masked (`PRIMASK` set).
+`os_startup_initialize_hardware()` clears `PRIMASK` after the pin setup, before the static constructors run.
+Without this step, the SysTick and USB interrupts never run, and the host cannot enumerate the device.
 The firmware initializes its DATA and BSS sections. It does not use RAM content from the bootloader.
 
 ## Dependencies
