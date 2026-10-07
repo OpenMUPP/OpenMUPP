@@ -39,8 +39,10 @@ add_executable(vsl-tests
         TestCommandProcessor.cpp
         TestUsbToAll.cpp
         TestReplay.cpp
+        TestGpioBlock.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
+        ../src/protocol/GpioBlock.cpp
         ../src/protocol/UsbToAll.cpp
         ../src/protocol/UsbToXxx.cpp
         ../src/usb/VersaloonFunction.cpp
