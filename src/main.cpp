@@ -13,7 +13,9 @@
 // bit-bang SWD engine (swd/SwdBitBang.h). The POWER block
 // (protocol/PowerBlock.h) switches the target supply, and its poll() in the
 // main loop switches it off when the rail drops. GET_TVCC replies the
-// voltage of its Vref sense.
+// voltage of its Vref sense. During a long JTAG or SWD command, the
+// engines call the serial service (protocol/Background.h): it runs the
+// serial port of the USB device and the UART bridge, or the debug log.
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -30,6 +32,7 @@
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
+#include "protocol/Background.h"
 #include "protocol/GpioBlock.h"
 #include "protocol/JtagRawBlock.h"
 #include "protocol/PowerBlock.h"
@@ -53,19 +56,38 @@ class BusyWaitDelay final : public protocol::Delay {
 };
 
 BusyWaitDelay busyWaitDelay;
+
+// The serial port during a long USB_TO_XXX command. It runs only the
+// serial port events of the USB device (UsbStack::pollSerial()), so no
+// command starts and the host stays connected for the running command.
+class SerialService final : public protocol::Background {
+   public:
+   void service() override;
+};
+
+SerialService serialService;
+
 protocol::UsbToAll usbToAll{ busyWaitDelay };
 board::BoardGpio boardGpio;
 protocol::GpioBlock gpioBlock{ boardGpio };
 board::JtagPins jtagPins;
-board::BoardJtag boardJtag{ jtagPins };
+board::BoardJtag boardJtag{ jtagPins, &serialService };
 protocol::JtagRawBlock jtagRawBlock{ boardJtag };
 board::SwdPins swdPins;
-board::BoardSwd boardSwd{ swdPins };
+board::BoardSwd boardSwd{ swdPins, &serialService };
 protocol::SwdBlock swdBlock{ boardSwd };
 board::BoardPower boardPower;
 protocol::PowerBlock powerBlock{ boardPower, busyWaitDelay };
 boot::BootloaderEntry bootloaderEntry;
 usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll };
+
+// A command runs only after usbStack.start(), so the USB device and the
+// bridge run.
+void SerialService::service() {
+   usbStack.pollSerial();
+   debug::pollLog(usbStack);
+   uart::pollBridge();
+}
 
 } // namespace
 

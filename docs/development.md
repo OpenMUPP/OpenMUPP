@@ -26,6 +26,9 @@ The unit tests use doctest and run on the host.
 They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry, the Versaloon command protocol, the `USB_TO_ALL` dispatcher, the `GPIO` block (with the release of SRST and TRST when the host goes away), the `JTAG_RAW` block, the JTAG bit-bang engine (on mock pins), the `SWD` block, the SWD request and parity encoding, the SWD bit-bang engine (on mock pins with a mock target), the `POWER` block (on a fake power switch and a fake voltage sense), and the Vref scale.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 The UART bridge tests run the bridge with the CDC-ACM function of libArT, the fake USB controller and a fake UART.
+Two of these tests run a long JTAG shift on mock pins, with and without the serial service of the engines.
+With the service, no UART data is lost.
+Other tests check the serial-only mode of the USB event queue, and the calls of the serial service in the JTAG and SWD engines.
 Configure without the toolchain file:
 
 ```sh

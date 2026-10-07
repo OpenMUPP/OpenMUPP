@@ -18,6 +18,13 @@
 //   uint32_t now();                 free-running core cycle counter
 //   uint32_t coreHz();              core clock frequency
 //
+// With a protocol::Background, a shift calls Background::service() between
+// bytes, at most once per backgroundIntervalMs (protocol/Background.h).
+// TCK is then low: the call makes that low half period longer. In timed
+// mode, the low half period starts again after the call, so the TDI and
+// TMS writes of the next bit come a full half period before the rising
+// edge.
+//
 // One bit, with TCK low at the start:
 //
 //   1. Write TDI and TMS. Wait for the low half period.
@@ -41,6 +48,7 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "protocol/Background.h"
 #include "protocol/JtagRawBlock.h"
 
 namespace jtag {
@@ -88,13 +96,26 @@ template <typename Pins>
 }
 
 template <Clocking C, typename Pins>
-bool shiftBits(Pins &pins, const Timing &timing, uint32_t bitCount, const uint8_t *tdi, const uint8_t *tms, uint8_t *tdo) {
+bool shiftBits(Pins &pins,
+               protocol::BackgroundTimer &background,
+               const Timing &timing,
+               uint32_t bitCount,
+               const uint8_t *tdi,
+               const uint8_t *tms,
+               uint8_t *tdo) {
    // TCK is low since the end of the last shift.
    uint32_t edge = 0;
    if constexpr(C == Clocking::Timed) {
       edge = pins.now();
    }
    for(uint32_t done = 0; done < bitCount; done += 8) {
+      // TCK is low. After a call, the low half period starts again: the
+      // next TDI and TMS writes get their full setup time.
+      if(background.poll(pins)) {
+         if constexpr(C == Clocking::Timed) {
+            edge = pins.now();
+         }
+      }
       const uint32_t bits = std::min<uint32_t>(8, bitCount - done);
       uint32_t tdiByte = *tdi++;
       uint32_t tmsByte = *tms++;
@@ -138,8 +159,10 @@ bool shiftBits(Pins &pins, const Timing &timing, uint32_t bitCount, const uint8_
 template <typename Pins>
 class BitBangPort final : public protocol::JtagPort {
    public:
-   explicit BitBangPort(Pins &pins)
-      : pins_(pins) {
+   // background: serviced during a shift, nullptr for none.
+   explicit BitBangPort(Pins &pins, protocol::Background *background = nullptr)
+      : pins_(pins)
+      , background_(background) {
    }
 
    void init() override {
@@ -165,11 +188,12 @@ class BitBangPort final : public protocol::JtagPort {
    [[nodiscard]] bool
    shift(uint32_t bitCount, art::span<const uint8_t> tdi, art::span<const uint8_t> tms, art::span<uint8_t> tdo) override {
       pins_.begin();
+      background_.begin(pins_);
       switch(timing_.clocking) {
       case Clocking::Timed:
-         return detail::shiftBits<Clocking::Timed>(pins_, timing_, bitCount, tdi.data(), tms.data(), tdo.data());
+         return detail::shiftBits<Clocking::Timed>(pins_, background_, timing_, bitCount, tdi.data(), tms.data(), tdo.data());
       case Clocking::Adaptive:
-         return detail::shiftBits<Clocking::Adaptive>(pins_, timing_, bitCount, tdi.data(), tms.data(), tdo.data());
+         return detail::shiftBits<Clocking::Adaptive>(pins_, background_, timing_, bitCount, tdi.data(), tms.data(), tdo.data());
       }
       return false;
    }
@@ -180,6 +204,7 @@ class BitBangPort final : public protocol::JtagPort {
 
    private:
    Pins &pins_;
+   protocol::BackgroundTimer background_;
    // INIT of the JTAG_RAW block sets the speed. Until then: the fastest
    // rate.
    Timing timing_{ Clocking::Timed, 0, 0 };

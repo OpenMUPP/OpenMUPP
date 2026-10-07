@@ -206,6 +206,50 @@ The OUT endpoint NAKs during the delay, and the serial port stops.
 
 A top-level command `0x20`-`0x7E` is one block without the `USB_TO_ALL` header, as in the original firmware.
 
+### Serial port during long commands
+
+A command runs in the main loop, so the main loop stops until the command ends.
+A long command can take seconds, for example a `JTAG_RAW` shift at 10 kHz or with a slow RTCK, or an `SWD` batch with many WAIT retries.
+The RX ring buffer of the [UART bridge](uart-bridge.md) holds only about 89 ms at 115200 baud.
+
+Thus the JTAG and SWD engines call a serial service during the command (`src/protocol/Background.h`).
+The call comes at most once per millisecond, at these points:
+
+- `JTAG_RAW`: between two bytes of a shift. TCK is low.
+- `SWD`: before each transfer and each WAIT retry, and between two bytes of a sequence. SWCLK is high.
+
+The serial service does these steps:
+
+1. It delivers the USB events of the serial port endpoints (`UsbStack::pollSerial()`, `src/usb/SerialEventQueue.h`).
+   It stops at the first other event: a SETUP packet, a bus reset, a suspend, a resume, or a Versaloon endpoint event.
+   That event waits until the command ends, so the order of the events does not change.
+   Thus the service does not start a new command, and the host does not disconnect during the command.
+2. It moves the UART data (`uart::pollBridge()`), or the debug log in a `VSL_DEBUG_CDC` build.
+
+Each call sends one IN packet of up to 64 bytes: 64 bytes per ms.
+At 115200 baud, the UART receives 11.5 bytes per ms.
+
+The call makes one clock phase longer by the time of the service, some microseconds.
+The clock does not get faster: each half period waits from its clock edge.
+For JTAG in timed mode, the low half period starts again after the call.
+Thus TDI and TMS change a full half period before the next rising edge, as for all other bits.
+For SWD, each bit waits a full half period after the SWDIO write, so SWDIO also keeps its setup time.
+The duty cycle of that one clock period changes.
+The service takes some microseconds in each millisecond, so a shift gets a little slower.
+The time of the service on the target is not measured yet.
+
+Limits:
+
+- A SETUP packet from the host stops the serial port until the command ends.
+  For example, a terminal program sends SET_LINE_CODING when it opens the port.
+- The `DELAY` block does not call the service (see above).
+- The service runs at a byte boundary. At a very slow clock, the time between two calls is 1 ms plus one byte.
+  At 10 kHz TCK, this is 1.8 ms.
+- With adaptive clocking (RTCK), one byte has no such limit.
+  Each of the 16 TCK edges of a byte can wait up to 10 ms for RTCK, so one byte can take up to 160 ms.
+  This is more than the 89 ms of the RX ring buffer.
+  Data loss occurs only when the target replies to each edge after more than about 5.5 ms.
+
 ### JTAG_RAW block
 
 OpenOCD shifts all JTAG bits through the `JTAG_RAW` block (`src/protocol/JtagRawBlock.h`).

@@ -39,7 +39,8 @@ extern logging::Logger usbLog;
 void startLog();
 
 // Sends the buffered log to the CDC port and logs USB state changes. Call
-// it in each main loop iteration, after UsbStack::poll().
+// it in each main loop iteration, after UsbStack::poll(), and in the
+// serial service during a long command (protocol/Background.h).
 void pollLog(usb::UsbStack &usbStack);
 #else
 inline constexpr bool cdcLog = false;
