@@ -7,6 +7,7 @@
 // TMS has an output pin and an input pin, which can be different pins (the
 // Mini: PB4 out, PB6 in). The output pin drives TMS; the input pin reads it.
 
+#include <array>
 #include <cstdint>
 #include <optional>
 
@@ -57,6 +58,31 @@ constexpr uint16_t gpioAvailable(const DebugPins &pins) {
       }
    }
    return mask;
+}
+
+// One pin and its mode
+struct GpioPinSetting {
+   Pin pin;
+   protocol::PinMode mode;
+
+   constexpr bool operator==(const GpioPinSetting &) const = default;
+};
+
+// The pins that CONFIG of one bit changes, in this order. Empty when the
+// board does not have the pin. A TMS output sets the output pin. A TMS
+// input with two pins sets the input pin to the mode and releases the
+// output pin (floating input).
+constexpr std::array<std::optional<GpioPinSetting>, 2> gpioPinSettings(const DebugPins &pins, uint16_t bit, protocol::PinMode mode) {
+   const auto out = gpioOutputPin(pins, bit);
+   if(!out) {
+      return {};
+   }
+   const auto in = gpioInputPin(pins, bit);
+   const bool output = mode == protocol::PinMode::PushPull || mode == protocol::PinMode::OpenDrain;
+   if(output || !in || *in == *out) {
+      return { GpioPinSetting{ *out, mode }, std::nullopt };
+   }
+   return { GpioPinSetting{ *in, mode }, GpioPinSetting{ *out, protocol::PinMode::Input } };
 }
 
 } // namespace board

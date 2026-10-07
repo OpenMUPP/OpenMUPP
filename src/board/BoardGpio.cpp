@@ -27,10 +27,9 @@ void configurePin(Pin pin, PinMode mode, bool level) {
       break;
    case PinMode::PushPull:
    case PinMode::OpenDrain:
-      // The output register first, so the pin starts at its level. An
-      // input becomes a push-pull output in setMode() and open-drain in
-      // setOutputType() a few cycles later: an open-drain pin at the high
-      // level drives high for these cycles.
+      // The output register first, so the pin starts at its level.
+      // configure() then writes the whole mode field in one step: the pin
+      // passes through no other mode.
       gpio.write(level);
       gpio.configure(GpioPin::Mode::Output,
                      mode == PinMode::OpenDrain ? GpioPin::OutputType::OpenDrain : GpioPin::OutputType::PushPull,
@@ -46,22 +45,11 @@ uint16_t BoardGpio::available() const {
 }
 
 void BoardGpio::configure(uint16_t bit, PinMode mode, bool level) {
-   const auto out = gpioOutputPin(current.debug, bit);
-   if(!out) {
-      return;
-   }
-   const auto in = gpioInputPin(current.debug, bit);
-   const bool output = mode == PinMode::PushPull || mode == PinMode::OpenDrain;
-   if(in && *in != *out) {
-      // TMS with two pins: the input pin stays an input. The output pin
-      // releases the line when TMS is an input.
-      configurePin(output ? *out : *in, mode, level);
-      if(!output) {
-         configurePin(*out, PinMode::Input, false);
+   for(const auto &setting : gpioPinSettings(current.debug, bit, mode)) {
+      if(setting) {
+         configurePin(setting->pin, setting->mode, level);
       }
-      return;
    }
-   configurePin(*out, mode, level);
 }
 
 void BoardGpio::write(uint16_t mask, uint16_t value) {

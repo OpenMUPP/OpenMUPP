@@ -135,8 +135,10 @@ std::vector<uint8_t> in(uint16_t mask) {
 
 class Bench {
    public:
-   explicit Bench(uint16_t available = gpio::all & ~(gpio::usr1 | gpio::usr2))
+   // replySize: the size of the reply buffer, for the overflow tests
+   explicit Bench(uint16_t available = gpio::all & ~(gpio::usr1 | gpio::usr2), std::size_t replySize = 256)
       : pins(available)
+      , replySize_(replySize)
       , block_(pins)
       , dispatcher_(delay_) {
       REQUIRE(dispatcher_.add(block_));
@@ -156,7 +158,7 @@ class Bench {
       command[1] = static_cast<uint8_t>(command.size());
       command[2] = static_cast<uint8_t>(command.size() >> 8);
       const auto size = dispatcher_.process(art::span<const uint8_t>(command.data(), command.size()),
-                                            art::span<uint8_t>(reply_.data(), reply_.size()));
+                                            art::span<uint8_t>(reply_.data(), replySize_));
       REQUIRE(size.has_value());
       return { reply_.begin(), reply_.begin() + static_cast<std::ptrdiff_t>(*size) };
    }
@@ -164,6 +166,7 @@ class Bench {
    FakeGpioPins pins;
 
    private:
+   std::size_t replySize_;
    NoDelay delay_;
    protocol::GpioBlock block_;
    protocol::UsbToAll dispatcher_;
@@ -313,4 +316,39 @@ TEST_CASE("Wrong GPIO requests") {
    }
    // No pin changed.
    CHECK(bench.pins.configured.empty());
+}
+
+TEST_CASE("CONFIG of TMS on the Mini: PB4 drives, PB6 reads") {
+   using board::GpioPinSetting;
+   using Settings = std::array<std::optional<GpioPinSetting>, 2>;
+   const auto &pins = board::mini.debug;
+   const Pin pb4{ Port::B, 4 };
+   const Pin pb6{ Port::B, 6 };
+
+   CHECK(board::gpioPinSettings(pins, gpio::tms, PinMode::PushPull) ==
+         Settings{ GpioPinSetting{ pb4, PinMode::PushPull }, std::nullopt });
+   CHECK(board::gpioPinSettings(pins, gpio::tms, PinMode::OpenDrain) ==
+         Settings{ GpioPinSetting{ pb4, PinMode::OpenDrain }, std::nullopt });
+   // An input: PB6 gets the mode, PB4 releases the line.
+   CHECK(board::gpioPinSettings(pins, gpio::tms, PinMode::InputPullUp) ==
+         Settings{ GpioPinSetting{ pb6, PinMode::InputPullUp }, GpioPinSetting{ pb4, PinMode::Input } });
+   CHECK(board::gpioPinSettings(pins, gpio::tms, PinMode::Input) ==
+         Settings{ GpioPinSetting{ pb6, PinMode::Input }, GpioPinSetting{ pb4, PinMode::Input } });
+   // Other bits have one pin.
+   CHECK(board::gpioPinSettings(pins, gpio::srst, PinMode::InputPullUp) ==
+         Settings{ GpioPinSetting{ Pin{ Port::B, 11 }, PinMode::InputPullUp }, std::nullopt });
+   CHECK(board::gpioPinSettings(pins, gpio::usr1, PinMode::PushPull) == Settings{});
+}
+
+TEST_CASE("CONFIG of TMS on the ST-Link/V2: one pin for both directions") {
+   using board::GpioPinSetting;
+   using Settings = std::array<std::optional<GpioPinSetting>, 2>;
+   const auto &pins = board::stLinkV2.debug;
+   const Pin pb14{ Port::B, 14 };
+
+   CHECK(board::gpioPinSettings(pins, gpio::tms, PinMode::PushPull) ==
+         Settings{ GpioPinSetting{ pb14, PinMode::PushPull }, std::nullopt });
+   CHECK(board::gpioPinSettings(pins, gpio::tms, PinMode::InputPullDown) ==
+         Settings{ GpioPinSetting{ pb14, PinMode::InputPullDown }, std::nullopt });
+   CHECK(board::gpioPinSettings(pins, gpio::trst, PinMode::PushPull) == Settings{});
 }
