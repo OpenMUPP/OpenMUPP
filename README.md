@@ -13,10 +13,10 @@ The project is at an early stage. The current firmware does these functions:
 - It bridges the serial port to the UART.
 - It starts the bootloader on request, for a firmware update.
 - It receives Versaloon commands and replies to the common commands, for example `GET_INFO`.
-- It runs the `USB_TO_ALL` command of OpenOCD, with the `INFO` and `DELAY` blocks.
+- It runs the `USB_TO_ALL` command of OpenOCD, with the `INFO`, `DELAY` and `GPIO` blocks. OpenOCD controls SRST and TRST through the `GPIO` block.
 
-The JTAG, SWD, GPIO and target power blocks are not available yet.
-OpenOCD reads the firmware version and the capabilities, but cannot debug a target.
+The JTAG, SWD and target power blocks are not available yet.
+OpenOCD reads the firmware version and the capabilities, and sets SRST and TRST, but cannot debug a target.
 See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
 ## Boards
