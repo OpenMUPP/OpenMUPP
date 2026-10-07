@@ -37,19 +37,28 @@
 //
 //   request (8 bits) | turnaround | ACK (3 bits) | data phase | idle
 //
-// - OK read: 32 data bits and the parity bit from the target, then a
-//   turnaround.
-// - OK write: a turnaround, then 32 data bits and the parity bit from the
-//   host.
-// - WAIT, FAULT: a turnaround, no data phase.
-// - Another ACK (for example no target: 0b111): the target can be out of
-//   step. The host clocks a turnaround and a data phase with SWDIO
-//   released.
+// The data phase runs for each ACK, as in the OpenOCD bitbang driver and
+// the original firmware:
+//
+// - Read: 32 data bits and the parity bit with SWDIO released, then a
+//   turnaround. Only an OK ACK gives data.
+// - Write: a turnaround, then the host drives 32 data bits and the parity
+//   bit.
+//
+// OpenOCD sets ORUNDETECT in the DP. Then the target expects the data
+// phase also after WAIT and FAULT (ADIv5, B4.2.4), and a host without it
+// loses sync with the target. Without ORUNDETECT, the target ignores the
+// data phase. A write without ACK (multidrop TARGETSEL) also needs it: the
+// target samples the data.
 //
 // After each transfer, the host drives SWDIO low for idleCycles cycles, as
 // the original firmware does. OpenOCD does not send idle cycles to this
 // adapter, and the target needs idle cycles to complete the last write.
-// A WAIT repeats the transfer up to `retries` times.
+//
+// A WAIT repeats the transfer up to `retries` times. With ORUNDETECT, a
+// WAIT sets STICKYORUN, and the DP replies FAULT until ABORT.ORUNERRCLR
+// clears it. Thus, before each retry, the host writes ABORT with
+// ORUNERRCLR, as the OpenOCD bitbang driver does.
 
 #include <array>
 #include <cstdint>
@@ -81,11 +90,12 @@ inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'0
 // small makes SWCLK slower than the table, too large makes it faster.
 inline constexpr uint32_t loopOverheadCycles = 12;
 
+// The DP ABORT write (encoded request) and its ORUNERRCLR bit
+inline constexpr uint8_t abortRequest = 0x81;
+inline constexpr uint32_t orunErrClr = 0x10;
+
 // SWDIO low cycles after each transfer
 inline constexpr uint32_t idleCycles = 8;
-
-// The bits of a data phase: 32 data bits and the parity bit
-inline constexpr uint32_t dataPhaseBits = 33;
 
 // Core cycles of a half SWCLK period for an OpenOCD delay value, rounded
 // up: SWCLK is never faster than OpenOCD expects.
@@ -152,6 +162,9 @@ class BitBangPort final : public protocol::SwdPort {
          if(attempt >= retries_) {
             return static_cast<uint8_t>(ack | retryOutFlag);
          }
+         // An ABORT write gets OK also with STICKYORUN set.
+         uint32_t clear = orunErrClr;
+         static_cast<void>(transferOnce(abortRequest, clear));
       }
    }
 
@@ -169,35 +182,27 @@ class BitBangPort final : public protocol::SwdPort {
       clocks(turnaround_);
       const auto ack = static_cast<uint8_t>(readBits(3));
       uint8_t result = ack;
-      switch(ack) {
-      case ackOk:
-         if((request & readRequest) != 0) {
-            const uint32_t value = readBits(32);
-            const bool parityBit = readBit();
-            clocks(turnaround_);
+      if((request & readRequest) != 0) {
+         const uint32_t value = readBits(32);
+         const bool parityBit = readBit();
+         clocks(turnaround_);
+         if(ack == ackOk) {
             if(parityBit != parity(value)) {
                result |= parityErrorFlag;
             } else {
                data = value;
             }
-         } else {
-            clocks(turnaround_);
-            pins_.swdioDrive((data & 1u) != 0);
-            writeBits(data, 32);
-            writeBit(parity(data));
          }
-         break;
-      case ackWait:
+      } else {
          clocks(turnaround_);
-         break;
-      case ackFault:
-         clocks(turnaround_);
+         pins_.swdioDrive((data & 1u) != 0);
+         writeBits(data, 32);
+         writeBit(parity(data));
+      }
+      if(ack == ackFault) {
          result |= faultFlag;
-         break;
-      default:
-         clocks(turnaround_ + dataPhaseBits);
+      } else if(ack != ackOk && ack != ackWait) {
          result |= ackErrorFlag;
-         break;
       }
       pins_.swdioDrive(false);
       writeBits(0, idleCycles);

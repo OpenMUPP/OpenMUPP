@@ -18,11 +18,14 @@ using vsltest::MockSwdPins;
 
 constexpr uint8_t readDpidr = 0xA5;
 constexpr uint8_t writeAbort = 0x81;
+constexpr uint8_t writeSelect = 0xB1;
+constexpr uint8_t readApDrw = 0x9F;
+constexpr uint8_t writeTargetsel = 0x99;
 
-// The rising edges of a transfer: request, turnaround, ACK, idle cycles,
-// and the bits of the data phase.
-constexpr std::size_t transferEdges(unsigned turnaround, unsigned dataPhase) {
-   return 8 + turnaround + 3 + dataPhase + swd::idleCycles;
+// The rising edges of a transfer: request, turnaround, ACK, data phase
+// with its turnaround, idle cycles. The same for each ACK.
+constexpr std::size_t transferEdges(unsigned turnaround) {
+   return 8 + turnaround + 3 + turnaround + 33 + swd::idleCycles;
 }
 
 struct Bench {
@@ -34,13 +37,14 @@ struct Bench {
    }
 
    // Checks the line state after a transfer: SWCLK high, SWDIO driven low,
-   // no contention.
+   // no contention, and the target in step with the host.
    void checkIdle() const {
       CHECK(pins.swclkLevel());
       CHECK(pins.hostDrives());
       CHECK_FALSE(pins.swdio());
       CHECK(pins.contentions == 0);
       CHECK(pins.undrivenSamples == 0);
+      CHECK(pins.desyncs == 0);
    }
 
    MockSwdPins pins;
@@ -89,7 +93,7 @@ TEST_CASE("SWD bit-bang: a read transfer") {
    REQUIRE(bench.pins.transfers.size() == 1);
    CHECK(bench.pins.transfers[0].request == readDpidr);
    // Data phase: 33 bits and a turnaround
-   CHECK(bench.pins.risingEdges.size() == transferEdges(1, 34));
+   CHECK(bench.pins.risingEdges.size() == transferEdges(1));
    bench.checkIdle();
 }
 
@@ -105,7 +109,7 @@ TEST_CASE("SWD bit-bang: a write transfer") {
       CHECK(bench.pins.transfers[0].written == value);
       CHECK(bench.pins.transfers[0].writtenParity == pswd::parity(value));
       // Data phase: a turnaround and 33 bits
-      CHECK(bench.pins.risingEdges.size() == transferEdges(1, 34));
+      CHECK(bench.pins.risingEdges.size() == transferEdges(1));
       bench.checkIdle();
    }
 }
@@ -120,7 +124,7 @@ TEST_CASE("SWD bit-bang: transfers with a turnaround of 2 cycles") {
    CHECK(bench.port.transfer(pswd::encodeRequest(0x02), data) == pswd::ackOk);
    REQUIRE(bench.pins.transfers.size() == 2);
    CHECK(bench.pins.transfers[1].written == 0x50000000);
-   CHECK(bench.pins.risingEdges.size() == 2 * transferEdges(2, 35));
+   CHECK(bench.pins.risingEdges.size() == 2 * transferEdges(2));
    bench.checkIdle();
 }
 
@@ -137,46 +141,85 @@ TEST_CASE("SWD bit-bang: transfers back to back") {
    bench.checkIdle();
 }
 
-TEST_CASE("SWD bit-bang: WAIT repeats the transfer up to the retry count") {
-   SUBCASE("OK after two WAIT") {
-      Bench bench(1, 2);
-      bench.pins.acks = { pswd::ackWait, pswd::ackWait };
-      bench.pins.readData = 7;
-      uint32_t data = 0;
-      CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
-      CHECK(data == 7);
-      CHECK(bench.pins.transfers.size() == 3);
-      CHECK(bench.pins.risingEdges.size() == 2 * transferEdges(1, 1) + transferEdges(1, 34));
-      bench.checkIdle();
-   }
-   SUBCASE("WAIT after all retries") {
-      Bench bench(1, 2);
-      bench.pins.acks = { pswd::ackWait, pswd::ackWait, pswd::ackWait, pswd::ackOk };
-      uint32_t data = 0x55;
-      CHECK(bench.port.transfer(readDpidr, data) == (pswd::ackWait | pswd::retryOutFlag));
-      CHECK(data == 0x55);
-      CHECK(bench.pins.transfers.size() == 3);
-      bench.checkIdle();
-   }
-   SUBCASE("no retry") {
-      Bench bench(1, 0);
-      bench.pins.acks = { pswd::ackWait };
-      uint32_t data = 0;
-      CHECK(bench.port.transfer(writeAbort, data) == (pswd::ackWait | pswd::retryOutFlag));
-      CHECK(bench.pins.transfers.size() == 1);
-      bench.checkIdle();
+TEST_CASE("SWD bit-bang: WAIT repeats the transfer after an ABORT with ORUNERRCLR") {
+   for(const bool overrunDetect : { false, true }) {
+      CAPTURE(overrunDetect);
+      SUBCASE("OK after two WAIT") {
+         Bench bench(1, 2);
+         bench.pins.overrunDetect = overrunDetect;
+         bench.pins.acks = { pswd::ackWait, pswd::ackWait };
+         bench.pins.readData = 7;
+         uint32_t data = 0;
+         CHECK(bench.port.transfer(readApDrw, data) == pswd::ackOk);
+         CHECK(data == 7);
+         REQUIRE(bench.pins.transfers.size() == 5);
+         for(const std::size_t i : { 1u, 3u }) {
+            CHECK(bench.pins.transfers[i].request == writeAbort);
+            CHECK(bench.pins.transfers[i].written == 0x10);
+         }
+         CHECK(bench.pins.transfers[4].request == readApDrw);
+         CHECK_FALSE(bench.pins.stickyOrun);
+         CHECK(bench.pins.risingEdges.size() == 5 * transferEdges(1));
+         bench.checkIdle();
+      }
+      SUBCASE("WAIT after all retries") {
+         Bench bench(1, 2);
+         bench.pins.overrunDetect = overrunDetect;
+         bench.pins.acks = { pswd::ackWait, pswd::ackWait, pswd::ackWait, pswd::ackOk };
+         uint32_t data = 0x55;
+         CHECK(bench.port.transfer(readApDrw, data) == (pswd::ackWait | pswd::retryOutFlag));
+         CHECK(data == 0x55);
+         CHECK(bench.pins.transfers.size() == 5);
+         // OpenOCD clears STICKYORUN after the failed transfer.
+         CHECK(bench.pins.stickyOrun == overrunDetect);
+         bench.checkIdle();
+      }
+      SUBCASE("no retry") {
+         Bench bench(1, 0);
+         bench.pins.overrunDetect = overrunDetect;
+         bench.pins.acks = { pswd::ackWait };
+         uint32_t data = 0x1234;
+         CHECK(bench.port.transfer(writeSelect, data) == (pswd::ackWait | pswd::retryOutFlag));
+         REQUIRE(bench.pins.transfers.size() == 1);
+         // The write drives its data phase also after WAIT.
+         CHECK(bench.pins.transfers[0].written == 0x1234);
+         bench.checkIdle();
+      }
    }
 }
 
-TEST_CASE("SWD bit-bang: FAULT ends the transfer without a data phase") {
-   Bench bench(1, 5);
-   bench.pins.acks = { pswd::ackFault };
-   uint32_t data = 0x1234;
-   CHECK(bench.port.transfer(writeAbort, data) == (pswd::ackFault | pswd::faultFlag));
-   CHECK(data == 0x1234);
-   CHECK(bench.pins.transfers.size() == 1);
-   CHECK(bench.pins.risingEdges.size() == transferEdges(1, 1));
+TEST_CASE("SWD bit-bang: with ORUNDETECT, a WAIT without ABORT gives FAULT") {
+   // The mock target itself: the reason for the ABORT before a retry.
+   Bench bench(1, 0);
+   bench.pins.overrunDetect = true;
+   bench.pins.acks = { pswd::ackWait };
+   uint32_t data = 0;
+   CHECK(bench.port.transfer(readApDrw, data) == (pswd::ackWait | pswd::retryOutFlag));
+   CHECK(bench.port.transfer(readApDrw, data) == (pswd::ackFault | pswd::faultFlag));
+   // DPIDR still answers.
+   bench.pins.readData = 0x1BA01477;
+   CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+   CHECK(data == 0x1BA01477);
    bench.checkIdle();
+}
+
+TEST_CASE("SWD bit-bang: FAULT runs the data phase, and the next transfer works") {
+   for(const bool read : { true, false }) {
+      CAPTURE(read);
+      Bench bench(1, 5);
+      bench.pins.overrunDetect = true;
+      bench.pins.acks = { pswd::ackFault };
+      bench.pins.readData = 0x1BA01477;
+      uint32_t data = 0x1234;
+      CHECK(bench.port.transfer(read ? readApDrw : writeSelect, data) == (pswd::ackFault | pswd::faultFlag));
+      CHECK(data == 0x1234);
+      CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+      CHECK(data == 0x1BA01477);
+      REQUIRE(bench.pins.transfers.size() == 2);
+      CHECK(bench.pins.transfers[1].request == readDpidr);
+      CHECK(bench.pins.risingEdges.size() == 2 * transferEdges(1));
+      bench.checkIdle();
+   }
 }
 
 TEST_CASE("SWD bit-bang: no reply is an ACK error, and the host clocks past the data phase") {
@@ -186,7 +229,19 @@ TEST_CASE("SWD bit-bang: no reply is an ACK error, and the host clocks past the 
    CHECK(bench.port.transfer(readDpidr, data) == (0x07 | pswd::ackErrorFlag));
    CHECK(data == 0x99);
    CHECK(bench.pins.transfers.size() == 1);
-   CHECK(bench.pins.risingEdges.size() == transferEdges(1, 34));
+   CHECK(bench.pins.risingEdges.size() == transferEdges(1));
+   bench.checkIdle();
+}
+
+TEST_CASE("SWD bit-bang: a write without ACK (TARGETSEL) still drives its data") {
+   Bench bench(1, 5);
+   bench.pins.acks = { 0 };
+   uint32_t data = 0x01002927;
+   CHECK(bench.port.transfer(writeTargetsel, data) == (0x07 | pswd::ackErrorFlag));
+   REQUIRE(bench.pins.transfers.size() == 1);
+   CHECK(bench.pins.transfers[0].request == writeTargetsel);
+   CHECK(bench.pins.transfers[0].written == 0x01002927);
+   CHECK(bench.pins.transfers[0].writtenParity == pswd::parity(0x01002927));
    bench.checkIdle();
 }
 
@@ -238,7 +293,7 @@ TEST_CASE("SWD bit-bang: each half period waits the half period without the loop
    const uint32_t start = bench.pins.time;
    uint32_t data = 0;
    CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
-   REQUIRE(bench.pins.edges.size() == 2 * transferEdges(1, 34));
+   REQUIRE(bench.pins.edges.size() == 2 * transferEdges(1));
    // The counter wraps in this test (pins.time starts near 2^32).
    CHECK(bench.pins.edges.back() < start);
    for(std::size_t i = 1; i < bench.pins.edges.size(); ++i) {

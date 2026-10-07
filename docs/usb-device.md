@@ -298,12 +298,17 @@ Then the firmware reads SWDIO, and sets SWCLK high: the target samples SWDIO at 
 1. The firmware sets the start bit, the parity, the stop bit and the park bit of the request.
    OpenOCD sends them already. Bits 1-4 of the request (APnDP, RnW, A2, A3) stay.
 2. The firmware sends the request, releases SWDIO for the turnaround, and reads the 3-bit acknowledge.
-3. For OK, the firmware reads 32 data bits and the parity bit (read), or sends them after a turnaround (write).
-   For WAIT and FAULT, there is no data phase.
-   For another acknowledge, the firmware clocks the turnaround and 33 bits with SWDIO released.
+3. The firmware runs the data phase for each acknowledge, as the OpenOCD `bitbang` driver and the original firmware do.
+   For a read, it reads 32 data bits and the parity bit with SWDIO released, then clocks the turnaround.
+   Only an OK acknowledge gives data.
+   For a write, it clocks the turnaround, then sends the 32 data bits and the parity bit.
+   OpenOCD sets ORUNDETECT in the DP. Then the target expects the data phase also after WAIT and FAULT.
+   A write without an acknowledge (multidrop `TARGETSEL`) also needs the data phase.
 4. The firmware drives SWDIO low for 8 idle cycles, as the original firmware does.
    The target needs idle cycles to complete a write, and OpenOCD does not send them to this adapter.
-5. After WAIT, the firmware repeats the transfer, up to `retry` times.
+5. After WAIT, the firmware writes DP `ABORT` with `ORUNERRCLR` (`0x10`), and then repeats the transfer.
+   It does this up to `retry` times.
+   With ORUNDETECT, a WAIT sets `STICKYORUN`, and the DP replies FAULT until `ORUNERRCLR` clears it.
 
 The `ack` byte has the acknowledge in bits 0-2 (OK 1, WAIT 2, FAULT 4), and these flags:
 
