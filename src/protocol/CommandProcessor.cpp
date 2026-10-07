@@ -42,8 +42,7 @@ std::optional<std::size_t> CommandProcessor::process(art::span<const uint8_t> co
    case getInfo:
       return info(reply);
    case getTvcc:
-      // The target voltage sense comes in phase C6.
-      putU16(reply, 0);
+      putU16(reply, usbToXxx_ != nullptr ? usbToXxx_->targetVoltage() : 0);
       return 2;
    case getHardware:
       reply[0] = info_.hardwareId;

@@ -20,7 +20,8 @@
 //
 // The other blocks are Block objects (GPIO, JTAG_RAW, SWD, POWER), added
 // with add(). A block type without a Block gets one CMD_NOT_SUPPORT status
-// byte.
+// byte. GET_TVCC (protocol/CommandProcessor.h) replies the voltage of the
+// TargetVoltage object from setTargetVoltage(), or 0 mV without one.
 //
 // The dispatcher checks the framing of all blocks and sub-commands before
 // it runs the first one. A malformed command (a length that does not fit)
@@ -67,6 +68,15 @@ class UsbToAll final : public UsbToXxxHandler {
    // Calls Block::hostGone() of each block.
    void hostGone() override;
 
+   // The source of GET_TVCC. nullptr: no source, the voltage is 0.
+   void setTargetVoltage(TargetVoltage *source) {
+      targetVoltage_ = source;
+   }
+
+   [[nodiscard]] uint16_t targetVoltage() override {
+      return targetVoltage_ != nullptr ? targetVoltage_->millivolts() : 0;
+   }
+
    // The capability bitmap of the INFO reply
    [[nodiscard]] std::array<uint8_t, capabilityBytes> capabilities() const;
 
@@ -82,6 +92,7 @@ class UsbToAll final : public UsbToXxxHandler {
    Delay &delay_;
    std::array<Block *, maxBlocks> blocks_{};
    std::size_t blockCount_{ 0 };
+   TargetVoltage *targetVoltage_{ nullptr };
 };
 
 } // namespace protocol

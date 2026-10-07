@@ -149,6 +149,17 @@ class Block {
    uint8_t type_;
 };
 
+// The target voltage (Vref) that GET_TVCC replies.
+class TargetVoltage {
+   public:
+   // The target voltage in mV, or 0 when it is not known (no sense, or a
+   // failed measurement).
+   [[nodiscard]] virtual uint16_t millivolts() = 0;
+
+   protected:
+   ~TargetVoltage() = default;
+};
+
 struct SubCommand {
    // Top 5 bits, for example subcommand::config
    uint8_t command;

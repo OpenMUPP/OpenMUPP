@@ -61,7 +61,7 @@ The common commands are:
 | Command | Request | Reply |
 |---|---|---|
 | `GET_INFO` | `[0x00]` | `[buffer size u16][version text][0x00]` |
-| `GET_TVCC` | `[0x01]` | `[target voltage in mV u16]`. The value is 0, because the voltage sense is not available yet. |
+| `GET_TVCC` | `[0x01]` | `[target voltage in mV u16]`, from the Vref sense (see [POWER block](#power-block)). The value is 0 when the board has no sense or the measurement fails. |
 | `GET_HARDWARE` | `[0x02]` | `[hardware ID u8]`, from the board definition (see [Boards](boards.md)). |
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
@@ -134,10 +134,10 @@ The firmware has these blocks:
 | `GPIO` | `0x23` | Sub-commands, see [GPIO block](#gpio-block) | `[status]`, and `[value u16]` for `IN` |
 | `JTAG_RAW` | `0x47` | Sub-commands, see [JTAG_RAW block](#jtag_raw-block) | `[status]`, and `[TDO n bytes]` for `IN_OUT` |
 | `SWD` | `0x46` | Sub-commands, see [SWD block](#swd-block) | `[status]`, and data for `IN` and `IN_OUT` |
+| `POWER` | `0x60` | Sub-commands, see [POWER block](#power-block) | `[status]`, and `[mV u16]` for `IN` |
 
 Bit n of the capability bitmap is set when the firmware has block `0x20 + n`.
-The firmware sets the bits of `GPIO`, `SWD`, `JTAG_RAW`, `INFO`, `DELAY` and `USB_TO_ALL`.
-The POWER block is not available yet.
+The firmware sets the bits of `GPIO`, `SWD`, `JTAG_RAW`, `POWER`, `INFO`, `DELAY` and `USB_TO_ALL`.
 A block that the firmware does not have gets one status byte `CMD_NOT_SUPPORT`.
 OpenOCD then stops with an error.
 
@@ -332,6 +332,57 @@ The original firmware replied `OK` in all cases.
 
 A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `INVALID_INDEX`.
 `IN` and `IN_OUT` reply their full data size also when they fail.
+
+### POWER block
+
+The `POWER` block (`src/protocol/PowerBlock.h`) switches the 3.3 V supply of the target and measures the target voltage (Vref).
+OpenOCD does not use it, but other tools do.
+The sub-commands use port index 0:
+
+| Sub-command | Payload | Reply |
+|---|---|---|
+| `INIT` | none | `[status]` |
+| `FINI` | none | `[status]` |
+| `CONFIG` | none | `[status]` |
+| `OUT` | `[mV u16]` | `[status]` |
+| `IN` | any, the firmware ignores it | `[status][mV u16]` |
+
+`OUT` accepts only 0 (supply off) and 3300 (supply on).
+Other values give `INVALID_PARA`.
+`IN` replies the voltage at the Vref pin.
+The voltage is the supply of the adapter when it is on, and the supply of the target when it is off.
+`GET_TVCC` replies the same voltage.
+
+The Mini and the OtherUse have the power switch on PB8.
+The switch is on when PB8 is driven low, and off when PB8 floats.
+The Vref sense is on PB0 (ADC1 channel 8) with a divider of 2.
+The firmware calculates the voltage from the mean of 8 conversions, with a 3.3 V ADC reference.
+
+The firmware protects the target and the adapter:
+
+- `OUT 3300` gives `FAILED` and keeps the supply off when the voltage is above 1.8 V.
+  The target then has its own supply, and two supplies on one rail can do damage.
+- `OUT 3300` gives `FAILED` and keeps the supply off when the firmware cannot measure the voltage.
+- The firmware switches the supply on, and waits 10 ms.
+  When the voltage is then not above 1.8 V, the rail has a short circuit or an overload.
+  The firmware then switches the supply off again and replies `FAILED`.
+- While the supply is on, the main loop measures the voltage every 10 ms.
+  The firmware switches the supply off when 3 measurements in a row are not above 1.8 V.
+  A failed measurement does not count.
+
+The supply stays on when the host goes away, so that a tool can switch the target on and then end.
+It does not stay on after a reset of the adapter: the switch pin floats then.
+
+A board can have no switch or no sense (see [Boards](boards.md)):
+
+| Board has | `OUT 0` | `OUT 3300` | `IN` and `GET_TVCC` |
+|---|---|---|---|
+| Switch and sense | `OK` | With the protection above | Voltage |
+| Sense, no switch | `OK` | `CMD_NOT_SUPPORT` | Voltage |
+| Switch, no sense | `OK` | `OK`, with no protection, and no automatic switch-off | `IN`: `CMD_NOT_SUPPORT`, `GET_TVCC`: 0 |
+| Neither | `OK` | `CMD_NOT_SUPPORT` | `IN`: `CMD_NOT_SUPPORT`, `GET_TVCC`: 0 |
+
+The ST-Link/V2 has a sense but no switch.
 
 ## Check the enumeration
 
