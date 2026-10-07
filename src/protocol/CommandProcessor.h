@@ -6,7 +6,8 @@
 // Common commands and their replies (all values little-endian):
 //
 //   GET_INFO      [0x00]        -> [buffer size u16][version text, NUL]
-//   GET_TVCC      [0x01]        -> [target voltage in mV u16]
+//   GET_TVCC      [0x01]        -> [target voltage in mV u16], 0 when
+//                                  the handler does not know it
 //   GET_HARDWARE  [0x02]        -> [hardware ID u8]
 //   FW_UPDATE     [0x0F][0xAA]  -> [status u8] (see boot/BootloaderEntry.h)
 //
@@ -45,6 +46,11 @@ class UsbToXxxHandler {
    // The host closed the interface (bus reset, deconfigure or suspend),
    // for example because OpenOCD stopped. Release the target.
    virtual void hostGone() {
+   }
+
+   // The target voltage in mV for GET_TVCC. 0 when it is not known.
+   [[nodiscard]] virtual uint16_t targetVoltage() {
+      return 0;
    }
 
    protected:

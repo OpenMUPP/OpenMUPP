@@ -32,8 +32,13 @@ class FakeUsbToXxx final : public protocol::UsbToXxxHandler {
       return replySize;
    }
 
+   uint16_t targetVoltage() override {
+      return voltage;
+   }
+
    std::vector<std::vector<uint8_t>> commands;
    std::optional<std::size_t> replySize;
+   uint16_t voltage{ 0 };
 };
 
 class Bench {
@@ -88,8 +93,17 @@ TEST_CASE("GET_INFO limits the version text") {
    CHECK(reply[*size - 2] == 'x');
 }
 
-TEST_CASE("GET_TVCC replies 0 mV until the target voltage sense is there") {
+TEST_CASE("GET_TVCC replies 0 mV without a handler") {
    Bench bench;
+   CHECK(bench.run({ protocol::getTvcc }) == std::vector<uint8_t>{ 0x00, 0x00 });
+}
+
+TEST_CASE("GET_TVCC replies the target voltage of the handler") {
+   FakeUsbToXxx handler;
+   Bench bench(nullptr, &handler);
+   handler.voltage = 3291;
+   CHECK(bench.run({ protocol::getTvcc }) == std::vector<uint8_t>{ 0xDB, 0x0C });
+   handler.voltage = 0;
    CHECK(bench.run({ protocol::getTvcc }) == std::vector<uint8_t>{ 0x00, 0x00 });
 }
 

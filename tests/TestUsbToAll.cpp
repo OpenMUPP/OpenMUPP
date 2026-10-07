@@ -325,3 +325,20 @@ TEST_CASE("add() refuses a full table, a duplicate type and the types of the dis
    FakeBlock oneTooMany(0x50);
    CHECK_FALSE(bench.dispatcher.add(oneTooMany));
 }
+
+TEST_CASE("targetVoltage() is 0 without a source, else the voltage of the source") {
+   class FixedVoltage final : public protocol::TargetVoltage {
+      public:
+      uint16_t millivolts() override {
+         return 3300;
+      }
+   };
+
+   Bench bench;
+   CHECK(bench.dispatcher.targetVoltage() == 0);
+   FixedVoltage source;
+   bench.dispatcher.setTargetVoltage(&source);
+   CHECK(bench.dispatcher.targetVoltage() == 3300);
+   bench.dispatcher.setTargetVoltage(nullptr);
+   CHECK(bench.dispatcher.targetVoltage() == 0);
+}
