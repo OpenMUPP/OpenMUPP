@@ -9,6 +9,7 @@
 
 #include "board/Board.h"
 #include "board/BoardPins.h"
+#include "board/CycleCounter.h"
 #include "jtag/JtagBitBang.h"
 
 namespace board {
@@ -20,11 +21,8 @@ class JtagPins {
    void init();
    void fini();
 
-   // A debugger can stop the cycle counter. A stopped counter would make
-   // the timed waits endless.
    [[gnu::always_inline]] void begin() {
-      CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-      DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+      startCycleCounter();
    }
 
    [[gnu::always_inline]] void tck(bool level) {
@@ -43,7 +41,7 @@ class JtagPins {
       return Rtck::read();
    }
    [[gnu::always_inline]] uint32_t now() {
-      return DWT->CYCCNT;
+      return cycleCount();
    }
    [[gnu::always_inline]] uint32_t coreHz() {
       return SystemCoreClock;
