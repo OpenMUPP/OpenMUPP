@@ -43,6 +43,11 @@ void VersaloonFunction::transferSent() {
 
 void VersaloonFunction::dataPathClosed() {
    assembler_.reset();
+   processor_.hostGone();
+}
+
+void VersaloonFunction::suspended() {
+   processor_.hostGone();
 }
 
 } // namespace usb

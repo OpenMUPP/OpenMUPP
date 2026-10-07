@@ -134,6 +134,11 @@ class Block {
    // reply. Stops at the first overflow of reply.
    virtual void run(art::span<const uint8_t> payload, Reply &reply) = 0;
 
+   // The host is gone (UsbToXxxHandler::hostGone()). A block releases the
+   // target lines that keep the target in a state, for example reset.
+   virtual void hostGone() {
+   }
+
    protected:
    explicit Block(uint8_t type)
       : type_(type) {
