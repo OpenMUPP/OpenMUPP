@@ -348,6 +348,7 @@ Limits:
 - At 9 MHz, the half period is 55.6 ns. The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
   Use a lower speed with a long cable.
 - The OpenOCD flash speed with the fast path is not measured yet.
+  `tools/flash_benchmark.py` measures it (see [docs/development.md](development.md#flash-speed-benchmark)).
 
 ### SWD block
 
