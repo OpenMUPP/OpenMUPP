@@ -61,9 +61,10 @@ std::vector<uint8_t> randomBytes(std::mt19937 &random, std::size_t count) {
 } // namespace
 
 TEST_CASE("JTAG fast path: the faster engine wins, TCK is never faster than the request") {
-   // SPI rates: 18000, 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 kHz
-   CHECK(spiShiftFor(spiClockHz, 100'000) == 1);
-   CHECK(spiShiftFor(spiClockHz, 18'000) == 1);
+   // SPI rates: 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 kHz.
+   // 18000 kHz is off (spiMinShift).
+   CHECK(spiShiftFor(spiClockHz, 100'000) == 2);
+   CHECK(spiShiftFor(spiClockHz, 18'000) == 2);
    CHECK(spiShiftFor(spiClockHz, 17'999) == 2);
    CHECK(spiShiftFor(spiClockHz, 9000) == 2);
    CHECK(spiShiftFor(spiClockHz, 4500) == 3);
@@ -78,7 +79,7 @@ TEST_CASE("JTAG fast path: the faster engine wins, TCK is never faster than the 
    CHECK(spiShiftFor(spiClockHz, 100) == 0);
    // Adaptive clocking
    CHECK(spiShiftFor(spiClockHz, 0) == 0);
-   CHECK(spiShiftFor(spiClockHz, 0xFFFFFFFF) == 1);
+   CHECK(spiShiftFor(spiClockHz, 0xFFFFFFFF) == 2);
 }
 
 TEST_CASE("JTAG fast path: SPI chunks of about 1 ms") {
@@ -102,8 +103,8 @@ TEST_CASE("JTAG fast path: INIT and FINI go to the pins and the SPI, TCK idles h
 TEST_CASE("JTAG fast path: CONFIG selects the SPI divider or bit-bang") {
    Fixture f;
    REQUIRE(f.port.setSpeed(18'000));
-   CHECK(f.port.spiShift() == 1);
-   CHECK(f.spi.shift() == 1);
+   CHECK(f.port.spiShift() == 2);
+   CHECK(f.spi.shift() == 2);
    REQUIRE(f.port.setSpeed(1000));
    CHECK(f.port.spiShift() == 0);
    CHECK(f.port.timing() == jtag::Timing{ jtag::Clocking::Timed, 36, 0 });
@@ -199,14 +200,14 @@ TEST_CASE("JTAG fast path: a long shift calls the background between SPI chunks,
    const Spi &spi = port.spi();
    port.init();
    REQUIRE(port.setSpeed(18'000));
-   // 5000 bytes: chunks of 2250 bytes, 1 ms each
+   // 5000 bytes at 9 MHz: chunks of 1125 bytes, 1 ms each
    const std::vector<uint8_t> data(5000, 0x5A);
    REQUIRE(shift(port, 5000 * 8, data, data).ok);
-   CHECK(spi.transfers == std::vector<uint32_t>{ 2250, 2250, 500 });
+   CHECK(spi.transfers == std::vector<uint32_t>{ 1125, 1125, 1125, 1125, 500 });
    REQUIRE(background.calls.size() >= 2);
    for(const auto &call : background.calls) {
       CHECK(call.clock);
-      CHECK(call.count % (2250 * 8) == 0);
+      CHECK(call.count % (1125 * 8) == 0);
    }
 }
 

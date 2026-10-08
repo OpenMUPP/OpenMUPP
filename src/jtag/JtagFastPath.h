@@ -4,7 +4,8 @@
 // peripherals and DMA, and the other bits with the bit-bang engine
 // (jtag/JtagBitBang.h). Hardware-independent: an Spi type gives the SPI
 // and DMA access, so the host unit tests run the logic on a mock. On
-// target, board/BoardJtagFast.h gives the SPI1, SPI2 and DMA1 drivers.
+// target, board::JtagSpi (board/BoardJtag.h, board/BoardJtagFast.cpp)
+// gives the SPI1, SPI2 and DMA1 drivers.
 //
 // The SPI master drives TCK and TDI and samples TDO. An SPI slave, clocked
 // by TCK through a board link, drives TMS. Both use clock polarity high and
@@ -17,7 +18,7 @@
 //   uint32_t clockHz();       SPI input clock: TCK = clockHz() >> shift
 //   void init();              clocks and configuration; the pins stay GPIO
 //   void fini();              SPI and DMA off
-//   void setShift(uint8_t);   TCK = clockHz() >> shift, shift 1-8
+//   void setShift(uint8_t);   TCK = clockHz() >> shift, shift 2-8
 //   bool transfer(Pins &pins, const uint8_t *tdi, const uint8_t *tms,
 //                 uint8_t *tdo, uint32_t bytes);
 //                             1-65535 whole bytes, LSB first. TCK is high
@@ -27,7 +28,7 @@
 //                             pins give the cycle counter (now()).
 //
 // Speed: the engine with the faster TCK wins, and TCK is never faster than
-// the request. The SPI gives clockHz() / 2^n, n = 1-8. Bit-bang gives the
+// the request. The SPI gives clockHz() / 2^n, n = 2-8. Bit-bang gives the
 // request, up to bitBangMaxKHz. kHz = 0 (adaptive clocking with RTCK) is
 // always bit-bang.
 //
@@ -43,8 +44,11 @@
 
 namespace jtag {
 
-// The SPI clock divider is 2^shift, shift 1-8 (SPI_CR1.BR + 1).
-inline constexpr uint8_t spiMinShift = 1;
+// The SPI clock divider is 2^shift (SPI_CR1.BR + 1). Shift 1 (18 MHz) is
+// off: TMS comes from the SPI1 slave, valid up to 25 ns after the falling
+// edge (tv(SO), STM32F103x8/B datasheet), and the half period is 27.8 ns.
+// Set it to 1 only after a hardware test at 18 MHz passes.
+inline constexpr uint8_t spiMinShift = 2;
 inline constexpr uint8_t spiMaxShift = 8;
 
 // The fastest TCK of the bit-bang loop at 72 MHz. An estimate: measure it

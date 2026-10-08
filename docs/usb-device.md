@@ -321,8 +321,12 @@ The target and SPI2 sample at the rising edge.
 The SPI clock idles high, so TCK also idles high between shifts.
 Only the rising edge clocks the TAP, so the idle level has no effect on the target.
 
-SPI2 runs from the 36 MHz APB1 clock, divided by 2 to 256.
-Thus the SPI speeds are 18000, 9000, 4500, 2250, 1125, 562.5, 281.25 and 140.625 kHz.
+SPI2 runs from the 36 MHz APB1 clock, divided by 4 to 256.
+Thus the SPI speeds are 9000, 4500, 2250, 1125, 562.5, 281.25 and 140.625 kHz.
+The divider 2 (18 MHz) is off (`jtag::spiMinShift`).
+SPI1 makes TMS valid up to 25 ns after the falling edge (tv(SO) in the STM32F103x8/B datasheet).
+At 18 MHz, the half period is only 27.8 ns, so the target can sample an old TMS bit.
+Enable 18 MHz only after a hardware test at 18 MHz passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
 
 - The SPI gives the fastest SPI speed that is not above the request.
@@ -330,7 +334,7 @@ Thus the SPI speeds are 18000, 9000, 4500, 2250, 1125, 562.5, 281.25 and 140.625
 - The SPI wins when its speed is equal to or higher than the bit-bang speed.
 - Adaptive clocking (0 kHz) always uses bit-bang.
 
-Examples: 18000 kHz and more give 18 MHz SPI, 4000 kHz gives 3 MHz bit-bang, 1000 kHz gives 1 MHz bit-bang.
+Examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 3 MHz bit-bang, 1000 kHz gives 1 MHz bit-bang.
 The value of `jtag::bitBangMaxKHz` is an estimate. Measure the bit-bang rate on hardware and correct it.
 
 A long shift runs in SPI chunks of about 1 ms, and the [serial service](#serial-port-during-long-commands) runs between two chunks.
@@ -341,7 +345,7 @@ Limits:
 
 - The SPI1 slave has no underrun flag. When DMA is late with a TMS byte, a TMS bit is wrong and the firmware does not see it.
   DMA channel 3 has the highest priority to prevent this.
-- At 18 MHz, the half period is 27.8 ns. The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
+- At 9 MHz, the half period is 55.6 ns. The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
   Use a lower speed with a long cable.
 - The OpenOCD flash speed with the fast path is not measured yet.
 
