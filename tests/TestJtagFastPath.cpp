@@ -156,40 +156,58 @@ TEST_CASE("JTAG fast path: bit-bang speeds do not use the SPI") {
    }
 }
 
+namespace {
+
+// Shifts random bits through a fast port and a bit-bang port, and
+// compares TDO and the TDI and TMS bits at each rising edge. Returns the
+// SPI transfers of the fast port.
+std::size_t compareWithBitBang(std::mt19937 &random, uint32_t kHz, uint32_t bitCount) {
+   CAPTURE(kHz);
+   CAPTURE(bitCount);
+   const std::size_t bytes = protocol::jtagRaw::byteCount(bitCount);
+   const auto tdi = randomBytes(random, bytes);
+   const auto tms = randomBytes(random, bytes);
+   const std::deque<bool> chain{ true, false, false, true, true };
+
+   Fixture fast(chain);
+   Pins pins(chain);
+   jtag::BitBangPort<Pins> bitBang(pins);
+   bitBang.init();
+   REQUIRE(fast.port.setSpeed(kHz));
+   REQUIRE(bitBang.setSpeed(kHz));
+
+   const auto fastResult = shift(fast.port, bitCount, tdi, tms);
+   const auto bitBangResult = shift(bitBang, bitCount, tdi, tms);
+   REQUIRE(fastResult.ok);
+   REQUIRE(bitBangResult.ok);
+   CHECK(fastResult.tdo == bitBangResult.tdo);
+   REQUIRE(fast.pins.rising.size() == pins.rising.size());
+   for(std::size_t i = 0; i < pins.rising.size(); ++i) {
+      CAPTURE(i);
+      CHECK(fast.pins.rising[i].tdi == pins.rising[i].tdi);
+      CHECK(fast.pins.rising[i].tms == pins.rising[i].tms);
+   }
+   CHECK_FALSE(fast.spi.tckLowAtTransfer);
+   CHECK(fast.pins.tckLevel());
+   return fast.spi.transfers.size();
+}
+
+} // namespace
+
 TEST_CASE("JTAG fast path: same TDO and same bits at the rising edges as bit-bang") {
    std::mt19937 random(1234);
    for(const uint32_t kHz : { 18'000u, 9000u, 4500u, 2250u, 1000u, 0u }) {
       for(int round = 0; round < 40; ++round) {
-         const uint32_t bitCount = 1 + random() % 300;
-         CAPTURE(kHz);
-         CAPTURE(bitCount);
-         const std::size_t bytes = protocol::jtagRaw::byteCount(bitCount);
-         const auto tdi = randomBytes(random, bytes);
-         const auto tms = randomBytes(random, bytes);
-         const std::deque<bool> chain{ true, false, false, true, true };
-
-         Fixture fast(chain);
-         Pins pins(chain);
-         jtag::BitBangPort<Pins> bitBang(pins);
-         bitBang.init();
-         REQUIRE(fast.port.setSpeed(kHz));
-         REQUIRE(bitBang.setSpeed(kHz));
-
-         const auto fastResult = shift(fast.port, bitCount, tdi, tms);
-         const auto bitBangResult = shift(bitBang, bitCount, tdi, tms);
-         REQUIRE(fastResult.ok);
-         REQUIRE(bitBangResult.ok);
-         CHECK(fastResult.tdo == bitBangResult.tdo);
-         REQUIRE(fast.pins.rising.size() == pins.rising.size());
-         for(std::size_t i = 0; i < pins.rising.size(); ++i) {
-            CAPTURE(i);
-            CHECK(fast.pins.rising[i].tdi == pins.rising[i].tdi);
-            CHECK(fast.pins.rising[i].tms == pins.rising[i].tms);
-         }
-         CHECK_FALSE(fast.spi.tckLowAtTransfer);
-         CHECK(fast.pins.tckLevel());
+         static_cast<void>(compareWithBitBang(random, kHz, 1 + random() % 300));
       }
    }
+}
+
+TEST_CASE("JTAG fast path: same TDO as bit-bang over several SPI chunks") {
+   std::mt19937 random(5678);
+   // 9 MHz: chunks of 1125 bytes; 2250 kHz: chunks of 281 bytes
+   CHECK(compareWithBitBang(random, 9000, 2500 * 8 + 3) == 3);
+   CHECK(compareWithBitBang(random, 2250, 700 * 8 + 3) == 3);
 }
 
 TEST_CASE("JTAG fast path: a long shift calls the background between SPI chunks, with TCK high") {
