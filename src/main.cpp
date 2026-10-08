@@ -8,8 +8,8 @@
 // enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
 // commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h),
 // with the GPIO block (protocol/GpioBlock.h) on the debug connector pins
-// the JTAG_RAW block (protocol/JtagRawBlock.h) on the bit-bang JTAG engine
-// (jtag/JtagBitBang.h), and the SWD block (protocol/SwdBlock.h) on the
+// the JTAG_RAW block (protocol/JtagRawBlock.h) on the JTAG port of the
+// board (board/BoardJtag.h: SPI fast path or bit-bang), and the SWD block (protocol/SwdBlock.h) on the
 // bit-bang SWD engine (swd/SwdBitBang.h). The POWER block
 // (protocol/PowerBlock.h) switches the target supply, and its poll() in the
 // main loop switches it off when the rail drops. GET_TVCC replies the

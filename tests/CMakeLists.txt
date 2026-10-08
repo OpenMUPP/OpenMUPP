@@ -43,6 +43,7 @@ add_executable(vsl-tests
         TestGpioBlock.cpp
         TestJtagRawBlock.cpp
         TestJtagBitBang.cpp
+        TestJtagFastPath.cpp
         TestSwdBlock.cpp
         TestSwdBitBang.cpp
         TestPowerBlock.cpp

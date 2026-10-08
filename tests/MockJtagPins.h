@@ -30,8 +30,11 @@ class MockJtagPins {
       , tdo_(chain_.back()) {
    }
 
-   void init() {
+   // Sets the TCK level without an edge: the tests count only the edges
+   // of the shifts.
+   void init(bool tckLevel) {
       ++inits;
+      tck_ = tckLevel;
    }
    void fini() {
       ++finis;

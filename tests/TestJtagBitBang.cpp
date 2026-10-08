@@ -28,8 +28,8 @@ struct Result {
    std::vector<uint8_t> tdo;
 };
 
-template <typename P>
-Result shift(BitBangPort<P> &port, uint32_t bitCount, const std::vector<uint8_t> &tdi, const std::vector<uint8_t> &tms) {
+template <typename Port>
+Result shift(Port &port, uint32_t bitCount, const std::vector<uint8_t> &tdi, const std::vector<uint8_t> &tms) {
    std::vector<uint8_t> tdo(tdi.size(), 0);
    const bool ok = port.shift(bitCount, art::span<const uint8_t>(tdi.data(), tdi.size()),
                               art::span<const uint8_t>(tms.data(), tms.size()), art::span<uint8_t>(tdo.data(), tdo.size()));
@@ -270,4 +270,100 @@ TEST_CASE("JTAG bit-bang: the background interval runs on over short shifts") {
    }
    CHECK(background.calls.size() >= (pins.time - start) / msCycles - 1);
    CHECK(background.calls.size() <= (pins.time - start) / msCycles + 1);
+}
+
+namespace {
+using IdleHighPort = BitBangPort<Pins, jtag::TckIdle::High>;
+} // namespace
+
+TEST_CASE("JTAG bit-bang, TCK idle high: INIT sets TCK high") {
+   Pins pins;
+   IdleHighPort port(pins);
+   port.init();
+   CHECK(pins.tckLevel());
+   CHECK(pins.edges.empty());
+}
+
+TEST_CASE("JTAG bit-bang, TCK idle high: same bits and TDO as with TCK idle low") {
+   for(const uint32_t kHz : { 1000u, 10'000u, 0u }) {
+      CAPTURE(kHz);
+      Pins low({ false, true });
+      Pins high({ false, true });
+      BitBangPort<Pins> lowPort(low);
+      IdleHighPort highPort(high);
+      lowPort.init();
+      highPort.init();
+      REQUIRE(lowPort.setSpeed(kHz));
+      REQUIRE(highPort.setSpeed(kHz));
+      const std::vector<uint8_t> tdi{ 0xA5, 0x3C, 0x06 };
+      const std::vector<uint8_t> tms{ 0x0F, 0xF0, 0x05 };
+      const auto lowResult = shift(lowPort, 19, tdi, tms);
+      const auto highResult = shift(highPort, 19, tdi, tms);
+      REQUIRE(lowResult.ok);
+      REQUIRE(highResult.ok);
+      CHECK(highResult.tdo == lowResult.tdo);
+      CHECK(high.tckLevel());
+      REQUIRE(high.rising.size() == low.rising.size());
+      for(std::size_t i = 0; i < low.rising.size(); ++i) {
+         CAPTURE(i);
+         CHECK(high.rising[i].tdi == low.rising[i].tdi);
+         CHECK(high.rising[i].tms == low.rising[i].tms);
+      }
+   }
+}
+
+TEST_CASE("JTAG bit-bang, TCK idle high: timed half periods are not shorter than the speed") {
+   Pins pins;
+   IdleHighPort port(pins);
+   port.init();
+   REQUIRE(port.setSpeed(1000));
+   uint32_t last = pins.time;
+   REQUIRE(shift(port, 16, { 0x12, 0x34 }, { 0, 0 }).ok);
+   REQUIRE(pins.edges.size() == 32);
+   for(const uint32_t edge : pins.edges) {
+      CHECK(edge - last >= 36);
+      CHECK(edge - last <= 38);
+      last = edge;
+   }
+   // TDI and TMS change after the falling edge, a half period before the
+   // rising edge.
+   for(const auto &rising : pins.rising) {
+      CHECK(rising.time - rising.dataWritten >= 36 - 4);
+   }
+}
+
+TEST_CASE("JTAG bit-bang, TCK idle high: RTCK that does not follow is a timeout, TCK stays low") {
+   Pins pins;
+   pins.rtckStuck = true;
+   IdleHighPort port(pins);
+   port.init();
+   REQUIRE(port.setSpeed(0));
+   CHECK_FALSE(shift(port, 16, { 0xFF, 0xFF }, { 0, 0 }).ok);
+   // RTCK is stuck low: the falling edge passes, the rising edge times out.
+   CHECK(pins.rising.size() == 1);
+   CHECK(pins.tckLevel());
+
+   Pins stuckHigh;
+   IdleHighPort highPort(stuckHigh);
+   highPort.init();
+   REQUIRE(highPort.setSpeed(0));
+   stuckHigh.rtckLag = 0xFFFFFFFFu;
+   CHECK_FALSE(shift(highPort, 16, { 0xFF, 0xFF }, { 0, 0 }).ok);
+   // RTCK does not follow the first falling edge: no rising edge, TCK low.
+   CHECK(stuckHigh.rising.empty());
+   CHECK_FALSE(stuckHigh.tckLevel());
+}
+
+TEST_CASE("JTAG bit-bang, TCK idle high: the background runs between bytes, with TCK high") {
+   Pins pins;
+   auto background = backgroundOf(pins);
+   IdleHighPort port(pins, &background);
+   port.init();
+   REQUIRE(port.setSpeed(10));
+   REQUIRE(shift(port, 512, std::vector<uint8_t>(64, 0x5A), std::vector<uint8_t>(64, 0)).ok);
+   REQUIRE_FALSE(background.calls.empty());
+   for(const auto &call : background.calls) {
+      CHECK(call.clock);
+      CHECK(call.count % 8 == 0);
+   }
 }
