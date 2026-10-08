@@ -11,7 +11,9 @@
 // Background::service() at a safe point of the bit stream, at most once
 // per backgroundIntervalMs:
 //
-// - JTAG: between bytes of a shift, with TCK low.
+// - JTAG: between bytes of a shift, with TCK at its idle level (low, or
+//   high with the SPI fast path), and between SPI chunks of the fast
+//   path (jtag/JtagFastPath.h), with TCK high.
 // - SWD: before each transfer and each retry, and between bytes of a
 //   sequence, with SWCLK high.
 //
