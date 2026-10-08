@@ -14,7 +14,7 @@ The board definition holds all board-specific data:
 
 - The pin map: JTAG and SWD, UART, Vref sense, power switch, LEDs, key and USB pull-up.
 - The crystal frequency.
-- The JTAG fast path. It is only available when the board links TCK (PB13) to PB3.
+- The JTAG fast path (SPI and DMA, see [JTAG fast path](usb-device.md#jtag-fast-path)). It is only available when the board links TCK (PB13) to PB3.
 - The hardware ID that `VERSALOON_GET_HARDWARE` returns.
 
 `src/board/BoardDefinition.h` defines the types. It does not use CMSIS, so the host unit tests check all boards.

@@ -89,6 +89,6 @@ class JtagSpi {
    uint8_t shift_{ jtag::spiMinShift };
 };
 
-using BoardJtag = jtag::BitBangPort<JtagPins>;
+using BoardJtag = std::conditional_t<current.hasJtagFastPath(), jtag::FastPort<JtagPins, JtagSpi>, jtag::BitBangPort<JtagPins>>;
 
 } // namespace board

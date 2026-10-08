@@ -215,7 +215,7 @@ The RX ring buffer of the [UART bridge](uart-bridge.md) holds only about 89 ms a
 Thus the JTAG and SWD engines call a serial service during the command (`src/protocol/Background.h`).
 The call comes at most once per millisecond, at these points:
 
-- `JTAG_RAW`: between two bytes of a shift. TCK is low.
+- `JTAG_RAW`: between two bytes of a shift, or between two SPI chunks of the [fast path](#jtag-fast-path). TCK is at its idle level: low, or high on a board with the fast path.
 - `SWD`: before each transfer and each WAIT retry, and between two bytes of a sequence. SWCLK is high.
 
 The serial service does these steps:
@@ -254,6 +254,7 @@ Limits:
 
 OpenOCD shifts all JTAG bits through the `JTAG_RAW` block (`src/protocol/JtagRawBlock.h`).
 The firmware drives the pins with GPIO bit-bang (`src/jtag/JtagBitBang.h`).
+On the Mini and the OtherUse, the [JTAG fast path](#jtag-fast-path) shifts the whole bytes with SPI and DMA.
 The pins are TCK, TMS, TDI, TDO and RTCK in the table of the [GPIO block](#gpio-block).
 TRST and SRST stay in the `GPIO` block.
 
@@ -270,7 +271,8 @@ The byte count n is `ceil(bitlen / 8)`.
 The first bit of a stream is the LSB of the first byte.
 In the last TDO byte, the bits above `bitlen` are 0.
 
-`INIT` makes TCK, TMS and TDI push-pull outputs, with TCK low and TMS and TDI high.
+`INIT` makes TCK, TMS and TDI push-pull outputs, with TMS and TDI high.
+TCK is low, or high on a board with the fast path.
 TDO becomes an input with pull-up, so an open TDO reads 1.
 RTCK becomes an input with pull-down.
 `INIT` also sets TCK to 1000 kHz.
@@ -279,20 +281,69 @@ RTCK becomes an input with pull-down.
 `CONFIG` sets the TCK frequency in kHz.
 The firmware rounds the half period up to full core clock cycles (72 MHz), so TCK is never faster than the request.
 A request above the fastest rate of the bit-bang loop gives that fastest rate.
+On a board with the fast path, `CONFIG` can select the SPI instead (see [JTAG fast path](#jtag-fast-path)).
 An interrupt can make a TCK period longer, but not shorter.
 
 `CONFIG` with 0 kHz selects adaptive clocking.
 After each TCK edge, the firmware waits until RTCK has the same level.
-When RTCK does not follow within 10 ms, `IN_OUT` stops with TCK low and replies `TIMEOUT`.
+When RTCK does not follow within 10 ms, `IN_OUT` stops and replies `TIMEOUT`.
+TCK is then low, or high when RTCK did not follow a rising edge on a board with the fast path.
 The original firmware did not report this error.
 A board without RTCK (the ST-Link/V2) replies `INVALID_PARA` to 0 kHz.
 
 For each bit, the firmware writes TDI and TMS while TCK is low, and waits for the low half period.
+When TCK idles high, each bit starts with the falling edge.
 Then it reads TDO and sets TCK high: the target samples TDI and TMS at this rising edge.
 After the high half period, TCK goes low, and the target changes TDO.
 
 A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `INVALID_INDEX`.
 `IN_OUT` replies the n TDO bytes also when it fails, as zeros.
+
+### JTAG fast path
+
+On the Mini and the OtherUse, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`, `src/board/BoardJtagFast.cpp`).
+The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
+A board has the fast path when its definition has `jtagFastPath` (see [Boards](boards.md)).
+The ST-Link/V2 does not have it.
+
+| Signal | Pin | Peripheral | DMA1 channel |
+|---|---|---|---|
+| TCK | PB13 | SPI2 SCK, master | - |
+| TDO | PB14 | SPI2 MISO | 4 |
+| TDI | PB15 | SPI2 MOSI | 5 |
+| TCK link | PB3 | SPI1 SCK (remapped), slave | - |
+| TMS | PB4 | SPI1 MISO (remapped) | 3 |
+
+The board links TCK (PB13) to PB3, so TCK also clocks SPI1.
+Both SPIs use clock polarity high and the second clock edge, LSB first.
+TDI and TMS change at the falling edge.
+The target and SPI2 sample at the rising edge.
+The SPI clock idles high, so TCK also idles high between shifts.
+Only the rising edge clocks the TAP, so the idle level has no effect on the target.
+
+SPI2 runs from the 36 MHz APB1 clock, divided by 2 to 256.
+Thus the SPI speeds are 18000, 9000, 4500, 2250, 1125, 562.5, 281.25 and 140.625 kHz.
+`CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
+
+- The SPI gives the fastest SPI speed that is not above the request.
+- Bit-bang gives the request, up to the fastest rate of the bit-bang loop (`jtag::bitBangMaxKHz`, 3000 kHz).
+- The SPI wins when its speed is equal to or higher than the bit-bang speed.
+- Adaptive clocking (0 kHz) always uses bit-bang.
+
+Examples: 18000 kHz and more give 18 MHz SPI, 4000 kHz gives 3 MHz bit-bang, 1000 kHz gives 1 MHz bit-bang.
+The value of `jtag::bitBangMaxKHz` is an estimate. Measure the bit-bang rate on hardware and correct it.
+
+A long shift runs in SPI chunks of about 1 ms, and the [serial service](#serial-port-during-long-commands) runs between two chunks.
+The pins are GPIO between two transfers, so the bit-bang engine and the SWD engine can use them.
+SPI1 also counts the TCK edges of bit-bang and SWD, so each transfer resets SPI1.
+
+Limits:
+
+- The SPI1 slave has no underrun flag. When DMA is late with a TMS byte, a TMS bit is wrong and the firmware does not see it.
+  DMA channel 3 has the highest priority to prevent this.
+- At 18 MHz, the half period is 27.8 ns. The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
+  Use a lower speed with a long cable.
+- The OpenOCD flash speed with the fast path is not measured yet.
 
 ### SWD block
 

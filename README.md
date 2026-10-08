@@ -14,7 +14,7 @@ The project is at an early stage. The current firmware does these functions:
 - It starts the bootloader on request, for a firmware update.
 - It receives Versaloon commands and replies to the common commands, for example `GET_INFO`.
 - It runs the `USB_TO_ALL` command of OpenOCD, with the `INFO`, `DELAY`, `GPIO`, `JTAG_RAW`, `SWD` and `POWER` blocks. OpenOCD controls SRST and TRST through the `GPIO` block.
-- It shifts JTAG bits with GPIO bit-bang through the `JTAG_RAW` block, with a fixed TCK frequency or with adaptive clocking (RTCK).
+- It shifts JTAG bits through the `JTAG_RAW` block, with a fixed TCK frequency or with adaptive clocking (RTCK). The Mini and the OtherUse use SPI and DMA up to 18 MHz TCK. The other bits and speeds use GPIO bit-bang.
 - It runs SWD transfers with GPIO bit-bang through the `SWD` block, at the SWCLK frequencies of the OpenOCD `vsllink` driver.
 - It switches the 3.3 V target supply through the `POWER` block, and replies the target voltage to `GET_TVCC`. It refuses to switch on a target that has its own supply.
 
