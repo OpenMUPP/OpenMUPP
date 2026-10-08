@@ -167,8 +167,13 @@ bool JtagSpi::transfer(JtagPins &pins, const uint8_t *tdi, const uint8_t *tms, u
    // The first TDI byte starts the clock.
    start(tdiDma, tdi, bytes);
 
-   bool ok = true;
+   // Wait on the cycle counter (not on the bus matrix) for the time of the
+   // bits: a DMA register poll takes AHB cycles from the three channels.
    begin = pins.now();
+   const uint32_t bitCycles = bytes * 8u * cyclesPerBit;
+   while(pins.now() - begin < bitCycles) {
+   }
+   bool ok = true;
    while(!tdoDma.isTransferCompleteInterruptFlagSet()) {
       if(pins.now() - begin >= timeout) {
          ok = false;
