@@ -71,7 +71,8 @@ class LowJtagPins {
    public:
    static constexpr bool hasRtck = true;
 
-   void init() {
+   void init(bool tckLevel) {
+      tck_ = tckLevel;
    }
    void fini() {
    }

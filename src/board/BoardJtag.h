@@ -18,7 +18,7 @@ class JtagPins {
    public:
    static constexpr bool hasRtck = current.debug.rtck.has_value();
 
-   void init();
+   void init(bool tckLevel);
    void fini();
 
    [[gnu::always_inline]] void begin() {

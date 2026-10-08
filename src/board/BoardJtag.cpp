@@ -15,12 +15,13 @@ void configureOutput(Pin pin, bool level) {
 
 } // namespace
 
-void JtagPins::init() {
+void JtagPins::init(bool tckLevel) {
    const DebugPins &pins = current.debug;
    // TMS and TDI high: extra TCK pulses keep the TAP in Test-Logic-Reset.
-   configureOutput(pins.tck, false);
+   // They go first: a rising edge on TCK then samples them high.
    configureOutput(pins.tmsOut, true);
    configureOutput(pins.tdi, true);
+   configureOutput(pins.tck, tckLevel);
    // An open TDO reads 1: OpenOCD then sees no device instead of a chain
    // of zeros.
    gpioPin(pins.tdo).configure(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
