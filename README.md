@@ -138,5 +138,5 @@ See [docs/boards.md](docs/boards.md#start-up-and-leds) for the meaning of the LE
 - [docs/uart-bridge.md](docs/uart-bridge.md): the USB-to-UART bridge, and the serial port test script.
 - [docs/debug-log.md](docs/debug-log.md): the debug log over the serial port in a `Debug` build.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
-- [docs/development.md](docs/development.md): build outputs, unit tests, code format, version, CI and branches.
+- [docs/development.md](docs/development.md): build outputs, unit tests, the flash speed benchmark, code format, version, CI and branches.
 - [docs/plan.md](docs/plan.md): the plan and the work items.

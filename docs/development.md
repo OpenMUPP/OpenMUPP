@@ -1,6 +1,6 @@
 # Development
 
-This document is for developers of the firmware: build outputs, tests, code format, version, CI and branches.
+This document is for developers of the firmware: build outputs, tests, the flash speed benchmark, code format, version, CI and branches.
 
 ## Build outputs
 
@@ -59,6 +59,83 @@ To replace a trace with a capture, do these steps:
 2. Record the traffic with `usbmon`, for example with Wireshark on the `usbmonN` interface of the bus.
 3. Run an OpenOCD session with `-f interface/vsllink.cfg`, in JTAG mode or in SWD mode.
 4. Write the bulk transfers of endpoints `0x03` and `0x82` into the trace format.
+
+## Flash speed benchmark
+
+`tools/flash_benchmark.py` measures the flash speed of the dongle with OpenOCD.
+Use it to compare the old firmware and this firmware on the same target (work item #17).
+The target is an STM32F1, with JTAG, SWD and SRST connected.
+
+The script writes a test image into the target flash, verifies it and reads it back.
+It does these steps in JTAG mode and in SWD mode, at each adapter speed.
+Each run is a new OpenOCD process.
+The script reads the times from the OpenOCD output, and also measures the time of the full OpenOCD process.
+It compares the read-back data with the image.
+
+After reset, the target core runs at 8 MHz (HSI), and JTAG must not be faster than F_CPU / 6.
+Thus the target speed limits the measurement.
+For this reason, `tools/stm32f1_clock.tcl` sets the target clock before the measurement:
+
+1. OpenOCD connects and halts the target at 1000 kHz.
+2. The `stm32f1_clock_max` procedure sets 64 MHz: HSI / 2 × 16 with the PLL, two flash wait states, APB1 at 32 MHz.
+   64 MHz allows a TCK of 10.6 MHz, which is more than the 9 MHz of the fast path.
+   The procedure does not use the HSE, because the crystal frequency of the target board is not known.
+   A wrong PLL factor overclocks the target.
+3. OpenOCD sets the adapter speed of the test.
+   In JTAG mode, `jtag arp_init` then resets the TAP and the TAP state of OpenOCD.
+   This is necessary for the old firmware: it sets up the JTAG pins again on each speed change, and the TAP goes to Test-Logic-Reset.
+
+The results show the target clock.
+`--no-clock-setup` keeps the target at 8 MHz.
+
+The test image is pseudo-random data with a fixed seed.
+Thus the two firmware versions write the same bytes.
+The default image is 32 KiB. This fits into all STM32F103 devices with 32 KiB of flash or more.
+Use `--size 65536` for an STM32F103x8 or a larger device.
+
+**Caution:** the script erases the flash of the target.
+
+Do these steps:
+
+1. Write the old firmware into the dongle. Then run:
+
+   ```sh
+   python3 tools/flash_benchmark.py run --label old --output old.json
+   ```
+
+2. Write this firmware into the dongle. Then run:
+
+   ```sh
+   python3 tools/flash_benchmark.py run --label new --output new.json
+   ```
+
+3. Make the table for the merge request:
+
+   ```sh
+   python3 tools/flash_benchmark.py compare old.json new.json
+   ```
+
+Each `run` prints a line for each run, and a Markdown table with the median times.
+`compare` prints a Markdown table with the times of the two files and the ratio new / old.
+A ratio above 1.00 means that the new firmware is slower.
+`compare` lists the steps with a ratio above 1.05 as slower, and then exits with code 1.
+Two runs of the same firmware differ by a few percent, so a smaller ratio is not a regression.
+It also exits with code 1 when a run in one of the files failed.
+
+The default speeds are 1000, 4500 and 9000 kHz for JTAG, and 250 and 2000 kHz for SWD.
+At 1000 kHz, JTAG uses bit-bang. At 4500 and 9000 kHz, JTAG uses the SPI fast path.
+The OpenOCD `vsllink` driver has fixed SWD steps: 250 kHz gives 235 kHz SWCLK, and 2000 kHz gives the fastest SWCLK (1.85 MHz).
+All requests from 235 to 1849 kHz give 235 kHz.
+These options change the run:
+
+- `--transports jtag`, `--jtag-speeds 1000,9000`, `--swd-speeds 2000`: select the transports and the speeds.
+- `--repeat 5`: the number of runs for each speed (default 3).
+- `--openocd`, `-s`, `--interface`, `--target`: the OpenOCD executable and its scripts.
+- `-c 'reset_config srst_only'`: an extra OpenOCD command after the target script.
+- `--no-clock-setup`: do not change the target clock.
+
+Write the results into a directory outside the source tree.
+`python3 tools/flash_benchmark.py run --help` shows all options.
 
 ## Code format
 
