@@ -265,6 +265,24 @@ TEST_CASE("Four queued packets run at once and each one gets its response") {
    CHECK(controller.isArmed(dapOut));
 }
 
+TEST_CASE("A suspend and resume with a response on its way: the next command answers in order") {
+   DapBench bench;
+   bench.enumerate();
+
+   // The response is on its way when the bus suspends.
+   REQUIRE(bench.write({ 0x00, 0xFE }));
+   bench.controller().busSuspend();
+   bench.controller().busResume();
+   CHECK(bench.controller().isArmed(dapOut));
+
+   REQUIRE(bench.write({ 0x00, 0xFF }));
+   REQUIRE(bench.write({ 0x09, 0x05, 0x00 }));
+   CHECK(bench.read() == Bytes{ 0x00, 0x01, 0x04 });
+   CHECK(bench.read() == Bytes{ 0x00, 0x02, 0x40, 0x00 });
+   CHECK(bench.read() == Bytes{ 0x09, 0x00 });
+   CHECK_FALSE(bench.read().has_value());
+}
+
 TEST_CASE("A suspend and resume keep the responses in order") {
    DapBench bench;
    bench.enumerate();
