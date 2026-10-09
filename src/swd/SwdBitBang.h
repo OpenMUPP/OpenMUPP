@@ -66,8 +66,8 @@
 // clears it. Thus, before each retry, the host writes ABORT with
 // ORUNERRCLR, as the OpenOCD bitbang driver does.
 //
-// CMSIS-DAP has other transfer rules. setRules() changes them (see
-// TransferRules):
+// CMSIS-DAP has other transfer rules. setRules() changes them, and
+// setClockHz() sets the clock in Hz (see TransferRules):
 //
 // - The idle cycles come from DAP_TransferConfigure (0-255).
 // - A WAIT repeats the transfer without the ABORT write. The debugger
@@ -79,8 +79,8 @@
 // - The turnaround is 1-4 cycles at each turnaround, as configure() takes
 //   it.
 //
-// The SWD block of the Versaloon protocol does not call setRules(). Its
-// transfers do not change.
+// The SWD block of the Versaloon protocol does not call setRules() or
+// setClockHz(). Its transfers do not change.
 //
 // With a protocol::Background, the engine calls Background::service()
 // before each transfer and each retry, and between the bytes of a
@@ -149,18 +149,27 @@ struct TransferRules {
    bool dataPhase{ true };
 };
 
+// Core cycles of a half SWCLK period for a frequency, rounded up: SWCLK is
+// never faster than the frequency. 0 Hz gives the slowest clock (1 Hz).
+constexpr uint32_t halfPeriodCyclesOfHz(uint32_t coreHz, uint32_t hz) {
+   const uint64_t cyclesPerPeriod = 2ull * (hz == 0 ? 1u : hz);
+   return static_cast<uint32_t>((coreHz + cyclesPerPeriod - 1) / cyclesPerPeriod);
+}
+
 // Core cycles of a half SWCLK period for an OpenOCD delay value, rounded
 // up: SWCLK is never faster than OpenOCD expects.
 constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
    if(delay < fixedClockHz.size()) {
-      const uint64_t cyclesPerPeriod = 2ull * fixedClockHz[delay];
-      return static_cast<uint32_t>((coreHz + cyclesPerPeriod - 1) / cyclesPerPeriod);
+      return halfPeriodCyclesOfHz(coreHz, fixedClockHz[delay]);
    }
    // Half a period is (delay + 1) us.
    return static_cast<uint32_t>((static_cast<uint64_t>(coreHz) * (delay + 1u) + 999'999u) / 1'000'000u);
 }
 
 static_assert(loopOverheadCycles < halfPeriodCycles(72'000'000, 1), "The wait at delay 1 would be 0");
+
+// The fastest SWCLK: the untimed engine (delay 0)
+inline constexpr uint32_t maxClockHz = fixedClockHz[0];
 
 // The SWD port of the SWD block on bit-banged pins.
 template <typename Pins>
@@ -183,9 +192,7 @@ class BitBangPort final : public protocol::SwdPort {
    void configure(uint8_t turnaround, uint16_t retries, uint16_t delay) override {
       turnaround_ = turnaround;
       retries_ = retries;
-      halfCycles_ = halfPeriodCycles(pins_.coreHz(), delay);
-      waitCycles_ = halfCycles_ > loopOverheadCycles ? halfCycles_ - loopOverheadCycles : 0;
-      timed_ = delay != 0;
+      setHalfCycles(halfPeriodCycles(pins_.coreHz(), delay), delay != 0);
    }
 
    // CMSIS-DAP: the transfer rules. They stay until the next call.
@@ -195,6 +202,16 @@ class BitBangPort final : public protocol::SwdPort {
 
    [[nodiscard]] const TransferRules &rules() const {
       return rules_;
+   }
+
+   // CMSIS-DAP: SWCLK in Hz, rounded down to the nearest available rate.
+   // From maxClockHz, the engine runs untimed (as at delay 0).
+   void setClockHz(uint32_t hz) {
+      if(hz >= maxClockHz) {
+         setHalfCycles(halfPeriodCycles(pins_.coreHz(), 0), false);
+      } else {
+         setHalfCycles(halfPeriodCyclesOfHz(pins_.coreHz(), hz), true);
+      }
    }
 
    void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) override {
@@ -277,6 +294,12 @@ class BitBangPort final : public protocol::SwdPort {
             static_cast<void>(transferOnce<Timed>(abortRequest, clear));
          }
       }
+   }
+
+   void setHalfCycles(uint32_t halfCycles, bool timed) {
+      halfCycles_ = halfCycles;
+      waitCycles_ = halfCycles_ > loopOverheadCycles ? halfCycles_ - loopOverheadCycles : 0;
+      timed_ = timed;
    }
 
    void begin() {

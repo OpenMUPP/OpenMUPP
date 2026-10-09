@@ -632,3 +632,50 @@ TEST_CASE("SWD bit-bang: CMSIS-DAP rules, WAIT then OK, with turnarounds of 1-4 
       bench.checkIdle();
    }
 }
+
+TEST_CASE("SWD bit-bang: half period of a clock in Hz") {
+   CHECK(swd::halfPeriodCyclesOfHz(72'000'000, 1'000'000) == 36);
+   CHECK(swd::halfPeriodCyclesOfHz(72'000'000, 999'999) == 37);
+   CHECK(swd::halfPeriodCyclesOfHz(72'000'000, 235'000) == halfPeriodCycles(72'000'000, 1));
+   CHECK(swd::halfPeriodCyclesOfHz(72'000'000, 1) == 36'000'000);
+   // 0 Hz: the slowest clock
+   CHECK(swd::halfPeriodCyclesOfHz(72'000'000, 0) == 36'000'000);
+}
+
+TEST_CASE("SWD bit-bang: the clock in Hz rounds down to an available rate") {
+   Bench bench;
+   for(const uint32_t hz : { 0u, 1u, 1000u, 72'000u, 100'001u, 235'000u, 1'000'000u, 1'500'000u, swd::maxClockHz - 1 }) {
+      CAPTURE(hz);
+      bench.port.setClockHz(hz);
+      CHECK(bench.port.isTimed());
+      const double actual = 72e6 / (2.0 * bench.port.halfCycles());
+      CHECK(actual <= (hz == 0 ? 1.0 : hz));
+      // The next shorter half period would be faster than hz.
+      CHECK(72e6 / (2.0 * (bench.port.halfCycles() - 1)) > hz);
+   }
+   for(const uint32_t hz : { swd::maxClockHz, 2'000'000u, 10'000'000u, UINT32_MAX }) {
+      CAPTURE(hz);
+      bench.port.setClockHz(hz);
+      // Untimed, as at delay 0
+      CHECK_FALSE(bench.port.isTimed());
+      CHECK(bench.port.halfCycles() == halfPeriodCycles(72'000'000, 0));
+   }
+}
+
+TEST_CASE("SWD bit-bang: transfers at a clock in Hz") {
+   Bench bench;
+   bench.port.setRules(cmsisDapRules);
+   bench.port.setClockHz(1'000'000);
+   bench.pins.readData = 0x2BA01477;
+   uint32_t data = 0;
+   CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+   CHECK(data == 0x2BA01477);
+   const auto &edges = bench.pins.edges;
+   REQUIRE(edges.size() == 2 * (transferEdges(1) - swd::defaultIdleCycles));
+   for(std::size_t i = 1; i < edges.size(); ++i) {
+      CAPTURE(i);
+      CHECK(edges[i] - edges[i - 1] >= 36 - swd::loopOverheadCycles);
+      CHECK(edges[i] - edges[i - 1] <= 36 - swd::loopOverheadCycles + 2);
+   }
+   bench.checkIdle();
+}
