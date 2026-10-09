@@ -399,16 +399,17 @@ A separate SWDIO input pin gets a pull-up, so an open SWDIO reads 1.
 The firmware rounds the half period up to full core clock cycles (72 MHz).
 Each half period waits from its SWCLK edge, so an interrupt makes a period longer, but not shorter.
 The wait subtracts an estimate of the cycles of the loop code (`swd::loopOverheadCycles`).
-The value comes from a logic analyzer measurement on the Versaloon Mini, with the engine compiled at `-Os`.
-The engines are now compiled with `-O2`, so the value must be measured again.
-It is rounded down, so SWCLK is never faster than the table at `delay` 1 and more.
+A smaller value makes SWCLK slower, so the value is a lower bound: SWCLK is never faster than the table at `delay` 1 and more.
+The engines are compiled with `-O2`. The value 8 is a lower bound from the disassembly, not a measurement.
+Measure SWCLK with a logic analyzer at `delay` 1 and correct the value.
+With the engine at `-Os`, the measured value was 21.
 The ST-Link/V2 board has other SWD pins and is not measured.
 
-At `delay` 0, the loop code is slower than the half period, and the wait is 0.
-The firmware then runs SWCLK as fast as the loop code, without the cycle counter.
-SWCLK can be faster than 1.85 MHz, as with the original firmware (2.25 to 3 MHz).
-The SWCLK frequency at `delay` 0 is not measured yet.
-The low half period is only some core cycles.
+At `delay` 0, the firmware runs untimed, without the cycle counter.
+Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`).
+The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
+SWCLK is then about 3 MHz, faster than 1.85 MHz, as with the original firmware (2.25 to 3 MHz).
+This is an estimate from the disassembly. Measure it with a logic analyzer.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 
 `OUT` drives the bits on SWDIO. `IN` releases SWDIO and reads the bits.

@@ -33,11 +33,10 @@
 // the loop code in each half period. Thus SWCLK is not faster than the
 // OpenOCD table, except at delay 0.
 //
-// At delay 0 (1.85 MHz), the loop code is slower than the half period, so
-// the wait is 0. The engine then runs untimed: it does not read the cycle
-// counter, and SWCLK runs as fast as the loop code. This can be faster
-// than 1.85 MHz, as with the original firmware (2.25 to 3 MHz). The low
-// half period is then only some core cycles.
+// At delay 0 (1.85 MHz), the engine runs untimed: it does not read the
+// cycle counter, and each half period is the loop code and untimedPadNops NOP
+// instructions. SWCLK is then about 3 MHz, as with the original firmware
+// (2.25 to 3 MHz), and faster than 1.85 MHz.
 //
 // A transfer:
 //
@@ -96,18 +95,24 @@ using protocol::swd::retryOutFlag;
 // Hz: a period of 2 * (delay + 1) us.
 inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'000, 102'000, 85'000, 72'000 };
 
-// The core cycles of the loop code in one half period (Release build with
-// the engine at -Os, STM32F103 at 72 MHz with 2 flash wait states). The
-// engine is now compiled with -O2 (CMakeLists.txt): measure again. Measured with a logic
-// analyzer on the Versaloon Mini (the ST-Link/V2 board has other SWD pins
-// and is not measured). With the value 12, SWCLK was 220 kHz at 235 kHz.
-// That is 163.6 cycles per half period, thus 21.6 cycles of loop code. The
-// high half has about 33 cycles and the low half about 14. SWCLK must never
-// be faster than the table, thus the value is rounded down. Too small makes
-// SWCLK slower than the table, too large makes it faster. Results with 21:
-// 230 kHz at 235 kHz (53 % high), and 1.68 MHz at 1.85 MHz (71 % high),
-// where the wait is 0.
-inline constexpr uint32_t loopOverheadCycles = 21;
+// The core cycles of the loop code in one half period (Release build,
+// STM32F103 at 72 MHz with 2 flash wait states). SWCLK must never be
+// faster than the table: too small makes SWCLK slower than the table, too
+// large makes it faster.
+//
+// With the engine at -Os, a logic analyzer on the Versaloon Mini gave 21
+// (230 kHz at 235 kHz). The engine is now compiled with -O2, and its loop
+// code is shorter. 8 is a lower bound from the -O2 disassembly, so SWCLK
+// stays below the table. Measure SWCLK at delay 1 again, and correct the
+// value. The ST-Link/V2 board has other SWD pins and is not measured.
+inline constexpr uint32_t loopOverheadCycles = 8;
+
+// Untimed (delay 0): NOP instructions in each half period. They keep a
+// minimum low half period, so SWDIO has a setup time before the rising
+// edge, and the target has time to drive SWDIO before the read. With the
+// loop code (about 10 cycles per bit at -O2), one bit takes about 24
+// cycles: about 3 MHz, as with the original firmware. Not measured yet.
+inline constexpr uint32_t untimedPadNops = 6;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
 inline constexpr uint8_t abortRequest = 0x81;
@@ -150,6 +155,7 @@ class BitBangPort final : public protocol::SwdPort {
       retries_ = retries;
       halfCycles_ = halfPeriodCycles(pins_.coreHz(), delay);
       waitCycles_ = halfCycles_ > loopOverheadCycles ? halfCycles_ - loopOverheadCycles : 0;
+      timed_ = delay != 0;
    }
 
    void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) override {
@@ -176,10 +182,10 @@ class BitBangPort final : public protocol::SwdPort {
       return halfCycles_;
    }
 
-   // False when the half period has no wait (delay 0): the engine then
-   // runs as fast as the loop code.
+   // False at delay 0: the engine then runs untimed (see the file
+   // comment).
    [[nodiscard]] bool isTimed() const {
-      return waitCycles_ != 0;
+      return timed_;
    }
 
    private:
@@ -282,6 +288,9 @@ class BitBangPort final : public protocol::SwdPort {
          const uint32_t edge = pins_.now();
          while(pins_.now() - edge < waitCycles_) {
          }
+      } else {
+         static_assert(untimedPadNops == 6, "Change the NOP count below too");
+         asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop");
       }
    }
 
@@ -337,6 +346,7 @@ class BitBangPort final : public protocol::SwdPort {
    uint32_t halfCycles_{ 0 };
    // halfCycles_ without the loop code
    uint32_t waitCycles_{ 0 };
+   bool timed_{ true };
 };
 
 } // namespace swd
