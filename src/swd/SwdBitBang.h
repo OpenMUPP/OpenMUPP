@@ -35,8 +35,8 @@
 //
 // At delay 0 (1.85 MHz), the engine runs untimed: it does not read the
 // cycle counter, and each half period is the loop code and untimedPadNops NOP
-// instructions. SWCLK is then about 3 MHz, as with the original firmware
-// (2.25 to 3 MHz), and faster than 1.85 MHz.
+// instructions. SWCLK is then 1.845 MHz (66 % duty), measured on the
+// Versaloon Mini. The original firmware bursts at 2.25 to 3 MHz.
 //
 // A transfer:
 //
@@ -100,18 +100,19 @@ inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'0
 // faster than the table: too small makes SWCLK slower than the table, too
 // large makes it faster.
 //
-// With the engine at -Os, a logic analyzer on the Versaloon Mini gave 21
-// (230 kHz at 235 kHz). The engine is now compiled with -O2, and its loop
-// code is shorter. 8 is a lower bound from the -O2 disassembly, so SWCLK
-// stays below the table. Measure SWCLK at delay 1 again, and correct the
-// value. The ST-Link/V2 board has other SWD pins and is not measured.
-inline constexpr uint32_t loopOverheadCycles = 8;
+// A logic analyzer on the Versaloon Mini gave 21 with the engine at -Os
+// (230 kHz at 235 kHz). With -O2 and a value of 8, it gave 210 kHz (53 %
+// duty): the loop code is about 25 cycles in each half period, not fewer
+// than at -Os. 24 gives 232 kHz, below the table (measured). Measure SWCLK at
+// delay 1 again after a change of the engine code. The ST-Link/V2 board
+// has other SWD pins and is not measured.
+inline constexpr uint32_t loopOverheadCycles = 24;
 
 // Untimed (delay 0): NOP instructions in each half period. They keep a
 // minimum low half period, so SWDIO has a setup time before the rising
 // edge, and the target has time to drive SWDIO before the read. With the
-// loop code (about 10 cycles per bit at -O2), one bit takes about 24
-// cycles: about 3 MHz, as with the original firmware. Not measured yet.
+// loop code, one bit takes about 39 cycles: 1.845 MHz measured at delay 0
+// (the first estimate was 3 MHz).
 inline constexpr uint32_t untimedPadNops = 6;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
