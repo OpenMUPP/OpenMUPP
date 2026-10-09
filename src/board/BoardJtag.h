@@ -92,3 +92,10 @@ class JtagSpi {
 using BoardJtag = std::conditional_t<current.hasJtagFastPath(), jtag::FastPort<JtagPins, JtagSpi>, jtag::BitBangPort<JtagPins>>;
 
 } // namespace board
+
+// BoardJtag.cpp instantiates both engines, with -O2 (CMakeLists.txt). The
+// linker drops the one that the board does not use. The fast path uses
+// bit-bang with TCK idle high.
+extern template class jtag::BitBangPort<board::JtagPins>;
+extern template class jtag::BitBangPort<board::JtagPins, jtag::TckIdle::High>;
+extern template class jtag::FastPort<board::JtagPins, board::JtagSpi>;

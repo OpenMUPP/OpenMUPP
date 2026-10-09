@@ -96,8 +96,9 @@ using protocol::swd::retryOutFlag;
 // Hz: a period of 2 * (delay + 1) us.
 inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'000, 102'000, 85'000, 72'000 };
 
-// The core cycles of the loop code in one half period (Release build,
-// STM32F103 at 72 MHz with 2 flash wait states). Measured with a logic
+// The core cycles of the loop code in one half period (Release build with
+// the engine at -Os, STM32F103 at 72 MHz with 2 flash wait states). The
+// engine is now compiled with -O2 (CMakeLists.txt): measure again. Measured with a logic
 // analyzer on the Versaloon Mini (the ST-Link/V2 board has other SWD pins
 // and is not measured). With the value 12, SWCLK was 220 kHz at 235 kHz.
 // That is 163.6 cycles per half period, thus 21.6 cycles of loop code. The

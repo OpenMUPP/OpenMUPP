@@ -179,6 +179,11 @@ if (CMAKE_CROSSCOMPILING)
     # Main program
     #----------------------------------------------------------------------------------------------------#
     add_executable(versaloon-next-gen.elf ${PROJECT_SOURCES})
+    # The JTAG and SWD engines are instantiated in these files (see
+    # board/BoardJtag.h and board/BoardSwd.h). -O2 makes their bit loops
+    # faster. It comes after the -Os of COMMON_OPTIONS, so it wins.
+    set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardSwd.cpp
+            PROPERTIES COMPILE_OPTIONS -O2)
 
     # Apply unified build configuration
     target_link_libraries(versaloon-next-gen.elf PUBLIC art-build-config)
