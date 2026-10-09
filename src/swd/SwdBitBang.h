@@ -91,10 +91,12 @@ using protocol::swd::retryOutFlag;
 inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'000, 102'000, 85'000, 72'000 };
 
 // The core cycles of the loop code in one half period (Release build,
-// STM32F103 at 72 MHz with 2 flash wait states). An estimate from the
-// disassembly: measure SWCLK with a logic analyzer and adjust it. Too
-// small makes SWCLK slower than the table, too large makes it faster.
-inline constexpr uint32_t loopOverheadCycles = 12;
+// STM32F103 at 72 MHz with 2 flash wait states). Measured with a logic
+// analyzer: about 21.6 cycles at 235 kHz. SWCLK must never be faster than
+// the table, thus the value is rounded down. Too small makes SWCLK slower
+// than the table, too large makes it faster. At 1.85 MHz the wait is 0, and
+// SWCLK stays below the table (about 1.06 MHz measured with the value 12).
+inline constexpr uint32_t loopOverheadCycles = 21;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
 inline constexpr uint8_t abortRequest = 0x81;

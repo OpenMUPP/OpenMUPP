@@ -391,7 +391,7 @@ A separate SWDIO input pin gets a pull-up, so an open SWDIO reads 1.
 The firmware rounds the half period up to full core clock cycles (72 MHz).
 Each half period waits from its SWCLK edge, so an interrupt makes a period longer, but not shorter.
 The wait subtracts an estimate of the cycles of the loop code (`swd::loopOverheadCycles`).
-Measure SWCLK with a logic analyzer to calibrate this value.
+The value is measured with a logic analyzer and rounded down: SWCLK is never faster than the table.
 
 `OUT` drives the bits on SWDIO. `IN` releases SWDIO and reads the bits.
 SWCLK is high between bits.
