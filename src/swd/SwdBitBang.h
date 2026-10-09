@@ -76,8 +76,13 @@
 //   clears STICKYORUN itself.
 // - The data phase after WAIT and FAULT is optional (DAP_SWD_Configure).
 //   Without it, the host clocks one turnaround after the ACK and then
-//   drives SWDIO. An ACK that is not OK, WAIT or FAULT always gets the data
-//   phase.
+//   drives SWDIO.
+// - The idle cycles come only after an OK ACK.
+// - After an ACK that is not OK, WAIT or FAULT (a protocol error), the host
+//   clocks the data phase and the turnaround with SWDIO released, also for
+//   a write. The target can then drive read data without contention: it
+//   possibly decoded another request. CMSIS-DAP debuggers send a multidrop
+//   TARGETSEL with DAP_SWD_Sequence, not as a transfer.
 // - The turnaround is 1-4 cycles at each turnaround, as for configure().
 //
 // DAP_SWJ_Sequence and DAP_SWD_Sequence use sequenceOut() and
@@ -151,6 +156,10 @@ struct TransferRules {
    bool abortOnWait{ true };
    // Run the data phase also after WAIT and FAULT
    bool dataPhase{ true };
+   // Send the idle cycles only after an OK ACK
+   bool idleOnlyAfterOk{ false };
+   // After a protocol error, release SWDIO also in the data phase of a write
+   bool releaseOnAckError{ false };
 };
 
 // Core cycles of a half SWCLK period for a frequency, rounded up: SWCLK is
@@ -333,10 +342,12 @@ class BitBangPort final : public protocol::SwdPort {
       clocks<Timed>(turnaround_);
       const auto ack = static_cast<uint8_t>(readBits<Timed>(3));
       uint8_t result = ack;
+      const bool ackError = ack != ackOk && ack != ackWait && ack != ackFault;
       if(!rules_.dataPhase && (ack == ackWait || ack == ackFault)) {
          // No data phase: the turnaround back to the host
          clocks<Timed>(turnaround_);
-      } else if((request & readRequest) != 0) {
+      } else if((request & readRequest) != 0 || (ackError && rules_.releaseOnAckError)) {
+         // A read, or the back-off after a protocol error: SWDIO released
          const uint32_t value = readBits<Timed>(32);
          const bool parityBit = readBit<Timed>();
          clocks<Timed>(turnaround_);
@@ -355,11 +366,13 @@ class BitBangPort final : public protocol::SwdPort {
       }
       if(ack == ackFault) {
          result |= faultFlag;
-      } else if(ack != ackOk && ack != ackWait) {
+      } else if(ackError) {
          result |= ackErrorFlag;
       }
       pins_.swdioDrive(false);
-      writeBits<Timed>(0, rules_.idleCycles);
+      if(ack == ackOk || !rules_.idleOnlyAfterOk) {
+         writeBits<Timed>(0, rules_.idleCycles);
+      }
       return result;
    }
 

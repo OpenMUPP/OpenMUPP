@@ -11,7 +11,10 @@
 // the host drives SWDIO in the data phase of a read that it does not
 // drive itself. Without dataPhase, the target skips the data phase after
 // WAIT and FAULT: one turnaround, then the host drives SWDIO again (the
-// CMSIS-DAP default). With overrunDetect, a WAIT sets STICKYORUN: the target
+// CMSIS-DAP default). With rnwFlipped, the target decodes the next request
+// with the other RnW bit, and ackNoise changes the ACK bits on the wire:
+// the host then sees a protocol error, while the target drives read data.
+// With overrunDetect, a WAIT sets STICKYORUN: the target
 // then replies FAULT to each access but DPIDR, CTRL/STAT and ABORT, until
 // an ABORT write with ORUNERRCLR (0x10).
 //
@@ -126,6 +129,10 @@ class MockSwdPins {
    bool overrunDetect{ false };
    // The data phase after WAIT and FAULT
    bool dataPhase{ true };
+   // For the next request only: the other RnW bit, and the ACK bits that
+   // the wire inverts
+   bool rnwFlipped{ false };
+   uint8_t ackNoise{ 0 };
    bool stickyOrun{ false };
    uint32_t readData{ 0 };
    bool badParity{ false };
@@ -218,14 +225,18 @@ class MockSwdPins {
       }
       transfers.push_back({ request, ack });
       const bool ok = ack == protocol::swd::ackOk;
+      const bool read = ((request & protocol::swd::readRequest) != 0) != rnwFlipped;
+      const uint8_t wireAck = ack ^ ackNoise;
+      rnwFlipped = false;
+      ackNoise = 0;
       addRelease(turnaround_);
       for(unsigned i = 0; i < 3; ++i) {
          // No ACK: SWDIO stays released.
-         plan_.push_back({ ack == 0 ? Action::Release : Action::Drive, ((ack >> i) & 1u) != 0 });
+         plan_.push_back({ ack == 0 ? Action::Release : Action::Drive, ((wireAck >> i) & 1u) != 0 });
       }
       if(!dataPhase && (ack == protocol::swd::ackWait || ack == protocol::swd::ackFault)) {
          addRelease(turnaround_);
-      } else if((request & protocol::swd::readRequest) != 0) {
+      } else if(read) {
          for(unsigned i = 0; i < 32; ++i) {
             plan_.push_back({ ok ? Action::Drive : Action::Expect, ((readData >> i) & 1u) != 0 });
          }

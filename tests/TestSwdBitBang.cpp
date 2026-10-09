@@ -462,7 +462,7 @@ TEST_CASE("SWD bit-bang: the background interval runs on over fast transfers") {
 
 namespace {
 
-constexpr swd::TransferRules cmsisDapRules{ 0, false, false };
+constexpr swd::TransferRules cmsisDapRules{ 0, false, false, true, true };
 
 // The rising edges of a transfer without the data phase: request,
 // turnaround, ACK, turnaround, idle cycles
@@ -477,6 +477,8 @@ TEST_CASE("SWD bit-bang: the default rules are the Versaloon rules, and CONFIG k
    CHECK(bench.port.rules().idleCycles == swd::defaultIdleCycles);
    CHECK(bench.port.rules().abortOnWait);
    CHECK(bench.port.rules().dataPhase);
+   CHECK_FALSE(bench.port.rules().idleOnlyAfterOk);
+   CHECK_FALSE(bench.port.rules().releaseOnAckError);
    bench.port.setRules(cmsisDapRules);
    bench.port.configure(1, 0, 1);
    CHECK(bench.port.rules().idleCycles == 0);
@@ -612,11 +614,84 @@ TEST_CASE("SWD bit-bang: without dataPhase, OK and a missing ACK still run the d
    }
 }
 
+TEST_CASE("SWD bit-bang: with idleOnlyAfterOk, only an OK ACK gets the idle cycles") {
+   const swd::TransferRules rules{ swd::defaultIdleCycles, false, false, true, false };
+   for(const uint8_t ack : { pswd::ackOk, pswd::ackWait, pswd::ackFault, uint8_t{ 0 } }) {
+      for(const bool read : { true, false }) {
+         CAPTURE(ack);
+         CAPTURE(read);
+         Bench bench;
+         bench.port.setRules(rules);
+         bench.pins.dataPhase = false;
+         bench.pins.acks = { ack };
+         uint32_t data = 0x1234;
+         static_cast<void>(bench.port.transfer(read ? readApDrw : writeSelect, data));
+         std::size_t edges = transferEdges(1);
+         if(ack == pswd::ackWait || ack == pswd::ackFault) {
+            edges = shortTransferEdges(1, 0);
+         } else if(ack == 0) {
+            edges -= swd::defaultIdleCycles;
+         }
+         CHECK(bench.pins.risingEdges.size() == edges);
+         // The next transfer is in step.
+         bench.pins.readData = 0x1BA01477;
+         CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+         CHECK(data == 0x1BA01477);
+         CHECK(bench.pins.risingEdges.size() == edges + transferEdges(1));
+         bench.checkIdle();
+      }
+   }
+}
+
+TEST_CASE("SWD bit-bang: a protocol error on a write, while the target drives read data") {
+   // The target decodes a read and replies OK. The host sees ACK 0b011.
+   for(const bool release : { true, false }) {
+      CAPTURE(release);
+      Bench bench;
+      bench.port.setRules({ swd::defaultIdleCycles, true, true, false, release });
+      bench.pins.rnwFlipped = true;
+      bench.pins.ackNoise = 0x02;
+      bench.pins.readData = 0xFFFF0000;
+      uint32_t data = 0x0000FFFF;
+      CHECK(bench.port.transfer(writeSelect, data) == (0x03 | pswd::ackErrorFlag));
+      CHECK(data == 0x0000FFFF);
+      CHECK(bench.pins.risingEdges.size() == transferEdges(1));
+      if(release) {
+         CHECK(bench.pins.contentions == 0);
+         // The next transfer is in step.
+         bench.pins.readData = 0x1BA01477;
+         CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+         CHECK(data == 0x1BA01477);
+         REQUIRE(bench.pins.transfers.size() == 2);
+         CHECK(bench.pins.transfers[1].request == readDpidr);
+         bench.checkIdle();
+      } else {
+         // The Versaloon rules drive the write data: contention.
+         CHECK(bench.pins.contentions > 0);
+      }
+   }
+}
+
+TEST_CASE("SWD bit-bang: with releaseOnAckError, a write without ACK releases SWDIO") {
+   Bench bench;
+   bench.port.setRules(cmsisDapRules);
+   bench.pins.acks = { 0 };
+   uint32_t data = 0x01002927;
+   CHECK(bench.port.transfer(writeTargetsel, data) == (0x07 | pswd::ackErrorFlag));
+   const auto &edges = bench.pins.risingEdges;
+   REQUIRE(edges.size() == transferEdges(1) - swd::defaultIdleCycles);
+   for(std::size_t i = 8; i < edges.size(); ++i) {
+      CAPTURE(i);
+      CHECK_FALSE(edges[i].hostDrives);
+   }
+   CHECK(bench.pins.contentions == 0);
+}
+
 TEST_CASE("SWD bit-bang: CMSIS-DAP rules, WAIT then OK, with turnarounds of 1-4 cycles") {
    for(uint8_t turnaround = 1; turnaround <= 4; ++turnaround) {
       CAPTURE(turnaround);
       Bench bench(turnaround, 5);
-      bench.port.setRules({ 2, false, false });
+      bench.port.setRules({ 2, false, false, true, true });
       bench.pins.dataPhase = false;
       bench.pins.acks = { pswd::ackWait, pswd::ackWait, pswd::ackOk, pswd::ackWait, pswd::ackOk };
       bench.pins.readData = 0x600DF00D;
@@ -628,7 +703,7 @@ TEST_CASE("SWD bit-bang: CMSIS-DAP rules, WAIT then OK, with turnarounds of 1-4 
       REQUIRE(bench.pins.transfers.size() == 5);
       CHECK(bench.pins.transfers[4].written == 0xFEEDBEEF);
       CHECK(bench.pins.risingEdges.size() ==
-            3 * shortTransferEdges(turnaround, 2) + 2 * (transferEdges(turnaround) - swd::defaultIdleCycles + 2));
+            3 * shortTransferEdges(turnaround, 0) + 2 * (transferEdges(turnaround) - swd::defaultIdleCycles + 2));
       bench.checkIdle();
    }
 }
