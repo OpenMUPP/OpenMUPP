@@ -31,6 +31,7 @@ add_executable(vsl-tests
         TestHeartbeat.cpp
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
+        TestCmsisDapDescriptors.cpp
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
