@@ -679,3 +679,30 @@ TEST_CASE("SWD bit-bang: transfers at a clock in Hz") {
    }
    bench.checkIdle();
 }
+
+TEST_CASE("SWD bit-bang: sequences of DAP_SWJ_Sequence and DAP_SWD_Sequence") {
+   Bench bench;
+   bench.pins.decodes = false;
+   // DAP_SWJ_Sequence: up to 256 bits
+   std::vector<uint8_t> out(32);
+   for(std::size_t i = 0; i < out.size(); ++i) {
+      out[i] = static_cast<uint8_t>(i * 37 + 1);
+   }
+   bench.port.sequenceOut(256, art::span<const uint8_t>(out.data(), out.size()));
+   REQUIRE(bench.pins.risingEdges.size() == 256);
+   for(std::size_t i = 0; i < 256; ++i) {
+      CAPTURE(i);
+      CHECK(bench.pins.risingEdges[i].hostDrives);
+      CHECK(bench.pins.risingEdges[i].level == (((out[i / 8] >> (i % 8)) & 1u) != 0));
+   }
+   // DAP_SWD_Sequence: up to 64 bits in each direction
+   std::vector<uint8_t> in(8, 0);
+   bench.port.sequenceIn(64, art::span<uint8_t>(in.data(), in.size()));
+   CHECK(in == std::vector<uint8_t>(8, 0xFF));
+   CHECK_FALSE(bench.pins.hostDrives());
+   bench.port.sequenceOut(64, art::span<const uint8_t>(out.data(), 8));
+   CHECK(bench.pins.hostDrives());
+   CHECK(bench.pins.risingEdges.size() == 256 + 64 + 64);
+   CHECK(bench.pins.swclkLevel());
+   CHECK(bench.pins.contentions == 0);
+}

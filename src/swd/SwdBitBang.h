@@ -79,6 +79,9 @@
 // - The turnaround is 1-4 cycles at each turnaround, as configure() takes
 //   it.
 //
+// DAP_SWJ_Sequence and DAP_SWD_Sequence use sequenceOut() and
+// sequenceIn(): each sequence is at most 256 bits, LSB first.
+//
 // The SWD block of the Versaloon protocol does not call setRules() or
 // setClockHz(). Its transfers do not change.
 //
