@@ -37,12 +37,12 @@ Each packet without a response takes one of the 4 slots.
 | `0x00` | `DAP_Info` | Vendor, product, serial number, protocol version `2.1.0`, firmware version, capabilities, packet size and count. Other information has length 0. |
 | `0x01` | `DAP_HostStatus` | Connect and running LED. |
 | `0x02` | `DAP_Connect` | Port 0 and 1 give SWD. JTAG replies 0 (failed) until the JTAG commands exist. |
-| `0x03` | `DAP_Disconnect` | Release SWCLK and SWDIO. |
+| `0x03` | `DAP_Disconnect` | Release SWCLK and SWDIO. Release the pins that `DAP_SWJ_Pins` drove: nRESET and nTRST get the pull-up. |
 | `0x04` | `DAP_TransferConfigure` | Idle cycles, WAIT retries, match retries. |
 | `0x05` | `DAP_Transfer` | Read, write, posted AP read, value match, match mask. |
 | `0x06` | `DAP_TransferBlock` | Read or write block. |
 | `0x07` | `DAP_TransferAbort` | No response. It has no effect yet, because nothing runs at the same time. |
-| `0x08` | `DAP_WriteABORT` | |
+| `0x08` | `DAP_WriteABORT` | Replies an error when no port is connected. |
 | `0x09` | `DAP_Delay` | |
 | `0x0A` | `DAP_ResetTarget` | A 10 ms pulse on SRST. A board without SRST replies that it did no reset. |
 | `0x10` | `DAP_SWJ_Pins` | SWCLK, SWDIO, TDI, TDO, nTRST, nRESET. nTRST and nRESET are open-drain. The wait is at most 3 s. |
@@ -61,15 +61,21 @@ The transfer commands follow the reference implementation of Arm.
 After an error, the processor skips the rest of the request data.
 After a `DAP_Transfer` write, the processor reads RDBUFF to check the write.
 
+The processor checks a request before the first transfer.
 A request that is too short gives `ID_DAP_Invalid`.
 A response that does not fit in a packet gives `ID_DAP_Invalid` too.
+In both cases, the target sees no transfer from that command.
 In `DAP_ExecuteCommands`, this stops the list, and the command count is the number of commands that ran.
+
+When the host goes away, the transport calls `hostGone()`.
+It disconnects, releases the pins, and drops the queued packets and the responses that the transport did not send.
 
 ## SWD engine rules
 
 The adapter sets the CMSIS-DAP rules of the engine (see `TransferRules` in `src/swd/SwdBitBang.h`).
 It never calls `configure()`, which sets the clock from an OpenOCD delay value.
 Thus the order of `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure` does not matter.
+`DAP_Connect` sets the configuration and the clock again, because the engine can run another personality in between.
 
 ## Tests
 
