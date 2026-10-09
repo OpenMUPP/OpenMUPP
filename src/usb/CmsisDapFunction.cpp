@@ -1,0 +1,51 @@
+#include "usb/CmsisDapFunction.h"
+
+namespace usb {
+
+CmsisDapFunction::CmsisDapFunction(cmsisdap::Processor &processor)
+   : VendorBulkFunction(dap::dapInterface,
+                        art::usb::VendorBulkEndpoints{ .out = dap::outEndpoint, .in = dap::inEndpoint, .maxPacketSize = dap::packetSize })
+   , processor_(processor) {
+}
+
+bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {
+   // The OUT endpoint is held while no slot is free, so a packet that
+   // arrives here always fits.
+   if(!packet.empty()) {
+      processor_.submit(packet);
+   }
+   sendResponse();
+   return processor_.canSubmit();
+}
+
+void CmsisDapFunction::transferSent() {
+   processor_.popResponse();
+   sendResponse();
+   if(processor_.canSubmit()) {
+      resumeOut();
+   }
+}
+
+void CmsisDapFunction::dataPathClosed() {
+   processor_.hostGone();
+}
+
+void CmsisDapFunction::suspended() {
+   // The USB function keeps its IN transfer and OUT hold over a suspend, so
+   // the processor keeps its queue and responses. Only the target is
+   // released.
+   processor_.release();
+}
+
+void CmsisDapFunction::sendResponse() {
+   while(!isInTransferBusy() && processor_.hasResponse()) {
+      const auto response = processor_.response();
+      if(!response.empty() && sendInTransfer(response, ZeroLengthPacket::Never)) {
+         return;
+      }
+      // Not configured, or nothing to send: drop it.
+      processor_.popResponse();
+   }
+}
+
+} // namespace usb

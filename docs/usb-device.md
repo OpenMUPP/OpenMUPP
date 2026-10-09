@@ -42,6 +42,45 @@ Interface 0 carries the Versaloon command protocol (see [Versaloon commands](#ve
 The serial port is the [UART bridge](uart-bridge.md).
 In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](debug-log.md)).
 
+## CMSIS-DAP personality
+
+The firmware has a second USB personality: CMSIS-DAP v2 instead of the Versaloon protocol.
+Only one personality is active in a firmware image.
+The USB peripheral has 512 bytes of packet memory.
+The Versaloon interface and a CMSIS-DAP interface do not fit together.
+The Versaloon personality is the default.
+A later work item adds the selection and the wiring into `usb::UsbStack`.
+Until then, the firmware does not serve the CMSIS-DAP descriptors.
+
+`src/usb/CmsisDapDescriptors.h` has the descriptors.
+`src/usb/CmsisDapFunction.h` has the USB function.
+
+| Item | Value |
+|---|---|
+| VID:PID | `0x0403:0x9B3C` |
+| Product string | `Versaloon CMSIS-DAP` |
+| Interface 0 string | `Versaloon CMSIS-DAP v2` |
+| Other items | As in the Versaloon personality |
+
+The host tools find a CMSIS-DAP v2 interface by the vendor class and the text `CMSIS-DAP` in the interface string.
+Interface 0 is vendor-specific (`0xFF`) with bulk OUT `0x03` and bulk IN `0x82`, 64 bytes each.
+The interfaces 1 and 2 are the CDC-ACM serial port, as in the Versaloon personality.
+The endpoint numbers and sizes are the same as in the Versaloon personality.
+Thus the packet memory use does not change from the Versaloon personality.
+The endpoints and EP0 use 464 bytes, with a 64-byte buffer descriptor table.
+The firmware uses a 40-byte table and a double-buffered OUT endpoint `0x03`: 504 bytes.
+
+`usb::CmsisDapFunction` sends each OUT packet to the [CMSIS-DAP command processor](cmsis-dap.md).
+It sends each response as one IN packet.
+A response of 64 bytes has no zero-length packet.
+The processor holds up to 4 packets.
+When all 4 slots are in use, the OUT endpoint NAKs until the host reads a response.
+`DAP_Info` reports the packet size 64 and the packet count 4.
+When a bus reset or `SET_CONFIGURATION 0` closes the interface, the function calls `Processor::hostGone()`.
+A suspend only releases the target pins, because the USB transfer state stays.
+When a `DAP_QueueCommands` packet takes the last free slot, the processor runs the queue at once.
+Thus queued packets alone do not hold the OUT endpoint, and each queued packet gets its response.
+
 ## Versaloon commands
 
 The host sends one command in one bulk OUT transfer on endpoint `0x03`.
