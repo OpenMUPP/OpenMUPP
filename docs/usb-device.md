@@ -31,6 +31,12 @@ The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
 A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
 
+The Versaloon OUT endpoint `0x03` is double-buffered (system-stm32 `hw::UsbDevice`, "Double-buffered bulk OUT").
+The hardware receives the next packet of a command while the main loop handles the last packet.
+Thus the host gets fewer NAKs, and a large command arrives faster.
+The 512-byte packet memory of the STM32F1 has no room for a double-buffered IN endpoint too.
+The buffer descriptor table covers only the endpoint numbers 0 to 4, so it takes 40 bytes instead of 64 bytes.
+
 Interface 0 carries the Versaloon command protocol (see [Versaloon commands](#versaloon-commands)).
 
 The serial port is the [UART bridge](uart-bridge.md).
@@ -73,7 +79,9 @@ The reply is one IN transfer.
 When the size of the reply is a multiple of 64 bytes, a zero-length packet (ZLP) follows, so that the host read ends.
 A reply of 4096 bytes has no ZLP.
 The host reads 4096 bytes, so its read ends without a ZLP, and the ZLP would end the next read.
-While the reply is on its way, the OUT endpoint NAKs. Thus the next command waits.
+While the reply is on its way, the firmware does not take the next command.
+The OUT endpoint can receive one packet of it into its second buffer, and then NAKs.
+Thus the next command waits.
 
 The firmware replies with a ZLP to a wrong command.
 The host then sees a reply with the wrong size immediately, without a timeout.
@@ -391,11 +399,20 @@ A separate SWDIO input pin gets a pull-up, so an open SWDIO reads 1.
 The firmware rounds the half period up to full core clock cycles (72 MHz).
 Each half period waits from its SWCLK edge, so an interrupt makes a period longer, but not shorter.
 The wait subtracts an estimate of the cycles of the loop code (`swd::loopOverheadCycles`).
-The value comes from a logic analyzer measurement on the Versaloon Mini.
-It is rounded down, so SWCLK is never faster than the table.
-At `delay` 0, the loop code is slower than the half period, and the wait is 0.
-Then SWCLK is 1.68 MHz on the Versaloon Mini.
+A smaller value makes SWCLK slower, so the value is a lower bound: SWCLK is not faster than the table at `delay` 1 (measured).
+The engines are compiled with `-O2`. The value 24 gives 232 kHz at `delay` 1, measured with a logic analyzer on the Versaloon Mini.
+With `-O2`, the value 8 gave 210 kHz.
+With `-Os`, the value 21 gave 230 kHz.
+`delay` 2 and more are not measured. The margin there is small.
+Measure SWCLK again after a change of the engine code.
 The ST-Link/V2 board has other SWD pins and is not measured.
+
+At `delay` 0, the firmware runs untimed, without the cycle counter.
+Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`).
+The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
+SWCLK is then 1.845 MHz (66 % duty), measured with a logic analyzer on the Versaloon Mini.
+The original firmware bursts at 2.25 to 3 MHz.
+If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 
 `OUT` drives the bits on SWDIO. `IN` releases SWDIO and reads the bits.
 SWCLK is high between bits.

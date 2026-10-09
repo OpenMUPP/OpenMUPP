@@ -53,6 +53,13 @@ inline constexpr uint8_t cdcDataInEndpoint = 0x84;
 // art::usb::CdcAcmFunctionBase::kDataPacketSize
 inline constexpr uint16_t cdcDataPacketSize = 64;
 
+// The highest endpoint number plus 1. The STM32F1 USB peripheral then has a
+// 40-byte buffer descriptor table instead of 64 bytes (hw::UsbDevice).
+inline constexpr uint8_t endpointCount = 5;
+static_assert((versaloonOutEndpoint & 0x0F) < endpointCount && (versaloonInEndpoint & 0x0F) < endpointCount &&
+              (cdcNotificationEndpoint & 0x0F) < endpointCount && (cdcDataOutEndpoint & 0x0F) < endpointCount &&
+              (cdcDataInEndpoint & 0x0F) < endpointCount);
+
 // String descriptor indexes. Index 0 is the LANGID table.
 enum StringIndex : uint8_t {
    stringLanguages = 0,

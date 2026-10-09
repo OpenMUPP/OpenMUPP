@@ -63,3 +63,6 @@ class SwdPins {
 using BoardSwd = swd::BitBangPort<SwdPins>;
 
 } // namespace board
+
+// BoardSwd.cpp instantiates the engine, with -O2 (CMakeLists.txt).
+extern template class swd::BitBangPort<board::SwdPins>;

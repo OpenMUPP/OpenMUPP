@@ -15,8 +15,10 @@
 // endpoint). That event and all events after it wait for the next
 // UsbStack::poll(), so the events stay in order.
 //
-// No Versaloon event comes during a command: the OUT endpoint NAKs until
-// the command ends, and the IN endpoint sends nothing.
+// No Versaloon event comes during a command: the IN endpoint sends nothing,
+// and the OUT endpoint reports no packet until the command ends. Its
+// second buffer can hold one packet, but hw::UsbDevice reports it only
+// when the reply is sent and the endpoint is armed again.
 
 #include <cstddef>
 #include <peripherals/UsbDeviceTypes.h>
@@ -44,7 +46,8 @@ class SerialEventQueue final : public RingBufferBase<hw::usb::Event> {
    }
 
    // RingBufferBase. The interrupt calls try_push(), the main loop all
-   // other functions.
+   // other functions. hw::UsbDevice::armOut() also calls try_push() in the
+   // main loop, with the USB interrupt masked.
    [[nodiscard]] bool try_push(const Event &value) noexcept override {
       return ring_.try_push(value);
    }

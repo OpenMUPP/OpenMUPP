@@ -5,7 +5,9 @@
 // usb/UsbDescriptors.h). Target only.
 //
 // The USB interrupt only queues the events. poll() runs the USB protocol in
-// the main loop. pollSerial() runs only the serial port, during a long
+// the main loop. The Versaloon OUT endpoint is double-buffered: the hardware
+// receives the next packet of a command while the main loop handles the
+// last one. pollSerial() runs only the serial port, during a long
 // USB_TO_XXX command (usb/SerialEventQueue.h). The D+ pull-up of the board definition connects the
 // device; a board without one has a fixed pull-up.
 
@@ -68,7 +70,7 @@ class UsbStack {
    // dropped.
    void discardSerialInput();
 
-   hw::UsbDevice hardware_;
+   hw::UsbDevice hardware_{ endpointCount };
    SerialEventQueue<16> events_;
    Stm32UsbDeviceController controller_;
    art::usb::Device device_;

@@ -1,5 +1,10 @@
 #include "board/BoardJtag.h"
 
+// The JTAG engines, compiled with -O2 (CMakeLists.txt).
+template class jtag::BitBangPort<board::JtagPins>;
+template class jtag::BitBangPort<board::JtagPins, jtag::TckIdle::High>;
+template class jtag::FastPort<board::JtagPins, board::JtagSpi>;
+
 namespace board {
 
 namespace {

@@ -1,5 +1,8 @@
 #include "board/BoardSwd.h"
 
+// The SWD engine, compiled with -O2 (CMakeLists.txt).
+template class swd::BitBangPort<board::SwdPins>;
+
 namespace board {
 
 namespace {
