@@ -66,7 +66,9 @@ The host tools find a CMSIS-DAP v2 interface by the vendor class and the text `C
 Interface 0 is vendor-specific (`0xFF`) with bulk OUT `0x03` and bulk IN `0x82`, 64 bytes each.
 The interfaces 1 and 2 are the CDC-ACM serial port, as in the Versaloon personality.
 The endpoint numbers and sizes are the same as in the Versaloon personality.
-Thus the packet memory use does not change: 464 bytes without double buffering, and 504 bytes with the double-buffered OUT endpoint `0x03`.
+Thus the packet memory use does not change from the Versaloon personality.
+The endpoints and EP0 use 464 bytes, with a 64-byte buffer descriptor table.
+The firmware uses a 40-byte table and a double-buffered OUT endpoint `0x03`: 504 bytes.
 
 `usb::CmsisDapFunction` sends each OUT packet to the [CMSIS-DAP command processor](cmsis-dap.md).
 It sends each response as one IN packet.
@@ -74,7 +76,9 @@ A response of 64 bytes has no zero-length packet.
 The processor holds up to 4 packets.
 When all 4 slots are in use, the OUT endpoint NAKs until the host reads a response.
 `DAP_Info` reports the packet size 64 and the packet count 4.
-When the host closes the interface or the bus suspends, the function calls `Processor::hostGone()`.
+When a bus reset or `SET_CONFIGURATION 0` closes the interface, the function calls `Processor::hostGone()`.
+A suspend only releases the target pins, because the USB transfer state stays.
+A host that fills all 4 slots with `DAP_QueueCommands` packets breaks the protocol, and the function drops the queue.
 
 ## Versaloon commands
 
