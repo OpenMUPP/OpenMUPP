@@ -32,6 +32,7 @@ add_executable(vsl-tests
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
         TestCmsisDapDescriptors.cpp
+        TestCmsisDapEnumeration.cpp
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
@@ -59,6 +60,7 @@ add_executable(vsl-tests
         ../src/protocol/UsbToAll.cpp
         ../src/protocol/UsbToXxx.cpp
         ../src/usb/VersaloonFunction.cpp
+        ../src/usb/CmsisDapFunction.cpp
         # Logger and printf of libArT, for the log sink test
         ../dependencies/libArT/src/logging/LogManager.cpp
         ../dependencies/libArT/src/streams/Writable.cpp
