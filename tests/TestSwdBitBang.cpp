@@ -289,8 +289,8 @@ TEST_CASE("SWD bit-bang: IN releases SWDIO and reads the bits") {
 }
 
 TEST_CASE("SWD bit-bang: each half period waits the half period without the loop code") {
-   Bench bench(1, 0, 0);
-   const uint32_t waitCycles = 20 - swd::loopOverheadCycles;
+   Bench bench(1, 0, 1);
+   const uint32_t waitCycles = 154 - swd::loopOverheadCycles;
    const uint32_t start = bench.pins.time;
    uint32_t data = 0;
    CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
@@ -303,8 +303,20 @@ TEST_CASE("SWD bit-bang: each half period waits the half period without the loop
    }
 }
 
-TEST_CASE("SWD bit-bang: after a late edge, the half periods do not get shorter to catch up") {
+TEST_CASE("SWD bit-bang: at the fastest setting the loop code is longer than the half period, and the wait is 0") {
    Bench bench(1, 0, 0);
+   // The half period of 20 cycles is shorter than the loop code.
+   static_assert(swd::loopOverheadCycles > 20);
+   uint32_t data = 0;
+   CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+   REQUIRE(bench.pins.edges.size() == 2 * transferEdges(1));
+   for(std::size_t i = 1; i < bench.pins.edges.size(); ++i) {
+      CHECK(bench.pins.edges[i] - bench.pins.edges[i - 1] <= 2);
+   }
+}
+
+TEST_CASE("SWD bit-bang: after a late edge, the half periods do not get shorter to catch up") {
+   Bench bench(1, 0, 1);
    bench.pins.stallEdge = 10;
    bench.pins.stallCycles = 500;
    uint32_t data = 0;
@@ -314,7 +326,7 @@ TEST_CASE("SWD bit-bang: after a late edge, the half periods do not get shorter 
    CHECK(edges[10] - edges[9] >= 500);
    for(std::size_t i = 1; i < edges.size(); ++i) {
       CAPTURE(i);
-      CHECK(edges[i] - edges[i - 1] >= 20 - swd::loopOverheadCycles);
+      CHECK(edges[i] - edges[i - 1] >= 154 - swd::loopOverheadCycles);
    }
 }
 
@@ -396,7 +408,8 @@ TEST_CASE("SWD bit-bang: a long sequence services the background between bytes")
       }
       REQUIRE(pins.risingEdges.size() == 2000);
       const uint32_t elapsed = pins.time - start;
-      CHECK(background.calls.size() >= elapsed / msCycles - 1);
+      // The engine polls after each byte, so a call can come up to 8 bits late.
+      CHECK(background.calls.size() >= elapsed / (msCycles + 16 * halfPeriodCycles(72'000'000, 20)));
       CHECK(background.calls.size() <= elapsed / msCycles + 1);
       for(const auto &call : background.calls) {
          CHECK(call.clock);
@@ -410,9 +423,9 @@ TEST_CASE("SWD bit-bang: the background interval runs on over fast transfers") {
    auto background = backgroundOf(pins);
    BitBangPort<MockSwdPins> port(pins, &background);
    port.init();
-   port.configure(1, 0, 0);
+   port.configure(1, 0, 1);
    const uint32_t start = pins.time;
-   // 300 transfers at 1.85 MHz: about 2000 cycles each, 8 ms together
+   // 300 transfers at 235 kHz: about 14000 cycles each, 60 ms together
    for(int i = 0; i < 300; ++i) {
       uint32_t data = 0;
       REQUIRE(port.transfer(readDpidr, data) == pswd::ackOk);

@@ -30,8 +30,9 @@
 // Each half period waits from its SWCLK edge, as in the JTAG engine
 // (jtag/JtagBitBang.h): an interrupt makes a half period longer, never
 // shorter. The wait is halfCycles minus loopOverheadCycles, the cycles of
-// the loop code in each half period. Thus SWCLK has the frequency of the
-// OpenOCD table, also at the fastest setting.
+// the loop code in each half period. Thus SWCLK is not faster than the
+// OpenOCD table. At the fastest setting the loop code is slower than the
+// half period, the wait is 0, and SWCLK stays below the table.
 //
 // A transfer:
 //
@@ -91,10 +92,16 @@ using protocol::swd::retryOutFlag;
 inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'000, 102'000, 85'000, 72'000 };
 
 // The core cycles of the loop code in one half period (Release build,
-// STM32F103 at 72 MHz with 2 flash wait states). An estimate from the
-// disassembly: measure SWCLK with a logic analyzer and adjust it. Too
-// small makes SWCLK slower than the table, too large makes it faster.
-inline constexpr uint32_t loopOverheadCycles = 12;
+// STM32F103 at 72 MHz with 2 flash wait states). Measured with a logic
+// analyzer on the Versaloon Mini (the ST-Link/V2 board has other SWD pins
+// and is not measured). With the value 12, SWCLK was 220 kHz at 235 kHz.
+// That is 163.6 cycles per half period, thus 21.6 cycles of loop code. The
+// high half has about 33 cycles and the low half about 14. SWCLK must never
+// be faster than the table, thus the value is rounded down. Too small makes
+// SWCLK slower than the table, too large makes it faster. Results with 21:
+// 230 kHz at 235 kHz (53 % high), and 1.68 MHz at 1.85 MHz (71 % high),
+// where the wait is 0.
+inline constexpr uint32_t loopOverheadCycles = 21;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
 inline constexpr uint8_t abortRequest = 0x81;
