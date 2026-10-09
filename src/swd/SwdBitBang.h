@@ -31,8 +31,13 @@
 // (jtag/JtagBitBang.h): an interrupt makes a half period longer, never
 // shorter. The wait is halfCycles minus loopOverheadCycles, the cycles of
 // the loop code in each half period. Thus SWCLK is not faster than the
-// OpenOCD table. At the fastest setting the loop code is slower than the
-// half period, the wait is 0, and SWCLK stays below the table.
+// OpenOCD table, except at delay 0.
+//
+// At delay 0 (1.85 MHz), the loop code is slower than the half period, so
+// the wait is 0. The engine then runs untimed: it does not read the cycle
+// counter, and SWCLK runs as fast as the loop code. This can be faster
+// than 1.85 MHz, as with the original firmware (2.25 to 3 MHz). The low
+// half period is then only some core cycles.
 //
 // A transfer:
 //
@@ -147,6 +152,40 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) override {
+      if(isTimed()) {
+         sequenceOut<true>(bitCount, data);
+      } else {
+         sequenceOut<false>(bitCount, data);
+      }
+   }
+
+   void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) override {
+      if(isTimed()) {
+         sequenceIn<true>(bitCount, data);
+      } else {
+         sequenceIn<false>(bitCount, data);
+      }
+   }
+
+   uint8_t transfer(uint8_t request, uint32_t &data) override {
+      return isTimed() ? transfer<true>(request, data) : transfer<false>(request, data);
+   }
+
+   [[nodiscard]] uint32_t halfCycles() const {
+      return halfCycles_;
+   }
+
+   // False when the half period has no wait (delay 0): the engine then
+   // runs as fast as the loop code.
+   [[nodiscard]] bool isTimed() const {
+      return waitCycles_ != 0;
+   }
+
+   private:
+   // Timed: wait for each half period. Untimed: no wait, and no read of the
+   // cycle counter.
+   template <bool Timed>
+   void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) {
       if(bitCount == 0) {
          return;
       }
@@ -156,28 +195,30 @@ class BitBangPort final : public protocol::SwdPort {
          if(i % 8 == 0) {
             background_.poll(pins_);
          }
-         writeBit(((data[i / 8] >> (i % 8)) & 1u) != 0);
+         writeBit<Timed>(((data[i / 8] >> (i % 8)) & 1u) != 0);
       }
    }
 
-   void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) override {
+   template <bool Timed>
+   void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) {
       begin();
       pins_.swdioRelease();
       for(uint32_t i = 0; i < bitCount; ++i) {
          if(i % 8 == 0) {
             background_.poll(pins_);
          }
-         if(readBit()) {
+         if(readBit<Timed>()) {
             data[i / 8] = static_cast<uint8_t>(data[i / 8] | 1u << (i % 8));
          }
       }
    }
 
-   uint8_t transfer(uint8_t request, uint32_t &data) override {
+   template <bool Timed>
+   uint8_t transfer(uint8_t request, uint32_t &data) {
       begin();
       for(uint32_t attempt = 0;; ++attempt) {
          background_.poll(pins_);
-         const uint8_t ack = transferOnce(request, data);
+         const uint8_t ack = transferOnce<Timed>(request, data);
          if(ack != ackWait) {
             return ack;
          }
@@ -186,15 +227,10 @@ class BitBangPort final : public protocol::SwdPort {
          }
          // An ABORT write gets OK also with STICKYORUN set.
          uint32_t clear = orunErrClr;
-         static_cast<void>(transferOnce(abortRequest, clear));
+         static_cast<void>(transferOnce<Timed>(abortRequest, clear));
       }
    }
 
-   [[nodiscard]] uint32_t halfCycles() const {
-      return halfCycles_;
-   }
-
-   private:
    void begin() {
       pins_.begin();
       background_.begin(pins_);
@@ -202,17 +238,18 @@ class BitBangPort final : public protocol::SwdPort {
 
    // One transfer. Returns the ACK and the FAULT, ACK error and parity
    // flags.
+   template <bool Timed>
    uint8_t transferOnce(uint8_t request, uint32_t &data) {
       pins_.swdioDrive(true);
-      writeBits(request, 8);
+      writeBits<Timed>(request, 8);
       pins_.swdioRelease();
-      clocks(turnaround_);
-      const auto ack = static_cast<uint8_t>(readBits(3));
+      clocks<Timed>(turnaround_);
+      const auto ack = static_cast<uint8_t>(readBits<Timed>(3));
       uint8_t result = ack;
       if((request & readRequest) != 0) {
-         const uint32_t value = readBits(32);
-         const bool parityBit = readBit();
-         clocks(turnaround_);
+         const uint32_t value = readBits<Timed>(32);
+         const bool parityBit = readBit<Timed>();
+         clocks<Timed>(turnaround_);
          if(ack == ackOk) {
             if(parityBit != parity(value)) {
                result |= parityErrorFlag;
@@ -221,10 +258,10 @@ class BitBangPort final : public protocol::SwdPort {
             }
          }
       } else {
-         clocks(turnaround_);
+         clocks<Timed>(turnaround_);
          pins_.swdioDrive((data & 1u) != 0);
-         writeBits(data, 32);
-         writeBit(parity(data));
+         writeBits<Timed>(data, 32);
+         writeBit<Timed>(parity(data));
       }
       if(ack == ackFault) {
          result |= faultFlag;
@@ -232,54 +269,62 @@ class BitBangPort final : public protocol::SwdPort {
          result |= ackErrorFlag;
       }
       pins_.swdioDrive(false);
-      writeBits(0, idleCycles);
+      writeBits<Timed>(0, idleCycles);
       return result;
    }
 
    // Waits for the rest of the half period after an edge. Unsigned
    // difference: correct across the wrap of the counter.
+   template <bool Timed>
    [[gnu::always_inline]] void waitHalfPeriod() {
-      const uint32_t edge = pins_.now();
-      while(pins_.now() - edge < waitCycles_) {
+      if constexpr(Timed) {
+         const uint32_t edge = pins_.now();
+         while(pins_.now() - edge < waitCycles_) {
+         }
       }
    }
 
+   template <bool Timed>
    [[gnu::always_inline]] void writeBit(bool level) {
       pins_.swclk(false);
       pins_.swdioWrite(level);
-      waitHalfPeriod();
+      waitHalfPeriod<Timed>();
       pins_.swclk(true);
-      waitHalfPeriod();
+      waitHalfPeriod<Timed>();
    }
 
+   template <bool Timed>
    [[gnu::always_inline]] bool readBit() {
       pins_.swclk(false);
-      waitHalfPeriod();
+      waitHalfPeriod<Timed>();
       const bool level = pins_.swdio();
       pins_.swclk(true);
-      waitHalfPeriod();
+      waitHalfPeriod<Timed>();
       return level;
    }
 
+   template <bool Timed>
    void writeBits(uint32_t value, uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
-         writeBit((value & 1u) != 0);
+         writeBit<Timed>((value & 1u) != 0);
          value >>= 1;
       }
    }
 
+   template <bool Timed>
    uint32_t readBits(uint32_t count) {
       uint32_t value = 0;
       for(uint32_t i = 0; i < count; ++i) {
-         value |= static_cast<uint32_t>(readBit()) << i;
+         value |= static_cast<uint32_t>(readBit<Timed>()) << i;
       }
       return value;
    }
 
    // Clock cycles with SWDIO released, for a turnaround
+   template <bool Timed>
    void clocks(uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
-         static_cast<void>(readBit());
+         static_cast<void>(readBit<Timed>());
       }
    }
 
