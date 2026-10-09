@@ -338,12 +338,15 @@ Enable 18 MHz only after a hardware test at 18 MHz passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
 
 - The SPI gives the fastest SPI speed that is not above the request.
-- Bit-bang gives the request, up to the fastest rate of the bit-bang loop (`jtag::bitBangMaxKHz`, 3000 kHz).
+- Bit-bang gives the request. For the choice, its speed counts as the request, up to `jtag::bitBangMaxKHz` (1000 kHz).
 - The SPI wins when its speed is equal to or higher than the bit-bang speed.
 - Adaptive clocking (0 kHz) always uses bit-bang.
 
-Examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 3 MHz bit-bang, 1000 kHz gives 1 MHz bit-bang.
-The value of `jtag::bitBangMaxKHz` is an estimate. Measure the bit-bang rate on hardware and correct it.
+Examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 2.25 MHz SPI, 2000 kHz gives 1.125 MHz SPI, 1000 kHz gives 1 MHz bit-bang.
+The value of `jtag::bitBangMaxKHz` is conservative: 1000 kHz is the rate that was checked with the flash benchmark.
+The fastest rate of the bit-bang loop is not measured.
+A higher value selects bit-bang for some requests above 1125 kHz, and the SPI is then slower than the request less often.
+To raise the value, set it to 18000 for a test, and measure TCK at a request of 4000 kHz with a logic analyzer.
 
 A long shift runs in SPI chunks of about 1 ms, and the [serial service](#serial-port-during-long-commands) runs between two chunks.
 The pins are GPIO between two transfers, so the bit-bang engine and the SWD engine can use them.
@@ -355,8 +358,8 @@ Limits:
   DMA channel 3 has the highest priority to prevent this.
 - At 9 MHz, the half period is 55.6 ns. The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
   Use a lower speed with a long cable.
-- The OpenOCD flash speed with the fast path is not measured yet.
-  `tools/flash_benchmark.py` measures it (see [docs/development.md](development.md#flash-speed-benchmark)).
+- The OpenOCD flash speed with the fast path is measured with `tools/flash_benchmark.py` (see [docs/development.md](development.md#flash-speed-benchmark)).
+  At 4500 and 9000 kHz, the total flash time is 1 to 2 % longer than with the original firmware.
 
 ### SWD block
 
