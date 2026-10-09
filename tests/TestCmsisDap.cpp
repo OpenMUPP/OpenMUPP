@@ -716,6 +716,23 @@ TEST_CASE("DAP_Transfer: more reads than fit in the response are invalid") {
    CHECK(b.run(request)[1] == 15);
 }
 
+TEST_CASE("DAP_Transfer: match reads need no room for data") {
+   Bench b;
+   b.connect();
+   b.run({ 0x04, 0x00, 0x00, 0x00, 0x00, 0x00 });
+   Bytes request{ 0x05, 0x00, 19 };
+   request.insert(request.end(), 10, readDpidr);
+   for(unsigned i = 0; i < 9; ++i) {
+      request.push_back(readDpidr | matchValue);
+      request.insert(request.end(), { 0, 0, 0, 0 });
+   }
+   b.pins.readData = 0;
+   // matchMask_ is 0 and the match value is 0: each match read matches.
+   const Bytes reply = b.run(request);
+   CHECK(reply.size() == 3 + 40);
+   CHECK(reply[1] == 19);
+}
+
 TEST_CASE("DAP_Transfer: a failed RDBUFF read still skips the data of the request") {
    Bench b;
    b.connect();
@@ -790,6 +807,20 @@ TEST_CASE("DAP_TransferBlock: empty, not connected and too large") {
    CHECK(b.run({ 0x06, 0xFF, 0xFF, 0x00, readCtrlStat }) == V{ 0xFF });
    // A write block with too little data
    CHECK(b.run(cat({ { 0x06, 0x00, 0x02, 0x00, writeTar }, word(1) })) == V{ 0xFF });
+   CHECK(b.pins.transfers.empty());
+}
+
+TEST_CASE("DAP_TransferBlock: a write needs room for its response") {
+   Bench b;
+   b.connect();
+   // The Info response leaves 2 bytes of the packet.
+   const std::string longText(57, 'x');
+   b.info.vendor = longText.c_str();
+   Processor dap(b.swd, b.gpio, b.platform, b.info);
+   dap.submit(cat({ { 0x7F, 0x02, 0x00, 0x01 }, { 0x06, 0x00, 0x01, 0x00, writeTar }, word(1) }));
+   const auto response = dap.response();
+   CHECK(response.size() == 2 + 2 + 58);
+   CHECK(response[1] == 1);
    CHECK(b.pins.transfers.empty());
 }
 
@@ -930,8 +961,15 @@ TEST_CASE("Disconnect and hostGone release the pins of DAP_SWJ_Pins") {
    b.dap.hostGone();
    CHECK(b.gpio.pin(gpio::srst).mode == PinMode::InputPullUp);
 
+   // SWCLK and SWDIO driven without a connection
+   Bench idle;
+   idle.run(cat({ { 0x10, 0x03, 0x03 }, word(0) }));
+   idle.dap.hostGone();
+   CHECK(idle.gpio.pin(gpio::tck).mode == PinMode::Input);
+   CHECK(idle.gpio.pin(gpio::tms).mode == PinMode::Input);
+
    // A board without SRST and TRST
-   Bench none(1, gpio::tck | gpio::tms | gpio::tdo);
+   Bench none(1, gpio::tdo);
    none.dap.hostGone();
    CHECK(none.gpio.configured.empty());
 }

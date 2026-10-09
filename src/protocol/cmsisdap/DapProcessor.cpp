@@ -419,6 +419,13 @@ void Processor::disconnect() {
    if(connected_) {
       swd_.fini();
       connected_ = false;
+   } else {
+      // DAP_SWJ_Pins can drive SWCLK and SWDIO without a connection.
+      for(const uint16_t bit : { protocol::gpio::tck, protocol::gpio::tms }) {
+         if((gpio_.available() & bit) != 0) {
+            gpio_.configure(bit, protocol::PinMode::Input, false);
+         }
+      }
    }
    // Release the pins that DAP_SWJ_Pins drove, also without a connection:
    // a target must not stay in reset when the host stops. SRST and TRST
@@ -646,7 +653,8 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
       std::size_t words = 0;
       for(uint8_t i = 0; i < todo; ++i) {
          const uint8_t request = check.u8();
-         if((request & requestRead) != 0) {
+         // A match read returns no data.
+         if((request & requestRead) != 0 && (request & requestMatchValue) == 0) {
             ++words;
          }
          if((request & requestRead) == 0 || (request & requestMatchValue) != 0) {
@@ -789,7 +797,8 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
    const bool read = (request & requestRead) != 0;
    // Check the data and the room before the first transfer: a bad request
    // must not reach the target.
-   if(read ? static_cast<std::size_t>(todo) * 4 + 4 > out.room() : static_cast<std::size_t>(todo) * 4 > in.remaining()) {
+   const std::size_t dataBytes = static_cast<std::size_t>(todo) * 4;
+   if(4 + (read ? dataBytes : 0) > out.room() || (!read && dataBytes > in.remaining())) {
       return false;
    }
    out.u8(command::transferBlock);
