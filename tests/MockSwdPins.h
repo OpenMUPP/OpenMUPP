@@ -135,6 +135,8 @@ class MockSwdPins {
    uint8_t ackNoise{ 0 };
    bool stickyOrun{ false };
    uint32_t readData{ 0 };
+   // The data of the next OK reads. When empty, readData.
+   std::deque<uint32_t> readQueue;
    bool badParity{ false };
    // False: the target ignores SWDIO (for the sequence tests).
    bool decodes{ true };
@@ -226,6 +228,10 @@ class MockSwdPins {
       transfers.push_back({ request, ack });
       const bool ok = ack == protocol::swd::ackOk;
       const bool read = ((request & protocol::swd::readRequest) != 0) != rnwFlipped;
+      if(read && ok && !readQueue.empty()) {
+         readData = readQueue.front();
+         readQueue.pop_front();
+      }
       const uint8_t wireAck = ack ^ ackNoise;
       rnwFlipped = false;
       ackNoise = 0;

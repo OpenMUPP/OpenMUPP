@@ -46,9 +46,11 @@ add_executable(vsl-tests
         TestJtagFastPath.cpp
         TestSwdBlock.cpp
         TestSwdBitBang.cpp
+        TestCmsisDap.cpp
         TestPowerBlock.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
+        ../src/protocol/cmsisdap/DapProcessor.cpp
         ../src/protocol/GpioBlock.cpp
         ../src/protocol/JtagRawBlock.cpp
         ../src/protocol/PowerBlock.cpp
