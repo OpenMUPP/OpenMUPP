@@ -31,7 +31,7 @@
 // (jtag/JtagBitBang.h): an interrupt makes a half period longer, never
 // shorter. The wait is halfCycles minus loopOverheadCycles, the cycles of
 // the loop code in each half period. Thus SWCLK is not faster than the
-// OpenOCD table, except at delay 0.
+// OpenOCD table. Only delay 1 is measured. At delay 0, the engine is untimed.
 //
 // At delay 0 (1.85 MHz), the engine runs untimed: it does not read the
 // cycle counter, and each half period is the loop code and untimedPadNops NOP
@@ -102,17 +102,17 @@ inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'0
 //
 // A logic analyzer on the Versaloon Mini gave 21 with the engine at -Os
 // (230 kHz at 235 kHz). With -O2 and a value of 8, it gave 210 kHz (53 %
-// duty): the loop code is about 25 cycles in each half period, not fewer
-// than at -Os. 24 gives 232 kHz, below the table (measured). Measure SWCLK at
-// delay 1 again after a change of the engine code. The ST-Link/V2 board
+// duty): the loop code is about 25 cycles per half period on average (the
+// two halves differ), not fewer than at -Os. 24 gives 232 kHz, below the table (measured). Delays 2 and more
+// are not measured: the margin there is small. Measure SWCLK again after a
+// change of the engine code. The ST-Link/V2 board
 // has other SWD pins and is not measured.
 inline constexpr uint32_t loopOverheadCycles = 24;
 
 // Untimed (delay 0): NOP instructions in each half period. They keep a
 // minimum low half period, so SWDIO has a setup time before the rising
 // edge, and the target has time to drive SWDIO before the read. With the
-// loop code, one bit takes about 39 cycles: 1.845 MHz measured at delay 0
-// (the first estimate was 3 MHz).
+// loop code, one bit takes about 39 cycles: 1.845 MHz measured at delay 0.
 inline constexpr uint32_t untimedPadNops = 6;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
@@ -132,6 +132,8 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
    // Half a period is (delay + 1) us.
    return static_cast<uint32_t>((static_cast<uint64_t>(coreHz) * (delay + 1u) + 999'999u) / 1'000'000u);
 }
+
+static_assert(loopOverheadCycles < halfPeriodCycles(72'000'000, 1), "The wait at delay 1 would be 0");
 
 // The SWD port of the SWD block on bit-banged pins.
 template <typename Pins>
