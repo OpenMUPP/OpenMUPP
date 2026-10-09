@@ -2,9 +2,11 @@
 
 This document describes the CMSIS-DAP v2.1 command processor for SWD.
 The code is in `src/protocol/cmsisdap/`.
-The processor is not yet part of a USB function.
+`usb::CmsisDapFunction` (`src/usb/CmsisDapFunction.h`) moves the packets over USB.
+See the [CMSIS-DAP personality](usb-device.md#cmsis-dap-personality).
+The firmware image does not use the function yet.
 Thus the firmware does not answer CMSIS-DAP requests yet.
-A later work item adds the USB personality (see the phase E context in issue #22).
+A later work item selects the personality at build time (see the phase E context in issue #22).
 
 ## Layers
 
