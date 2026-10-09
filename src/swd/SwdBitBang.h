@@ -92,10 +92,12 @@ inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'0
 
 // The core cycles of the loop code in one half period (Release build,
 // STM32F103 at 72 MHz with 2 flash wait states). Measured with a logic
-// analyzer: about 21.6 cycles at 235 kHz. SWCLK must never be faster than
-// the table, thus the value is rounded down. Too small makes SWCLK slower
-// than the table, too large makes it faster. At 1.85 MHz the wait is 0, and
-// SWCLK stays below the table (about 1.06 MHz measured with the value 12).
+// analyzer: about 21.6 cycles in a half period at 235 kHz. The high half
+// has about 33 cycles and the low half about 14, thus the duty cycle is 53 %
+// at 235 kHz. SWCLK must never be faster than the table, thus the value is
+// rounded down. Too small makes SWCLK slower than the table, too large makes
+// it faster. Results with 21: 230 kHz at 235 kHz, and 1.68 MHz (71 % high)
+// at 1.85 MHz, where the wait is 0.
 inline constexpr uint32_t loopOverheadCycles = 21;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
