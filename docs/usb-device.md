@@ -391,7 +391,11 @@ A separate SWDIO input pin gets a pull-up, so an open SWDIO reads 1.
 The firmware rounds the half period up to full core clock cycles (72 MHz).
 Each half period waits from its SWCLK edge, so an interrupt makes a period longer, but not shorter.
 The wait subtracts an estimate of the cycles of the loop code (`swd::loopOverheadCycles`).
-The value is measured with a logic analyzer and rounded down: SWCLK is never faster than the table.
+The value comes from a logic analyzer measurement on the Versaloon Mini.
+It is rounded down, so SWCLK is never faster than the table.
+At `delay` 0, the loop code is slower than the half period, and the wait is 0.
+Then SWCLK is 1.68 MHz on the Versaloon Mini.
+The ST-Link/V2 board has other SWD pins and is not measured.
 
 `OUT` drives the bits on SWDIO. `IN` releases SWDIO and reads the bits.
 SWCLK is high between bits.

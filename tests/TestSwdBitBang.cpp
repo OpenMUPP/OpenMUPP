@@ -303,6 +303,18 @@ TEST_CASE("SWD bit-bang: each half period waits the half period without the loop
    }
 }
 
+TEST_CASE("SWD bit-bang: at the fastest setting the loop code is longer than the half period, and the wait is 0") {
+   Bench bench(1, 0, 0);
+   // The half period of 20 cycles is shorter than the loop code.
+   static_assert(swd::loopOverheadCycles > 20);
+   uint32_t data = 0;
+   CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+   REQUIRE(bench.pins.edges.size() == 2 * transferEdges(1));
+   for(std::size_t i = 1; i < bench.pins.edges.size(); ++i) {
+      CHECK(bench.pins.edges[i] - bench.pins.edges[i - 1] <= 2);
+   }
+}
+
 TEST_CASE("SWD bit-bang: after a late edge, the half periods do not get shorter to catch up") {
    Bench bench(1, 0, 1);
    bench.pins.stallEdge = 10;
