@@ -67,7 +67,9 @@
 // ORUNERRCLR, as the OpenOCD bitbang driver does.
 //
 // CMSIS-DAP has other transfer rules. setRules() changes them, and
-// setClockHz() sets the clock in Hz (see TransferRules):
+// setClockHz() sets the clock in Hz (see TransferRules). setTurnaround()
+// and setRetries() change one value each. configure() sets the clock
+// from a delay value, so the CMSIS-DAP path does not call it.
 //
 // - The idle cycles come from DAP_TransferConfigure (0-255).
 // - A WAIT repeats the transfer without the ABORT write. The debugger
@@ -76,8 +78,7 @@
 //   Without it, the host clocks one turnaround after the ACK and then
 //   drives SWDIO. An ACK that is not OK, WAIT or FAULT always gets the data
 //   phase.
-// - The turnaround is 1-4 cycles at each turnaround, as configure() takes
-//   it.
+// - The turnaround is 1-4 cycles at each turnaround, as for configure().
 //
 // DAP_SWJ_Sequence and DAP_SWD_Sequence use sequenceOut() and
 // sequenceIn(): each sequence is at most 256 bits, LSB first.
@@ -201,6 +202,18 @@ class BitBangPort final : public protocol::SwdPort {
    // CMSIS-DAP: the transfer rules. They stay until the next call.
    void setRules(const TransferRules &rules) {
       rules_ = rules;
+   }
+
+   // CMSIS-DAP: cycles at each turnaround, 1-4 (DAP_SWD_Configure). The
+   // clock does not change.
+   void setTurnaround(uint8_t turnaround) {
+      turnaround_ = turnaround;
+   }
+
+   // CMSIS-DAP: retries after WAIT (DAP_TransferConfigure). The clock does
+   // not change.
+   void setRetries(uint16_t retries) {
+      retries_ = retries;
    }
 
    [[nodiscard]] const TransferRules &rules() const {

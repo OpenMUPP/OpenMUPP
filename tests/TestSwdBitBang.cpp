@@ -662,6 +662,30 @@ TEST_CASE("SWD bit-bang: the clock in Hz rounds down to an available rate") {
    }
 }
 
+TEST_CASE("SWD bit-bang: setTurnaround() and setRetries() keep the clock in Hz") {
+   // A target with a turnaround of 3 cycles, OK after two WAIT
+   MockSwdPins pins(3);
+   BitBangPort<MockSwdPins> port(pins);
+   port.init();
+   port.configure(1, 0, 1);
+   port.setRules(cmsisDapRules);
+   port.setClockHz(1'000'000);
+   port.setTurnaround(3);
+   port.setRetries(2);
+   CHECK(port.halfCycles() == 36);
+   CHECK(port.isTimed());
+   pins.dataPhase = false;
+   pins.acks = { pswd::ackWait, pswd::ackWait };
+   pins.readData = 0x1234;
+   uint32_t data = 0;
+   CHECK(port.transfer(readApDrw, data) == pswd::ackOk);
+   CHECK(data == 0x1234);
+   CHECK(pins.transfers.size() == 3);
+   CHECK(port.halfCycles() == 36);
+   CHECK(pins.contentions == 0);
+   CHECK(pins.desyncs == 0);
+}
+
 TEST_CASE("SWD bit-bang: transfers at a clock in Hz") {
    Bench bench;
    bench.port.setRules(cmsisDapRules);
