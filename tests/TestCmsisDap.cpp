@@ -446,8 +446,15 @@ TEST_CASE("DAP_SWD_Sequence") {
    CHECK(b.pins.risingEdges[8 + 4 + 64].level == true);
    CHECK(b.pins.risingEdges[8 + 4 + 64 + 1].level == false);
 
-   // Too little data
-   CHECK(b.run({ 0x1D, 0x01, 0x10, 0xFF }) == V{ 0xFF });
+   // Too little data: nothing runs, also not the first sequence.
+   b.pins.risingEdges.clear();
+   CHECK(b.run({ 0x1D, 0x02, 0x08, 0xFF, 0x10, 0xFF }) == V{ 0xFF });
+   CHECK(b.pins.risingEdges.empty());
+   // The captured data does not fit in a packet: 8 sequences of 64 bits.
+   Bytes many{ 0x1D, 0x08 };
+   many.insert(many.end(), 8, 0x80);
+   CHECK(b.run(many) == V{ 0xFF });
+   CHECK(b.pins.risingEdges.empty());
 }
 
 TEST_CASE("DAP_SWD_Configure sets the turnaround and the data phase") {
@@ -692,6 +699,40 @@ TEST_CASE("DAP_Transfer: a request that is too short is invalid") {
    b.connect();
    CHECK(b.run({ 0x05, 0x00, 0x02, readDpidr }) == V{ 0xFF });
    CHECK(b.run({ 0x05, 0x00, 0x01, writeSelect, 0x01 }) == V{ 0xFF });
+   CHECK(b.run({ 0x05, 0x00, 0x02, readDpidr, readDpidr | matchValue, 0x01 }) == V{ 0xFF });
+   // The target saw nothing of the bad requests.
+   CHECK(b.pins.transfers.empty());
+}
+
+TEST_CASE("DAP_Transfer: more reads than fit in the response are invalid") {
+   Bench b;
+   b.connect();
+   Bytes request{ 0x05, 0x00, 16 };
+   request.insert(request.end(), 16, readDpidr);
+   CHECK(b.run(request) == V{ 0xFF });
+   CHECK(b.pins.transfers.empty());
+   request[2] = 15;
+   request.pop_back();
+   CHECK(b.run(request)[1] == 15);
+}
+
+TEST_CASE("DAP_Transfer: a failed RDBUFF read still skips the data of the request") {
+   Bench b;
+   b.connect();
+   // AP read (posted), then a write. The RDBUFF read before the write gets
+   // a FAULT. The write data must not run as commands.
+   b.pins.acks = { pswd::ackOk, pswd::ackFault };
+   const Bytes write = cat({ { 0x7F, 0x02, 0x05, 0x00, 0x02, readApDrw, writeSelect }, word(0x00000907), { 0x09, 0x03, 0x00 } });
+   CHECK(b.run(write) == V{ 0x7F, 0x02, 0x05, 0x01, 0x04, 0x09, 0x00 });
+   CHECK(b.platform.delays == std::vector<uint32_t>{ 3 });
+
+   // The same before a match read
+   b.platform.delays.clear();
+   b.pins.acks = { pswd::ackOk, pswd::ackFault };
+   const Bytes match =
+   cat({ { 0x7F, 0x02, 0x05, 0x00, 0x02, readApDrw, readDpidr | matchValue }, word(0x00000907), { 0x09, 0x04, 0x00 } });
+   CHECK(b.run(match) == V{ 0x7F, 0x02, 0x05, 0x01, 0x04, 0x09, 0x00 });
+   CHECK(b.platform.delays == std::vector<uint32_t>{ 4 });
 }
 
 TEST_CASE("DAP_TransferBlock: reads") {
@@ -744,15 +785,18 @@ TEST_CASE("DAP_TransferBlock: empty, not connected and too large") {
    b.connect();
    CHECK(b.run({ 0x06, 0x00, 0x00, 0x00, readCtrlStat }) == V{ 0x06, 0x00, 0x00, 0x00 });
    CHECK(b.pins.transfers.empty());
-   // 20 words do not fit in a packet of 64 bytes.
+   // 20 words do not fit in a packet of 64 bytes. The target sees nothing.
    CHECK(b.run({ 0x06, 0x00, 20, 0x00, readCtrlStat }) == V{ 0xFF });
+   CHECK(b.run({ 0x06, 0xFF, 0xFF, 0x00, readCtrlStat }) == V{ 0xFF });
    // A write block with too little data
    CHECK(b.run(cat({ { 0x06, 0x00, 0x02, 0x00, writeTar }, word(1) })) == V{ 0xFF });
+   CHECK(b.pins.transfers.empty());
 }
 
 TEST_CASE("DAP_WriteABORT writes the ABORT register") {
    Bench b;
-   CHECK(b.run(cat({ { 0x08, 0x00 }, word(0x1E) })) == V{ 0x08, 0x00 });
+   // Not connected: error
+   CHECK(b.run(cat({ { 0x08, 0x00 }, word(0x1E) })) == V{ 0x08, 0x01 });
    CHECK(b.pins.transfers.empty());
    b.connect();
    CHECK(b.run(cat({ { 0x08, 0x00 }, word(0x1E) })) == V{ 0x08, 0x00 });
@@ -860,4 +904,51 @@ TEST_CASE("hostGone disconnects") {
    CHECK(b.pins.finis == 1);
    b.dap.hostGone();
    CHECK(b.pins.finis == 1);
+}
+
+TEST_CASE("hostGone drops the responses that were not sent") {
+   Bench b;
+   b.dap.submit(V{ 0x09, 0x01, 0x00 });
+   REQUIRE(b.dap.hasResponse());
+   b.dap.hostGone();
+   CHECK_FALSE(b.dap.hasResponse());
+   CHECK(b.dap.canSubmit());
+}
+
+TEST_CASE("Disconnect and hostGone release the pins of DAP_SWJ_Pins") {
+   Bench b;
+   // Hold nRESET and nTRST low, drive TDI high
+   b.run(cat({ { 0x10, 0x04, 0xA4 }, word(0) }));
+   CHECK_FALSE(b.gpio.pin(gpio::srst).level);
+   CHECK(b.run({ 0x03 }) == V{ 0x03, 0x00 });
+   CHECK(b.gpio.pin(gpio::srst).mode == PinMode::InputPullUp);
+   CHECK(b.gpio.pin(gpio::trst).mode == PinMode::InputPullUp);
+   CHECK(b.gpio.pin(gpio::tdi).mode == PinMode::Input);
+
+   b.run(cat({ { 0x10, 0x00, 0x80 }, word(0) }));
+   CHECK(b.gpio.pin(gpio::srst).mode == PinMode::OpenDrain);
+   b.dap.hostGone();
+   CHECK(b.gpio.pin(gpio::srst).mode == PinMode::InputPullUp);
+
+   // A board without SRST and TRST
+   Bench none(1, gpio::tck | gpio::tms | gpio::tdo);
+   none.dap.hostGone();
+   CHECK(none.gpio.configured.empty());
+}
+
+TEST_CASE("DAP_Connect sets the configuration of the engine again") {
+   Bench b;
+   b.run(cat({ { 0x11 }, word(100'000) }));
+   b.run({ 0x04, 0x05, 0x01, 0x00, 0x00, 0x00 });
+   // The Versaloon block uses the engine in between.
+   swd::TransferRules versaloon;
+   b.port.setRules(versaloon);
+   b.port.configure(4, 7, 5);
+   b.connect();
+   CHECK(b.port.rules().idleCycles == 5);
+   CHECK_FALSE(b.port.rules().abortOnWait);
+   CHECK(b.port.halfCycles() == 360);
+   b.pins.readData = 1;
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr })[1] == 0x01);
+   b.checkIdle();
 }

@@ -32,6 +32,10 @@
 //   does not fit in a packet, gives ID_DAP_Invalid. In a DAP_ExecuteCommands
 //   it stops the list, and the command count is the number of commands
 //   that ran.
+// - DAP_Disconnect and hostGone() release the pins that DAP_SWJ_Pins
+//   drove. nRESET and nTRST get the pull-up, as in the GPIO block.
+// - A request is checked, with the room for its response, before the first
+//   transfer. A bad request does not reach the target.
 // - The timestamp bit of DAP_Transfer is ignored: the capabilities do not
 //   include the test domain timer.
 // - DAP_ExecuteCommands and DAP_QueueCommands do not nest.
@@ -209,6 +213,7 @@ class Processor {
    SwdSettings settings_;
    uint16_t matchRetries_{ 0 };
    uint32_t matchMask_{ 0 };
+   uint32_t clockHz_{ defaultClockHz };
 
    // The queued request packets, and the response packets
    std::array<Packet, packetCount> queue_{};

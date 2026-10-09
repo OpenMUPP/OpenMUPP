@@ -45,6 +45,10 @@ class PacketReader {
       static_cast<void>(bytes(count));
    }
 
+   [[nodiscard]] std::size_t remaining() const {
+      return data_.size() - pos_;
+   }
+
    [[nodiscard]] bool ok() const {
       return ok_;
    }
@@ -111,6 +115,10 @@ class PacketWriter {
       return size_;
    }
 
+   [[nodiscard]] std::size_t room() const {
+      return data_.size() - size_;
+   }
+
    [[nodiscard]] bool ok() const {
       return ok_;
    }
@@ -163,7 +171,7 @@ Processor::Processor(DapSwd &swd, protocol::GpioPins &gpio, Platform &platform, 
    , platform_(platform)
    , info_(info) {
    swd_.apply(settings_);
-   swd_.setClockHz(defaultClockHz);
+   swd_.setClockHz(clockHz_);
 }
 
 art::span<const uint8_t> Processor::response() const {
@@ -182,9 +190,10 @@ void Processor::popResponse() {
 
 void Processor::hostGone() {
    queued_ = 0;
-   if(connected_) {
-      disconnect();
-   }
+   // The responses are for the old host.
+   responses_ = 0;
+   responseFirst_ = 0;
+   disconnect();
 }
 
 void Processor::submit(art::span<const uint8_t> request) {
@@ -394,6 +403,9 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
    if(connected_) {
       swd_.fini();
    }
+   // Another user of the engine may have changed it.
+   swd_.apply(settings_);
+   swd_.setClockHz(clockHz_);
    if((gpio_.available() & protocol::gpio::tdo) != 0) {
       gpio_.configure(protocol::gpio::tdo, protocol::PinMode::Input, false);
    }
@@ -407,6 +419,18 @@ void Processor::disconnect() {
    if(connected_) {
       swd_.fini();
       connected_ = false;
+   }
+   // Release the pins that DAP_SWJ_Pins drove, also without a connection:
+   // a target must not stay in reset when the host stops. SRST and TRST
+   // get the pull-up, as in the GPIO block.
+   const uint16_t available = gpio_.available();
+   for(const uint16_t bit : { protocol::gpio::srst, protocol::gpio::trst }) {
+      if((available & bit) != 0) {
+         gpio_.configure(bit, protocol::PinMode::InputPullUp, true);
+      }
+   }
+   if((available & protocol::gpio::tdi) != 0) {
+      gpio_.configure(protocol::gpio::tdi, protocol::PinMode::Input, false);
    }
 }
 
@@ -446,6 +470,7 @@ bool Processor::swjClock(PacketReader &in, PacketWriter &out) {
       out.u8(statusError);
       return true;
    }
+   clockHz_ = hz;
    swd_.setClockHz(hz);
    out.u8(statusOk);
    return true;
@@ -473,6 +498,24 @@ bool Processor::swdSequence(PacketReader &in, PacketWriter &out) {
    const uint8_t count = in.u8();
    if(!in.ok()) {
       return false;
+   }
+   // Check the whole request and the room for the data before the first
+   // sequence.
+   {
+      PacketReader check = in;
+      std::size_t inputBytes = 0;
+      for(uint8_t i = 0; i < count; ++i) {
+         const uint8_t info = check.u8();
+         const std::size_t bytes = ((((info & 0x3Fu) == 0) ? 64 : (info & 0x3Fu)) + 7) / 8;
+         if((info & 0x80u) != 0) {
+            inputBytes += bytes;
+         } else {
+            check.skip(bytes);
+         }
+      }
+      if(!check.ok() || inputBytes + 2 > out.room()) {
+         return false;
+      }
    }
    out.u8(command::swdSequence);
    const std::size_t statusPosition = out.reserve(1);
@@ -578,11 +621,13 @@ bool Processor::writeAbort(PacketReader &in, PacketWriter &out) {
    if(!in.ok()) {
       return false;
    }
-   if(connected_) {
-      // The address of ABORT is 0.
-      static_cast<void>(swd_.transfer(0, data));
-   }
    out.u8(command::writeAbort);
+   if(!connected_) {
+      out.u8(statusError);
+      return true;
+   }
+   // The address of ABORT is 0.
+   static_cast<void>(swd_.transfer(0, data));
    out.u8(statusOk);
    return true;
 }
@@ -593,6 +638,24 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
    uint8_t todo = in.u8();
    if(!in.ok()) {
       return false;
+   }
+   // Check the whole request and the room for the data before the first
+   // transfer: a bad request must not reach the target.
+   {
+      PacketReader check = in;
+      std::size_t words = 0;
+      for(uint8_t i = 0; i < todo; ++i) {
+         const uint8_t request = check.u8();
+         if((request & requestRead) != 0) {
+            ++words;
+         }
+         if((request & requestRead) == 0 || (request & requestMatchValue) != 0) {
+            check.skip(4);
+         }
+      }
+      if(!check.ok() || words * 4 + 3 > out.room()) {
+         return false;
+      }
    }
    out.u8(command::transfer);
    const std::size_t head = out.reserve(2);
@@ -607,6 +670,9 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
       --todo;
       const uint8_t request = in.u8();
       if((request & requestRead) != 0) {
+         // The data words come before any transfer, so that an error
+         // skips the right bytes.
+         const uint32_t match = (request & requestMatchValue) != 0 ? in.u32() : 0;
          if(postedRead) {
             // Another AP read continues the posted one. Else read the data
             // of the posted read from RDBUFF.
@@ -619,7 +685,6 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
             out.u32(data);
          }
          if((request & requestMatchValue) != 0) {
-            const uint32_t match = in.u32();
             if((request & requestApNotDp) != 0) {
                value = swd_.transfer(request, unused);
                if(value != ackOk) {
@@ -660,6 +725,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
          }
          checkWrite = false;
       } else {
+         uint32_t word = in.u32();
          if(postedRead) {
             value = swd_.transfer(readRdbuff, data);
             if(value != ackOk) {
@@ -668,7 +734,6 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
             out.u32(data);
             postedRead = false;
          }
-         uint32_t word = in.u32();
          if((request & requestMatchMask) != 0) {
             matchMask_ = word;
             value = ackOk;
@@ -722,6 +787,11 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
       return false;
    }
    const bool read = (request & requestRead) != 0;
+   // Check the data and the room before the first transfer: a bad request
+   // must not reach the target.
+   if(read ? static_cast<std::size_t>(todo) * 4 + 4 > out.room() : static_cast<std::size_t>(todo) * 4 > in.remaining()) {
+      return false;
+   }
    out.u8(command::transferBlock);
    const std::size_t head = out.reserve(3);
    uint16_t done = 0;
