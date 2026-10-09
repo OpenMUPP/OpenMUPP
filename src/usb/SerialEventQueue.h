@@ -46,7 +46,8 @@ class SerialEventQueue final : public RingBufferBase<hw::usb::Event> {
    }
 
    // RingBufferBase. The interrupt calls try_push(), the main loop all
-   // other functions.
+   // other functions. hw::UsbDevice::armOut() also calls try_push() in the
+   // main loop, with the USB interrupt masked.
    [[nodiscard]] bool try_push(const Event &value) noexcept override {
       return ring_.try_push(value);
    }
