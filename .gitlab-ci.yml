@@ -1,0 +1,109 @@
+stages:
+  - build
+
+image: "docker.vandertogt.org/firmware-builder:v1.14.0"
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_FORCE_HTTPS: "true"
+  GIT_DEPTH: 0
+  GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
+  # 64 KB STM32F103C8 minus the 10 KB versaloon-bootloader
+  FLASH_LIMIT_BYTES: "55296"
+
+# Build on:
+# - Tags
+# - Merge requests
+# - Branches
+workflow:
+  rules:
+    - if: "$CI_COMMIT_TAG"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS"
+      when: never
+    - if: "$CI_COMMIT_BRANCH"
+
+lint-code:
+  stage: .pre
+  script:
+    - clang-format --version
+    - cmake --version
+    - cd "$CI_PROJECT_DIR"
+    - BUILDDIR=clangformat-build
+    - cmake -S . -B "${BUILDDIR}" -G "Unix Makefiles"
+    - cmake --build ${BUILDDIR} --target clangformat
+    - git diff --numstat
+    - linter_errors=$(git diff --numstat | wc -l)
+    - if [ ! "$linter_errors" -eq "0" ]; then echo "Detected formatting issues; please fix"; git diff; exit 1; else echo "Formatting is correct"; exit 0; fi
+  after_script:
+    - echo "Cleanup changes made"
+    - git checkout .
+
+run-unit-tests:
+  stage: .pre
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - BUILDDIR=build-tests
+    - cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" -S . -B "${BUILDDIR}"
+    - cmake --build ${BUILDDIR} --target vsl-tests -- -j`nproc`
+    - cd ${BUILDDIR} && ctest --output-on-failure
+
+run-tool-tests:
+  stage: .pre
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - python3 -m unittest discover -s tools -p "test_*.py" -v
+
+# Build linked behind versaloon-bootloader (0x08002800, 54 KB). Release by
+# default; a Debug build has the debug log on the CDC port and SWD on.
+# The linker script fails the link when the image does not fit; the size
+# check reports the size and fails on the same limit. The default target
+# also builds versaloon-bootloader for the Mini and the OtherUse.
+.build-board-template:
+  stage: build
+  variables:
+    BUILD_TYPE: Release
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - BUILDDIR=${BOARD}-${BUILD_TYPE}-build
+    - cmake --no-warn-unused-cli
+      -D GCC_TOOLCHAIN_PREFIX:STRING=${GCC_TOOLCHAIN_PREFIX}
+      -D BOARD:STRING=${BOARD}
+      -D VSL_BOOTLOADER:BOOL=ON
+      -D CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
+      -D CMAKE_BUILD_TYPE:STRING=${BUILD_TYPE}
+      -D CMAKE_TOOLCHAIN_FILE=${CI_PROJECT_DIR}/cmake/gcc_arm.cmake
+      -G "Unix Makefiles"
+      -S .
+      -B "${BUILDDIR}"
+    - cmake --build ${BUILDDIR} -- -j`nproc`
+    - ci/check-size.sh ${BUILDDIR}/versaloon-next-gen.bin ${FLASH_LIMIT_BYTES}
+  artifacts:
+    name: "versaloon-next-gen-${BOARD}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen-*.hex
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen-*.bin
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen.elf
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen.map
+      - ${BOARD}-${BUILD_TYPE}-build/versaloon-bootloader/versaloon-bootloader-*
+
+build-mini:
+  extends: .build-board-template
+  variables:
+    BOARD: mini
+
+build-otheruse:
+  extends: .build-board-template
+  variables:
+    BOARD: otheruse
+
+build-stlinkv2:
+  extends: .build-board-template
+  variables:
+    BOARD: stlinkv2
+
+build-mini-debug:
+  extends: .build-board-template
+  variables:
+    BOARD: mini
+    BUILD_TYPE: Debug
