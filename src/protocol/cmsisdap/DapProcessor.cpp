@@ -210,6 +210,11 @@ void Processor::submit(art::span<const uint8_t> request) {
       std::copy(request.begin(), request.end(), queue_[queued_].begin());
       queueLength_[queued_] = static_cast<uint8_t>(request.size());
       ++queued_;
+      // A queued packet in the last free slot runs the queue: no response
+      // could free a slot for the packet that ends the queue.
+      if(queued_ + responses_ == packetCount) {
+         flushQueue();
+      }
       return;
    }
    flushQueue();

@@ -52,7 +52,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x12` | `DAP_SWJ_Sequence` | 1 to 256 bits. |
 | `0x13` | `DAP_SWD_Configure` | Turnaround and data phase. |
 | `0x1D` | `DAP_SWD_Sequence` | |
-| `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. |
+| `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
 An unknown command replies `ID_DAP_Invalid` (`0xFF`).

@@ -15,12 +15,6 @@ bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {
       processor_.submit(packet);
    }
    sendResponse();
-   if(!processor_.canSubmit() && !processor_.hasResponse()) {
-      // Only queued packets fill the slots, so no response will free one.
-      // The host must end a queue with a command that runs it. Drop the
-      // queue instead of holding the OUT endpoint for good.
-      processor_.discardQueue();
-   }
    return processor_.canSubmit();
 }
 

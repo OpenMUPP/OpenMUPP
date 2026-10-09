@@ -43,7 +43,9 @@
 // DAP_QueueCommands packets wait. The next packet with another command
 // runs the queued packets and then itself, back to back. The responses of
 // the queued packets have the ID of DAP_ExecuteCommands, as in the
-// reference implementation.
+// reference implementation. A queued packet that takes the last free slot
+// runs the queue at once: else no slot is free for the packet that ends
+// the queue.
 //
 // Each packet that has no response yet takes one slot of the packetCount
 // slots. The transport must call canSubmit() before submit(), and send the
@@ -178,12 +180,6 @@ class Processor {
    // responses stay. For a suspend, where the transport keeps its state.
    void release() {
       disconnect();
-   }
-
-   // Drops the queued packets. For a host that queues as many packets as
-   // there are slots: no response can free a slot then.
-   void discardQueue() {
-      queued_ = 0;
    }
 
    [[nodiscard]] bool connected() const {

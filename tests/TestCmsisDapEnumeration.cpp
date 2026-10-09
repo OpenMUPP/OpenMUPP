@@ -240,18 +240,29 @@ TEST_CASE("A suspend disconnects the target") {
    CHECK(bench.swd.finis == 1);
 }
 
-TEST_CASE("Four queued packets do not lock the OUT endpoint") {
+TEST_CASE("Four queued packets run at once and each one gets its response") {
    DapBench bench;
    bench.enumerate();
+   auto &controller = bench.controller();
 
-   for(int i = 0; i < 4; ++i) {
-      REQUIRE(bench.write({ 0x7E, 0x01, 0x00, 0xFE }));
+   for(int i = 0; i < 3; ++i) {
+      REQUIRE(bench.write({ 0x7E, 0x01, 0x09, static_cast<uint8_t>(i + 1), 0x00 }));
    }
-   CHECK(bench.controller().isArmed(dapOut));
-   // The queue is gone: only the new command answers.
+   CHECK(bench.platform.delays.empty());
+   // The fourth queued packet takes the last slot and runs the queue.
+   REQUIRE(bench.write({ 0x7E, 0x01, 0x09, 0x04, 0x00 }));
+   CHECK(bench.platform.delays == std::vector<uint32_t>{ 1, 2, 3, 4 });
+   CHECK_FALSE(controller.isArmed(dapOut));
+
+   CHECK(bench.read() == Bytes{ 0x7F, 0x01, 0x09, 0x00 });
+   CHECK(controller.isArmed(dapOut));
    REQUIRE(bench.write({ 0x00, 0xFF }));
+   for(int i = 0; i < 3; ++i) {
+      CHECK(bench.read() == Bytes{ 0x7F, 0x01, 0x09, 0x00 });
+   }
    CHECK(bench.read() == Bytes{ 0x00, 0x02, 0x40, 0x00 });
    CHECK_FALSE(bench.read().has_value());
+   CHECK(controller.isArmed(dapOut));
 }
 
 TEST_CASE("A suspend and resume keep the responses in order") {

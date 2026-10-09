@@ -876,20 +876,50 @@ TEST_CASE("DAP_QueueCommands runs the packets back to back") {
    CHECK_FALSE(b.dap.hasResponse());
 }
 
-TEST_CASE("DAP_QueueCommands: a packet needs a free slot") {
+TEST_CASE("DAP_QueueCommands: a queued packet in the last free slot runs the queue") {
    Bench b;
-   for(unsigned i = 0; i < Processor::packetCount; ++i) {
-      CHECK(b.dap.canSubmit());
-      b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x01, 0x00 });
+   for(unsigned i = 0; i < Processor::packetCount - 1; ++i) {
+      b.dap.submit(V{ 0x7E, 0x01, 0x09, static_cast<uint8_t>(i + 1), 0x00 });
    }
-   CHECK_FALSE(b.dap.canSubmit());
-   // A packet that is not accepted has no effect.
-   b.dap.submit(V{ 0x09, 0x01, 0x00 });
-   CHECK(b.platform.delays.empty());
-   b.dap.hostGone();
    CHECK(b.dap.canSubmit());
+   CHECK(b.platform.delays.empty());
+   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
+   CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2, 3, 4 });
+   CHECK_FALSE(b.dap.canSubmit());
+
+   // A packet that is not accepted has no effect.
+   b.dap.submit(V{ 0x09, 0x07, 0x00 });
+   CHECK(b.platform.delays.size() == 4);
+
+   // Each queued packet has its response.
+   for(unsigned i = 0; i < Processor::packetCount; ++i) {
+      CHECK(b.pop() == V{ 0x7F, 0x01, 0x09, 0x00 });
+   }
+   CHECK_FALSE(b.dap.hasResponse());
+   CHECK(b.dap.canSubmit());
+}
+
+TEST_CASE("DAP_QueueCommands: a queued packet in the last slot after responses runs the queue") {
+   Bench b;
    b.dap.submit(V{ 0x09, 0x01, 0x00 });
-   CHECK(b.platform.delays == std::vector<uint32_t>{ 1 });
+   b.dap.submit(V{ 0x09, 0x02, 0x00 });
+   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x03, 0x00 });
+   CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2 });
+   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
+   CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2, 3, 4 });
+   CHECK(b.pop() == V{ 0x09, 0x00 });
+   CHECK(b.pop() == V{ 0x09, 0x00 });
+   CHECK(b.pop() == V{ 0x7F, 0x01, 0x09, 0x00 });
+   CHECK(b.pop() == V{ 0x7F, 0x01, 0x09, 0x00 });
+   CHECK_FALSE(b.dap.hasResponse());
+}
+
+TEST_CASE("DAP_QueueCommands: hostGone() drops the queue") {
+   Bench b;
+   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x01, 0x00 });
+   b.dap.hostGone();
+   b.dap.submit(V{ 0x09, 0x02, 0x00 });
+   CHECK(b.platform.delays == std::vector<uint32_t>{ 2 });
    CHECK(b.pop() == V{ 0x09, 0x00 });
    CHECK_FALSE(b.dap.hasResponse());
 }

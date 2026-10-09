@@ -19,8 +19,8 @@
 // only releases the target (Processor::release()): the USB transfer state
 // stays, so the processor keeps its responses.
 //
-// A host that fills all slots with DAP_QueueCommands packets breaks the
-// protocol: no response can free a slot. The function drops the queue.
+// A DAP_QueueCommands packet in the last free slot runs the queue in the
+// processor, so queued packets alone never hold the OUT endpoint.
 
 #include <cstdint>
 #include <usb/VendorBulkFunction.h>

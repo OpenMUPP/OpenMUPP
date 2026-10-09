@@ -78,7 +78,8 @@ When all 4 slots are in use, the OUT endpoint NAKs until the host reads a respon
 `DAP_Info` reports the packet size 64 and the packet count 4.
 When a bus reset or `SET_CONFIGURATION 0` closes the interface, the function calls `Processor::hostGone()`.
 A suspend only releases the target pins, because the USB transfer state stays.
-A host that fills all 4 slots with `DAP_QueueCommands` packets breaks the protocol, and the function drops the queue.
+When a `DAP_QueueCommands` packet takes the last free slot, the processor runs the queue at once.
+Thus queued packets alone do not hold the OUT endpoint, and each queued packet gets its response.
 
 ## Versaloon commands
 
