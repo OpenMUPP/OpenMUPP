@@ -31,6 +31,12 @@ The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
 A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
 
+The Versaloon OUT endpoint `0x03` is double-buffered (system-stm32 `hw::UsbDevice`, "Double-buffered bulk OUT").
+The hardware receives the next packet of a command while the main loop handles the last packet.
+Thus the host gets fewer NAKs, and a large command arrives faster.
+The 512-byte packet memory of the STM32F1 has no room for a double-buffered IN endpoint too.
+The buffer descriptor table covers only the endpoint numbers 0 to 4, so it takes 40 bytes instead of 64 bytes.
+
 Interface 0 carries the Versaloon command protocol (see [Versaloon commands](#versaloon-commands)).
 
 The serial port is the [UART bridge](uart-bridge.md).
@@ -73,7 +79,9 @@ The reply is one IN transfer.
 When the size of the reply is a multiple of 64 bytes, a zero-length packet (ZLP) follows, so that the host read ends.
 A reply of 4096 bytes has no ZLP.
 The host reads 4096 bytes, so its read ends without a ZLP, and the ZLP would end the next read.
-While the reply is on its way, the OUT endpoint NAKs. Thus the next command waits.
+While the reply is on its way, the firmware does not take the next command.
+The OUT endpoint can receive one packet of it into its second buffer, and then NAKs.
+Thus the next command waits.
 
 The firmware replies with a ZLP to a wrong command.
 The host then sees a reply with the wrong size immediately, without a timeout.

@@ -17,6 +17,11 @@ namespace {
 
 static_assert(art::usb::CdcAcmFunctionBase::kDataPacketSize == cdcDataPacketSize);
 static_assert(hw::Uid::SizeBytes == uidBytes);
+// The packet memory: the buffer descriptor table, EP0 (64 bytes each way),
+// two buffers for the double-buffered Versaloon OUT endpoint, and one for
+// each other endpoint.
+static_assert(endpointCount * 8 + 2 * 64 + 2 * versaloonPacketSize + versaloonPacketSize + cdcNotificationPacketSize + 2 * cdcDataPacketSize <=
+              hw::UsbDevice::PacketMemorySize);
 
 constexpr art::usb::CdcAcmEndpoints serialPortEndpoints{
    .notification = cdcNotificationEndpoint,
@@ -52,6 +57,7 @@ UsbStack::UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler 
    , device_(controller_, descriptors)
    , versaloon_(deviceInfo, bootloader, &usbToXxx)
    , serialPort_(cdcControlInterface, serialPortEndpoints) {
+   controller_.setDoubleBufferedOut(versaloonOutEndpoint);
    // Fails only for an interface range that does not fit the device: a
    // static configuration error, which the host tests catch.
    static_cast<void>(device_.addFunction(versaloon_));
