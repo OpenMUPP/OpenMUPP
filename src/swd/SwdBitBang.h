@@ -56,14 +56,31 @@
 // data phase. A write without ACK (multidrop TARGETSEL) also needs it: the
 // target samples the data.
 //
-// After each transfer, the host drives SWDIO low for idleCycles cycles, as
-// the original firmware does. OpenOCD does not send idle cycles to this
-// adapter, and the target needs idle cycles to complete the last write.
+// After each transfer, the host drives SWDIO low for defaultIdleCycles
+// cycles, as the original firmware does. OpenOCD does not send idle cycles
+// to this adapter, and the target needs idle cycles to complete the last
+// write.
 //
 // A WAIT repeats the transfer up to `retries` times. With ORUNDETECT, a
 // WAIT sets STICKYORUN, and the DP replies FAULT until ABORT.ORUNERRCLR
 // clears it. Thus, before each retry, the host writes ABORT with
 // ORUNERRCLR, as the OpenOCD bitbang driver does.
+//
+// CMSIS-DAP has other transfer rules. setRules() changes them (see
+// TransferRules):
+//
+// - The idle cycles come from DAP_TransferConfigure (0-255).
+// - A WAIT repeats the transfer without the ABORT write. The debugger
+//   clears STICKYORUN itself.
+// - The data phase after WAIT and FAULT is optional (DAP_SWD_Configure).
+//   Without it, the host clocks one turnaround after the ACK and then
+//   drives SWDIO. An ACK that is not OK, WAIT or FAULT always gets the data
+//   phase.
+// - The turnaround is 1-4 cycles at each turnaround, as configure() takes
+//   it.
+//
+// The SWD block of the Versaloon protocol does not call setRules(). Its
+// transfers do not change.
 //
 // With a protocol::Background, the engine calls Background::service()
 // before each transfer and each retry, and between the bytes of a
@@ -119,8 +136,18 @@ inline constexpr uint32_t untimedPadNops = 6;
 inline constexpr uint8_t abortRequest = 0x81;
 inline constexpr uint32_t orunErrClr = 0x10;
 
-// SWDIO low cycles after each transfer
-inline constexpr uint32_t idleCycles = 8;
+// SWDIO low cycles after each transfer (Versaloon)
+inline constexpr uint8_t defaultIdleCycles = 8;
+
+// The transfer rules. The defaults are the Versaloon rules.
+struct TransferRules {
+   // SWDIO low cycles after each transfer
+   uint8_t idleCycles{ defaultIdleCycles };
+   // Write ABORT with ORUNERRCLR before each retry after a WAIT
+   bool abortOnWait{ true };
+   // Run the data phase also after WAIT and FAULT
+   bool dataPhase{ true };
+};
 
 // Core cycles of a half SWCLK period for an OpenOCD delay value, rounded
 // up: SWCLK is never faster than OpenOCD expects.
@@ -159,6 +186,15 @@ class BitBangPort final : public protocol::SwdPort {
       halfCycles_ = halfPeriodCycles(pins_.coreHz(), delay);
       waitCycles_ = halfCycles_ > loopOverheadCycles ? halfCycles_ - loopOverheadCycles : 0;
       timed_ = delay != 0;
+   }
+
+   // CMSIS-DAP: the transfer rules. They stay until the next call.
+   void setRules(const TransferRules &rules) {
+      rules_ = rules;
+   }
+
+   [[nodiscard]] const TransferRules &rules() const {
+      return rules_;
    }
 
    void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) override {
@@ -235,9 +271,11 @@ class BitBangPort final : public protocol::SwdPort {
          if(attempt >= retries_) {
             return static_cast<uint8_t>(ack | retryOutFlag);
          }
-         // An ABORT write gets OK also with STICKYORUN set.
-         uint32_t clear = orunErrClr;
-         static_cast<void>(transferOnce<Timed>(abortRequest, clear));
+         if(rules_.abortOnWait) {
+            // An ABORT write gets OK also with STICKYORUN set.
+            uint32_t clear = orunErrClr;
+            static_cast<void>(transferOnce<Timed>(abortRequest, clear));
+         }
       }
    }
 
@@ -256,7 +294,10 @@ class BitBangPort final : public protocol::SwdPort {
       clocks<Timed>(turnaround_);
       const auto ack = static_cast<uint8_t>(readBits<Timed>(3));
       uint8_t result = ack;
-      if((request & readRequest) != 0) {
+      if(!rules_.dataPhase && (ack == ackWait || ack == ackFault)) {
+         // No data phase: the turnaround back to the host
+         clocks<Timed>(turnaround_);
+      } else if((request & readRequest) != 0) {
          const uint32_t value = readBits<Timed>(32);
          const bool parityBit = readBit<Timed>();
          clocks<Timed>(turnaround_);
@@ -279,7 +320,7 @@ class BitBangPort final : public protocol::SwdPort {
          result |= ackErrorFlag;
       }
       pins_.swdioDrive(false);
-      writeBits<Timed>(0, idleCycles);
+      writeBits<Timed>(0, rules_.idleCycles);
       return result;
    }
 
@@ -346,6 +387,7 @@ class BitBangPort final : public protocol::SwdPort {
    // INIT of the SWD block sets the configuration.
    uint8_t turnaround_{ defaultTurnaround };
    uint16_t retries_{ defaultRetries };
+   TransferRules rules_;
    uint32_t halfCycles_{ 0 };
    // halfCycles_ without the loop code
    uint32_t waitCycles_{ 0 };
