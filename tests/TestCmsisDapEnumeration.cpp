@@ -239,3 +239,37 @@ TEST_CASE("A suspend disconnects the target") {
    CHECK_FALSE(bench.processor.connected());
    CHECK(bench.swd.finis == 1);
 }
+
+TEST_CASE("Four queued packets do not lock the OUT endpoint") {
+   DapBench bench;
+   bench.enumerate();
+
+   for(int i = 0; i < 4; ++i) {
+      REQUIRE(bench.write({ 0x7E, 0x01, 0x00, 0xFE }));
+   }
+   CHECK(bench.controller().isArmed(dapOut));
+   // The queue is gone: only the new command answers.
+   REQUIRE(bench.write({ 0x00, 0xFF }));
+   CHECK(bench.read() == Bytes{ 0x00, 0x02, 0x40, 0x00 });
+   CHECK_FALSE(bench.read().has_value());
+}
+
+TEST_CASE("A suspend and resume keep the responses in order") {
+   DapBench bench;
+   bench.enumerate();
+
+   REQUIRE(bench.write({ 0x00, 0xFE }));
+   REQUIRE(bench.write({ 0x00, 0xFF }));
+   REQUIRE(bench.write({ 0x09, 0x05, 0x00 }));
+   REQUIRE(bench.write({ 0x01, 0x00, 0x01 }));
+   CHECK_FALSE(bench.controller().isArmed(dapOut));
+
+   bench.controller().busSuspend();
+   bench.controller().busResume();
+   CHECK(bench.read() == Bytes{ 0x00, 0x01, 0x04 });
+   CHECK(bench.controller().isArmed(dapOut));
+   CHECK(bench.read() == Bytes{ 0x00, 0x02, 0x40, 0x00 });
+   CHECK(bench.read() == Bytes{ 0x09, 0x00 });
+   CHECK(bench.read() == Bytes{ 0x01, 0x00 });
+   CHECK_FALSE(bench.read().has_value());
+}

@@ -15,6 +15,12 @@ bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {
       processor_.submit(packet);
    }
    sendResponse();
+   if(!processor_.canSubmit() && !processor_.hasResponse()) {
+      // Only queued packets fill the slots, so no response will free one.
+      // The host must end a queue with a command that runs it. Drop the
+      // queue instead of holding the OUT endpoint for good.
+      processor_.discardQueue();
+   }
    return processor_.canSubmit();
 }
 
@@ -31,7 +37,10 @@ void CmsisDapFunction::dataPathClosed() {
 }
 
 void CmsisDapFunction::suspended() {
-   processor_.hostGone();
+   // The USB function keeps its IN transfer and OUT hold over a suspend, so
+   // the processor keeps its queue and responses. Only the target is
+   // released.
+   processor_.release();
 }
 
 void CmsisDapFunction::sendResponse() {

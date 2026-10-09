@@ -14,8 +14,8 @@
 // default.
 //
 // Hardware-independent: the host unit tests check the descriptors.
-// usb/UsbStack.cpp serves them, with the serial number string from the
-// chip UID.
+// The USB stack serves them, with the serial number string from the chip
+// UID, in a CMSIS-DAP image.
 
 #include "usb/UsbDescriptors.h"
 

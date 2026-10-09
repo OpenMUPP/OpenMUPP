@@ -13,9 +13,14 @@
 // response sent yet. When no slot is free, the OUT endpoint NAKs until a
 // response is sent. DAP_Info reports the same packet count to the host.
 //
-// When the host closes the interface (bus reset, deconfigure or suspend),
-// the function calls Processor::hostGone(): it disconnects the target,
-// releases the pins, and drops the queued packets and the unsent responses.
+// When the host closes the interface (bus reset or deconfigure), the
+// function calls Processor::hostGone(): it disconnects the target, releases
+// the pins, and drops the queued packets and the unsent responses. A suspend
+// only releases the target (Processor::release()): the USB transfer state
+// stays, so the processor keeps its responses.
+//
+// A host that fills all slots with DAP_QueueCommands packets breaks the
+// protocol: no response can free a slot. The function drops the queue.
 
 #include <cstdint>
 #include <usb/VendorBulkFunction.h>

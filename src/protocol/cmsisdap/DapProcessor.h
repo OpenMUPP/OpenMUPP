@@ -174,6 +174,18 @@ class Processor {
    // The host went away: like DAP_Disconnect, and the queue is empty.
    void hostGone();
 
+   // Like DAP_Disconnect: releases the pins. The queued packets and the
+   // responses stay. For a suspend, where the transport keeps its state.
+   void release() {
+      disconnect();
+   }
+
+   // Drops the queued packets. For a host that queues as many packets as
+   // there are slots: no response can free a slot then.
+   void discardQueue() {
+      queued_ = 0;
+   }
+
    [[nodiscard]] bool connected() const {
       return connected_;
    }
