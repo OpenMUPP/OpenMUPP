@@ -51,10 +51,13 @@ namespace jtag {
 inline constexpr uint8_t spiMinShift = 2;
 inline constexpr uint8_t spiMaxShift = 8;
 
-// The fastest TCK of the bit-bang loop at 72 MHz. An estimate: measure it
-// on hardware and correct it. Too high a value selects bit-bang at a speed
-// where the SPI is faster.
-inline constexpr uint32_t bitBangMaxKHz = 3000;
+// The TCK rate that the bit-bang loop surely reaches at 72 MHz. Not the
+// fastest rate of the loop: that rate is not measured. 1000 kHz gave the same
+// OpenOCD flash times as the original firmware (tools/flash_benchmark.py).
+// Too high a value selects bit-bang at a speed where the SPI is faster. Too
+// low a value selects the SPI, which is a little slower than bit-bang could
+// be. Measure TCK at a request of 4000 kHz to raise it.
+inline constexpr uint32_t bitBangMaxKHz = 1000;
 
 // The SPI divider shift for a request of kHz, or 0 for bit-bang: the SPI
 // rate must not be above the request and must be at least the bit-bang

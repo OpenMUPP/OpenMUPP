@@ -68,13 +68,14 @@ TEST_CASE("JTAG fast path: the faster engine wins, TCK is never faster than the 
    CHECK(spiShiftFor(spiClockHz, 17'999) == 2);
    CHECK(spiShiftFor(spiClockHz, 9000) == 2);
    CHECK(spiShiftFor(spiClockHz, 4500) == 3);
-   // Bit-bang gives 3000 kHz (bitBangMaxKHz), the SPI only 2250 kHz.
-   CHECK(spiShiftFor(spiClockHz, 4499) == 0);
-   CHECK(spiShiftFor(spiClockHz, 3000) == 0);
-   // Equal rates: the SPI wins.
+   // Bit-bang is limited to 1000 kHz (bitBangMaxKHz): the SPI wins above.
+   CHECK(spiShiftFor(spiClockHz, 4499) == 4);
+   CHECK(spiShiftFor(spiClockHz, 3000) == 4);
    CHECK(spiShiftFor(spiClockHz, 2250) == 4);
+   CHECK(spiShiftFor(spiClockHz, 2249) == 5);
+   CHECK(spiShiftFor(spiClockHz, 1125) == 5);
    // Bit-bang gives the request exactly, the SPI less.
-   CHECK(spiShiftFor(spiClockHz, 2249) == 0);
+   CHECK(spiShiftFor(spiClockHz, 1124) == 0);
    CHECK(spiShiftFor(spiClockHz, 1000) == 0);
    CHECK(spiShiftFor(spiClockHz, 100) == 0);
    // Adaptive clocking
