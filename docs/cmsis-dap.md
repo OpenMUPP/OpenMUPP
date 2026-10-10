@@ -41,7 +41,7 @@ The runtime selection is a later work item.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
 - Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
-- The hardware test passed for OpenOCD, pyOCD and probe-rs. The UART bridge test during a flash is open (see [Hardware test](#hardware-test)).
+- The hardware test passed for OpenOCD, pyOCD and probe-rs (see [Hardware test](#hardware-test)).
 
 ## Use the probe
 
@@ -162,7 +162,7 @@ Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4
 | Read back (`cmp`) | pass | pass | not run |
 | Halt, step, reset | pass | pass | pass (halt and step through GDB) |
 | Memory write and read | pass | not run | read only (`probe-rs read`) |
-| UART bridge during flash | not run | not run | not run |
+| UART bridge during flash (256 KiB) | pass | pass | pass |
 
 Enumeration: the product string is `Versaloon CMSIS-DAP`.
 Interface 0 is a vendor class interface with the string `Versaloon CMSIS-DAP v2`.
@@ -192,8 +192,9 @@ Findings:
 
 - Write time does not improve above 1 MHz. The write time is flash programming time, not SWD time.
 - Read time is the same at 2000 kHz and 4000 kHz. The cause is not known. The engine can round the clock down, or the USB path is the limit. A logic analyzer on SWCLK can show which.
+- After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause was in the wiring, not in the firmware. The exact wire is not known.
 - `probe-rs info` stops after it finds the DPv1 MemoryAP and the ROM table, with the message "does not support SWD multidrop". This is normal for an STM32F1 target.
 - `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is a probe-rs behavior, not a probe finding.
 - In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
-- The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a flash is open.
+- The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a 256 KiB flash with each tool also passes (60 of 60 runs at 115200 baud, 8N1, for each tool).
 
