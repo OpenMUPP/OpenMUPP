@@ -3,6 +3,7 @@
 Firmware for the Versaloon Mini and OtherUse debug adapters (STM32F103C8/CB, 12 MHz crystal, 72 MHz).
 The firmware is compatible with the original Versaloon USB protocol, so unmodified OpenOCD can use it.
 It also has a USB-CDC (Communication Device Class) serial port, which is bridged to a UART.
+A build option selects a second USB personality, CMSIS-DAP v2, for OpenOCD, pyOCD and probe-rs (see [docs/cmsis-dap.md](docs/cmsis-dap.md)).
 
 ## Status
 
@@ -86,6 +87,7 @@ The CMake options are:
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
 | `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. The firmware then refuses `VERSALOON_FW_UPDATE`. The ST-Link/V2 has no bootloader: its firmware always refuses `VERSALOON_FW_UPDATE`. |
 | `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse, and only with `VSL_BOOTLOADER=ON`. |
+| `VSL_PROTOCOL` | `versaloon` | USB personality of the image: `versaloon` or `cmsis-dap`. A `cmsis-dap` image has the CMSIS-DAP v2 interface, `0403:9b3c`, instead of the Versaloon interface. The serial port and the UART bridge are in both. See [docs/cmsis-dap.md](docs/cmsis-dap.md). |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [docs/boards.md](docs/boards.md#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [docs/debug-log.md](docs/debug-log.md)). Not allowed in a `Release` build. |
@@ -127,6 +129,10 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
 - **Serial port:** the dongle has a serial port (`/dev/ttyACM*` on Linux, a COM port on Windows).
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini and the OtherUse.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
+
+A firmware image built with `-DVSL_PROTOCOL=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `Versaloon CMSIS-DAP`.
+The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
+The serial port works as in the default image.
 
 The state LED shows a short flash one time each second when the firmware runs.
 See [docs/boards.md](docs/boards.md#start-up-and-leds) for the meaning of the LEDs.
