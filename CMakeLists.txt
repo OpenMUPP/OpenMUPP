@@ -78,6 +78,13 @@ option(VSL_BOOTLOADER "Link the application behind versaloon-bootloader at 0x080
 # for the board. Only for boards that the bootloader supports, and only with VSL_BOOTLOADER.
 option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 
+# USB personality of the firmware image. One image has one personality.
+#   versaloon  the Versaloon interface of OpenOCD (default)
+#   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
+set(VSL_PROTOCOLS versaloon cmsis-dap)
+set(VSL_PROTOCOL "versaloon" CACHE STRING "USB personality: ${VSL_PROTOCOLS}")
+set_property(CACHE VSL_PROTOCOL PROPERTY STRINGS ${VSL_PROTOCOLS})
+
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
 # native (test) build leaves the variables unset.
@@ -127,6 +134,10 @@ if (CMAKE_CROSSCOMPILING)
         message(FATAL_ERROR "VSL_DEBUG_SWD is for debug builds: a Release build has all LEDs. Set -DVSL_DEBUG_SWD=OFF.")
     endif ()
 
+    if (NOT VSL_PROTOCOL IN_LIST VSL_PROTOCOLS)
+        message(FATAL_ERROR "Unknown VSL_PROTOCOL '${VSL_PROTOCOL}'. Supported protocols: ${VSL_PROTOCOLS}")
+    endif ()
+
     # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
     set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER})
@@ -135,6 +146,27 @@ if (CMAKE_CROSSCOMPILING)
     if (VSL_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
         list(APPEND PROJECT_DEFINES VSL_HAS_BOOTLOADER_ENTRY)
     endif ()
+    # An image has the sources of its personality only: the CMSIS-DAP image
+    # does not link the Versaloon command buffers (usb/VersaloonFunction.h).
+    set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
+    if (VSL_PROTOCOL STREQUAL "cmsis-dap")
+        list(APPEND PROJECT_DEFINES VSL_PROTOCOL_CMSIS_DAP)
+        set(VSL_IMAGE_TAG "-cmsis-dap")
+        set(_vsl_other_protocol_files
+                "src/protocol/CommandAssembler\\.cpp" "src/protocol/CommandProcessor\\.cpp"
+                "src/protocol/UsbToAll\\.cpp" "src/protocol/UsbToXxx\\.cpp"
+                "src/protocol/GpioBlock\\.cpp" "src/protocol/JtagRawBlock\\.cpp"
+                "src/protocol/PowerBlock\\.cpp" "src/protocol/SwdBlock\\.cpp"
+                "src/usb/VersaloonFunction\\.cpp" "src/board/BoardJtag\\.cpp"
+                "src/board/BoardJtagFast\\.cpp" "src/board/BoardPower\\.cpp"
+                "src/boot/Bootloader\\.cpp")
+    else ()
+        set(VSL_IMAGE_TAG "")
+        set(_vsl_other_protocol_files "src/protocol/cmsisdap/DapProcessor\\.cpp" "src/usb/CmsisDapFunction\\.cpp")
+    endif ()
+    foreach (_file ${_vsl_other_protocol_files})
+        list(FILTER VSL_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
+    endforeach ()
     if (VSL_DEBUG_CDC)
         list(APPEND PROJECT_DEFINES VSL_DEBUG_CDC)
     else ()
@@ -178,7 +210,7 @@ if (CMAKE_CROSSCOMPILING)
     #----------------------------------------------------------------------------------------------------#
     # Main program
     #----------------------------------------------------------------------------------------------------#
-    add_executable(versaloon-next-gen.elf ${PROJECT_SOURCES})
+    add_executable(versaloon-next-gen.elf ${VSL_FIRMWARE_SOURCES})
     # The JTAG and SWD engines are instantiated in these files (see
     # board/BoardJtag.h and board/BoardSwd.h). They use -O2 instead of
     # -Os. It comes after the -Os of COMMON_OPTIONS, so it wins.
@@ -198,8 +230,8 @@ if (CMAKE_CROSSCOMPILING)
     ADD_DUMP_TARGET(versaloon-next-gen.elf)
     PRINT_SIZE_OF_TARGETS(versaloon-next-gen.elf)
 
-    set(HEX_FILE versaloon-next-gen-${BOARD}-${VSL_LINK_VARIANT}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION}.hex)
-    set(BIN_FILE versaloon-next-gen-${BOARD}-${VSL_LINK_VARIANT}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION}.bin)
+    set(HEX_FILE versaloon-next-gen-${BOARD}${VSL_IMAGE_TAG}-${VSL_LINK_VARIANT}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION}.hex)
+    set(BIN_FILE versaloon-next-gen-${BOARD}${VSL_IMAGE_TAG}-${VSL_LINK_VARIANT}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION}.bin)
 
     add_custom_command(TARGET versaloon-next-gen.elf POST_BUILD
             COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:versaloon-next-gen.elf> versaloon-next-gen.hex
