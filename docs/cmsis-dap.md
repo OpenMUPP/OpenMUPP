@@ -172,17 +172,21 @@ OpenOCD opens the probe with VID:PID 0x0403:0x9b3c.
 
 Flash speed (64 KiB, median of 3, SWD, target at 64 MHz):
 
-| SWCLK request | Write | Verify | Read |
-|---|---|---|---|
-| 100 kHz | 9.75 s | 0.22 s | 8.27 s |
-| 250 kHz | 4.50 s | 0.16 s | 3.40 s |
-| 500 kHz | 2.78 s | 0.14 s | 1.77 s |
-| 1000 kHz | 2.58 s | 0.13 s | 0.95 s |
-| 2000 kHz | 2.53 s | 0.13 s | 0.56 s |
-| 4000 kHz | 2.53 s | 0.13 s | 0.56 s |
+| SWCLK request | Write | Verify | Read | Versaloon personality (write / read) |
+|---|---|---|---|---|
+| 100 kHz | 9.75 s | 0.22 s | 8.27 s | - |
+| 250 kHz | 4.50 s | 0.16 s | 3.40 s | 5.20 s / 4.26 s |
+| 500 kHz | 2.78 s | 0.14 s | 1.77 s | - |
+| 1000 kHz | 2.58 s | 0.13 s | 0.95 s | - |
+| 2000 kHz | 2.53 s | 0.13 s | 0.56 s | 2.54 s / 0.81 s |
+| 4000 kHz | 2.53 s | 0.13 s | 0.56 s | - |
 
 All runs passed (0 failures in 3 runs for each rate).
-The comparison with the Versaloon personality is open.
+The probe is an OtherUse board.
+The Versaloon personality runs the same firmware version with the default image.
+It uses the `vsllink` OpenOCD driver, which has fixed SWD steps, so only 250 kHz and 2000 kHz can be compared.
+The CMSIS-DAP personality writes as fast as the Versaloon personality (2.53 s and 2.54 s at 2000 kHz).
+It reads faster by 20% at 250 kHz and by 31% at 2000 kHz.
 
 Findings:
 
