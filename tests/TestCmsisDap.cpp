@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -154,6 +155,12 @@ class FakePlatform final : public cmsisdap::Platform {
    std::vector<std::pair<cmsisdap::Led, bool>> leds;
 };
 
+// Stores a request and runs the stored requests, as the main loop does.
+void send(Processor &dap, const Bytes &request) {
+   dap.submit(request);
+   dap.run();
+}
+
 cmsisdap::DeviceInfo deviceInfo() {
    cmsisdap::DeviceInfo info;
    info.vendor = "Vendor";
@@ -178,7 +185,7 @@ struct Bench {
 
    Bytes run(const Bytes &request) {
       REQUIRE(dap.canSubmit());
-      dap.submit(request);
+      send(dap, request);
       REQUIRE(dap.hasResponse());
       return pop();
    }
@@ -224,6 +231,84 @@ struct Bench {
 
 using V = std::vector<uint8_t>;
 
+// The SWD engine of a Bench, with a hook after each transfer: the
+// background service of the engine runs between transfers
+// (protocol/Background.h), and the host can send a packet then.
+class HookedSwd final : public cmsisdap::DapSwd {
+   public:
+   explicit HookedSwd(cmsisdap::DapSwd &swd)
+      : swd_(swd) {
+   }
+
+   void init() override {
+      swd_.init();
+   }
+   void fini() override {
+      swd_.fini();
+   }
+   void setClockHz(uint32_t hz) override {
+      swd_.setClockHz(hz);
+   }
+   void apply(const cmsisdap::SwdSettings &settings) override {
+      swd_.apply(settings);
+   }
+   void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) override {
+      swd_.sequenceOut(bitCount, data);
+   }
+   void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) override {
+      swd_.sequenceIn(bitCount, data);
+   }
+   uint8_t transfer(uint8_t request, uint32_t &data) override {
+      const uint8_t value = swd_.transfer(request, data);
+      ++transfers;
+      if(onTransfer) {
+         onTransfer();
+      }
+      return value;
+   }
+
+   int transfers{ 0 };
+   std::function<void()> onTransfer;
+
+   private:
+   cmsisdap::DapSwd &swd_;
+};
+
+// A processor on the HookedSwd of a Bench, connected to SWD.
+struct AbortBench {
+   AbortBench()
+      : swd(b.swd)
+      , dap(swd, b.gpio, b.platform, b.info) {
+      send(dap, V{ 0x02, 0x01 });
+      CHECK(pop() == V{ 0x02, 0x01 });
+   }
+
+   Bytes pop() {
+      REQUIRE(dap.hasResponse());
+      const auto response = dap.response();
+      Bytes result(response.begin(), response.end());
+      dap.popResponse();
+      return result;
+   }
+
+   // The host sends a packet after transfer number `at` of the engine.
+   void sendAt(int at, const Bytes &request) {
+      later.push_back({ at, request });
+      swd.onTransfer = [this] {
+         for(const auto &[at, request] : later) {
+            if(swd.transfers == at) {
+               dap.submit(request);
+            }
+         }
+      };
+   }
+
+   Bench b;
+   HookedSwd swd;
+   Processor dap;
+   std::vector<std::pair<int, Bytes>> later;
+};
+
 } // namespace
 
 TEST_CASE("DAP_Info: strings, capabilities and packet size") {
@@ -245,7 +330,7 @@ TEST_CASE("DAP_Info: information that is not available has length 0") {
    }
    b.info.vendor = nullptr;
    Processor empty(b.swd, b.gpio, b.platform, b.info);
-   empty.submit(V{ 0x00, 0x01 });
+   send(empty, V{ 0x00, 0x01 });
    CHECK(Bytes(empty.response().begin(), empty.response().end()) == V{ 0x00, 0x00 });
 }
 
@@ -255,12 +340,12 @@ TEST_CASE("DAP_Info: a long string is cut, and a second capability byte is sent"
    b.info.product = longText.c_str();
    b.info.capabilities = 0x0191;
    Processor dap(b.swd, b.gpio, b.platform, b.info);
-   dap.submit(V{ 0x00, 0x02 });
+   send(dap, V{ 0x00, 0x02 });
    CHECK(dap.response().size() == 64);
    CHECK(dap.response()[1] == 62);
    CHECK(dap.response()[63] == 0);
    dap.popResponse();
-   dap.submit(V{ 0x00, 0xF0 });
+   send(dap, V{ 0x00, 0xF0 });
    CHECK(Bytes(dap.response().begin(), dap.response().end()) == V{ 0x00, 0x02, 0x91, 0x01 });
 }
 
@@ -817,7 +902,7 @@ TEST_CASE("DAP_TransferBlock: a write needs room for its response") {
    const std::string longText(57, 'x');
    b.info.vendor = longText.c_str();
    Processor dap(b.swd, b.gpio, b.platform, b.info);
-   dap.submit(cat({ { 0x7F, 0x02, 0x00, 0x01 }, { 0x06, 0x00, 0x01, 0x00, writeTar }, word(1) }));
+   send(dap, cat({ { 0x7F, 0x02, 0x00, 0x01 }, { 0x06, 0x00, 0x01, 0x00, writeTar }, word(1) }));
    const auto response = dap.response();
    CHECK(response.size() == 2 + 2 + 58);
    CHECK(response[1] == 1);
@@ -854,7 +939,7 @@ TEST_CASE("DAP_ExecuteCommands: a response that does not fit stops the list") {
    const std::string longText(20, 'x');
    b.info.vendor = longText.c_str();
    Processor dap(b.swd, b.gpio, b.platform, b.info);
-   dap.submit(V{ 0x7F, 0x03, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01 });
+   send(dap, V{ 0x7F, 0x03, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01 });
    const auto response = dap.response();
    CHECK(response.size() == 2 + 2 * 23);
    CHECK(response[1] == 2);
@@ -862,12 +947,12 @@ TEST_CASE("DAP_ExecuteCommands: a response that does not fit stops the list") {
 
 TEST_CASE("DAP_QueueCommands runs the packets back to back") {
    Bench b;
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x05, 0x00 });
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x06, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x05, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x06, 0x00 });
    CHECK_FALSE(b.dap.hasResponse());
    CHECK(b.platform.delays.empty());
    // The next other command runs the queue and then itself.
-   b.dap.submit(V{ 0x00, 0xFF });
+   send(b.dap, V{ 0x00, 0xFF });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 5, 6 });
    // The queued responses have the ID of DAP_ExecuteCommands.
    CHECK(b.pop() == V{ 0x7F, 0x01, 0x09, 0x00 });
@@ -879,16 +964,16 @@ TEST_CASE("DAP_QueueCommands runs the packets back to back") {
 TEST_CASE("DAP_QueueCommands: a queued packet in the last free slot runs the queue") {
    Bench b;
    for(unsigned i = 0; i < Processor::packetCount - 1; ++i) {
-      b.dap.submit(V{ 0x7E, 0x01, 0x09, static_cast<uint8_t>(i + 1), 0x00 });
+      send(b.dap, V{ 0x7E, 0x01, 0x09, static_cast<uint8_t>(i + 1), 0x00 });
    }
    CHECK(b.dap.canSubmit());
    CHECK(b.platform.delays.empty());
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2, 3, 4 });
    CHECK_FALSE(b.dap.canSubmit());
 
    // A packet that is not accepted has no effect.
-   b.dap.submit(V{ 0x09, 0x07, 0x00 });
+   send(b.dap, V{ 0x09, 0x07, 0x00 });
    CHECK(b.platform.delays.size() == 4);
 
    // Each queued packet has its response.
@@ -901,11 +986,11 @@ TEST_CASE("DAP_QueueCommands: a queued packet in the last free slot runs the que
 
 TEST_CASE("DAP_QueueCommands: a queued packet in the last slot after responses runs the queue") {
    Bench b;
-   b.dap.submit(V{ 0x09, 0x01, 0x00 });
-   b.dap.submit(V{ 0x09, 0x02, 0x00 });
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x03, 0x00 });
+   send(b.dap, V{ 0x09, 0x01, 0x00 });
+   send(b.dap, V{ 0x09, 0x02, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x03, 0x00 });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2 });
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2, 3, 4 });
    CHECK(b.pop() == V{ 0x09, 0x00 });
    CHECK(b.pop() == V{ 0x09, 0x00 });
@@ -916,9 +1001,9 @@ TEST_CASE("DAP_QueueCommands: a queued packet in the last slot after responses r
 
 TEST_CASE("DAP_QueueCommands: hostGone() drops the queue") {
    Bench b;
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x01, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x01, 0x00 });
    b.dap.hostGone();
-   b.dap.submit(V{ 0x09, 0x02, 0x00 });
+   send(b.dap, V{ 0x09, 0x02, 0x00 });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 2 });
    CHECK(b.pop() == V{ 0x09, 0x00 });
    CHECK_FALSE(b.dap.hasResponse());
@@ -927,9 +1012,9 @@ TEST_CASE("DAP_QueueCommands: hostGone() drops the queue") {
 TEST_CASE("DAP_QueueCommands: the responses make room") {
    Bench b;
    for(unsigned i = 0; i < Processor::packetCount - 1; ++i) {
-      b.dap.submit(V{ 0x7E, 0x00 });
+      send(b.dap, V{ 0x7E, 0x00 });
    }
-   b.dap.submit(V{ 0x09, 0x01, 0x00 });
+   send(b.dap, V{ 0x09, 0x01, 0x00 });
    CHECK(b.dap.hasResponse());
    CHECK_FALSE(b.dap.canSubmit());
    CHECK(b.pop() == V{ 0x7F, 0x00 });
@@ -946,9 +1031,9 @@ TEST_CASE("Unknown commands, DAP_TransferAbort and bad packets") {
    CHECK(b.run({ 0x7F, 0x02, 0x55, 0x09, 0x01, 0x00 })[0] == 0x7F);
 
    // DAP_TransferAbort has no response.
-   b.dap.submit(V{ 0x07 });
+   send(b.dap, V{ 0x07 });
    CHECK_FALSE(b.dap.hasResponse());
-   b.dap.submit(V{});
+   send(b.dap, V{});
    CHECK_FALSE(b.dap.hasResponse());
 
    // More than a packet
@@ -969,7 +1054,7 @@ TEST_CASE("hostGone disconnects") {
 
 TEST_CASE("hostGone drops the responses that were not sent") {
    Bench b;
-   b.dap.submit(V{ 0x09, 0x01, 0x00 });
+   send(b.dap, V{ 0x09, 0x01, 0x00 });
    REQUIRE(b.dap.hasResponse());
    b.dap.hostGone();
    CHECK_FALSE(b.dap.hasResponse());
@@ -1019,4 +1104,172 @@ TEST_CASE("DAP_Connect sets the configuration of the engine again") {
    b.pins.readData = 1;
    CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr })[1] == 0x01);
    b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops a running DAP_TransferBlock") {
+   AbortBench a;
+   a.b.pins.readQueue = { 0xA, 0xB, 0xC, 0xD, 0xE };
+   a.sendAt(2, { 0x07 });
+   send(a.dap, { 0x06, 0x00, 0x05, 0x00, readCtrlStat });
+   CHECK(a.pop() == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0xA), word(0xB) }));
+   CHECK(a.b.seen() == V{ readCtrlStat, readCtrlStat });
+   // The abort has no response.
+   CHECK_FALSE(a.dap.hasResponse());
+   CHECK(a.dap.canSubmit());
+
+   // The next block runs to the end.
+   a.b.pins.transfers.clear();
+   send(a.dap, { 0x06, 0x00, 0x03, 0x00, readCtrlStat });
+   CHECK(a.pop() == cat({ { 0x06, 0x03, 0x00, 0x01 }, word(0xC), word(0xD), word(0xE) }));
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops a DAP_TransferBlock of writes and checks the last write") {
+   AbortBench a;
+   a.sendAt(1, { 0x07 });
+   send(a.dap, cat({ { 0x06, 0x00, 0x03, 0x00, writeTar }, word(1), word(2), word(3) }));
+   CHECK(a.pop() == V{ 0x06, 0x01, 0x00, 0x01 });
+   CHECK(a.b.seen() == V{ writeTar, readRdbuff });
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops a DAP_Transfer, and the next command of the packet runs") {
+   AbortBench a;
+   a.b.pins.readData = 0x55;
+   a.sendAt(1, { 0x07 });
+   send(a.dap, cat({ { 0x7F, 0x02, 0x05, 0x00, 0x03, readCtrlStat, writeTar }, word(1), { readCtrlStat, 0x09, 0x04, 0x00 } }));
+   CHECK(a.pop() == cat({ { 0x7F, 0x02, 0x05, 0x01, 0x01 }, word(0x55), { 0x09, 0x00 } }));
+   CHECK(a.b.seen() == V{ readCtrlStat });
+   CHECK(a.b.platform.delays == std::vector<uint32_t>{ 4 });
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort reads the posted AP read after the stop") {
+   AbortBench a;
+   a.b.pins.readQueue = { 0x0, 0x1, 0x2, 0x3 };
+   a.sendAt(2, { 0x07 });
+   send(a.dap, { 0x05, 0x00, 0x03, readApDrw, readApDrw, readApDrw });
+   CHECK(a.pop() == cat({ { 0x05, 0x02, 0x01 }, word(0x1), word(0x2) }));
+   CHECK(a.b.seen() == V{ readApDrw, readApDrw, readRdbuff });
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops a value match") {
+   AbortBench a;
+   // No limit of the match retries in this test
+   send(a.dap, { 0x04, 0x00, 0x00, 0x00, 0xFF, 0xFF });
+   CHECK(a.pop() == V{ 0x04, 0x00 });
+   a.b.pins.readData = 0;
+   a.sendAt(5, { 0x07 });
+   send(a.dap, cat({ { 0x05, 0x00, 0x01, static_cast<uint8_t>(readCtrlStat | matchValue) }, word(1) }));
+   CHECK(a.pop() == V{ 0x05, 0x00, 0x11 });
+   CHECK(a.b.pins.transfers.size() == 5);
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops the packets before it, not the packets after it") {
+   AbortBench a;
+   // During block A: block B, the abort, block C
+   a.sendAt(1, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   a.sendAt(1, { 0x07 });
+   a.sendAt(1, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   a.b.pins.readData = 0x99;
+   send(a.dap, { 0x06, 0x00, 0x04, 0x00, readCtrlStat });
+   CHECK(a.pop() == cat({ { 0x06, 0x01, 0x00, 0x01 }, word(0x99) }));
+   // B does not reach the target.
+   CHECK(a.pop() == V{ 0x06, 0x00, 0x00, 0x00 });
+   CHECK(a.pop() == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0x99), word(0x99) }));
+   CHECK_FALSE(a.dap.hasResponse());
+   CHECK(a.b.pins.transfers.size() == 3);
+   a.b.checkIdle();
+}
+
+TEST_CASE("A packet that arrives during a command waits until the command ends") {
+   AbortBench a;
+   a.sendAt(1, { 0x09, 0x03, 0x00 });
+   send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   CHECK(a.pop()[0] == 0x06);
+   CHECK(a.pop() == V{ 0x09, 0x00 });
+   CHECK(a.b.platform.delays == std::vector<uint32_t>{ 3 });
+   CHECK(a.b.pins.transfers.size() == 2);
+}
+
+TEST_CASE("DAP_TransferAbort between commands has no response and no effect") {
+   AbortBench a;
+   send(a.dap, { 0x07 });
+   CHECK_FALSE(a.dap.hasResponse());
+   send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   CHECK(a.pop()[1] == 0x02);
+   CHECK_FALSE(a.dap.hasResponse());
+}
+
+TEST_CASE("DAP_TransferAbort stops queued packets that wait") {
+   AbortBench a;
+   send(a.dap, { 0x7E, 0x01, 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   send(a.dap, { 0x07 });
+   send(a.dap, { 0x06, 0x00, 0x01, 0x00, readCtrlStat });
+   CHECK(a.pop() == V{ 0x7F, 0x01, 0x06, 0x00, 0x00, 0x00 });
+   CHECK(a.pop()[1] == 0x01);
+   CHECK(a.b.pins.transfers.size() == 1);
+}
+
+TEST_CASE("hostGone forgets an abort") {
+   AbortBench a;
+   send(a.dap, { 0x7E, 0x01, 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   send(a.dap, { 0x07 });
+   a.dap.hostGone();
+   send(a.dap, { 0x02, 0x01 });
+   CHECK(a.pop() == V{ 0x02, 0x01 });
+   send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   CHECK(a.pop()[1] == 0x02);
+}
+
+TEST_CASE("DAP_TransferAbort stops a DAP_TransferBlock of AP reads and reads the posted read") {
+   AbortBench a;
+   a.b.pins.readQueue = { 0x0, 0x1, 0x2, 0x3, 0x4 };
+   a.sendAt(2, { 0x07 });
+   send(a.dap, { 0x06, 0x00, 0x05, 0x00, readApDrw });
+   // Each AP read on the target has its data in the response.
+   CHECK(a.pop() == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0x1), word(0x2) }));
+   CHECK(a.b.seen() == V{ readApDrw, readApDrw, readRdbuff });
+   a.b.checkIdle();
+}
+
+TEST_CASE("Responses sent during a command: the response ring wraps") {
+   AbortBench a;
+   // Move the first response to the last slot of the ring.
+   for(unsigned i = 0; i < Processor::packetCount - 1; ++i) {
+      send(a.dap, { 0x09, 0x01, 0x00 });
+      CHECK(a.pop() == V{ 0x09, 0x00 });
+   }
+   a.dap.submit(V{ 0x09, 0x02, 0x00 });
+   a.dap.submit(V{ 0x09, 0x03, 0x00 });
+   REQUIRE(a.dap.runNext());
+   REQUIRE(a.dap.runNext());
+   // The transport sends both responses while the block runs.
+   std::vector<Bytes> sent;
+   a.swd.onTransfer = [&a, &sent] {
+      while(a.dap.hasResponse()) {
+         sent.push_back(a.pop());
+      }
+   };
+   a.b.pins.readData = 0x42;
+   send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   CHECK(sent == std::vector<Bytes>{ V{ 0x09, 0x00 }, V{ 0x09, 0x00 } });
+   CHECK(a.pop() == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0x42), word(0x42) }));
+   CHECK_FALSE(a.dap.hasResponse());
+   CHECK(a.dap.canSubmit());
+}
+
+TEST_CASE("runNext() runs one packet at a time") {
+   AbortBench a;
+   a.dap.submit(V{ 0x09, 0x01, 0x00 });
+   a.dap.submit(V{ 0x09, 0x02, 0x00 });
+   REQUIRE(a.dap.runNext());
+   CHECK(a.b.platform.delays == std::vector<uint32_t>{ 1 });
+   REQUIRE(a.dap.runNext());
+   CHECK_FALSE(a.dap.runNext());
+   // A DAP_QueueCommands packet alone waits.
+   a.dap.submit(V{ 0x7E, 0x01, 0x09, 0x03, 0x00 });
+   CHECK_FALSE(a.dap.runNext());
 }

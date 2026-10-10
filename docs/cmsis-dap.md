@@ -36,7 +36,8 @@ The runtime selection is a later work item.
 
 - SWD only. `DAP_Connect` to JTAG replies "failed". The JTAG commands come with a later work item.
 - No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
-- `DAP_TransferAbort` has no effect, because no command runs while another command runs.
+- `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one transfer. It does not stop other commands, for example `DAP_Delay`.
+- `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
@@ -90,7 +91,13 @@ It uses these objects:
 ## Transport
 
 The USB function calls `submit()` for each request packet.
-It sends the response packets in order.
+`submit()` only stores the packet.
+`UsbStack::poll()` then calls `CmsisDapFunction::poll()` in the main loop.
+This calls `runNext()` for each stored packet, in order, and sends each response immediately.
+Thus the OUT endpoint stays armed while a command runs, if a slot is free.
+During a USB suspend, `CmsisDapFunction::poll()` runs no packet. The stored packets run after the resume.
+A packet that arrives during a command waits until that command ends.
+The USB function sends the response packets in order.
 The packet size is 64 bytes, and up to 4 packets are in flight.
 Call `canSubmit()` before `submit()`.
 Each packet without a response takes one of the 4 slots.
@@ -106,7 +113,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x04` | `DAP_TransferConfigure` | Idle cycles, WAIT retries, match retries. |
 | `0x05` | `DAP_Transfer` | Read, write, posted AP read, value match, match mask. |
 | `0x06` | `DAP_TransferBlock` | Read or write block. |
-| `0x07` | `DAP_TransferAbort` | No response. It has no effect yet, because nothing runs at the same time. |
+| `0x07` | `DAP_TransferAbort` | No response. It stops a running transfer command. See [Transfer abort](#transfer-abort). |
 | `0x08` | `DAP_WriteABORT` | Replies an error when no port is connected. |
 | `0x09` | `DAP_Delay` | |
 | `0x0A` | `DAP_ResetTarget` | A 10 ms pulse on SRST. A board without SRST replies that it did no reset. |
@@ -132,6 +139,31 @@ A response that does not fit in a packet gives `ID_DAP_Invalid` too.
 In both cases, the target sees no transfer from that command.
 In `DAP_ExecuteCommands`, this stops the list, and the command count is the number of commands that ran.
 
+### Transfer abort
+
+The host sends `DAP_TransferAbort` to stop a long `DAP_Transfer` or `DAP_TransferBlock`.
+The packet arrives on the same bulk OUT endpoint as the running command.
+During a command, the SWD engine calls the serial service between transfers (see [Serial port during long commands](usb-device.md#serial-port-during-long-commands)).
+The serial service also delivers the CMSIS-DAP OUT packets, so the abort reaches the processor during the command.
+
+The processor handles `DAP_TransferAbort` in `submit()`:
+
+- The abort takes no slot and has no response.
+- It applies to all packets that came before it: the packet that runs and the packets that wait.
+  A `DAP_QueueCommands` packet that waits is one of them.
+- A packet that comes after the abort runs normally.
+- When no packet runs or waits, the abort has no effect.
+  The CMSIS-DAP specification requires no response for it.
+
+`DAP_Transfer` and `DAP_TransferBlock` check the abort before each transfer.
+After an abort, the command stops and skips the rest of its request data.
+The response gives the number of transfers that the command did.
+A value match also stops, with the mismatch bit set.
+The command then ends as after the last transfer: it reads RDBUFF for a posted AP read, and to check the last write.
+The data of the posted AP read is in the response, and the count includes it.
+A transfer command of a packet that waits does no transfer and replies a count of 0.
+The other commands of the packet run, for example in `DAP_ExecuteCommands`.
+
 When the host goes away, the transport calls `hostGone()`.
 It disconnects, releases the pins, and drops the queued packets and the responses that the transport did not send.
 
@@ -146,6 +178,7 @@ Thus the order of `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigur
 
 `tests/TestCmsisDap.cpp` runs the processor on the real SWD bit-bang engine, with the mock SWD target of `tests/MockSwdPins.h`.
 The tests cover each command, WAIT retries, FAULT, parity errors, protocol errors, value match and the timeout of value match, and posted reads.
+Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.
 
 ## Hardware test
 
