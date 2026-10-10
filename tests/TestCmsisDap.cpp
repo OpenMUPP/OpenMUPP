@@ -1223,3 +1223,14 @@ TEST_CASE("hostGone forgets an abort") {
    send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
    CHECK(a.pop()[1] == 0x02);
 }
+
+TEST_CASE("DAP_TransferAbort stops a DAP_TransferBlock of AP reads and reads the posted read") {
+   AbortBench a;
+   a.b.pins.readQueue = { 0x0, 0x1, 0x2, 0x3, 0x4 };
+   a.sendAt(2, { 0x07 });
+   send(a.dap, { 0x06, 0x00, 0x05, 0x00, readApDrw });
+   // Each AP read on the target has its data in the response.
+   CHECK(a.pop() == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0x1), word(0x2) }));
+   CHECK(a.b.seen() == V{ readApDrw, readApDrw, readRdbuff });
+   a.b.checkIdle();
+}

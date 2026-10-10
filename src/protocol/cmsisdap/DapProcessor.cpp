@@ -868,6 +868,15 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
             out.u32(data);
             ++done;
          }
+         if(todo != 0 && value == ackOk && (request & requestApNotDp) != 0) {
+            // An abort stopped the block with an AP read posted. Read its
+            // data from RDBUFF, as at the end of the block.
+            value = swd_.transfer(readRdbuff, data);
+            if(value == ackOk) {
+               out.u32(data);
+               ++done;
+            }
+         }
       } else {
          while(todo != 0 && !aborted()) {
             --todo;

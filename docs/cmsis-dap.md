@@ -158,6 +158,7 @@ After an abort, the command stops and skips the rest of its request data.
 The response gives the number of transfers that the command did.
 A value match also stops, with the mismatch bit set.
 The command then ends as after the last transfer: it reads RDBUFF for a posted AP read, and to check the last write.
+The data of the posted AP read is in the response, and the count includes it.
 A transfer command of a packet that waits does no transfer and replies a count of 0.
 The other commands of the packet run, for example in `DAP_ExecuteCommands`.
 
