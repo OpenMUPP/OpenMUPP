@@ -183,7 +183,7 @@ Other tests send `DAP_TransferAbort` and other packets during a transfer command
 ## Hardware test
 
 Date: 2026-10-10.
-Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`), built as `v0.2.0-63-g10d84fa-dirty`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
+Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`). The build is `v0.2.0-63-g10d84fa-dirty`. The `-dirty` suffix is from the merge of `dev`, which was not committed at build time. The `src/` tree equals commit `75d93cd`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
 The same checks first ran on `v0.2.0-57-g59614cb` (before E6). All checks passed there too. Only the read speed differs (see below).
 Probe: OtherUse board.
 Target: STM32F103ZET6 (512 KiB flash) on SWD.
@@ -192,16 +192,16 @@ Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4
 
 | Check | OpenOCD | pyOCD | probe-rs |
 |---|---|---|---|
-| Connect, DPIDR `0x1ba01477` | pass | pass | pass |
+| Connect, DPIDR `0x1ba01477` | pass | pass | connect passes, DPIDR value not shown (see findings) |
 | Flash and verify (32 KiB) | pass | pass | pass |
 | Read back (`cmp`) | pass | pass | not run |
 | Halt, step, reset | pass | pass | pass (halt and step through GDB) |
-| Memory write and read | pass | not run | read only (`probe-rs read`) |
+| Memory write and read | pass | not run | read only (`probe-rs read`), run before E6 only |
 | UART bridge during flash (256 KiB, image verified after) | pass | pass | pass |
 
 Enumeration: the product string is `Versaloon CMSIS-DAP`.
 Interface 0 is a vendor class interface with the string `Versaloon CMSIS-DAP v2`.
-Interfaces 1 and 2 are bound to `cdc_acm` and give `/dev/ttyACM0`.
+The `cdc_acm` driver binds interfaces 1 and 2 and gives `/dev/ttyACM0`.
 The `ftdi_sio` driver does not bind to the device.
 OpenOCD opens the probe with VID:PID 0x0403:0x9b3c.
 
@@ -215,7 +215,7 @@ Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with E6):
 | 4000 kHz | 2.55 s | 0.13 s | 0.73 s | 0.56 s |
 
 All runs passed (0 failures in 3 runs for each rate).
-The runs at 100 kHz and 500 kHz were done only before E6 (write 9.75 s and 2.78 s, read 8.27 s and 1.77 s).
+Only the run before E6 includes 100 kHz and 500 kHz (write 9.75 s and 2.78 s, read 8.27 s and 1.77 s).
 
 The Versaloon personality (OtherUse board, same firmware version before E6, `vsllink` driver) gave these times:
 
@@ -238,9 +238,9 @@ Findings:
 
 - Write time does not improve above 1 MHz. The flash programming time is probably the limit. This test did not measure it.
 - The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine runs untimed from 1.85 MHz, so both requests give the same clock.
-- E6 made the read time 20% to 30% longer at 1 MHz and above (0.56 s to 0.70 s at 2000 kHz). Write time and the 250 kHz read time did not change. The change is probably the cost of the new command and response flow. The cause was not measured.
+- E6 made the read time about 20% to 25% longer at 1000 kHz and 2000 kHz (0.56 s to 0.70 s at 2000 kHz). The 4000 kHz run shows 30%, but it is noisy. Write time and the 250 kHz read time did not change. The cause is not measured. Issue #35 tracks it.
 - After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause is probably the wiring. No log proves this, and the exact wire is not known.
-- `probe-rs info` stops after it finds the DPv1 MemoryAP and the ROM table, with the message "does not support SWD multidrop". This is normal for an STM32F1 target.
+- `probe-rs info` does not print the DPIDR value. Without `--verbose`, it prints "Connecting to the chip was unsuccessful", although `download`, `verify`, `gdb` and `reset` connect. With `--verbose` (run before E6), it shows the DPv1 MemoryAP and the ROM table, and stops with "does not support SWD multidrop". This is normal for an STM32F1 target.
 - `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is how probe-rs behaves. It is not a probe finding.
 - In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
 - The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a 256 KiB flash passes with all three tools (60 of 60 runs at 115200 baud, 8N1).
