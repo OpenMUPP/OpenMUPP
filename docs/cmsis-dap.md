@@ -195,5 +195,5 @@ Findings:
 - `probe-rs info` stops after it finds the DPv1 MemoryAP and the ROM table, with the message "does not support SWD multidrop". This is normal for an STM32F1 target.
 - `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is a probe-rs behavior, not a probe finding.
 - In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
-- The UART loopback test received no bytes at 115200 baud. The PA9 to PA10 wire was probably not connected. The test must be repeated.
+- The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a flash is open.
 
