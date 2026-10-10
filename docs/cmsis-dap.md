@@ -41,7 +41,7 @@ The runtime selection is a later work item.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
 - Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
-- The hardware test passed for OpenOCD, pyOCD and probe-rs (see [Hardware test](#hardware-test)).
+- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs, with SWD only. Windows, the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test)).
 
 ## Use the probe
 
@@ -151,6 +151,7 @@ The tests cover each command, WAIT retries, FAULT, parity errors, protocol error
 
 Date: 2026-10-10.
 Firmware: `v0.2.0-57-g59614cb` (CMSIS-DAP v2 firmware version 2.1.0), `cmsis-dap` personality.
+Probe: OtherUse board.
 Target: STM32F103ZET6 (512 KiB flash) on SWD.
 Host: Linux 6.18.55.
 Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4.1), probe-rs 0.32.0.
@@ -162,7 +163,7 @@ Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4
 | Read back (`cmp`) | pass | pass | not run |
 | Halt, step, reset | pass | pass | pass (halt and step through GDB) |
 | Memory write and read | pass | not run | read only (`probe-rs read`) |
-| UART bridge during flash (256 KiB) | pass | pass | pass |
+| UART bridge during flash (256 KiB, image verified after) | pass | pass | pass |
 
 Enumeration: the product string is `Versaloon CMSIS-DAP`.
 Interface 0 is a vendor class interface with the string `Versaloon CMSIS-DAP v2`.
@@ -182,19 +183,24 @@ Flash speed (64 KiB, median of 3, SWD, target at 64 MHz):
 | 4000 kHz | 2.53 s | 0.13 s | 0.56 s | - |
 
 All runs passed (0 failures in 3 runs for each rate).
-The probe is an OtherUse board.
 The Versaloon personality runs the same firmware version with the default image.
-It uses the `vsllink` OpenOCD driver, which has fixed SWD steps, so only 250 kHz and 2000 kHz can be compared.
-The CMSIS-DAP personality writes as fast as the Versaloon personality (2.53 s and 2.54 s at 2000 kHz).
-It reads faster by 20% at 250 kHz and by 31% at 2000 kHz.
+It uses the `vsllink` OpenOCD driver, which has fixed SWD steps (235 kHz and 1.85 MHz).
+Thus the 250 kHz row compares a 250 kHz clock with a 235 kHz clock. Only the 2000 kHz row is a fair comparison, because both personalities run the untimed engine there.
+At 2000 kHz, the write time is the same (2.53 s and 2.54 s).
+The read rate is 114 KiB/s for CMSIS-DAP and 79 KiB/s for the Versaloon personality (44% more).
+At 250 kHz, the read rate is 18.8 KiB/s and 15.0 KiB/s (25% more). Part of this gain comes from the faster clock.
+
+Maximum SWD clock: 1.85 MHz (the untimed engine, `maxClockHz` in `src/swd/SwdBitBang.h`).
+All runs passed up to this clock with the wiring of this test.
+A request above 1.85 MHz gives the same clock.
 
 Findings:
 
-- Write time does not improve above 1 MHz. The write time is flash programming time, not SWD time.
-- Read time is the same at 2000 kHz and 4000 kHz. The cause is not known. The engine can round the clock down, or the USB path is the limit. A logic analyzer on SWCLK can show which.
-- After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause was in the wiring, not in the firmware. The exact wire is not known.
+- Write time does not improve above 1 MHz. The flash programming time is probably the limit. This test did not measure it.
+- The times at 2000 kHz and 4000 kHz are the same. This is expected: the engine runs untimed from 1.85 MHz, so both requests give the same clock.
+- After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause is probably the wiring. No log proves this, and the exact wire is not known.
 - `probe-rs info` stops after it finds the DPv1 MemoryAP and the ROM table, with the message "does not support SWD multidrop". This is normal for an STM32F1 target.
-- `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is a probe-rs behavior, not a probe finding.
+- `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is how probe-rs behaves. It is not a probe finding.
 - In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
-- The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a 256 KiB flash with each tool also passes (60 of 60 runs at 115200 baud, 8N1, for each tool).
+- The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a 256 KiB flash passes with all three tools (60 of 60 runs at 115200 baud, 8N1).
 
