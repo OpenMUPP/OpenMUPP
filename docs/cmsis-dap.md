@@ -41,7 +41,7 @@ The runtime selection is a later work item.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
 - Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
-- The hardware test with OpenOCD, pyOCD and probe-rs is a later work item. The host tools below follow their documentation.
+- The hardware test is complete for OpenOCD only. The pyOCD and probe-rs tests, and the UART bridge test during a flash, are open (see [Hardware test](#hardware-test)).
 
 ## Use the probe
 
@@ -146,3 +146,48 @@ Thus the order of `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigur
 
 `tests/TestCmsisDap.cpp` runs the processor on the real SWD bit-bang engine, with the mock SWD target of `tests/MockSwdPins.h`.
 The tests cover each command, WAIT retries, FAULT, parity errors, protocol errors, value match and the timeout of value match, and posted reads.
+
+## Hardware test
+
+Date: 2026-10-10.
+Firmware: `v0.2.0-57-g59614cb` (CMSIS-DAP v2 firmware version 2.1.0), `cmsis-dap` personality.
+Target: STM32F103ZET6 (512 KiB flash) on SWD.
+Host: Linux 6.18.55.
+Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66.
+pyOCD and probe-rs were not available.
+
+| Check | OpenOCD | pyOCD | probe-rs |
+|---|---|---|---|
+| Connect, DPIDR `0x1ba01477` | pass | not run | not run |
+| Flash and verify (32 KiB) | pass | not run | not run |
+| Read back (`cmp`) | pass | not run | not run |
+| Halt, step, reset | pass | not run | not run |
+| Memory write and read | pass | not run | not run |
+| UART bridge during flash | not run | not run | not run |
+
+Enumeration: the product string is `Versaloon CMSIS-DAP`.
+Interface 0 is a vendor class interface with the string `Versaloon CMSIS-DAP v2`.
+Interfaces 1 and 2 are bound to `cdc_acm` and give `/dev/ttyACM0`.
+The `ftdi_sio` driver does not bind to the device.
+OpenOCD opens the probe with VID:PID 0x0403:0x9b3c.
+
+Flash speed (64 KiB, median of 3, SWD, target at 64 MHz):
+
+| SWCLK request | Write | Verify | Read |
+|---|---|---|---|
+| 100 kHz | 9.75 s | 0.22 s | 8.27 s |
+| 250 kHz | 4.50 s | 0.16 s | 3.40 s |
+| 500 kHz | 2.78 s | 0.14 s | 1.77 s |
+| 1000 kHz | 2.58 s | 0.13 s | 0.95 s |
+| 2000 kHz | 2.53 s | 0.13 s | 0.56 s |
+| 4000 kHz | 2.53 s | 0.13 s | 0.56 s |
+
+All runs passed (0 failures in 3 runs for each rate).
+The comparison with the Versaloon personality is open.
+
+Findings:
+
+- Write time does not improve above 1 MHz. The write time is flash programming time, not SWD time.
+- Read time is the same at 2000 kHz and 4000 kHz. The cause is not known. The engine can round the clock down, or the USB path is the limit. A logic analyzer on SWCLK can show which.
+- The UART loopback test received no bytes at 115200 baud. The PA9 to PA10 wire was probably not connected. The test must be repeated.
+
