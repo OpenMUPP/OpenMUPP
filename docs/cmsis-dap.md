@@ -183,7 +183,8 @@ Other tests send `DAP_TransferAbort` and other packets during a transfer command
 ## Hardware test
 
 Date: 2026-10-10.
-Firmware: `v0.2.0-57-g59614cb` (CMSIS-DAP v2 firmware version 2.1.0), `cmsis-dap` personality.
+Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`), built as `v0.2.0-63-g10d84fa-dirty`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
+The same checks first ran on `v0.2.0-57-g59614cb` (before E6). All checks passed there too. Only the read speed differs (see below).
 Probe: OtherUse board.
 Target: STM32F103ZET6 (512 KiB flash) on SWD.
 Host: Linux 6.18.55.
@@ -204,24 +205,30 @@ Interfaces 1 and 2 are bound to `cdc_acm` and give `/dev/ttyACM0`.
 The `ftdi_sio` driver does not bind to the device.
 OpenOCD opens the probe with VID:PID 0x0403:0x9b3c.
 
-Flash speed (64 KiB, median of 3, SWD, target at 64 MHz):
+Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with E6):
 
-| SWCLK request | Write | Verify | Read | Versaloon personality (write / read) |
+| SWCLK request | Write | Verify | Read | Read before E6 |
 |---|---|---|---|---|
-| 100 kHz | 9.75 s | 0.22 s | 8.27 s | - |
-| 250 kHz | 4.50 s | 0.16 s | 3.40 s | 5.20 s / 4.26 s |
-| 500 kHz | 2.78 s | 0.14 s | 1.77 s | - |
-| 1000 kHz | 2.58 s | 0.13 s | 0.95 s | - |
-| 2000 kHz | 2.53 s | 0.13 s | 0.56 s | 2.54 s / 0.81 s |
-| 4000 kHz | 2.53 s | 0.13 s | 0.56 s | - |
+| 250 kHz | 4.51 s | 0.16 s | 3.41 s | 3.40 s |
+| 1000 kHz | 2.59 s | 0.13 s | 1.15 s | 0.95 s |
+| 2000 kHz | 2.55 s | 0.13 s | 0.70 s | 0.56 s |
+| 4000 kHz | 2.55 s | 0.13 s | 0.73 s | 0.56 s |
 
 All runs passed (0 failures in 3 runs for each rate).
-The Versaloon personality runs the same firmware version with the default image.
-It uses the `vsllink` OpenOCD driver, which has fixed SWD steps (235 kHz and 1.85 MHz).
-Thus the 250 kHz row compares a 250 kHz clock with a 235 kHz clock. Only the 2000 kHz row is a fair comparison, because both personalities run the untimed engine there.
-At 2000 kHz, the write time is the same (2.53 s and 2.54 s).
-The read rate is 114 KiB/s for CMSIS-DAP and 79 KiB/s for the Versaloon personality (44% more).
-At 250 kHz, the read rate is 18.8 KiB/s and 15.0 KiB/s (25% more). Part of this gain comes from the faster clock.
+The runs at 100 kHz and 500 kHz were done only before E6 (write 9.75 s and 2.78 s, read 8.27 s and 1.77 s).
+
+The Versaloon personality (OtherUse board, same firmware version before E6, `vsllink` driver) gave these times:
+
+| Clock | Write | Read |
+|---|---|---|
+| 235 kHz (`vsllink` step) | 5.20 s | 4.26 s |
+| 1.85 MHz (untimed) | 2.54 s | 0.81 s |
+
+The `vsllink` driver has fixed SWD steps. Thus the comparison is not exact at 250 kHz, where the clocks are 250 kHz and 235 kHz.
+At 2000 kHz, both personalities run the untimed engine.
+The write time is the same (2.55 s and 2.54 s).
+The read time with E6 is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon personality (91 and 79 KiB/s).
+Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
 
 Maximum SWD clock: 1.85 MHz (the untimed engine, `maxClockHz` in `src/swd/SwdBitBang.h`).
 All runs passed up to this clock with the wiring of this test.
@@ -230,7 +237,8 @@ A request above 1.85 MHz gives the same clock.
 Findings:
 
 - Write time does not improve above 1 MHz. The flash programming time is probably the limit. This test did not measure it.
-- The times at 2000 kHz and 4000 kHz are the same. This is expected: the engine runs untimed from 1.85 MHz, so both requests give the same clock.
+- The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine runs untimed from 1.85 MHz, so both requests give the same clock.
+- E6 made the read time 20% to 30% longer at 1 MHz and above (0.56 s to 0.70 s at 2000 kHz). Write time and the 250 kHz read time did not change. The change is probably the cost of the new command and response flow. The cause was not measured.
 - After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause is probably the wiring. No log proves this, and the exact wire is not known.
 - `probe-rs info` stops after it finds the DPv1 MemoryAP and the ROM table, with the message "does not support SWD multidrop". This is normal for an STM32F1 target.
 - `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is how probe-rs behaves. It is not a probe finding.
