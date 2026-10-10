@@ -41,7 +41,7 @@ The runtime selection is a later work item.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
 - Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
-- The hardware test is complete for OpenOCD only. The pyOCD and probe-rs tests, and the UART bridge test during a flash, are open (see [Hardware test](#hardware-test)).
+- The hardware test passed for OpenOCD, pyOCD and probe-rs. The UART bridge test during a flash is open (see [Hardware test](#hardware-test)).
 
 ## Use the probe
 
@@ -153,16 +153,15 @@ Date: 2026-10-10.
 Firmware: `v0.2.0-57-g59614cb` (CMSIS-DAP v2 firmware version 2.1.0), `cmsis-dap` personality.
 Target: STM32F103ZET6 (512 KiB flash) on SWD.
 Host: Linux 6.18.55.
-Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66.
-pyOCD and probe-rs were not available.
+Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4.1), probe-rs 0.32.0.
 
 | Check | OpenOCD | pyOCD | probe-rs |
 |---|---|---|---|
-| Connect, DPIDR `0x1ba01477` | pass | not run | not run |
-| Flash and verify (32 KiB) | pass | not run | not run |
-| Read back (`cmp`) | pass | not run | not run |
-| Halt, step, reset | pass | not run | not run |
-| Memory write and read | pass | not run | not run |
+| Connect, DPIDR `0x1ba01477` | pass | pass | pass |
+| Flash and verify (32 KiB) | pass | pass | pass |
+| Read back (`cmp`) | pass | pass | not run |
+| Halt, step, reset | pass | pass | pass (halt and step through GDB) |
+| Memory write and read | pass | not run | read only (`probe-rs read`) |
 | UART bridge during flash | not run | not run | not run |
 
 Enumeration: the product string is `Versaloon CMSIS-DAP`.
@@ -189,5 +188,8 @@ Findings:
 
 - Write time does not improve above 1 MHz. The write time is flash programming time, not SWD time.
 - Read time is the same at 2000 kHz and 4000 kHz. The cause is not known. The engine can round the clock down, or the USB path is the limit. A logic analyzer on SWCLK can show which.
+- `probe-rs info` stops after it finds the DPv1 MemoryAP and the ROM table, with the message "does not support SWD multidrop". This is normal for an STM32F1 target.
+- `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is a probe-rs behavior, not a probe finding.
+- In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
 - The UART loopback test received no bytes at 115200 baud. The PA9 to PA10 wire was probably not connected. The test must be repeated.
 
