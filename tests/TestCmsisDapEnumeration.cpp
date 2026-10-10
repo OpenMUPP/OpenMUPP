@@ -362,3 +362,19 @@ TEST_CASE("DAP_TransferAbort over USB between commands has no response") {
    REQUIRE(bench.write({ 0x00, 0xFE }));
    CHECK(bench.read() == Bytes{ 0x00, 0x01, 0x04 });
 }
+
+TEST_CASE("A response goes out before the next stored packet runs") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   // Two packets arrive before the main loop runs.
+   REQUIRE(bench.send({ 0x00, 0xFE }));
+   REQUIRE(bench.send({ 0x06, 0x00, 0x01, 0x00, 0x06 }));
+   std::optional<Bytes> first;
+   bench.swd.onTransfer = [&bench, &first] { first = bench.read(); };
+   bench.function.poll();
+   CHECK(first == Bytes{ 0x00, 0x01, 0x04 });
+   CHECK(bench.read() == Bytes{ 0x06, 0x01, 0x00, 0x01, 0, 0, 0, 0 });
+}

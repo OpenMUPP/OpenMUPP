@@ -91,9 +91,9 @@ It uses these objects:
 
 The USB function calls `submit()` for each request packet.
 `submit()` only stores the packet.
-`UsbStack::poll()` then calls `CmsisDapFunction::poll()` in the main loop, and this calls `run()`.
-`run()` runs the stored packets in order.
-Thus the OUT endpoint stays armed while a command runs.
+`UsbStack::poll()` then calls `CmsisDapFunction::poll()` in the main loop.
+This calls `runNext()` for each stored packet, in order, and sends each response immediately.
+Thus the OUT endpoint stays armed while a command runs, if a slot is free.
 A packet that arrives during a command waits until that command ends.
 The USB function sends the response packets in order.
 The packet size is 64 bytes, and up to 4 packets are in flight.

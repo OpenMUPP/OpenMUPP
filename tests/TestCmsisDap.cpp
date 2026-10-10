@@ -1234,3 +1234,42 @@ TEST_CASE("DAP_TransferAbort stops a DAP_TransferBlock of AP reads and reads the
    CHECK(a.b.seen() == V{ readApDrw, readApDrw, readRdbuff });
    a.b.checkIdle();
 }
+
+TEST_CASE("Responses sent during a command: the response ring wraps") {
+   AbortBench a;
+   // Move the first response to the last slot of the ring.
+   for(unsigned i = 0; i < Processor::packetCount - 1; ++i) {
+      send(a.dap, { 0x09, 0x01, 0x00 });
+      CHECK(a.pop() == V{ 0x09, 0x00 });
+   }
+   a.dap.submit(V{ 0x09, 0x02, 0x00 });
+   a.dap.submit(V{ 0x09, 0x03, 0x00 });
+   REQUIRE(a.dap.runNext());
+   REQUIRE(a.dap.runNext());
+   // The transport sends both responses while the block runs.
+   std::vector<Bytes> sent;
+   a.swd.onTransfer = [&a, &sent] {
+      while(a.dap.hasResponse()) {
+         sent.push_back(a.pop());
+      }
+   };
+   a.b.pins.readData = 0x42;
+   send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   CHECK(sent == std::vector<Bytes>{ V{ 0x09, 0x00 }, V{ 0x09, 0x00 } });
+   CHECK(a.pop() == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0x42), word(0x42) }));
+   CHECK_FALSE(a.dap.hasResponse());
+   CHECK(a.dap.canSubmit());
+}
+
+TEST_CASE("runNext() runs one packet at a time") {
+   AbortBench a;
+   a.dap.submit(V{ 0x09, 0x01, 0x00 });
+   a.dap.submit(V{ 0x09, 0x02, 0x00 });
+   REQUIRE(a.dap.runNext());
+   CHECK(a.b.platform.delays == std::vector<uint32_t>{ 1 });
+   REQUIRE(a.dap.runNext());
+   CHECK_FALSE(a.dap.runNext());
+   // A DAP_QueueCommands packet alone waits.
+   a.dap.submit(V{ 0x7E, 0x01, 0x09, 0x03, 0x00 });
+   CHECK_FALSE(a.dap.runNext());
+}

@@ -9,7 +9,10 @@ CmsisDapFunction::CmsisDapFunction(cmsisdap::Processor &processor)
 }
 
 void CmsisDapFunction::poll() {
-   processor_.run();
+   // Send each response at once, before the next packet runs.
+   while(processor_.runNext()) {
+      sendResponse();
+   }
    sendResponse();
    if(processor_.canSubmit()) {
       resumeOut();

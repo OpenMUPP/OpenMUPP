@@ -60,8 +60,8 @@
 //
 // submit(), response() and popResponse() can also run during run(), from
 // the background service of the SWD engine (protocol/Background.h). A
-// packet that arrives then waits until the running packet ends. run() does
-// not start again from there.
+// packet that arrives then waits until the running packet ends. runNext()
+// does not start again from there.
 
 #include <array>
 #include <cstddef>
@@ -178,9 +178,16 @@ class Processor {
    // than packetSize bytes gives ID_DAP_Invalid.
    void submit(art::span<const uint8_t> request);
 
-   // Runs the stored packets in order, and keeps the DAP_QueueCommands
-   // packets that wait. Call it in the main loop, not during run().
-   void run();
+   // Runs the next stored packet. Returns false when no packet can run:
+   // none is stored, or only DAP_QueueCommands packets wait. Call it in the
+   // main loop, not during runNext().
+   bool runNext();
+
+   // Runs the stored packets until runNext() returns false.
+   void run() {
+      while(runNext()) {
+      }
+   }
 
    [[nodiscard]] bool hasResponse() const {
       return responses_ != 0;

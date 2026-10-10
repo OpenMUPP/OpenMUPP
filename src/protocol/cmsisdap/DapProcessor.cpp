@@ -217,25 +217,24 @@ void Processor::submit(art::span<const uint8_t> request) {
    ++requests_;
 }
 
-void Processor::run() {
-   if(running_) {
-      return;
+bool Processor::runNext() {
+   if(running_ || requests_ == 0 || mustWait()) {
+      return false;
    }
    running_ = true;
-   while(requests_ != 0 && !mustWait()) {
-      const auto front = request(0);
-      if(isQueued(0)) {
-         front[0] = command::executeCommands;
-      }
-      // submit() can add packets behind this one while it runs.
-      execute(front);
-      requestFirst_ = (requestFirst_ + 1) % packetCount;
-      --requests_;
-      if(abortRequests_ != 0) {
-         --abortRequests_;
-      }
+   const auto front = request(0);
+   if(isQueued(0)) {
+      front[0] = command::executeCommands;
+   }
+   // submit() can add packets behind this one while it runs.
+   execute(front);
+   requestFirst_ = (requestFirst_ + 1) % packetCount;
+   --requests_;
+   if(abortRequests_ != 0) {
+      --abortRequests_;
    }
    running_ = false;
+   return true;
 }
 
 art::span<uint8_t> Processor::request(std::size_t index) {
