@@ -9,6 +9,11 @@ CmsisDapFunction::CmsisDapFunction(cmsisdap::Processor &processor)
 }
 
 void CmsisDapFunction::poll() {
+   // A packet that came before the suspend runs after the resume: the
+   // target stays released during the suspend.
+   if(suspended_) {
+      return;
+   }
    // Send each response at once, before the next packet runs.
    while(processor_.runNext()) {
       sendResponse();
@@ -37,6 +42,7 @@ void CmsisDapFunction::transferSent() {
 }
 
 void CmsisDapFunction::dataPathClosed() {
+   suspended_ = false;
    processor_.hostGone();
 }
 
@@ -44,7 +50,12 @@ void CmsisDapFunction::suspended() {
    // The USB function keeps its IN transfer and OUT hold over a suspend, so
    // the processor keeps its queue and responses. Only the target is
    // released.
+   suspended_ = true;
    processor_.release();
+}
+
+void CmsisDapFunction::resumed() {
+   suspended_ = false;
 }
 
 void CmsisDapFunction::sendResponse() {

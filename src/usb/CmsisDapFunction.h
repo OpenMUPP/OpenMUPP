@@ -19,7 +19,8 @@
 // function calls Processor::hostGone(): it disconnects the target, releases
 // the pins, and drops the queued packets and the unsent responses. A suspend
 // only releases the target (Processor::release()): the USB transfer state
-// stays, so the processor keeps its responses.
+// stays, so the processor keeps its packets and responses. poll() runs no
+// command until the resume.
 //
 // A DAP_QueueCommands packet in the last free slot runs the queue in the
 // processor, so queued packets alone never hold the OUT endpoint.
@@ -48,6 +49,7 @@ class CmsisDapFunction final : public art::usb::VendorBulkFunction {
    void transferSent() override;
    void dataPathClosed() override;
    void suspended() override;
+   void resumed() override;
 
    private:
    // Starts the IN transfer of the oldest response, if the IN endpoint is
@@ -55,6 +57,8 @@ class CmsisDapFunction final : public art::usb::VendorBulkFunction {
    void sendResponse();
 
    cmsisdap::Processor &processor_;
+   // Between suspended() and resumed(): poll() runs no command.
+   bool suspended_{ false };
 };
 
 } // namespace usb

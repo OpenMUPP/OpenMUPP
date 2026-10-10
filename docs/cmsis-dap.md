@@ -94,6 +94,7 @@ The USB function calls `submit()` for each request packet.
 `UsbStack::poll()` then calls `CmsisDapFunction::poll()` in the main loop.
 This calls `runNext()` for each stored packet, in order, and sends each response immediately.
 Thus the OUT endpoint stays armed while a command runs, if a slot is free.
+During a USB suspend, `CmsisDapFunction::poll()` runs no packet. The stored packets run after the resume.
 A packet that arrives during a command waits until that command ends.
 The USB function sends the response packets in order.
 The packet size is 64 bytes, and up to 4 packets are in flight.
