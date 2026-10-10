@@ -302,3 +302,120 @@ TEST_CASE("A suspend and resume keep the responses in order") {
    CHECK(bench.read() == Bytes{ 0x01, 0x00 });
    CHECK_FALSE(bench.read().has_value());
 }
+
+TEST_CASE("A command that arrives while a command runs waits for it") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   // The OUT endpoint is armed while the block runs.
+   bool sent = false;
+   bench.swd.onTransfer = [&bench, &sent] {
+      if(bench.swd.transfers == 2) {
+         sent = bench.send({ 0x09, 0x07, 0x00 });
+         CHECK(bench.platform.delays.empty());
+      }
+   };
+   // DAP_TransferBlock: 4 reads of DP RDBUFF
+   REQUIRE(bench.write({ 0x06, 0x00, 0x04, 0x00, 0x0E }));
+   CHECK(sent);
+   CHECK(bench.platform.delays == std::vector<uint32_t>{ 7 });
+   const auto block = bench.read();
+   REQUIRE(block.has_value());
+   CHECK(Bytes(block->begin(), block->begin() + 4) == Bytes{ 0x06, 0x04, 0x00, 0x01 });
+   CHECK(bench.read() == Bytes{ 0x09, 0x00 });
+   CHECK_FALSE(bench.read().has_value());
+   CHECK(bench.controller().isArmed(dapOut));
+}
+
+TEST_CASE("DAP_TransferAbort over USB stops a running DAP_TransferBlock") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   bool sent = false;
+   bench.swd.onTransfer = [&bench, &sent] {
+      if(bench.swd.transfers == 2) {
+         sent = bench.send({ 0x07 });
+      }
+   };
+   // DAP_TransferBlock: 6 reads of DP CTRL/STAT
+   REQUIRE(bench.write({ 0x06, 0x00, 0x06, 0x00, 0x06 }));
+   CHECK(sent);
+   CHECK(bench.swd.transfers == 2);
+   const auto block = bench.read();
+   REQUIRE(block.has_value());
+   CHECK(*block == Bytes{ 0x06, 0x02, 0x00, 0x01, 0, 0, 0, 0, 0, 0, 0, 0 });
+   // The abort has no response.
+   CHECK_FALSE(bench.read().has_value());
+   CHECK(bench.controller().isArmed(dapOut));
+}
+
+TEST_CASE("DAP_TransferAbort over USB between commands has no response") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x07 }));
+   CHECK_FALSE(bench.read().has_value());
+   CHECK(bench.controller().isArmed(dapOut));
+   REQUIRE(bench.write({ 0x00, 0xFE }));
+   CHECK(bench.read() == Bytes{ 0x00, 0x01, 0x04 });
+}
+
+TEST_CASE("A response goes out before the next stored packet runs") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   // Two packets arrive before the main loop runs.
+   REQUIRE(bench.send({ 0x00, 0xFE }));
+   REQUIRE(bench.send({ 0x06, 0x00, 0x01, 0x00, 0x06 }));
+   std::optional<Bytes> first;
+   bench.swd.onTransfer = [&bench, &first] { first = bench.read(); };
+   bench.function.poll();
+   CHECK(first == Bytes{ 0x00, 0x01, 0x04 });
+   CHECK(bench.read() == Bytes{ 0x06, 0x01, 0x00, 0x01, 0, 0, 0, 0 });
+}
+
+TEST_CASE("A packet before a suspend runs after the resume") {
+   DapBench bench;
+   bench.enumerate();
+
+   // The packet and the suspend come in the same poll of the controller.
+   REQUIRE(bench.send({ 0x09, 0x05, 0x00 }));
+   bench.controller().busSuspend();
+   bench.function.poll();
+   CHECK(bench.platform.delays.empty());
+   CHECK_FALSE(bench.read().has_value());
+
+   bench.controller().busResume();
+   bench.function.poll();
+   CHECK(bench.platform.delays == std::vector<uint32_t>{ 5 });
+   CHECK(bench.read() == Bytes{ 0x09, 0x00 });
+}
+
+TEST_CASE("DAP_TransferAbort waits at the OUT endpoint when all slots are in use") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   bool abortSent = true;
+   bench.swd.onTransfer = [&bench, &abortSent] {
+      if(bench.swd.transfers == 1) {
+         // The block and three more packets use the four slots.
+         for(int i = 0; i < 3; ++i) {
+            CHECK(bench.send({ 0x09, 0x01, 0x00 }));
+         }
+         abortSent = bench.send({ 0x07 });
+      }
+   };
+   REQUIRE(bench.write({ 0x06, 0x00, 0x02, 0x00, 0x06 }));
+   CHECK_FALSE(abortSent);
+   // The block was not stopped.
+   const auto block = bench.read();
+   REQUIRE(block.has_value());
+   CHECK((*block)[1] == 0x02);
+}

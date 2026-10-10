@@ -97,3 +97,38 @@ TEST_CASE("SerialEventQueue: the serial-only mode on an empty queue") {
    REQUIRE(queue.try_push(event(EventType::InComplete, usb::cdcDataInEndpoint)));
    CHECK(popAll(queue).size() == 1);
 }
+
+TEST_CASE("SerialEventQueue: the serial-only mode also gives the events of the command endpoints") {
+   Queue queue;
+   queue.setCommandEndpoints(0x03, 0x82);
+   CHECK(queue.isServiceEvent(event(EventType::Out, 0x03)));
+   CHECK(queue.isServiceEvent(event(EventType::InComplete, 0x82)));
+   CHECK(queue.isServiceEvent(event(EventType::Out, usb::cdcDataOutEndpoint)));
+   CHECK_FALSE(queue.isServiceEvent(event(EventType::InComplete, 0x83)));
+   CHECK_FALSE(queue.isServiceEvent(event(EventType::Setup)));
+   CHECK_FALSE(queue.isServiceEvent(event(EventType::Reset)));
+
+   REQUIRE(queue.try_push(event(EventType::InComplete, 0x82)));
+   REQUIRE(queue.try_push(event(EventType::Out, 0x03)));
+   REQUIRE(queue.try_push(event(EventType::Out, usb::cdcDataOutEndpoint)));
+   REQUIRE(queue.try_push(event(EventType::Setup)));
+   REQUIRE(queue.try_push(event(EventType::Out, 0x03)));
+   queue.setSerialOnly(true);
+   const auto service = popAll(queue);
+   REQUIRE(service.size() == 3);
+   CHECK(service[0].endpoint == 0x82);
+   CHECK(service[1].endpoint == 0x03);
+   CHECK(service[2].endpoint == usb::cdcDataOutEndpoint);
+   // The SETUP and the packet after it wait.
+   CHECK(queue.size() == 2);
+}
+
+TEST_CASE("SerialEventQueue: without command endpoints, the serial-only mode stops at a protocol event") {
+   Queue queue;
+   CHECK_FALSE(queue.isServiceEvent(event(EventType::Out, usb::versaloonOutEndpoint)));
+   REQUIRE(queue.try_push(event(EventType::Out, usb::versaloonOutEndpoint)));
+   REQUIRE(queue.try_push(event(EventType::Out, usb::cdcDataOutEndpoint)));
+   queue.setSerialOnly(true);
+   CHECK(popAll(queue).empty());
+   CHECK(queue.size() == 2);
+}

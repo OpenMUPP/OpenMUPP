@@ -8,13 +8,28 @@ CmsisDapFunction::CmsisDapFunction(cmsisdap::Processor &processor)
    , processor_(processor) {
 }
 
+void CmsisDapFunction::poll() {
+   // A packet that came before the suspend runs after the resume: the
+   // target stays released during the suspend.
+   if(suspended_) {
+      return;
+   }
+   // Send each response at once, before the next packet runs.
+   while(processor_.runNext()) {
+      sendResponse();
+   }
+   sendResponse();
+   if(processor_.canSubmit()) {
+      resumeOut();
+   }
+}
+
 bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {
    // The OUT endpoint is held while no slot is free, so a packet that
-   // arrives here always fits.
+   // arrives here always fits. poll() runs it.
    if(!packet.empty()) {
       processor_.submit(packet);
    }
-   sendResponse();
    return processor_.canSubmit();
 }
 
@@ -27,6 +42,7 @@ void CmsisDapFunction::transferSent() {
 }
 
 void CmsisDapFunction::dataPathClosed() {
+   suspended_ = false;
    processor_.hostGone();
 }
 
@@ -34,7 +50,12 @@ void CmsisDapFunction::suspended() {
    // The USB function keeps its IN transfer and OUT hold over a suspend, so
    // the processor keeps its queue and responses. Only the target is
    // released.
+   suspended_ = true;
    processor_.release();
+}
+
+void CmsisDapFunction::resumed() {
+   suspended_ = false;
 }
 
 void CmsisDapFunction::sendResponse() {

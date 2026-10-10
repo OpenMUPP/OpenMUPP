@@ -15,6 +15,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -35,6 +36,8 @@ inline constexpr uint8_t dapOut = usb::dap::outEndpoint;
 inline constexpr uint8_t dapIn = usb::dap::inEndpoint;
 
 // An SWD engine that records the calls. A transfer is always OK.
+// onTransfer runs in each transfer, as the background service of the
+// engine does (protocol/Background.h).
 class FakeDapSwd final : public cmsisdap::DapSwd {
    public:
    void init() override {
@@ -52,12 +55,18 @@ class FakeDapSwd final : public cmsisdap::DapSwd {
    void sequenceIn(uint16_t, art::span<uint8_t>) override {
    }
    uint8_t transfer(uint8_t, uint32_t &data) override {
+      ++transfers;
+      if(onTransfer) {
+         onTransfer();
+      }
       data = 0;
       return cmsisdap::dap::ackOk;
    }
 
    int inits{ 0 };
    int finis{ 0 };
+   int transfers{ 0 };
+   std::function<void()> onTransfer;
 };
 
 class FakeDapGpio final : public protocol::GpioPins {
@@ -144,9 +153,17 @@ class DapBench {
       REQUIRE(device_.isConfigured());
    }
 
-   // The host writes one command packet. Returns false if the OUT endpoint
-   // NAKs.
+   // The host writes one command packet, and the main loop runs it.
+   // Returns false if the OUT endpoint NAKs.
    bool write(const std::vector<uint8_t> &command) {
+      const bool sent = send(command);
+      function.poll();
+      return sent;
+   }
+
+   // The host writes one command packet, and the main loop does not run.
+   // Returns false if the OUT endpoint NAKs.
+   bool send(const std::vector<uint8_t> &command) {
       return controller_.sendOut(dapOut, art::span<const uint8_t>(command.data(), command.size()));
    }
 

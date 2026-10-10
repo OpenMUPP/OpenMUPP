@@ -189,7 +189,9 @@ void Processor::popResponse() {
 }
 
 void Processor::hostGone() {
-   queued_ = 0;
+   requests_ = 0;
+   requestFirst_ = 0;
+   abortRequests_ = 0;
    // The responses are for the old host.
    responses_ = 0;
    responseFirst_ = 0;
@@ -197,36 +199,67 @@ void Processor::hostGone() {
 }
 
 void Processor::submit(art::span<const uint8_t> request) {
-   if(!canSubmit()) {
-      return;
-   }
    if(request.empty()) {
       return;
    }
    if(request[0] == command::transferAbort) {
+      // All packets that came before it, also the one that runs
+      abortRequests_ = requests_;
       return;
    }
-   if(request[0] == command::queueCommands && request.size() <= packetSize) {
-      std::copy(request.begin(), request.end(), queue_[queued_].begin());
-      queueLength_[queued_] = static_cast<uint8_t>(request.size());
-      ++queued_;
-      // A queued packet in the last free slot runs the queue: no response
-      // could free a slot for the packet that ends the queue.
-      if(queued_ + responses_ == packetCount) {
-         flushQueue();
-      }
+   if(!canSubmit()) {
       return;
    }
-   flushQueue();
-   execute(request);
+   const std::size_t index = (requestFirst_ + requests_) % packetCount;
+   const std::size_t length = std::min(request.size(), requestBuffer_[index].size());
+   std::copy_n(request.begin(), length, requestBuffer_[index].begin());
+   requestLength_[index] = static_cast<uint8_t>(length);
+   ++requests_;
 }
 
-void Processor::flushQueue() {
-   for(std::size_t i = 0; i < queued_; ++i) {
-      queue_[i][0] = command::executeCommands;
-      execute({ queue_[i].data(), queueLength_[i] });
+bool Processor::runNext() {
+   if(running_ || requests_ == 0 || mustWait()) {
+      return false;
    }
-   queued_ = 0;
+   running_ = true;
+   const auto front = request(0);
+   if(isQueued(0)) {
+      front[0] = command::executeCommands;
+   }
+   // submit() can add packets behind this one while it runs.
+   execute(front);
+   requestFirst_ = (requestFirst_ + 1) % packetCount;
+   --requests_;
+   if(abortRequests_ != 0) {
+      --abortRequests_;
+   }
+   running_ = false;
+   return true;
+}
+
+art::span<uint8_t> Processor::request(std::size_t index) {
+   const std::size_t slot = (requestFirst_ + index) % packetCount;
+   return { requestBuffer_[slot].data(), requestLength_[slot] };
+}
+
+bool Processor::isQueued(std::size_t index) {
+   const auto packet = request(index);
+   return packet[0] == command::queueCommands && packet.size() <= packetSize;
+}
+
+// The DAP_QueueCommands packets wait for the next packet with another
+// command. A queued packet in the last free slot runs the queue: no
+// response could free a slot for the packet that ends the queue.
+bool Processor::mustWait() {
+   if(!canSubmit()) {
+      return false;
+   }
+   for(std::size_t i = 0; i < requests_; ++i) {
+      if(!isQueued(i)) {
+         return false;
+      }
+   }
+   return true;
 }
 
 // Runs a packet and appends its response.
@@ -679,7 +712,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
    uint32_t data = 0;
    uint32_t unused = 0;
 
-   while(todo != 0 && connected_) {
+   while(todo != 0 && connected_ && !aborted()) {
       --todo;
       const uint8_t request = in.u8();
       if((request & requestRead) != 0) {
@@ -713,7 +746,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
                if((data & matchMask_) == match) {
                   break;
                }
-               if(retries-- == 0) {
+               if(retries-- == 0 || aborted()) {
                   value |= valueMismatch;
                   break;
                }
@@ -813,7 +846,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
    uint32_t data = 0;
    uint32_t unused = 0;
 
-   if(connected_ && todo != 0) {
+   if(connected_ && todo != 0 && !aborted()) {
       if(read) {
          if((request & requestApNotDp) != 0) {
             // Post the first AP read.
@@ -821,7 +854,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
          } else {
             value = ackOk;
          }
-         while(todo != 0 && value == ackOk) {
+         while(todo != 0 && value == ackOk && !aborted()) {
             --todo;
             if(todo == 0 && (request & requestApNotDp) != 0) {
                // The last AP read gives the data from RDBUFF.
@@ -834,8 +867,17 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
             out.u32(data);
             ++done;
          }
+         if(todo != 0 && value == ackOk && (request & requestApNotDp) != 0) {
+            // An abort stopped the block with an AP read posted. Read its
+            // data from RDBUFF, as at the end of the block.
+            value = swd_.transfer(readRdbuff, data);
+            if(value == ackOk) {
+               out.u32(data);
+               ++done;
+            }
+         }
       } else {
-         while(todo != 0) {
+         while(todo != 0 && !aborted()) {
             --todo;
             data = in.u32();
             value = swd_.transfer(request, data);
