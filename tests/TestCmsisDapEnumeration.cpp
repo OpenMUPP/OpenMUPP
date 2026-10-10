@@ -328,3 +328,37 @@ TEST_CASE("A command that arrives while a command runs waits for it") {
    CHECK_FALSE(bench.read().has_value());
    CHECK(bench.controller().isArmed(dapOut));
 }
+
+TEST_CASE("DAP_TransferAbort over USB stops a running DAP_TransferBlock") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   bool sent = false;
+   bench.swd.onTransfer = [&bench, &sent] {
+      if(bench.swd.transfers == 2) {
+         sent = bench.send({ 0x07 });
+      }
+   };
+   // DAP_TransferBlock: 6 reads of DP CTRL/STAT
+   REQUIRE(bench.write({ 0x06, 0x00, 0x06, 0x00, 0x06 }));
+   CHECK(sent);
+   CHECK(bench.swd.transfers == 2);
+   const auto block = bench.read();
+   REQUIRE(block.has_value());
+   CHECK(*block == Bytes{ 0x06, 0x02, 0x00, 0x01, 0, 0, 0, 0, 0, 0, 0, 0 });
+   // The abort has no response.
+   CHECK_FALSE(bench.read().has_value());
+   CHECK(bench.controller().isArmed(dapOut));
+}
+
+TEST_CASE("DAP_TransferAbort over USB between commands has no response") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x07 }));
+   CHECK_FALSE(bench.read().has_value());
+   CHECK(bench.controller().isArmed(dapOut));
+   REQUIRE(bench.write({ 0x00, 0xFE }));
+   CHECK(bench.read() == Bytes{ 0x00, 0x01, 0x04 });
+}

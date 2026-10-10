@@ -28,8 +28,12 @@
 //
 // - A command that is unknown replies ID_DAP_Invalid (0xFF).
 // - JTAG is not available yet: DAP_Connect to JTAG replies 0 (failed).
-// - DAP_TransferAbort (0x07) has no response. Nothing runs concurrently,
-//   so it has no effect yet.
+// - DAP_TransferAbort (0x07) has no response and takes no slot. It stops
+//   the transfer commands of the packets that came before it: the packet
+//   that runs, and the packets that wait. A DAP_Transfer or
+//   DAP_TransferBlock checks it before each transfer, and replies the
+//   transfers that it did. A packet after the abort runs normally. When no
+//   packet runs or waits, the abort has no effect.
 // - A request that is shorter than its command needs, or a response that
 //   does not fit in a packet, gives ID_DAP_Invalid. In a DAP_ExecuteCommands
 //   it stops the list, and the command count is the number of commands
@@ -208,6 +212,10 @@ class Processor {
    [[nodiscard]] art::span<uint8_t> request(std::size_t index);
    [[nodiscard]] bool isQueued(std::size_t index);
    [[nodiscard]] bool mustWait();
+   // DAP_TransferAbort stops the packet that runs.
+   [[nodiscard]] bool aborted() const {
+      return abortRequests_ != 0;
+   }
 
    [[nodiscard]] bool infoCommand(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool hostStatus(PacketReader &in, PacketWriter &out);
@@ -247,6 +255,8 @@ class Processor {
    std::size_t requestFirst_{ 0 };
    std::size_t requests_{ 0 };
    bool running_{ false };
+   // The requests at the front that DAP_TransferAbort stops
+   std::size_t abortRequests_{ 0 };
    std::array<Packet, packetCount> responseBuffer_{};
    std::array<uint8_t, packetCount> responseLength_{};
    std::size_t responseFirst_{ 0 };

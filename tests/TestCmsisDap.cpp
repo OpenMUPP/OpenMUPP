@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -229,6 +230,84 @@ struct Bench {
 };
 
 using V = std::vector<uint8_t>;
+
+// The SWD engine of a Bench, with a hook after each transfer: the
+// background service of the engine runs between transfers
+// (protocol/Background.h), and the host can send a packet then.
+class HookedSwd final : public cmsisdap::DapSwd {
+   public:
+   explicit HookedSwd(cmsisdap::DapSwd &swd)
+      : swd_(swd) {
+   }
+
+   void init() override {
+      swd_.init();
+   }
+   void fini() override {
+      swd_.fini();
+   }
+   void setClockHz(uint32_t hz) override {
+      swd_.setClockHz(hz);
+   }
+   void apply(const cmsisdap::SwdSettings &settings) override {
+      swd_.apply(settings);
+   }
+   void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) override {
+      swd_.sequenceOut(bitCount, data);
+   }
+   void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) override {
+      swd_.sequenceIn(bitCount, data);
+   }
+   uint8_t transfer(uint8_t request, uint32_t &data) override {
+      const uint8_t value = swd_.transfer(request, data);
+      ++transfers;
+      if(onTransfer) {
+         onTransfer();
+      }
+      return value;
+   }
+
+   int transfers{ 0 };
+   std::function<void()> onTransfer;
+
+   private:
+   cmsisdap::DapSwd &swd_;
+};
+
+// A processor on the HookedSwd of a Bench, connected to SWD.
+struct AbortBench {
+   AbortBench()
+      : swd(b.swd)
+      , dap(swd, b.gpio, b.platform, b.info) {
+      send(dap, V{ 0x02, 0x01 });
+      CHECK(pop() == V{ 0x02, 0x01 });
+   }
+
+   Bytes pop() {
+      REQUIRE(dap.hasResponse());
+      const auto response = dap.response();
+      Bytes result(response.begin(), response.end());
+      dap.popResponse();
+      return result;
+   }
+
+   // The host sends a packet after transfer number `at` of the engine.
+   void sendAt(int at, const Bytes &request) {
+      later.push_back({ at, request });
+      swd.onTransfer = [this] {
+         for(const auto &[at, request] : later) {
+            if(swd.transfers == at) {
+               dap.submit(request);
+            }
+         }
+      };
+   }
+
+   Bench b;
+   HookedSwd swd;
+   Processor dap;
+   std::vector<std::pair<int, Bytes>> later;
+};
 
 } // namespace
 
@@ -1025,4 +1104,122 @@ TEST_CASE("DAP_Connect sets the configuration of the engine again") {
    b.pins.readData = 1;
    CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr })[1] == 0x01);
    b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops a running DAP_TransferBlock") {
+   AbortBench a;
+   a.b.pins.readQueue = { 0xA, 0xB, 0xC, 0xD, 0xE };
+   a.sendAt(2, { 0x07 });
+   send(a.dap, { 0x06, 0x00, 0x05, 0x00, readCtrlStat });
+   CHECK(a.pop() == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0xA), word(0xB) }));
+   CHECK(a.b.seen() == V{ readCtrlStat, readCtrlStat });
+   // The abort has no response.
+   CHECK_FALSE(a.dap.hasResponse());
+   CHECK(a.dap.canSubmit());
+
+   // The next block runs to the end.
+   a.b.pins.transfers.clear();
+   send(a.dap, { 0x06, 0x00, 0x03, 0x00, readCtrlStat });
+   CHECK(a.pop() == cat({ { 0x06, 0x03, 0x00, 0x01 }, word(0xC), word(0xD), word(0xE) }));
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops a DAP_TransferBlock of writes and checks the last write") {
+   AbortBench a;
+   a.sendAt(1, { 0x07 });
+   send(a.dap, cat({ { 0x06, 0x00, 0x03, 0x00, writeTar }, word(1), word(2), word(3) }));
+   CHECK(a.pop() == V{ 0x06, 0x01, 0x00, 0x01 });
+   CHECK(a.b.seen() == V{ writeTar, readRdbuff });
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops a DAP_Transfer, and the next command of the packet runs") {
+   AbortBench a;
+   a.b.pins.readData = 0x55;
+   a.sendAt(1, { 0x07 });
+   send(a.dap, cat({ { 0x7F, 0x02, 0x05, 0x00, 0x03, readCtrlStat, writeTar }, word(1), { readCtrlStat, 0x09, 0x04, 0x00 } }));
+   CHECK(a.pop() == cat({ { 0x7F, 0x02, 0x05, 0x01, 0x01 }, word(0x55), { 0x09, 0x00 } }));
+   CHECK(a.b.seen() == V{ readCtrlStat });
+   CHECK(a.b.platform.delays == std::vector<uint32_t>{ 4 });
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort reads the posted AP read after the stop") {
+   AbortBench a;
+   a.b.pins.readQueue = { 0x0, 0x1, 0x2, 0x3 };
+   a.sendAt(2, { 0x07 });
+   send(a.dap, { 0x05, 0x00, 0x03, readApDrw, readApDrw, readApDrw });
+   CHECK(a.pop() == cat({ { 0x05, 0x02, 0x01 }, word(0x1), word(0x2) }));
+   CHECK(a.b.seen() == V{ readApDrw, readApDrw, readRdbuff });
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops a value match") {
+   AbortBench a;
+   // No limit of the match retries in this test
+   send(a.dap, { 0x04, 0x00, 0x00, 0x00, 0xFF, 0xFF });
+   CHECK(a.pop() == V{ 0x04, 0x00 });
+   a.b.pins.readData = 0;
+   a.sendAt(5, { 0x07 });
+   send(a.dap, cat({ { 0x05, 0x00, 0x01, static_cast<uint8_t>(readCtrlStat | matchValue) }, word(1) }));
+   CHECK(a.pop() == V{ 0x05, 0x00, 0x11 });
+   CHECK(a.b.pins.transfers.size() == 5);
+   a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops the packets before it, not the packets after it") {
+   AbortBench a;
+   // During block A: block B, the abort, block C
+   a.sendAt(1, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   a.sendAt(1, { 0x07 });
+   a.sendAt(1, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   a.b.pins.readData = 0x99;
+   send(a.dap, { 0x06, 0x00, 0x04, 0x00, readCtrlStat });
+   CHECK(a.pop() == cat({ { 0x06, 0x01, 0x00, 0x01 }, word(0x99) }));
+   // B does not reach the target.
+   CHECK(a.pop() == V{ 0x06, 0x00, 0x00, 0x00 });
+   CHECK(a.pop() == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0x99), word(0x99) }));
+   CHECK_FALSE(a.dap.hasResponse());
+   CHECK(a.b.pins.transfers.size() == 3);
+   a.b.checkIdle();
+}
+
+TEST_CASE("A packet that arrives during a command waits until the command ends") {
+   AbortBench a;
+   a.sendAt(1, { 0x09, 0x03, 0x00 });
+   send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   CHECK(a.pop()[0] == 0x06);
+   CHECK(a.pop() == V{ 0x09, 0x00 });
+   CHECK(a.b.platform.delays == std::vector<uint32_t>{ 3 });
+   CHECK(a.b.pins.transfers.size() == 2);
+}
+
+TEST_CASE("DAP_TransferAbort between commands has no response and no effect") {
+   AbortBench a;
+   send(a.dap, { 0x07 });
+   CHECK_FALSE(a.dap.hasResponse());
+   send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   CHECK(a.pop()[1] == 0x02);
+   CHECK_FALSE(a.dap.hasResponse());
+}
+
+TEST_CASE("DAP_TransferAbort stops queued packets that wait") {
+   AbortBench a;
+   send(a.dap, { 0x7E, 0x01, 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   send(a.dap, { 0x07 });
+   send(a.dap, { 0x06, 0x00, 0x01, 0x00, readCtrlStat });
+   CHECK(a.pop() == V{ 0x7F, 0x01, 0x06, 0x00, 0x00, 0x00 });
+   CHECK(a.pop()[1] == 0x01);
+   CHECK(a.b.pins.transfers.size() == 1);
+}
+
+TEST_CASE("hostGone forgets an abort") {
+   AbortBench a;
+   send(a.dap, { 0x7E, 0x01, 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   send(a.dap, { 0x07 });
+   a.dap.hostGone();
+   send(a.dap, { 0x02, 0x01 });
+   CHECK(a.pop() == V{ 0x02, 0x01 });
+   send(a.dap, { 0x06, 0x00, 0x02, 0x00, readCtrlStat });
+   CHECK(a.pop()[1] == 0x02);
 }

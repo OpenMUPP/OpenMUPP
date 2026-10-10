@@ -191,6 +191,7 @@ void Processor::popResponse() {
 void Processor::hostGone() {
    requests_ = 0;
    requestFirst_ = 0;
+   abortRequests_ = 0;
    // The responses are for the old host.
    responses_ = 0;
    responseFirst_ = 0;
@@ -198,13 +199,15 @@ void Processor::hostGone() {
 }
 
 void Processor::submit(art::span<const uint8_t> request) {
-   if(!canSubmit()) {
-      return;
-   }
    if(request.empty()) {
       return;
    }
    if(request[0] == command::transferAbort) {
+      // All packets that came before it, also the one that runs
+      abortRequests_ = requests_;
+      return;
+   }
+   if(!canSubmit()) {
       return;
    }
    const std::size_t index = (requestFirst_ + requests_) % packetCount;
@@ -228,6 +231,9 @@ void Processor::run() {
       execute(front);
       requestFirst_ = (requestFirst_ + 1) % packetCount;
       --requests_;
+      if(abortRequests_ != 0) {
+         --abortRequests_;
+      }
    }
    running_ = false;
 }
@@ -707,7 +713,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
    uint32_t data = 0;
    uint32_t unused = 0;
 
-   while(todo != 0 && connected_) {
+   while(todo != 0 && connected_ && !aborted()) {
       --todo;
       const uint8_t request = in.u8();
       if((request & requestRead) != 0) {
@@ -741,7 +747,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
                if((data & matchMask_) == match) {
                   break;
                }
-               if(retries-- == 0) {
+               if(retries-- == 0 || aborted()) {
                   value |= valueMismatch;
                   break;
                }
@@ -841,7 +847,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
    uint32_t data = 0;
    uint32_t unused = 0;
 
-   if(connected_ && todo != 0) {
+   if(connected_ && todo != 0 && !aborted()) {
       if(read) {
          if((request & requestApNotDp) != 0) {
             // Post the first AP read.
@@ -849,7 +855,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
          } else {
             value = ackOk;
          }
-         while(todo != 0 && value == ackOk) {
+         while(todo != 0 && value == ackOk && !aborted()) {
             --todo;
             if(todo == 0 && (request & requestApNotDp) != 0) {
                // The last AP read gives the data from RDBUFF.
@@ -863,7 +869,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
             ++done;
          }
       } else {
-         while(todo != 0) {
+         while(todo != 0 && !aborted()) {
             --todo;
             data = in.u32();
             value = swd_.transfer(request, data);
