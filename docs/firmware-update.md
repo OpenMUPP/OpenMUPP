@@ -11,6 +11,10 @@ Use one of these methods:
 - Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`.
 - Hold the key (PB9) down and reset the board.
 
+A firmware image built with `VSL_PROTOCOL=cmsis-dap` has no Versaloon interface.
+It has no `VERSALOON_FW_UPDATE` command.
+Use the key to start the bootloader.
+
 The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 
 | Status | Meaning |

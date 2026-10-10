@@ -4,9 +4,72 @@ This document describes the CMSIS-DAP v2.1 command processor for SWD.
 The code is in `src/protocol/cmsisdap/`.
 `usb::CmsisDapFunction` (`src/usb/CmsisDapFunction.h`) moves the packets over USB.
 See the [CMSIS-DAP personality](usb-device.md#cmsis-dap-personality).
-The firmware image does not use the function yet.
-Thus the firmware does not answer CMSIS-DAP requests yet.
-A later work item selects the personality at build time (see the phase E context in issue #22).
+The build option `VSL_PROTOCOL=cmsis-dap` puts the function and the processor into the firmware image (see [Build](#build)).
+
+## Build
+
+Set the CMake option `VSL_PROTOCOL` to `cmsis-dap`:
+
+```sh
+cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DVSL_PROTOCOL=cmsis-dap
+cmake --build build/mini-dap -j
+```
+
+The default value is `versaloon`.
+The default image does not change.
+The build then writes `versaloon-next-gen-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
+Write the image as in [Firmware update](firmware-update.md).
+All boards build with both values.
+
+The `cmsis-dap` image has these properties:
+
+- USB interface 0 is CMSIS-DAP v2, with `0403:9B3C`. The Versaloon interface is not in the image.
+- The CDC-ACM serial port, the UART bridge, the debug log and the heartbeat are as in the Versaloon image.
+- The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks, the JTAG engine and the power block.
+- The SWD engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
+
+Only one personality is in an image.
+To change the personality, write another image.
+The runtime selection is a later work item.
+
+## Limits
+
+- SWD only. `DAP_Connect` to JTAG replies "failed". The JTAG commands come with a later work item.
+- No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
+- `DAP_TransferAbort` has no effect, because no command runs while another command runs.
+- 64-byte packets, and up to 4 packets in flight.
+- No target power switch and no Vref sense in this personality.
+- The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
+- Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
+- The hardware test with OpenOCD, pyOCD and probe-rs is a later work item. The host tools below follow their documentation.
+
+## Use the probe
+
+The probe has the USB ID `0403:9B3C` and the product name `Versaloon CMSIS-DAP`.
+The host tools find the CMSIS-DAP v2 interface by the text `CMSIS-DAP` in its interface string.
+
+On Linux, a udev rule gives a normal user access to the probe.
+For example, put this line into `/etc/udev/rules.d/99-versaloon-cmsis-dap.rules`:
+
+```text
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="9b3c", MODE="0660", TAG+="uaccess"
+```
+
+Then reload the rules with `udevadm control --reload` and plug in the probe again.
+
+OpenOCD:
+
+```sh
+openocd -f interface/cmsis-dap.cfg -c "cmsis-dap vid_pid 0x0403 0x9b3c" -f target/stm32f1x.cfg
+```
+
+Older OpenOCD versions use the command `cmsis_dap_vid_pid`.
+
+pyOCD finds the probe by its interface string.
+Use `pyocd list` to see the probe and `pyocd gdbserver -t <target>` to start a GDB server.
+
+probe-rs finds the probe in the same way.
+Use `probe-rs list` and then `probe-rs info`.
 
 ## Layers
 

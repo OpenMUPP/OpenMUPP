@@ -38,6 +38,7 @@ The build system and the CI follow the [universal oven controller firmware](http
 | B: serial | M1: USB-serial adapter | The dongle starts from the bootloader and enumerates as Versaloon plus a COM port. The serial bridge works at all line codings. |
 | C: OpenOCD | M2: OpenOCD works | OpenOCD programs and debugs targets over JTAG and SWD |
 | D: release | M3: Release | Fast JTAG through SPI and DMA, throughput tuning, documentation and release builds |
+| E: CMSIS-DAP | M4: CMSIS-DAP probe | A second USB personality, CMSIS-DAP v2, for OpenOCD, pyOCD and probe-rs. Build-time selection first, runtime selection later. |
 
 ## Work items
 
@@ -63,6 +64,16 @@ The estimates are in person-days (low-high).
 | #16 | D1: JTAG fast path with SPI and DMA | 2.5-4 | #12, #15 |
 | #17 | D2: USB and protocol throughput tuning | 1-2 | #15 |
 | #18 | D3: Documentation and release builds | 1-1.5 | #15, #16 |
+| #22 | E1: Make the SWD engine configurable for CMSIS-DAP | 1.5-2.5 | #16, #17, #18 |
+| #23 | E2: CMSIS-DAP command processor (SWD, phase 1 commands) | 3-5 | #22 |
+| #24 | E3: CMSIS-DAP USB function and descriptors | 1.5-2.5 | #23 |
+| #25 | E4: Build-time personality option `VSL_PROTOCOL` | 1-1.5 | #24 |
+| #26 | E5: CMSIS-DAP hardware test with OpenOCD, pyOCD and probe-rs | 1.5-3 | #25 |
+| #27 | E6: `DAP_TransferAbort` during a running command | 0.5-1.5 | #24 |
+| #28 | E7: CMSIS-DAP JTAG commands and JTAG DAP transfers | 2.5-4 | #26 |
+| #29 | E8: Runtime selection of the USB personality | 2-3 | #25 |
+| #30 | E9: Driverless Windows: BOS and MS OS 2.0 descriptors | 1.5-2.5 | #24 |
+| #31 | E10: CMSIS-DAP UART commands (`DAP_UART_*`) | 1-2 | #26 |
 
 ## Dependencies
 
@@ -92,6 +103,16 @@ flowchart LR
     C7 --> D2["#17 D2 throughput"]
     C7 --> D3["#18 D3 docs, release"]
     D1 --> D3
+    D3 --> E1["#22 E1 SWD engine"]
+    E1 --> E2["#23 E2 DAP processor"]
+    E2 --> E3["#24 E3 DAP USB"]
+    E3 --> E4["#25 E4 VSL_PROTOCOL"]
+    E4 --> E5["#26 E5 hardware test"]
+    E3 --> E6["#27 E6 transfer abort"]
+    E5 --> E7["#28 E7 JTAG"]
+    E4 --> E8["#29 E8 runtime selection"]
+    E3 --> E9["#30 E9 driverless Windows"]
+    E5 --> E10["#31 E10 UART"]
 ```
 
 ## Hardware tests

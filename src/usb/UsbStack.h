@@ -1,11 +1,19 @@
 #pragma once
 
 // The USB composite device of the dongle on the STM32F1 USB peripheral:
-// the Versaloon vendor interface and one CDC-ACM serial port (see
-// usb/UsbDescriptors.h). Target only.
+// the protocol interface and one CDC-ACM serial port. Target only.
+//
+// The build selects the personality (VSL_PROTOCOL in CMakeLists.txt):
+//
+//   versaloon (default)  the Versaloon vendor interface of OpenOCD
+//                        (usb/UsbDescriptors.h, usb/VersaloonFunction.h)
+//   cmsis-dap            the CMSIS-DAP v2 interface, VSL_PROTOCOL_CMSIS_DAP
+//                        (usb/CmsisDapDescriptors.h, usb/CmsisDapFunction.h)
+//
+// Only one personality is in an image. The serial port is the same.
 //
 // The USB interrupt only queues the events. poll() runs the USB protocol in
-// the main loop. The Versaloon OUT endpoint is double-buffered: the hardware
+// the main loop. The OUT endpoint of the protocol interface is double-buffered: the hardware
 // receives the next packet of a command while the main loop handles the
 // last one. pollSerial() runs only the serial port, during a long
 // USB_TO_XXX command (usb/SerialEventQueue.h). The D+ pull-up of the board definition connects the
@@ -17,7 +25,11 @@
 #include <usb/Stm32UsbDeviceController.h>
 
 #include "usb/SerialEventQueue.h"
+#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#include "usb/CmsisDapFunction.h"
+#else
 #include "usb/VersaloonFunction.h"
+#endif
 
 #if !defined(ART_STM32_HAS_USB_DEVICE_CONTROLLER)
 #error "libart-stm32 has no USB device controller for this device"
@@ -27,10 +39,16 @@ namespace usb {
 
 class UsbStack {
    public:
+#if defined(VSL_PROTOCOL_CMSIS_DAP)
+   // processor: runs the CMSIS-DAP commands (see usb/CmsisDapFunction.h).
+   // It must outlive the stack.
+   explicit UsbStack(cmsisdap::Processor &processor);
+#else
    // bootloader: the bootloader entry of VERSALOON_FW_UPDATE, nullptr when
    // the firmware has no bootloader. usbToXxx: runs the USB_TO_XXX commands
    // (see protocol/CommandProcessor.h).
    UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler &usbToXxx);
+#endif
 
    UsbStack(const UsbStack &) = delete;
    UsbStack &operator=(const UsbStack &) = delete;
@@ -74,7 +92,11 @@ class UsbStack {
    SerialEventQueue<16> events_;
    Stm32UsbDeviceController controller_;
    art::usb::Device device_;
-   VersaloonFunction versaloon_;
+#if defined(VSL_PROTOCOL_CMSIS_DAP)
+   CmsisDapFunction protocol_;
+#else
+   VersaloonFunction protocol_;
+#endif
    art::usb::CdcAcmFunction<serialRxSize, serialTxSize> serialPort_;
 };
 

@@ -48,9 +48,8 @@ The firmware has a second USB personality: CMSIS-DAP v2 instead of the Versaloon
 Only one personality is active in a firmware image.
 The USB peripheral has 512 bytes of packet memory.
 The Versaloon interface and a CMSIS-DAP interface do not fit together.
+The build option `VSL_PROTOCOL` selects the personality (see [Select the personality](#select-the-personality)).
 The Versaloon personality is the default.
-A later work item adds the selection and the wiring into `usb::UsbStack`.
-Until then, the firmware does not serve the CMSIS-DAP descriptors.
 
 `src/usb/CmsisDapDescriptors.h` has the descriptors.
 `src/usb/CmsisDapFunction.h` has the USB function.
@@ -80,6 +79,31 @@ When a bus reset or `SET_CONFIGURATION 0` closes the interface, the function cal
 A suspend only releases the target pins, because the USB transfer state stays.
 When a `DAP_QueueCommands` packet takes the last free slot, the processor runs the queue at once.
 Thus queued packets alone do not hold the OUT endpoint, and each queued packet gets its response.
+
+### Select the personality
+
+The CMake option `VSL_PROTOCOL` selects the personality of the image:
+
+| `VSL_PROTOCOL` | USB interface 0 | VID:PID | Sources |
+|---|---|---|---|
+| `versaloon` (default) | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/`) |
+| `cmsis-dap` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
+
+The option defines `VSL_PROTOCOL_CMSIS_DAP` for the `cmsis-dap` image.
+`usb::UsbStack` and `main.cpp` use the define to select the USB function, the descriptors and the protocol objects.
+The CMake file also removes the source files of the other personality.
+Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
+Both images share the CDC-ACM serial port, the UART bridge, the debug log, the heartbeat and the LEDs.
+
+The CMSIS-DAP image differs from the Versaloon image in these points:
+
+- It has no `VERSALOON_FW_UPDATE` command.
+  Start the bootloader with the key (see [Firmware update](firmware-update.md)).
+- It has no target power switch and no `GET_TVCC`.
+- It has no JTAG: `DAP_Connect` to JTAG replies "failed" until the JTAG commands exist.
+
+The runtime selection of the personality is a later work item.
+The names of the image files have the text `-cmsis-dap` after the board name.
 
 ## Versaloon commands
 
