@@ -154,6 +154,12 @@ class FakePlatform final : public cmsisdap::Platform {
    std::vector<std::pair<cmsisdap::Led, bool>> leds;
 };
 
+// Stores a request and runs the stored requests, as the main loop does.
+void send(Processor &dap, const Bytes &request) {
+   dap.submit(request);
+   dap.run();
+}
+
 cmsisdap::DeviceInfo deviceInfo() {
    cmsisdap::DeviceInfo info;
    info.vendor = "Vendor";
@@ -178,7 +184,7 @@ struct Bench {
 
    Bytes run(const Bytes &request) {
       REQUIRE(dap.canSubmit());
-      dap.submit(request);
+      send(dap, request);
       REQUIRE(dap.hasResponse());
       return pop();
    }
@@ -245,7 +251,7 @@ TEST_CASE("DAP_Info: information that is not available has length 0") {
    }
    b.info.vendor = nullptr;
    Processor empty(b.swd, b.gpio, b.platform, b.info);
-   empty.submit(V{ 0x00, 0x01 });
+   send(empty, V{ 0x00, 0x01 });
    CHECK(Bytes(empty.response().begin(), empty.response().end()) == V{ 0x00, 0x00 });
 }
 
@@ -255,12 +261,12 @@ TEST_CASE("DAP_Info: a long string is cut, and a second capability byte is sent"
    b.info.product = longText.c_str();
    b.info.capabilities = 0x0191;
    Processor dap(b.swd, b.gpio, b.platform, b.info);
-   dap.submit(V{ 0x00, 0x02 });
+   send(dap, V{ 0x00, 0x02 });
    CHECK(dap.response().size() == 64);
    CHECK(dap.response()[1] == 62);
    CHECK(dap.response()[63] == 0);
    dap.popResponse();
-   dap.submit(V{ 0x00, 0xF0 });
+   send(dap, V{ 0x00, 0xF0 });
    CHECK(Bytes(dap.response().begin(), dap.response().end()) == V{ 0x00, 0x02, 0x91, 0x01 });
 }
 
@@ -817,7 +823,7 @@ TEST_CASE("DAP_TransferBlock: a write needs room for its response") {
    const std::string longText(57, 'x');
    b.info.vendor = longText.c_str();
    Processor dap(b.swd, b.gpio, b.platform, b.info);
-   dap.submit(cat({ { 0x7F, 0x02, 0x00, 0x01 }, { 0x06, 0x00, 0x01, 0x00, writeTar }, word(1) }));
+   send(dap, cat({ { 0x7F, 0x02, 0x00, 0x01 }, { 0x06, 0x00, 0x01, 0x00, writeTar }, word(1) }));
    const auto response = dap.response();
    CHECK(response.size() == 2 + 2 + 58);
    CHECK(response[1] == 1);
@@ -854,7 +860,7 @@ TEST_CASE("DAP_ExecuteCommands: a response that does not fit stops the list") {
    const std::string longText(20, 'x');
    b.info.vendor = longText.c_str();
    Processor dap(b.swd, b.gpio, b.platform, b.info);
-   dap.submit(V{ 0x7F, 0x03, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01 });
+   send(dap, V{ 0x7F, 0x03, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01 });
    const auto response = dap.response();
    CHECK(response.size() == 2 + 2 * 23);
    CHECK(response[1] == 2);
@@ -862,12 +868,12 @@ TEST_CASE("DAP_ExecuteCommands: a response that does not fit stops the list") {
 
 TEST_CASE("DAP_QueueCommands runs the packets back to back") {
    Bench b;
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x05, 0x00 });
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x06, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x05, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x06, 0x00 });
    CHECK_FALSE(b.dap.hasResponse());
    CHECK(b.platform.delays.empty());
    // The next other command runs the queue and then itself.
-   b.dap.submit(V{ 0x00, 0xFF });
+   send(b.dap, V{ 0x00, 0xFF });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 5, 6 });
    // The queued responses have the ID of DAP_ExecuteCommands.
    CHECK(b.pop() == V{ 0x7F, 0x01, 0x09, 0x00 });
@@ -879,16 +885,16 @@ TEST_CASE("DAP_QueueCommands runs the packets back to back") {
 TEST_CASE("DAP_QueueCommands: a queued packet in the last free slot runs the queue") {
    Bench b;
    for(unsigned i = 0; i < Processor::packetCount - 1; ++i) {
-      b.dap.submit(V{ 0x7E, 0x01, 0x09, static_cast<uint8_t>(i + 1), 0x00 });
+      send(b.dap, V{ 0x7E, 0x01, 0x09, static_cast<uint8_t>(i + 1), 0x00 });
    }
    CHECK(b.dap.canSubmit());
    CHECK(b.platform.delays.empty());
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2, 3, 4 });
    CHECK_FALSE(b.dap.canSubmit());
 
    // A packet that is not accepted has no effect.
-   b.dap.submit(V{ 0x09, 0x07, 0x00 });
+   send(b.dap, V{ 0x09, 0x07, 0x00 });
    CHECK(b.platform.delays.size() == 4);
 
    // Each queued packet has its response.
@@ -901,11 +907,11 @@ TEST_CASE("DAP_QueueCommands: a queued packet in the last free slot runs the que
 
 TEST_CASE("DAP_QueueCommands: a queued packet in the last slot after responses runs the queue") {
    Bench b;
-   b.dap.submit(V{ 0x09, 0x01, 0x00 });
-   b.dap.submit(V{ 0x09, 0x02, 0x00 });
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x03, 0x00 });
+   send(b.dap, V{ 0x09, 0x01, 0x00 });
+   send(b.dap, V{ 0x09, 0x02, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x03, 0x00 });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2 });
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x04, 0x00 });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 1, 2, 3, 4 });
    CHECK(b.pop() == V{ 0x09, 0x00 });
    CHECK(b.pop() == V{ 0x09, 0x00 });
@@ -916,9 +922,9 @@ TEST_CASE("DAP_QueueCommands: a queued packet in the last slot after responses r
 
 TEST_CASE("DAP_QueueCommands: hostGone() drops the queue") {
    Bench b;
-   b.dap.submit(V{ 0x7E, 0x01, 0x09, 0x01, 0x00 });
+   send(b.dap, V{ 0x7E, 0x01, 0x09, 0x01, 0x00 });
    b.dap.hostGone();
-   b.dap.submit(V{ 0x09, 0x02, 0x00 });
+   send(b.dap, V{ 0x09, 0x02, 0x00 });
    CHECK(b.platform.delays == std::vector<uint32_t>{ 2 });
    CHECK(b.pop() == V{ 0x09, 0x00 });
    CHECK_FALSE(b.dap.hasResponse());
@@ -927,9 +933,9 @@ TEST_CASE("DAP_QueueCommands: hostGone() drops the queue") {
 TEST_CASE("DAP_QueueCommands: the responses make room") {
    Bench b;
    for(unsigned i = 0; i < Processor::packetCount - 1; ++i) {
-      b.dap.submit(V{ 0x7E, 0x00 });
+      send(b.dap, V{ 0x7E, 0x00 });
    }
-   b.dap.submit(V{ 0x09, 0x01, 0x00 });
+   send(b.dap, V{ 0x09, 0x01, 0x00 });
    CHECK(b.dap.hasResponse());
    CHECK_FALSE(b.dap.canSubmit());
    CHECK(b.pop() == V{ 0x7F, 0x00 });
@@ -946,9 +952,9 @@ TEST_CASE("Unknown commands, DAP_TransferAbort and bad packets") {
    CHECK(b.run({ 0x7F, 0x02, 0x55, 0x09, 0x01, 0x00 })[0] == 0x7F);
 
    // DAP_TransferAbort has no response.
-   b.dap.submit(V{ 0x07 });
+   send(b.dap, V{ 0x07 });
    CHECK_FALSE(b.dap.hasResponse());
-   b.dap.submit(V{});
+   send(b.dap, V{});
    CHECK_FALSE(b.dap.hasResponse());
 
    // More than a packet
@@ -969,7 +975,7 @@ TEST_CASE("hostGone disconnects") {
 
 TEST_CASE("hostGone drops the responses that were not sent") {
    Bench b;
-   b.dap.submit(V{ 0x09, 0x01, 0x00 });
+   send(b.dap, V{ 0x09, 0x01, 0x00 });
    REQUIRE(b.dap.hasResponse());
    b.dap.hostGone();
    CHECK_FALSE(b.dap.hasResponse());

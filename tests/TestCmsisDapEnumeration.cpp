@@ -302,3 +302,29 @@ TEST_CASE("A suspend and resume keep the responses in order") {
    CHECK(bench.read() == Bytes{ 0x01, 0x00 });
    CHECK_FALSE(bench.read().has_value());
 }
+
+TEST_CASE("A command that arrives while a command runs waits for it") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   // The OUT endpoint is armed while the block runs.
+   bool sent = false;
+   bench.swd.onTransfer = [&bench, &sent] {
+      if(bench.swd.transfers == 2) {
+         sent = bench.send({ 0x09, 0x07, 0x00 });
+         CHECK(bench.platform.delays.empty());
+      }
+   };
+   // DAP_TransferBlock: 4 reads of DP RDBUFF
+   REQUIRE(bench.write({ 0x06, 0x00, 0x04, 0x00, 0x0E }));
+   CHECK(sent);
+   CHECK(bench.platform.delays == std::vector<uint32_t>{ 7 });
+   const auto block = bench.read();
+   REQUIRE(block.has_value());
+   CHECK(Bytes(block->begin(), block->begin() + 4) == Bytes{ 0x06, 0x04, 0x00, 0x01 });
+   CHECK(bench.read() == Bytes{ 0x09, 0x00 });
+   CHECK_FALSE(bench.read().has_value());
+   CHECK(bench.controller().isArmed(dapOut));
+}

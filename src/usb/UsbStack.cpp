@@ -111,6 +111,9 @@ void UsbStack::start() {
 
 void UsbStack::poll() {
    controller_.poll();
+#if defined(VSL_PROTOCOL_CMSIS_DAP)
+   protocol_.poll();
+#endif
    // Without VSL_DEBUG_CDC the UART bridge reads the serial port
    // (uart/SerialBridge.h).
    if constexpr(debug::cdcLog) {

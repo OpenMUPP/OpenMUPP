@@ -172,7 +172,7 @@ void startProtocol() {
    setDapSerialNumber();
 }
 
-// The processor has no periodic work: the USB function runs it.
+// The processor has no periodic work: UsbStack::poll() runs it.
 void beforeUsbPoll(uint64_t /*nowMs*/) {
 }
 

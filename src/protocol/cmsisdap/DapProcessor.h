@@ -2,11 +2,13 @@
 
 // The CMSIS-DAP v2.1 command processor for SWD. Hardware-independent: it
 // runs on a DapSwd object, a protocol::GpioPins object and a Platform
-// object, and the host unit tests use mock ones. A USB function (a later
-// change) moves the packets.
+// object, and the host unit tests use mock ones. usb::CmsisDapFunction
+// moves the packets.
 //
 // The transport calls submit() for each request packet (at most
-// packetSize bytes) and sends the response packets in order. Commands:
+// packetSize bytes). submit() only stores the packet. run() runs the
+// stored packets, in the main loop. The transport sends the response
+// packets in order. Commands:
 //
 //   0x00 DAP_Info             0x10 DAP_SWJ_Pins        0x1D DAP_SWD_Sequence
 //   0x01 DAP_HostStatus       0x11 DAP_SWJ_Clock       0x7E DAP_QueueCommands
@@ -48,8 +50,14 @@
 // the queue.
 //
 // Each packet that has no response yet takes one slot of the packetCount
-// slots. The transport must call canSubmit() before submit(), and send the
-// responses (response(), popResponse()) to make room.
+// slots: a stored packet, a queued packet and the packet that runs. The
+// transport must call canSubmit() before submit(), and send the responses
+// (response(), popResponse()) to make room.
+//
+// submit(), response() and popResponse() can also run during run(), from
+// the background service of the SWD engine (protocol/Background.h). A
+// packet that arrives then waits until the running packet ends. run() does
+// not start again from there.
 
 #include <array>
 #include <cstddef>
@@ -159,12 +167,16 @@ class Processor {
    Processor(DapSwd &swd, protocol::GpioPins &gpio, Platform &platform, const DeviceInfo &info);
 
    [[nodiscard]] bool canSubmit() const {
-      return queued_ + responses_ < packetCount;
+      return requests_ + responses_ < packetCount;
    }
 
-   // Runs a request packet, or queues it (DAP_QueueCommands). Needs
-   // canSubmit(). A packet of more than packetSize bytes gives ID_DAP_Invalid.
+   // Stores a request packet for run(). Needs canSubmit(). A packet of more
+   // than packetSize bytes gives ID_DAP_Invalid.
    void submit(art::span<const uint8_t> request);
+
+   // Runs the stored packets in order, and keeps the DAP_QueueCommands
+   // packets that wait. Call it in the main loop, not during run().
+   void run();
 
    [[nodiscard]] bool hasResponse() const {
       return responses_ != 0;
@@ -188,10 +200,14 @@ class Processor {
 
    private:
    using Packet = std::array<uint8_t, packetSize>;
+   // One byte more than a packet: a longer request gives ID_DAP_Invalid.
+   using Request = std::array<uint8_t, packetSize + 1>;
 
    [[nodiscard]] bool processCommand(PacketReader &in, PacketWriter &out, bool nested);
    void execute(art::span<const uint8_t> request);
-   void flushQueue();
+   [[nodiscard]] art::span<uint8_t> request(std::size_t index);
+   [[nodiscard]] bool isQueued(std::size_t index);
+   [[nodiscard]] bool mustWait();
 
    [[nodiscard]] bool infoCommand(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool hostStatus(PacketReader &in, PacketWriter &out);
@@ -223,10 +239,14 @@ class Processor {
    uint32_t matchMask_{ 0 };
    uint32_t clockHz_{ defaultClockHz };
 
-   // The queued request packets, and the response packets
-   std::array<Packet, packetCount> queue_{};
-   std::array<uint8_t, packetCount> queueLength_{};
-   std::size_t queued_{ 0 };
+   // The request packets in order: the packet that runs, the
+   // DAP_QueueCommands packets that wait, and the packets that submit()
+   // stored. And the response packets.
+   std::array<Request, packetCount> requestBuffer_{};
+   std::array<uint8_t, packetCount> requestLength_{};
+   std::size_t requestFirst_{ 0 };
+   std::size_t requests_{ 0 };
+   bool running_{ false };
    std::array<Packet, packetCount> responseBuffer_{};
    std::array<uint8_t, packetCount> responseLength_{};
    std::size_t responseFirst_{ 0 };

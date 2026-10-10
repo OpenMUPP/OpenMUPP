@@ -189,7 +189,8 @@ void Processor::popResponse() {
 }
 
 void Processor::hostGone() {
-   queued_ = 0;
+   requests_ = 0;
+   requestFirst_ = 0;
    // The responses are for the old host.
    responses_ = 0;
    responseFirst_ = 0;
@@ -206,27 +207,54 @@ void Processor::submit(art::span<const uint8_t> request) {
    if(request[0] == command::transferAbort) {
       return;
    }
-   if(request[0] == command::queueCommands && request.size() <= packetSize) {
-      std::copy(request.begin(), request.end(), queue_[queued_].begin());
-      queueLength_[queued_] = static_cast<uint8_t>(request.size());
-      ++queued_;
-      // A queued packet in the last free slot runs the queue: no response
-      // could free a slot for the packet that ends the queue.
-      if(queued_ + responses_ == packetCount) {
-         flushQueue();
-      }
-      return;
-   }
-   flushQueue();
-   execute(request);
+   const std::size_t index = (requestFirst_ + requests_) % packetCount;
+   const std::size_t length = std::min(request.size(), requestBuffer_[index].size());
+   std::copy_n(request.begin(), length, requestBuffer_[index].begin());
+   requestLength_[index] = static_cast<uint8_t>(length);
+   ++requests_;
 }
 
-void Processor::flushQueue() {
-   for(std::size_t i = 0; i < queued_; ++i) {
-      queue_[i][0] = command::executeCommands;
-      execute({ queue_[i].data(), queueLength_[i] });
+void Processor::run() {
+   if(running_) {
+      return;
    }
-   queued_ = 0;
+   running_ = true;
+   while(requests_ != 0 && !mustWait()) {
+      const auto front = request(0);
+      if(isQueued(0)) {
+         front[0] = command::executeCommands;
+      }
+      // submit() can add packets behind this one while it runs.
+      execute(front);
+      requestFirst_ = (requestFirst_ + 1) % packetCount;
+      --requests_;
+   }
+   running_ = false;
+}
+
+art::span<uint8_t> Processor::request(std::size_t index) {
+   const std::size_t slot = (requestFirst_ + index) % packetCount;
+   return { requestBuffer_[slot].data(), requestLength_[slot] };
+}
+
+bool Processor::isQueued(std::size_t index) {
+   const auto packet = request(index);
+   return packet[0] == command::queueCommands && packet.size() <= packetSize;
+}
+
+// The DAP_QueueCommands packets wait for the next packet with another
+// command. A queued packet in the last free slot runs the queue: no
+// response could free a slot for the packet that ends the queue.
+bool Processor::mustWait() {
+   if(!canSubmit()) {
+      return false;
+   }
+   for(std::size_t i = 0; i < requests_; ++i) {
+      if(!isQueued(i)) {
+         return false;
+      }
+   }
+   return true;
 }
 
 // Runs a packet and appends its response.

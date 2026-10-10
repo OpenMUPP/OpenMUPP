@@ -90,7 +90,12 @@ It uses these objects:
 ## Transport
 
 The USB function calls `submit()` for each request packet.
-It sends the response packets in order.
+`submit()` only stores the packet.
+`UsbStack::poll()` then calls `CmsisDapFunction::poll()` in the main loop, and this calls `run()`.
+`run()` runs the stored packets in order.
+Thus the OUT endpoint stays armed while a command runs.
+A packet that arrives during a command waits until that command ends.
+The USB function sends the response packets in order.
 The packet size is 64 bytes, and up to 4 packets are in flight.
 Call `canSubmit()` before `submit()`.
 Each packet without a response takes one of the 4 slots.

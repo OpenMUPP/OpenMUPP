@@ -8,13 +8,20 @@ CmsisDapFunction::CmsisDapFunction(cmsisdap::Processor &processor)
    , processor_(processor) {
 }
 
+void CmsisDapFunction::poll() {
+   processor_.run();
+   sendResponse();
+   if(processor_.canSubmit()) {
+      resumeOut();
+   }
+}
+
 bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {
    // The OUT endpoint is held while no slot is free, so a packet that
-   // arrives here always fits.
+   // arrives here always fits. poll() runs it.
    if(!packet.empty()) {
       processor_.submit(packet);
    }
-   sendResponse();
    return processor_.canSubmit();
 }
 
