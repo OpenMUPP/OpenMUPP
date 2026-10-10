@@ -29,6 +29,7 @@ add_executable(vsl-tests
         TestVersion.cpp
         TestBoards.cpp
         TestHeartbeat.cpp
+        TestUptimeMicros.cpp
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
         TestCmsisDapDescriptors.cpp

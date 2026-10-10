@@ -24,6 +24,7 @@
 
 #include "Hardware.h"
 #include "Heartbeat.h"
+#include "UptimeMicros.h"
 #include "Version.h"
 #include "board/Board.h"
 #include "board/BoardGpio.h"
@@ -72,13 +73,20 @@ constexpr const char *dapProduct = "Versaloon CMSIS-DAP";
 
 std::array<char, 2 * hw::Uid::SizeBytes + 1> dapSerialNumber{};
 
-// Time of the processor. The uptime in milli-ticks is the uptime in
-// microseconds (1 ms per SysTick), and it wraps at 2^32 as the
-// processor needs.
+// Time of the processor. It is the uptime in microseconds (1 ms per
+// SysTick) and wraps at 2^32 as the processor needs. getUptimeMilliTicks()
+// of system-stm32 can go back by 1 ms when the SysTick counter wraps
+// with interrupts off, so the registers are read here (UptimeMicros.h).
 class DapPlatform final : public cmsisdap::Platform {
    public:
    uint32_t nowUs() override {
-      return static_cast<uint32_t>(getUptimeMilliTicks());
+      const uint32_t primask = __get_PRIMASK();
+      __disable_irq();
+      const auto ticks = static_cast<uint64_t>(getUptimeTicks());
+      const uint32_t value = SysTick->VAL;
+      const bool tickPending = (SCB->ICSR & SCB_ICSR_PENDSTSET_Msk) != 0;
+      __set_PRIMASK(primask);
+      return uptimeMicroseconds(ticks, SysTick->LOAD + 1, value, tickPending);
    }
    void delayUs(uint32_t microseconds) override {
       // The pin wait of DAP_SWJ_Pins is up to 3 s
