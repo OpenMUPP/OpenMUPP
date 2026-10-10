@@ -62,8 +62,9 @@ class UsbStack {
    void poll();
 
    // Delivers the serial port events at the front of the queue, and no
-   // other events. Call it during a USB_TO_XXX command (see
-   // protocol/Background.h), not in the main loop.
+   // other events. In the CMSIS-DAP personality, also the packet events of
+   // the CMSIS-DAP endpoints (usb/SerialEventQueue.h). Call it during a
+   // command (see protocol/Background.h), not in the main loop.
    void pollSerial();
 
    // True when the host has configured the device.

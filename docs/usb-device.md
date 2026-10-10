@@ -295,6 +295,9 @@ The serial service does these steps:
    It stops at the first other event: a SETUP packet, a bus reset, a suspend, a resume, or a Versaloon endpoint event.
    That event waits until the command ends, so the order of the events does not change.
    Thus the service does not start a new command, and the host does not disconnect during the command.
+   In the CMSIS-DAP personality, the service also delivers the events of the CMSIS-DAP endpoints.
+   A CMSIS-DAP packet only waits in the processor, so this starts no command (see [CMSIS-DAP transport](cmsis-dap.md#transport)).
+   Thus `DAP_TransferAbort` can stop a running transfer command.
 2. It moves the UART data (`uart::pollBridge()`), or the debug log in a `VSL_DEBUG_CDC` build.
 
 Each call sends one IN packet of up to 64 bytes: 64 bytes per ms.

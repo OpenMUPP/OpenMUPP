@@ -86,6 +86,10 @@ UsbStack::UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler 
 #endif
    , serialPort_(cdcControlInterface, serialPortEndpoints) {
    controller_.setDoubleBufferedOut(protocolOutEndpoint);
+#if defined(VSL_PROTOCOL_CMSIS_DAP)
+   // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
+   events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
+#endif
    // Fails only for an interface range that does not fit the device: a
    // static configuration error, which the host tests catch.
    static_cast<void>(device_.addFunction(protocol_));
