@@ -37,6 +37,7 @@ The runtime selection is a later work item.
 - SWD only. `DAP_Connect` to JTAG replies "failed". The JTAG commands come with a later work item.
 - No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
 - `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one transfer. It does not stop other commands, for example `DAP_Delay`.
+- `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.

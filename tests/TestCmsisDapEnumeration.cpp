@@ -395,3 +395,27 @@ TEST_CASE("A packet before a suspend runs after the resume") {
    CHECK(bench.platform.delays == std::vector<uint32_t>{ 5 });
    CHECK(bench.read() == Bytes{ 0x09, 0x00 });
 }
+
+TEST_CASE("DAP_TransferAbort waits at the OUT endpoint when all slots are in use") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   bool abortSent = true;
+   bench.swd.onTransfer = [&bench, &abortSent] {
+      if(bench.swd.transfers == 1) {
+         // The block and three more packets use the four slots.
+         for(int i = 0; i < 3; ++i) {
+            CHECK(bench.send({ 0x09, 0x01, 0x00 }));
+         }
+         abortSent = bench.send({ 0x07 });
+      }
+   };
+   REQUIRE(bench.write({ 0x06, 0x00, 0x02, 0x00, 0x06 }));
+   CHECK_FALSE(abortSent);
+   // The block was not stopped.
+   const auto block = bench.read();
+   REQUIRE(block.has_value());
+   CHECK((*block)[1] == 0x02);
+}
