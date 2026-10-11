@@ -132,9 +132,16 @@ The common commands are:
 | `GET_INFO` | `[0x00]` | `[buffer size u16][version text][0x00]` |
 | `GET_TVCC` | `[0x01]` | `[target voltage in mV u16]`, from the Vref sense (see [POWER block](#power-block)). The value is 0 when the board has no sense or the measurement fails. |
 | `GET_HARDWARE` | `[0x02]` | `[hardware ID u8]`, from the board definition (see [Boards](boards.md)). |
+| `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
 The version text has the form `versaloon-next-gen <version>, board <board>`.
+
+`SWITCH_PERSONALITY` changes the USB personality of a dual image (see [Dual image](#dual-image)).
+The firmware sends the reply, stores the personality and resets.
+An image with one personality refuses the command.
+The firmware also refuses a personality code other than `0` and `1`.
+A switch to the active personality gets status `0`, and the firmware does not reset.
 Other common commands have no reply.
 The `USB_TO_XXX` commands go to the `USB_TO_ALL` dispatcher (see [USB_TO_ALL](#usb_to_all)).
 

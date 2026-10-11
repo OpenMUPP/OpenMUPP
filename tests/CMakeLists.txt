@@ -40,6 +40,7 @@ add_executable(vsl-tests
         TestSerialEventQueue.cpp
         TestBootloaderEntry.cpp
         TestPersonalityStore.cpp
+        TestPersonalitySwitch.cpp
         TestCommandAssembler.cpp
         TestCommandProcessor.cpp
         TestUsbToAll.cpp

@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "boot/BootloaderEntry.h"
+#include "personality/PersonalitySwitch.h"
 #include "protocol/Versaloon.h"
 
 namespace protocol {
@@ -22,10 +23,14 @@ uint8_t *append(uint8_t *out, const uint8_t *limit, std::string_view text) {
 
 } // namespace
 
-CommandProcessor::CommandProcessor(const DeviceInfo &info, boot::BootloaderEntry *bootloader, UsbToXxxHandler *usbToXxx)
+CommandProcessor::CommandProcessor(const DeviceInfo &info,
+                                   boot::BootloaderEntry *bootloader,
+                                   UsbToXxxHandler *usbToXxx,
+                                   personality::PersonalitySwitch *personalitySwitch)
    : info_(info)
    , bootloader_(bootloader)
-   , usbToXxx_(usbToXxx) {
+   , usbToXxx_(usbToXxx)
+   , personalitySwitch_(personalitySwitch) {
 }
 
 std::optional<std::size_t> CommandProcessor::process(art::span<const uint8_t> command, art::span<uint8_t> reply) {
@@ -47,6 +52,8 @@ std::optional<std::size_t> CommandProcessor::process(art::span<const uint8_t> co
    case getHardware:
       reply[0] = info_.hardwareId;
       return 1;
+   case switchPersonality:
+      return personalitySwitch(command, reply);
    case fwUpdate:
       return firmwareUpdate(command, reply);
    default:
@@ -79,6 +86,18 @@ std::size_t CommandProcessor::firmwareUpdate(art::span<const uint8_t> command, a
       // The main loop resets after the reply delay, also when the host does
       // not read the reply.
       bootloader_->request();
+   }
+   return 1;
+}
+
+std::size_t CommandProcessor::personalitySwitch(art::span<const uint8_t> command, art::span<uint8_t> reply) {
+   const auto target = command.size() >= 2 ? personality::fromCode(command[1]) : std::nullopt;
+   const bool accept = personalitySwitch_ != nullptr && target.has_value();
+   reply[0] = accept ? switchAccepted : switchRefused;
+   if(accept) {
+      // The main loop stores the personality and resets after the reply
+      // delay.
+      personalitySwitch_->request(*target);
    }
    return 1;
 }

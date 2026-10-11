@@ -19,7 +19,7 @@
 //   0x06 DAP_TransferBlock      0x16 DAP_JTAG_IDCODE
 //   0x08 DAP_WriteABORT         0x1D DAP_SWD_Sequence
 //   0x09 DAP_Delay
-//   0x0A DAP_ResetTarget
+//   0x0A DAP_ResetTarget        0x80 ID_DAP_Vendor0
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
 // DAP.c): posted AP reads, RDBUFF at the end of a read sequence, a read of
@@ -51,6 +51,12 @@
 // - The timestamp bit of DAP_Transfer is ignored: the capabilities do not
 //   include the test domain timer.
 // - DAP_ExecuteCommands and DAP_QueueCommands do not nest.
+// - ID_DAP_Vendor0 [0x80][personality u8] -> [0x80][status u8] switches
+//   the USB personality of a dual image (personality/PersonalitySwitch.h).
+//   The personality is the code of personality/Personality.h: 0 Versaloon,
+//   1 CMSIS-DAP. The status is DAP_OK (0) or 1 for a code that is not a
+//   personality. Without a personality switch (an image with one
+//   personality), the command replies ID_DAP_Invalid.
 //
 // DAP_QueueCommands packets wait. The next packet with another command
 // runs the queued packets and then itself, back to back. The responses of
@@ -79,6 +85,10 @@
 #include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
 
+namespace personality {
+class PersonalitySwitch;
+}
+
 namespace cmsisdap {
 
 namespace command {
@@ -101,6 +111,7 @@ inline constexpr uint8_t jtagSequence = 0x14;
 inline constexpr uint8_t jtagConfigure = 0x15;
 inline constexpr uint8_t jtagIdcode = 0x16;
 inline constexpr uint8_t swdSequence = 0x1D;
+inline constexpr uint8_t vendor0 = 0x80;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
 inline constexpr uint8_t invalid = 0xFF;
@@ -180,8 +191,14 @@ class Processor {
    // The longest wait of DAP_SWJ_Pins
    static constexpr uint32_t maxPinWaitUs = 3'000'000;
 
-   // jtag: nullptr for a board without JTAG.
-   Processor(DapSwd &swd, protocol::GpioPins &gpio, Platform &platform, const DeviceInfo &info, protocol::JtagPort *jtag = nullptr);
+   // jtag: nullptr for a board without JTAG. personalitySwitch: nullptr
+   // for an image with one personality.
+   Processor(DapSwd &swd,
+             protocol::GpioPins &gpio,
+             Platform &platform,
+             const DeviceInfo &info,
+             protocol::JtagPort *jtag = nullptr,
+             personality::PersonalitySwitch *personalitySwitch = nullptr);
 
    [[nodiscard]] bool canSubmit() const {
       return requests_ + responses_ < packetCount;
@@ -258,6 +275,7 @@ class Processor {
    [[nodiscard]] bool jtagConfigure(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool jtagIdcode(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool executeCommands(uint8_t id, PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool switchPersonality(PacketReader &in, PacketWriter &out);
 
    [[nodiscard]] uint8_t pinsIn() const;
    void applySettings();
@@ -273,6 +291,7 @@ class Processor {
    protocol::GpioPins &gpio_;
    Platform &platform_;
    DeviceInfo info_;
+   personality::PersonalitySwitch *personalitySwitch_;
 
    Port port_{ Port::None };
    // Also the idle cycles and the WAIT retries of JTAG

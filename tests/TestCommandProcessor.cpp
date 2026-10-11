@@ -134,7 +134,7 @@ TEST_CASE("FW_UPDATE is refused without a bootloader") {
 
 TEST_CASE("Unknown commands have no reply") {
    Bench bench;
-   for(const uint8_t command : { 0x03, 0x0E, 0x10, 0x1F, 0x80, 0xFF }) {
+   for(const uint8_t command : { 0x03, 0x0D, 0x10, 0x1F, 0x80, 0xFF }) {
       CAPTURE(int(command));
       CHECK_FALSE(bench.run({ command }).has_value());
    }

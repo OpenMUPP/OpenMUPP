@@ -39,10 +39,12 @@ namespace usb {
 
 class VersaloonFunction final : public art::usb::VendorBulkFunction {
    public:
-   // See protocol::CommandProcessor for bootloader and usbToXxx.
+   // See protocol::CommandProcessor for bootloader, usbToXxx and
+   // personalitySwitch.
    explicit VersaloonFunction(const protocol::DeviceInfo &info,
                               boot::BootloaderEntry *bootloader = nullptr,
-                              protocol::UsbToXxxHandler *usbToXxx = nullptr);
+                              protocol::UsbToXxxHandler *usbToXxx = nullptr,
+                              personality::PersonalitySwitch *personalitySwitch = nullptr);
 
    protected:
    bool dataReceived(art::span<const uint8_t> packet) override;
