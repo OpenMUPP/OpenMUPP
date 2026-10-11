@@ -49,7 +49,7 @@ class FakeFlashPage final : public personality::FlashPage {
 };
 
 constexpr uint16_t record(Personality personality) {
-   return static_cast<uint16_t>(PersonalityStore::recordTag | personality::toCode(personality));
+   return PersonalityStore::recordOf(personality);
 }
 
 } // namespace
@@ -120,7 +120,7 @@ TEST_CASE("A cut record is not a stored personality") {
    FakeFlashPage page;
    PersonalityStore store{ page };
    // A power loss during the write cleared only some bits
-   page.content[0] = 0x5AFE;
+   page.content[0] = static_cast<uint16_t>(record(Personality::CmsisDap) | 0x0100);
 
    CHECK_FALSE(store.load().has_value());
 
@@ -131,12 +131,31 @@ TEST_CASE("A cut record is not a stored personality") {
    CHECK(store.load() == Personality::CmsisDap);
 }
 
-TEST_CASE("A record without the tag is not a stored personality") {
+TEST_CASE("Another value is not a stored personality") {
    FakeFlashPage page;
    const PersonalityStore store{ page };
    page.content[0] = 0x0001;
 
    CHECK_FALSE(store.load().has_value());
+}
+
+TEST_CASE("A cut record is never the record of the other personality") {
+   // A cut write leaves a value with all the 0 bits of a subset of the
+   // record: each value v with (v & record) == record.
+   for(const auto target : { Personality::Versaloon, Personality::CmsisDap }) {
+      const uint16_t full = record(target);
+      for(uint32_t value = 0; value <= 0xFFFF; ++value) {
+         if((value & full) != full || value == full || value == PersonalityStore::erasedSlot) {
+            continue;
+         }
+         FakeFlashPage page;
+         const PersonalityStore store{ page };
+         page.content[0] = static_cast<uint16_t>(value);
+         const auto loaded = store.load();
+         CAPTURE(value);
+         CHECK_FALSE(loaded.has_value());
+      }
+   }
 }
 
 TEST_CASE("A page with data after the first erased slot is erased first") {

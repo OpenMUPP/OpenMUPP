@@ -2,17 +2,20 @@
 
 // The stored personality of a dual image, in one flash page at the end of
 // the application area. Hardware-independent: the host unit tests run it
-// on a fake page. personality/FlashPage.h has the page of the target.
+// on a fake page. board/SettingsFlashPage.h has the page of the target.
 //
-// The page is a log of 16-bit records. An erased slot is 0xFFFF. A record
-// is recordTag | the personality code (personality/Personality.h). The
-// first erased slot ends the log, and the record before it is the stored
-// personality. store() writes the next slot, so the page is erased only
-// when it is full: one erase for each slotCount switches.
+// The page is a log of 16-bit records. An erased slot is 0xFFFF. Each
+// personality has one record value (recordOf()). The first erased slot
+// ends the log, and the record before it is the stored personality.
+// store() writes the next slot, so the page is erased only when it is
+// full: one erase for each slot of the page.
 //
-// A slot that a power loss cut is not a valid record: load() then returns
-// no value, and the image uses its default personality. A new store()
-// writes after that slot. A page with data after the first erased slot is
+// A write clears bits from 1 to 0, so a write that a power loss cut keeps
+// some 1 bits of the erased slot. The record values have 8 bits set each,
+// so no record has all the 1 bits of another one: a cut record is never
+// the record of the other personality. load() then returns no value, and
+// the image uses its default personality. A new store() writes after
+// that slot. A page with data after the first erased slot is
 // not a log (for example code of an older, larger image): store() erases
 // it first.
 
@@ -42,8 +45,10 @@ class FlashPage {
 class PersonalityStore {
    public:
    static constexpr uint16_t erasedSlot = 0xFFFF;
-   static constexpr uint16_t recordTag = 0x5A00;
-   static constexpr uint16_t tagMask = 0xFF00;
+
+   static constexpr uint16_t recordOf(Personality personality) {
+      return personality == Personality::CmsisDap ? 0x5AA5 : 0xA55A;
+   }
 
    explicit PersonalityStore(FlashPage &page)
       : page_(page) {
@@ -57,10 +62,12 @@ class PersonalityStore {
          return std::nullopt;
       }
       const uint16_t record = slots[end - 1];
-      if((record & tagMask) != recordTag) {
-         return std::nullopt;
+      for(const auto personality : { Personality::Versaloon, Personality::CmsisDap }) {
+         if(record == recordOf(personality)) {
+            return personality;
+         }
       }
-      return fromCode(static_cast<uint8_t>(record & ~tagMask));
+      return std::nullopt;
    }
 
    // Stores the personality. True when load() then returns it.
@@ -76,7 +83,7 @@ class PersonalityStore {
          }
          next = 0;
       }
-      return page_.program(next, static_cast<uint16_t>(recordTag | toCode(personality))) && load() == personality;
+      return page_.program(next, recordOf(personality)) && load() == personality;
    }
 
    private:
