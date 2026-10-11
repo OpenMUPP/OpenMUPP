@@ -3,8 +3,9 @@
 // before main() runs. The main loop wakes up on each 1 ms SysTick and on
 // each USB interrupt. It runs the USB device, the UART bridge
 // (uart/SerialBridge.h) or, in a VSL_DEBUG_CDC build, the debug log
-// (debug/DebugLog.h), and drives the heartbeat on the
-// state LED and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
+// (debug/DebugLog.h), and drives the LEDs: the target power on the power
+// LED, the command activity on the state LED (the clock fault pattern
+// when the crystal fails) and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
 // enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
 // commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h),
 // with the GPIO block (protocol/GpioBlock.h) on the debug connector pins
@@ -28,12 +29,15 @@
 #include <array>
 
 #include "Hardware.h"
+#include "ActivityLed.h"
 #include "Heartbeat.h"
+#include "TargetPowerLed.h"
 #include "UptimeMicros.h"
 #include "Version.h"
 #include "board/Board.h"
 #include "board/BoardGpio.h"
 #include "board/BoardJtag.h"
+#include "board/BoardPower.h"
 #include "board/BoardSwd.h"
 #include "board/Leds.h"
 #include "debug/DebugLog.h"
@@ -49,7 +53,6 @@
 #include "protocol/cmsisdap/DapProcessor.h"
 #endif
 #if defined(VSL_WITH_VERSALOON)
-#include "board/BoardPower.h"
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
 #include "protocol/JtagRawBlock.h"
@@ -106,6 +109,10 @@ personality::KeyGesture keyGesture;
 
 #endif
 
+// The Vref sense and the target switch. The target power LED reads the
+// sense in every personality.
+board::BoardPower boardPower;
+
 #if defined(VSL_WITH_CMSIS_DAP)
 
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
@@ -134,8 +141,8 @@ class DapPlatform final : public cmsisdap::Platform {
       // The pin wait of DAP_SWJ_Pins is up to 3 s
       delayuS(microseconds);
    }
-   // The LEDs show the heartbeat and the USB state, as in the Versaloon
-   // personality. DAP_HostStatus changes nothing.
+   // The LEDs show the target power, the activity and the USB state, as
+   // in the Versaloon personality. DAP_HostStatus changes nothing.
    void setLed(cmsisdap::Led /*led*/, bool /*on*/) override {
    }
 };
@@ -181,7 +188,6 @@ protocol::UsbToAll usbToAll{ busyWaitDelay };
 protocol::GpioBlock gpioBlock{ boardGpio };
 protocol::JtagRawBlock jtagRawBlock{ boardJtag };
 protocol::SwdBlock swdBlock{ boardSwd };
-board::BoardPower boardPower;
 protocol::PowerBlock powerBlock{ boardPower, busyWaitDelay };
 boot::BootloaderEntry bootloaderEntry;
 
@@ -233,7 +239,6 @@ void addUsbToAllBlocks() {
    if(!usbToAll.add(swdBlock)) {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the SWD block");
    }
-   boardPower.init();
    if(!usbToAll.add(powerBlock)) {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the POWER block");
    }
@@ -263,7 +268,7 @@ void addUsbToAllBlocks() {
 void pollPersonality(uint64_t nowMs) {
    if(const auto key = board::current.key) {
       if(keyGesture.update(board::isAsserted(*key), nowMs)) {
-         personalitySwitch.request(personality::other(personalitySwitch.active()));
+         personalitySwitch.request(personality::other(personalitySwitch.active()), personality::PersonalitySwitch::flashDelayMs);
       }
    }
    if(personalitySwitch.isDue(nowMs)) {
@@ -275,6 +280,7 @@ void pollPersonality(uint64_t nowMs) {
 
 // Before the first command
 void startProtocol() {
+   boardPower.init();
 #if defined(VSL_WITH_CMSIS_DAP)
    setDapSerialNumber();
 #endif
@@ -301,11 +307,35 @@ void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
 #endif
 }
 
+constexpr Heartbeat clockFaultBlink{ Heartbeat::clockFault };
+ActivityLed activityLed;
+TargetPowerLed targetPowerLed;
+
+// Drives the LEDs (docs/boards.md, "LEDs"). Call it in each main loop
+// iteration, after the USB poll.
+void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
+#if defined(VSL_DUAL_PERSONALITY)
+   // The key gesture flashes all LEDs before the switch.
+   if(const auto flash = personalitySwitch.indication(nowMs)) {
+      board::setLed(board::Led::Power, *flash);
+      board::setLed(board::Led::State, *flash);
+      board::setLed(board::Led::Usb, *flash);
+      return;
+   }
+#endif
+   if(boardPower.hasSense() && targetPowerLed.isDue(nowMs)) {
+      targetPowerLed.update(nowMs, boardPower.senseMillivolts());
+   }
+   activityLed.update(nowMs, usbStack.commandCount());
+   board::setLed(board::Led::Power, targetPowerLed.isOn());
+   board::setLed(board::Led::State, clockFromCrystal ? activityLed.isOn() : clockFaultBlink.isOn(nowMs));
+   board::setLed(board::Led::Usb, usbStack.isConfigured());
+}
+
 } // namespace
 
 int main() {
    const bool clockFromCrystal = hardware::isClockFromCrystal();
-   const Heartbeat heartbeat{ clockFromCrystal ? Heartbeat::normal : Heartbeat::clockFault };
 
    debug::startLog();
    // The board names are string literals, so name.data() ends with a NUL.
@@ -329,8 +359,7 @@ int main() {
          uart::pollBridge();
       }
       afterUsbPoll(nowMs);
-      board::setLed(board::Led::State, heartbeat.isOn(nowMs));
-      board::setLed(board::Led::Usb, usbStack.isConfigured());
+      updateLeds(nowMs, clockFromCrystal);
       __WFI();
    }
 }

@@ -23,6 +23,7 @@ bool VersaloonFunction::dataReceived(art::span<const uint8_t> packet) {
    case Result::Complete:
       break;
    }
+   ++commandCount_;
    const auto size = processor_.process(assembler_.command(), art::span<uint8_t>(reply_.data(), reply_.size()));
    if(!size) {
       return true;

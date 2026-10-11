@@ -184,8 +184,7 @@ if (CMAKE_CROSSCOMPILING)
                 "src/protocol/UsbToAll\\.cpp" "src/protocol/UsbToXxx\\.cpp"
                 "src/protocol/GpioBlock\\.cpp" "src/protocol/JtagRawBlock\\.cpp"
                 "src/protocol/PowerBlock\\.cpp" "src/protocol/SwdBlock\\.cpp"
-                "src/usb/VersaloonFunction\\.cpp" "src/board/BoardPower\\.cpp"
-                "src/boot/Bootloader\\.cpp")
+                "src/usb/VersaloonFunction\\.cpp" "src/boot/Bootloader\\.cpp")
     else ()
         list(APPEND PROJECT_DEFINES VSL_WITH_VERSALOON)
         set(VSL_IMAGE_TAG "")

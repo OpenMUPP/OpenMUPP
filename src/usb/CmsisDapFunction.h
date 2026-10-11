@@ -44,6 +44,11 @@ class CmsisDapFunction final : public art::usb::VendorBulkFunction {
    // main loop after the USB events, not during a command.
    void poll();
 
+   // Number of command packets received. It wraps at 2^32.
+   [[nodiscard]] uint32_t commandCount() const {
+      return commandCount_;
+   }
+
    protected:
    bool dataReceived(art::span<const uint8_t> packet) override;
    void transferSent() override;
@@ -59,6 +64,7 @@ class CmsisDapFunction final : public art::usb::VendorBulkFunction {
    cmsisdap::Processor &processor_;
    // Between suspended() and resumed(): poll() runs no command.
    bool suspended_{ false };
+   uint32_t commandCount_{ 0 };
 };
 
 } // namespace usb

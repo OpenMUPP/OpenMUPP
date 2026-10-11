@@ -28,6 +28,7 @@ bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {
    // The OUT endpoint is held while no slot is free, so a packet that
    // arrives here always fits. poll() runs it.
    if(!packet.empty()) {
+      ++commandCount_;
       processor_.submit(packet);
    }
    return processor_.canSubmit();
