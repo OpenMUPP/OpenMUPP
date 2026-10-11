@@ -136,15 +136,27 @@ def command_switch(usb, args):
             device.detach_kernel_driver(0)
     except (NotImplementedError, usb.core.USBError):
         pass
-    usb.util.claim_interface(device, 0)
     try:
+        usb.util.claim_interface(device, 0)
         device.write(OUT_ENDPOINT, switch_request(active, args.personality), TIMEOUT_MS)
+    except usb.core.USBError as error:
+        print("Cannot send the command: %s" % error, file=sys.stderr)
+        usb.util.dispose_resources(device)
+        return 1
+    try:
         check_reply(active, device.read(IN_ENDPOINT, 64, TIMEOUT_MS))
     except PersonalityError as error:
         print(error, file=sys.stderr)
         return 1
+    except usb.core.USBError as error:
+        # The command went out, so the switch can be in progress: wait for
+        # the other device.
+        print("No reply (%s), waiting for the device" % error, file=sys.stderr)
     finally:
-        usb.util.release_interface(device, 0)
+        try:
+            usb.util.release_interface(device, 0)
+        except usb.core.USBError:
+            pass
         usb.util.dispose_resources(device)
     print("Switching from %s to %s ..." % (active, args.personality))
     if not wait_for(usb, args.personality, serial, ENUMERATION_TIMEOUT_S):
