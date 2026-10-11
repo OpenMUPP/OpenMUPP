@@ -1,6 +1,6 @@
 # CMSIS-DAP command processor
 
-This document describes the CMSIS-DAP v2.1 command processor for SWD.
+This document describes the CMSIS-DAP v2.1 command processor for SWD and JTAG.
 The code is in `src/protocol/cmsisdap/`.
 `usb::CmsisDapFunction` (`src/usb/CmsisDapFunction.h`) moves the packets over USB.
 See the [CMSIS-DAP personality](usb-device.md#cmsis-dap-personality).
@@ -25,8 +25,9 @@ The `cmsis-dap` image has these properties:
 
 - USB interface 0 is CMSIS-DAP v2, with `0403:9B3C`. The Versaloon interface is not in the image.
 - The CDC-ACM serial port, the UART bridge, the debug log and the heartbeat are as in the Versaloon image.
-- The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks, the JTAG engine and the power block.
-- The SWD engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
+- The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
+- The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
+  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
 
 Only one personality is in an image.
 To change the personality, write another image.
@@ -34,7 +35,12 @@ The runtime selection is a later work item.
 
 ## Limits
 
-- SWD only. `DAP_Connect` to JTAG replies "failed". The JTAG commands come with a later work item.
+- JTAG has no adaptive clocking (RTCK). TCK is in whole kHz, at least 1 kHz. See [JTAG](#jtag).
+- A JTAG chain has up to 8 devices. The IR length of a device is 1 to 32 bits.
+- On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
+  Else the next scan has an extra TCK edge or a missing TCK edge.
+  The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
+- The hardware test with OpenOCD and pyOCD in JTAG mode is not done yet.
 - No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
 - `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one transfer. It does not stop other commands, for example `DAP_Delay`.
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
@@ -79,11 +85,13 @@ Use `probe-rs list` and then `probe-rs info`.
 | `DapProcessor.h`, `DapProcessor.cpp` | Parse the request packets, run the commands, write the response packets. |
 | `DapSwd.h` | The interface of the SWD engine, as the processor needs it. |
 | `BitBangDapSwd.h` | The adapter from `DapSwd` to the SWD bit-bang engine (`swd::BitBangPort`). |
+| `DapJtag.h`, `DapJtag.cpp` | The JTAG-DP: the device chain, the IR and DR scans, and the transfers on a JTAG port. |
 
 The processor has no CMSIS header and no hardware header.
 It uses these objects:
 
 - A `DapSwd` for the SWD transfers and sequences.
+- A `protocol::JtagPort` (`src/protocol/JtagPort.h`, on target `board::BoardJtag`) for JTAG. It is optional.
 - A `protocol::GpioPins` (on target `board::BoardGpio`) for `DAP_SWJ_Pins` and `DAP_ResetTarget`.
 - A `Platform` for the microsecond time, the delay and the LEDs.
 - A `DeviceInfo` with the strings and the capabilities of `DAP_Info`.
@@ -108,26 +116,30 @@ Each packet without a response takes one of the 4 slots.
 |---|---|---|
 | `0x00` | `DAP_Info` | Vendor, product, serial number, protocol version `2.1.0`, firmware version, capabilities, packet size and count. Other information has length 0. |
 | `0x01` | `DAP_HostStatus` | Connect and running LED. |
-| `0x02` | `DAP_Connect` | Port 0 and 1 give SWD. JTAG replies 0 (failed) until the JTAG commands exist. |
-| `0x03` | `DAP_Disconnect` | Release SWCLK and SWDIO. Release the pins that `DAP_SWJ_Pins` drove: nRESET and nTRST get the pull-up. |
+| `0x02` | `DAP_Connect` | Port 0 and 1 give SWD. Port 2 gives JTAG. |
+| `0x03` | `DAP_Disconnect` | Release the pins of the port. Release the pins that `DAP_SWJ_Pins` drove: nRESET and nTRST get the pull-up. |
 | `0x04` | `DAP_TransferConfigure` | Idle cycles, WAIT retries, match retries. |
-| `0x05` | `DAP_Transfer` | Read, write, posted AP read, value match, match mask. |
-| `0x06` | `DAP_TransferBlock` | Read or write block. |
+| `0x05` | `DAP_Transfer` | Read, write, posted AP read, value match, match mask. On JTAG, the device index selects the device. |
+| `0x06` | `DAP_TransferBlock` | Read or write block. On JTAG, the device index selects the device. |
 | `0x07` | `DAP_TransferAbort` | No response. It stops a running transfer command. See [Transfer abort](#transfer-abort). |
-| `0x08` | `DAP_WriteABORT` | Replies an error when no port is connected. |
+| `0x08` | `DAP_WriteABORT` | Replies an error when no port is connected. On JTAG, an ABORT scan of the device of the index. A device index that is not in the chain replies an error. |
 | `0x09` | `DAP_Delay` | |
 | `0x0A` | `DAP_ResetTarget` | A 10 ms pulse on SRST. A board without SRST replies that it did no reset. |
 | `0x10` | `DAP_SWJ_Pins` | SWCLK, SWDIO, TDI, TDO, nTRST, nRESET. nTRST and nRESET are open-drain. The wait is at most 3 s. |
-| `0x11` | `DAP_SWJ_Clock` | In Hz. See the SWD engine for the available rates. |
-| `0x12` | `DAP_SWJ_Sequence` | 1 to 256 bits. |
+| `0x11` | `DAP_SWJ_Clock` | In Hz, for SWCLK and TCK. See the SWD engine for the available SWCLK rates. TCK is in kHz, rounded down, and at least 1 kHz. |
+| `0x12` | `DAP_SWJ_Sequence` | 1 to 256 bits. On JTAG, the bits go to TMS, and TDI is high. |
 | `0x13` | `DAP_SWD_Configure` | Turnaround and data phase. |
-| `0x1D` | `DAP_SWD_Sequence` | |
+| `0x14` | `DAP_JTAG_Sequence` | TDI bits with one TMS level, and the TDO bits on request. Replies an error when JTAG is not connected. |
+| `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
+| `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
+| `0x1D` | `DAP_SWD_Sequence` | Replies an error when SWD is not connected. |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
 An unknown command replies `ID_DAP_Invalid` (`0xFF`).
-The JTAG commands and the UART commands come with their own work items.
-The capabilities in `DAP_Info` show SWD and atomic commands only.
+The UART commands come with their own work item.
+The capabilities in `DAP_Info` show SWD, JTAG and atomic commands.
+A processor without a JTAG port does not show JTAG, and `DAP_Connect` to JTAG then replies 0 (failed).
 
 The transfer commands follow the reference implementation of Arm.
 After an error, the processor skips the rest of the request data.
@@ -174,8 +186,47 @@ It never calls `configure()`, which sets the clock from an OpenOCD delay value.
 Thus the order of `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure` does not matter.
 `DAP_Connect` sets the configuration and the clock again, because the engine can run another personality in between.
 
+## JTAG
+
+`DAP_Connect` with port 2 releases the SWD pins and starts the JTAG engine.
+The JTAG engine is the one of the Versaloon image (`board::BoardJtag`).
+On the Mini and the OtherUse, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
+This starts at a TCK of 1125 kHz. The other bits, and the slower rates, use GPIO bit-bang.
+`DAP_SWJ_Clock` sets TCK in kHz, rounded down, and at least 1 kHz.
+
+`DAP_JTAG_Configure` gives the device chain: the IR length of each device.
+Device 0 is next to TDO.
+After a reset of the debug unit, the chain is empty.
+Thus the host must send `DAP_JTAG_Configure` before the first transfer.
+
+A transfer command, `DAP_WriteABORT` and `DAP_JTAG_IDCODE` select the device with their device index.
+A scan puts the other devices in BYPASS.
+Each scan starts and ends in Run-Test/Idle, as in the reference implementation.
+The host must put the TAP into Run-Test/Idle first, for example with `DAP_SWJ_Sequence`.
+
+The JTAG-DP (`JtagDp` in `DapJtag.h`) gives each transfer the result that it has on SWD.
+Thus the processor uses the same transfer rules for SWD and JTAG:
+
+- An AP read is posted. Its data comes with the next AP read or with a read of RDBUFF.
+- A DP read returns its own data. The JTAG-DP posts all reads, so `JtagDp` reads RDBUFF after a DP read.
+- After the last write of a command, the processor reads RDBUFF to check the write.
+
+The JTAG-DP acknowledge is OK/FAULT or WAIT.
+After WAIT, `JtagDp` does the scan again, up to the WAIT retries of `DAP_TransferConfigure`.
+A FAULT shows in the sticky bits of CTRL/STAT, as on each JTAG-DP.
+Each DR scan of a transfer ends with the idle cycles of `DAP_TransferConfigure`.
+
+`JtagDp` keeps the IR of the device from one transfer to the next, to skip IR scans.
+These commands make the next transfer write the IR again: `DAP_Connect`, `DAP_JTAG_Configure`, a sequence command and `DAP_SWJ_Pins`.
+A transfer to another device also writes the IR again.
+
 ## Tests
 
 `tests/TestCmsisDap.cpp` runs the processor on the real SWD bit-bang engine, with the mock SWD target of `tests/MockSwdPins.h`.
 The tests cover each command, WAIT retries, FAULT, parity errors, protocol errors, value match and the timeout of value match, and posted reads.
+
+`tests/TestCmsisDapJtag.cpp` runs the processor on the JTAG bit-bang engine and on the JTAG fast path, with the mock JTAG pins of `tests/MockJtagPins.h`.
+The target is the JTAG chain of `tests/MockJtagDp.h`: a TAP state machine, and devices with IDCODE and BYPASS.
+One device of the chain is a JTAG-DP with a memory AP.
+The tests cover the JTAG commands, IDCODE, DPACC and APACC reads and writes, posted reads, WAIT, value match, block transfers, ABORT and chains with more than one device.
 Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.

@@ -157,12 +157,12 @@ if (CMAKE_CROSSCOMPILING)
                 "src/protocol/UsbToAll\\.cpp" "src/protocol/UsbToXxx\\.cpp"
                 "src/protocol/GpioBlock\\.cpp" "src/protocol/JtagRawBlock\\.cpp"
                 "src/protocol/PowerBlock\\.cpp" "src/protocol/SwdBlock\\.cpp"
-                "src/usb/VersaloonFunction\\.cpp" "src/board/BoardJtag\\.cpp"
-                "src/board/BoardJtagFast\\.cpp" "src/board/BoardPower\\.cpp"
+                "src/usb/VersaloonFunction\\.cpp" "src/board/BoardPower\\.cpp"
                 "src/boot/Bootloader\\.cpp")
     else ()
         set(VSL_IMAGE_TAG "")
-        set(_vsl_other_protocol_files "src/protocol/cmsisdap/DapProcessor\\.cpp" "src/usb/CmsisDapFunction\\.cpp")
+        set(_vsl_other_protocol_files "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
+                "src/usb/CmsisDapFunction\\.cpp")
     endif ()
     foreach (_file ${_vsl_other_protocol_files})
         list(FILTER VSL_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")

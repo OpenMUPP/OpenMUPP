@@ -59,7 +59,7 @@
 #include <cstdint>
 
 #include "protocol/Background.h"
-#include "protocol/JtagRawBlock.h"
+#include "protocol/JtagPort.h"
 
 namespace jtag {
 
