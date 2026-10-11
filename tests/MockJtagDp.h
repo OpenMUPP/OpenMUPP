@@ -17,7 +17,9 @@
 // - The AP (bank of SELECT): CSW (0x00), TAR (0x04), DRW (0x0C) on a word
 //   memory, TAR increments by 4 after each DRW access, IDR (0xFC).
 // - ABORT scans are recorded.
-// - Test-Logic-Reset loads IDCODE into the IR of all devices.
+// - Test-Logic-Reset loads the IDCODE instruction of each device into its
+//   IR. A device has its own IDCODE instruction (0x0E for an Arm
+//   JTAG-DP).
 
 #include <cstdint>
 #include <map>
@@ -60,6 +62,7 @@ class MockJtagChain final : public JtagTarget {
       uint8_t irLength;
       uint32_t idcode;
       bool dp;
+      uint32_t idcodeIr{ tapIr::idcode };
    };
 
    // A JTAG-DP access at Update-DR
@@ -75,6 +78,9 @@ class MockJtagChain final : public JtagTarget {
    explicit MockJtagChain(std::vector<Device> devices)
       : devices_(std::move(devices))
       , taps_(devices_.size()) {
+      for(std::size_t i = 0; i < taps_.size(); ++i) {
+         taps_[i].ir = devices_[i].idcodeIr;
+      }
    }
 
    void rising(bool tms, bool tdi) override {
@@ -103,8 +109,8 @@ class MockJtagChain final : public JtagTarget {
       }
       state = next(state, tms);
       if(state == State::Reset) {
-         for(Tap &tap : taps_) {
-            tap.ir = tapIr::idcode;
+         for(std::size_t i = 0; i < taps_.size(); ++i) {
+            taps_[i].ir = devices_[i].idcodeIr;
          }
       }
    }
@@ -153,7 +159,7 @@ class MockJtagChain final : public JtagTarget {
 
    private:
    struct Tap {
-      uint32_t ir{ tapIr::idcode };
+      uint32_t ir{ 0 };
       uint64_t shift{ 0 };
       uint32_t length{ 1 };
       // The captured acknowledge was WAIT: Update-DR drops the request.
@@ -213,7 +219,7 @@ class MockJtagChain final : public JtagTarget {
             ack = 0b001;
          }
          tap.shift = static_cast<uint64_t>(result_) << 3 | ack;
-      } else if(tap.ir == tapIr::idcode) {
+      } else if(tap.ir == devices_[device].idcodeIr) {
          tap.length = 32;
          tap.shift = devices_[device].idcode;
       } else {

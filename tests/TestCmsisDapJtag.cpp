@@ -12,7 +12,9 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <initializer_list>
 #include <vector>
 
@@ -40,11 +42,14 @@ constexpr uint8_t matchMask = 0x20;
 constexpr uint32_t dpIdcode = 0x3BA00477;
 constexpr uint32_t bscIdcode = 0x06414041;
 constexpr uint32_t otherIdcode = 0x12345679;
+constexpr uint32_t firstIdcode = 0x0A0B0C0D;
 
 // The chain of an STM32F1: the Cortex-M3 JTAG-DP next to TDO, then the
-// boundary scan TAP.
+// boundary scan TAP. Its IDCODE instruction is 0b00001, not 0x0E.
+constexpr uint32_t bscIdcodeIr = 0x01;
+
 std::vector<MockJtagChain::Device> stm32Chain() {
-   return { { 4, dpIdcode, true }, { 5, bscIdcode, false } };
+   return { { 4, dpIdcode, true }, { 5, bscIdcode, false, bscIdcodeIr } };
 }
 
 Bytes word(uint32_t value) {
@@ -170,6 +175,39 @@ struct BasicBench {
 
 using Bench = BasicBench<jtag::BitBangPort<Pins>>;
 
+// The bit-bang engine with a hook after each shift: the background service
+// of the engine runs during a shift (protocol/Background.h), and the host
+// can send a packet then.
+class HookedPort final : public protocol::JtagPort {
+   public:
+   explicit HookedPort(Pins &pins)
+      : port_(pins) {
+   }
+
+   void init() override {
+      port_.init();
+   }
+   void fini() override {
+      port_.fini();
+   }
+   [[nodiscard]] bool setSpeed(uint32_t kHz) override {
+      return port_.setSpeed(kHz);
+   }
+   [[nodiscard]] bool
+   shift(uint32_t bitCount, art::span<const uint8_t> tdi, art::span<const uint8_t> tms, art::span<uint8_t> tdo) override {
+      const bool ok = port_.shift(bitCount, tdi, tms, tdo);
+      if(onShift) {
+         onShift();
+      }
+      return ok;
+   }
+
+   std::function<void()> onShift;
+
+   private:
+   jtag::BitBangPort<Pins> port_;
+};
+
 // An STM32F1 chain, connected and configured
 struct Stm32Bench : Bench {
    Stm32Bench() {
@@ -260,7 +298,10 @@ TEST_CASE("DAP JTAG: DAP_JTAG_IDCODE reads each device of the chain") {
    CHECK(b.run({ 0x16, 0x00 }) == cat({ { 0x16, 0x00 }, word(dpIdcode) }));
    // The boundary scan TAP was in BYPASS.
    CHECK(b.chain.ir(1) == 0x1F);
-   CHECK(b.run({ 0x16, 0x01 }) == cat({ { 0x16, 0x00 }, word(bscIdcode) }));
+   // DAP_JTAG_IDCODE uses the instruction of the Arm JTAG-DP, as the
+   // reference implementation. The boundary scan TAP then is in BYPASS: a
+   // 0 bit, then the ones of TDI.
+   CHECK(b.run({ 0x16, 0x01 }) == cat({ { 0x16, 0x00 }, word(0xFFFFFFFE) }));
    CHECK(b.chain.ir(0) == 0x0F);
    CHECK(b.chain.state == State::Idle);
    // No device 2
@@ -383,10 +424,10 @@ TEST_CASE("DAP JTAG: a write ends with a read of RDBUFF") {
 }
 
 TEST_CASE("DAP JTAG: transfers with a device in the middle of the chain") {
-   Bench b({ { 5, bscIdcode, false }, { 4, dpIdcode, true }, { 6, otherIdcode, false } });
+   Bench b({ { 5, firstIdcode, false }, { 4, dpIdcode, true }, { 6, otherIdcode, false } });
    b.connect();
    b.configure({ 5, 4, 6 });
-   CHECK(b.run({ 0x16, 0x00 }) == cat({ { 0x16, 0x00 }, word(bscIdcode) }));
+   CHECK(b.run({ 0x16, 0x00 }) == cat({ { 0x16, 0x00 }, word(firstIdcode) }));
    CHECK(b.run({ 0x16, 0x01 }) == cat({ { 0x16, 0x00 }, word(dpIdcode) }));
    CHECK(b.run({ 0x16, 0x02 }) == cat({ { 0x16, 0x00 }, word(otherIdcode) }));
 
@@ -442,6 +483,65 @@ TEST_CASE("DAP JTAG: DAP_TransferBlock writes and reads a block") {
          cat({ { 0x06, 0x02, 0x00, 0x01 }, word(b.chain.dpidr), word(b.chain.dpidr) }));
 }
 
+TEST_CASE("DAP JTAG: WAIT in a block, and the retry limit") {
+   Stm32Bench b;
+   b.chain.apWaits = 2;
+   CHECK(b.run(cat({ { 0x05, 0x00, 0x01, writeTar }, word(0x20000200) })) == V{ 0x05, 0x01, 0x01 });
+   const Bytes write = cat({ { 0x06, 0x00, 0x03, 0x00, writeDrw }, word(7), word(8), word(9) });
+   CHECK(b.run(write) == V{ 0x06, 0x03, 0x00, 0x01 });
+   CHECK(b.run(cat({ { 0x05, 0x00, 0x01, writeTar }, word(0x20000200) })) == V{ 0x05, 0x01, 0x01 });
+   CHECK(b.run({ 0x06, 0x00, 0x03, 0x00, readDrw }) == cat({ { 0x06, 0x03, 0x00, 0x01 }, word(7), word(8), word(9) }));
+   CHECK(b.chain.waits > 0);
+
+   // No retry: the second write of the block gets WAIT.
+   CHECK(b.run({ 0x04, 0x00, 0x00, 0x00, 0x00, 0x00 }) == V{ 0x04, 0x00 });
+   b.chain.apWaits = 1;
+   CHECK(b.run(write) == V{ 0x06, 0x01, 0x00, 0x02 });
+}
+
+TEST_CASE("DAP JTAG: a DP write after a posted AP read") {
+   Stm32Bench b;
+   b.chain.memory[0] = 0x5EED0001;
+   b.chain.accesses.clear();
+   CHECK(b.run(cat({ { 0x05, 0x00, 0x02, readDrw, writeSelect }, word(0x000000F0) })) ==
+         cat({ { 0x05, 0x02, 0x01 }, word(0x5EED0001) }));
+   CHECK(b.chain.select == 0xF0);
+   // The posted data from RDBUFF, then the write and its check
+   const std::vector<Access> expected{
+      { true, true, 0xC, 0 }, { false, true, 0xC, 0 }, { false, false, 0x8, 0xF0 }, { false, true, 0xC, 0 }
+   };
+   CHECK(b.chain.accesses == expected);
+}
+
+TEST_CASE("DAP JTAG: DAP_TransferAbort stops an AP block read") {
+   BasicBench<HookedPort> b;
+   b.connect();
+   b.configure({ 4, 5 });
+   for(uint32_t i = 0; i < 4; ++i) {
+      b.chain.memory[0x20000000 + 4 * i] = 0xA0 + i;
+   }
+   CHECK(b.run(cat({ { 0x05, 0x00, 0x01, writeTar }, word(0x20000000) })) == V{ 0x05, 0x01, 0x01 });
+   b.chain.accesses.clear();
+   bool sent = false;
+   b.port.onShift = [&] {
+      const auto apReads = std::count_if(b.chain.accesses.begin(), b.chain.accesses.end(),
+                                         [](const Access &access) { return access.ap && access.read; });
+      if(apReads == 2 && !sent) {
+         sent = true;
+         b.dap.submit(V{ 0x07 });
+      }
+   };
+   // The posted read and one more AP read, then the abort: the data of the
+   // posted read comes from RDBUFF.
+   CHECK(b.run({ 0x06, 0x00, 0x04, 0x00, readDrw }) == cat({ { 0x06, 0x02, 0x00, 0x01 }, word(0xA0), word(0xA1) }));
+   CHECK(sent);
+   const std::vector<Access> expected{ { true, true, 0xC, 0 }, { true, true, 0xC, 0 }, { false, true, 0xC, 0 } };
+   CHECK(b.chain.accesses == expected);
+   // The next packet runs normally.
+   b.port.onShift = nullptr;
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == cat({ { 0x05, 0x01, 0x01 }, word(b.chain.dpidr) }));
+}
+
 TEST_CASE("DAP JTAG: DAP_WriteABORT scans ABORT") {
    Stm32Bench b;
    CHECK(b.run(cat({ { 0x08, 0x00 }, word(0x1E) })) == V{ 0x08, 0x00 });
@@ -494,7 +594,7 @@ TEST_CASE("DAP JTAG: the fast path does the same transfers") {
    b.connect();
    CHECK(b.port.spiShift() == 3);
    b.configure({ 4, 5 });
-   CHECK(b.run({ 0x16, 0x01 }) == cat({ { 0x16, 0x00 }, word(bscIdcode) }));
+   CHECK(b.run({ 0x16, 0x00 }) == cat({ { 0x16, 0x00 }, word(dpIdcode) }));
    const Bytes request =
    cat({ { 0x05, 0x00, 0x04, writeCtrlStat }, word(0x50000000), { readCtrlStat, writeTar }, word(0x20000000), { readDrw } });
    b.chain.memory[0x20000000] = 0x600DF00D;
