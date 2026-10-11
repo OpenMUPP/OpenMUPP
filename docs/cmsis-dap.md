@@ -40,7 +40,7 @@ Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Ve
 - On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
   Else the next scan has an extra TCK edge or a missing TCK edge.
   The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
-- The hardware test with OpenOCD and pyOCD in JTAG mode is not done yet.
+- pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
 - No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
 - `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one transfer. It does not stop other commands, for example `DAP_Delay`.
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
@@ -48,7 +48,7 @@ Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Ve
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
 - Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
-- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs, with SWD only. Windows, the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test)).
+- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs on JTAG, Windows, the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
 
 ## Use the probe
 
@@ -234,6 +234,8 @@ Other tests send `DAP_TransferAbort` and other packets during a transfer command
 
 ## Hardware test
 
+This section has the SWD tests. The JTAG tests follow in [JTAG hardware test](#jtag-hardware-test).
+
 Date: 2026-10-10.
 Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`). The build is `v0.2.0-63-g10d84fa-dirty`. The `-dirty` suffix is from the merge of `dev`, which was not committed at build time. The `src/` tree equals commit `75d93cd`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
 The same checks first ran on `v0.2.0-57-g59614cb` (before E6). All checks passed there too. Only the read speed differs (see below).
@@ -296,4 +298,70 @@ Findings:
 - `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is how probe-rs behaves. It is not a probe finding.
 - In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
 - The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a 256 KiB flash passes with all three tools (60 of 60 runs at 115200 baud, 8N1).
+
+## JTAG hardware test
+
+Date: 2026-10-11.
+Firmware: `dev` at `6fc6d8b` with E7 (JTAG). The build is `v0.2.0-101-g6fc6d8b`. The tree was clean. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality, `Release` build.
+Probe: OtherUse board. The image ran behind `versaloon-bootloader`.
+Target: STM32F103ZET6 (512 KiB flash) on JTAG. The wiring is the one of the SWD test, with TDI, TDO and TMS added.
+Host: Linux 6.18.55.
+Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1.
+
+The chain has two TAPs: the Cortex-M3 DAP (IR length 4, IDCODE `0x3ba00477`) and the boundary-scan TAP (IR length 5, IDCODE `0x06414041`).
+The DAP is next to TDO, so it is device 0.
+
+| Check | OpenOCD | pyOCD |
+|---|---|---|
+| Find the TAPs, read IDCODE | pass (scan chain finds both TAPs) | pass (IDCODE of device 0; the script sets the chain) |
+| Flash and verify at 1000, 4500 and 9000 kHz | pass (32 KiB random image) | pass (32 KiB image, see below) |
+| Read back at 1000, 4500 and 9000 kHz | pass (`cmp`) | pass (compared in Python) |
+| Reset and halt, `pc` and `sp` from the vector table | pass (2 KiB loop image) | pass |
+| Single step | pass (2 KiB loop image) | pass |
+| Hardware breakpoint, resume and halt | pass (2 KiB loop image) | pass |
+| RAM write and read (words, 8 KiB block) | pass (words only) | pass |
+
+The OpenOCD flash checks use a random 32 KiB image.
+The OpenOCD debug checks use a 2 KiB image that has a vector table and the loop `adds r1, #1` / `b`.
+The pyOCD script builds one 32 KiB image for all checks: the vector table, the same loop and random data.
+The pyOCD checks come from `tools/pyocd_jtag_test.py`.
+
+All runs passed (0 failures).
+OpenOCD uses `DAP_JTAG_Sequence` for all JTAG scans.
+pyOCD uses `DAP_Transfer` and `DAP_TransferBlock`.
+Thus the pyOCD run is the test of the JTAG-DP transfers of this firmware.
+
+The target runs at 8 MHz after a reset, and TCK must not be above F_CPU / 6.
+Thus each run above 1000 kHz sets the target clock to 64 MHz first (`tools/stm32f1_clock.tcl` for OpenOCD, the same register writes in the pyOCD script).
+The target clock goes back to 8 MHz at each reset.
+The two requests above 1125 kHz use the SPI and DMA fast path of the firmware.
+This test did not measure the real TCK.
+
+JTAG flash time of 32 KiB (target at 64 MHz, one run per rate):
+
+| TCK request | OpenOCD write | OpenOCD verify | OpenOCD read | pyOCD write | pyOCD read |
+|---|---|---|---|---|---|
+| 1000 kHz | 8.66 s | 0.23 s | 7.66 s | 2.36 s | 1.37 s |
+| 4500 kHz | 8.07 s | 0.22 s | 7.11 s | 1.03 s | 0.94 s |
+| 9000 kHz | 8.16 s | 0.21 s | 7.14 s | 0.98 s | 0.90 s |
+
+The OpenOCD verify time is much shorter than the read time. Thus OpenOCD probably checks a CRC on the target and does not read the flash data over the probe. This test did not confirm it.
+The pyOCD write time at 1000 kHz was 1.67 s in an earlier run of the same check. Thus the write times vary by about 40%.
+
+`DAP_JTAG_Configure` and `DAP_JTAG_IDCODE` checks (raw commands in `tools/pyocd_jtag_test.py`):
+
+| Check | Result |
+|---|---|
+| IR lengths 4 and 5, IDCODE of device 0 | `0x3ba00477` |
+| IDCODE of device 2 (not in the chain) | error reply |
+| 9 devices, IR length 0, IR length 33 | error reply |
+
+Findings:
+
+- OpenOCD in JTAG mode is slow. The write rate is about 4 KiB/s and the read rate about 4.5 KiB/s. The rate does not depend on TCK from 1000 kHz to 9000 kHz. pyOCD is 4 to 8 times faster with the same probe. SWD with OpenOCD (see [Hardware test](#hardware-test)) is faster too. The cause is not measured. OpenOCD sends one `DAP_JTAG_Sequence` per scan, so the USB round trips probably limit the rate. This test did not check whether the firmware or the host causes it.
+- pyOCD 0.45.1 does not work with the STM32F1 on JTAG without a change. It sends `DAP_JTAG_Configure` with one device of IR length 4, and the chain has two TAPs. The first transfer fails with ACK 0. With the chain set to the IR lengths 4 and 5, all transfers pass. The test script `tools/pyocd_jtag_test.py` sets the chain to the IR lengths 4 and 5 in a patch of the pyOCD protocol class.
+- The pyOCD target `stm32f103ze` (from the Keil DFP) fails on JTAG before the first transfer with `'bytes' object cannot be interpreted as an integer`. The error is in the debug sequence code of pyOCD (`hex()` of a `bytes` result in a trace call). It is not a probe problem. The test uses the built-in target `stm32f103rc`.
+- `DAP_JTAG_IDCODE` for device 1 (the boundary-scan TAP) returns 0. The firmware loads the IR value `0x0E`, as the reference implementation of Arm does. This is the IDCODE instruction of the Cortex-M3 DAP. The boundary-scan TAP of the STM32F1 probably does not decode it as IDCODE. OpenOCD reads `0x06414041` from this TAP with its own scan, so the TAP does answer. No debug host uses `DAP_JTAG_IDCODE` of this TAP.
+- The probe re-enumerated once on the USB bus, about 2 minutes after the firmware started (device number 7 to 8). The first OpenOCD tries failed with "No such device" in that time. It then stayed on device number 8 for the rest of the test. The cause is not known. A second run did not repeat it.
+- The probe-rs JTAG test is not done. The issue asks for OpenOCD and pyOCD only.
 
