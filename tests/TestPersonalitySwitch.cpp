@@ -61,14 +61,29 @@ TEST_CASE("A request for the active personality does nothing") {
    CHECK_FALSE(personalitySwitch.isDue(1'000));
 }
 
-TEST_CASE("A second request changes the personality, not the time") {
+TEST_CASE("A second request does not move the time") {
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+
+   personalitySwitch.request(Personality::CmsisDap);
+   CHECK_FALSE(personalitySwitch.isDue(100));
+   personalitySwitch.request(Personality::CmsisDap);
+   CHECK_FALSE(personalitySwitch.isDue(105));
+   CHECK(personalitySwitch.isDue(100 + PersonalitySwitch::replyDelayMs));
+}
+
+TEST_CASE("A request for the active personality cancels a pending request") {
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
 
    personalitySwitch.request(Personality::CmsisDap);
    CHECK_FALSE(personalitySwitch.isDue(100));
    personalitySwitch.request(Personality::Versaloon);
-   CHECK(personalitySwitch.requested() == Personality::Versaloon);
-   CHECK(personalitySwitch.isDue(100 + PersonalitySwitch::replyDelayMs));
+   CHECK_FALSE(personalitySwitch.requested().has_value());
+   CHECK_FALSE(personalitySwitch.isDue(100 + PersonalitySwitch::replyDelayMs));
+
+   // A new request gets a new time
+   personalitySwitch.request(Personality::CmsisDap);
+   CHECK_FALSE(personalitySwitch.isDue(200));
+   CHECK(personalitySwitch.isDue(200 + PersonalitySwitch::replyDelayMs));
 }
 
 TEST_CASE("SWITCH_PERSONALITY requests the personality") {

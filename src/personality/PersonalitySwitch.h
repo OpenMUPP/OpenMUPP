@@ -35,10 +35,13 @@ class PersonalitySwitch {
       return active_;
    }
 
-   // Requests a personality. A request for the active personality does
-   // nothing. A second request changes the personality, but not the time.
+   // Requests a personality. A request for the active personality cancels
+   // a pending request, so the firmware does not reset. A second request
+   // for the same personality does not move the time.
    void request(Personality personality) {
-      if(personality == active_ && !requested_) {
+      if(personality == active_) {
+         requested_.reset();
+         dueMs_.reset();
          return;
       }
       requested_ = personality;

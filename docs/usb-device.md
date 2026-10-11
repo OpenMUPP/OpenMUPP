@@ -140,6 +140,7 @@ After a command, the firmware sends the reply, and then waits 10 ms.
 Then the firmware disconnects from USB, writes the flash page and resets.
 The host sees a disconnect, and then the device with the other VID:PID.
 A switch to the active personality does not reset.
+It also cancels a switch that the firmware did not do yet.
 If the flash write fails, the firmware starts again with the old personality.
 
 The key gesture has these rules:
