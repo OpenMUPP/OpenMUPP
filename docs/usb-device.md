@@ -100,7 +100,7 @@ The CMSIS-DAP image differs from the Versaloon image in these points:
 - It has no `VERSALOON_FW_UPDATE` command.
   Start the bootloader with the key (see [Firmware update](firmware-update.md)).
 - It has no target power switch and no `GET_TVCC`.
-- It has no JTAG: `DAP_Connect` to JTAG replies "failed" until the JTAG commands exist.
+- JTAG uses the CMSIS-DAP JTAG commands instead of the `JTAG_RAW` block (see [JTAG](cmsis-dap.md#jtag)).
 
 The runtime selection of the personality is a later work item.
 The names of the image files have the text `-cmsis-dap` after the board name.

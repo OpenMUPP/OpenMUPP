@@ -28,6 +28,7 @@
 #include "Version.h"
 #include "board/Board.h"
 #include "board/BoardGpio.h"
+#include "board/BoardJtag.h"
 #include "board/BoardSwd.h"
 #include "board/Leds.h"
 #include "debug/DebugLog.h"
@@ -42,7 +43,6 @@
 #include "protocol/cmsisdap/BitBangDapSwd.h"
 #include "protocol/cmsisdap/DapProcessor.h"
 #else
-#include "board/BoardJtag.h"
 #include "board/BoardPower.h"
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
@@ -103,13 +103,16 @@ board::BoardGpio boardGpio;
 board::SwdPins swdPins;
 board::BoardSwd boardSwd{ swdPins, &serialService };
 cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
+board::JtagPins jtagPins;
+board::BoardJtag boardJtag{ jtagPins, &serialService };
 cmsisdap::Processor dapProcessor{ dapSwd, boardGpio, dapPlatform,
                                   cmsisdap::DeviceInfo{
                                   .vendor = dapVendor,
                                   .product = dapProduct,
                                   .serialNumber = dapSerialNumber.data(),
                                   .firmwareVersion = versionString,
-                                  } };
+                                  },
+                                  &boardJtag };
 usb::UsbStack usbStack{ dapProcessor };
 
 #else
