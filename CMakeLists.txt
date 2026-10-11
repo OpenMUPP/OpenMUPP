@@ -149,6 +149,9 @@ if (CMAKE_CROSSCOMPILING)
     # An image has the sources of its personality only: the CMSIS-DAP image
     # does not link the Versaloon command buffers (usb/VersaloonFunction.h).
     set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
+    # The flash page of the stored personality: only in a dual image
+    set(_vsl_settings_files "src/board/SettingsFlashPage\\.cpp")
+    set(VSL_SETTINGS_PAGE_SIZE 0)
     # VSL_WITH_VERSALOON and VSL_WITH_CMSIS_DAP: the personalities in the image
     if (VSL_PROTOCOL STREQUAL "cmsis-dap")
         list(APPEND PROJECT_DEFINES VSL_WITH_CMSIS_DAP)
@@ -166,7 +169,7 @@ if (CMAKE_CROSSCOMPILING)
         set(_vsl_other_protocol_files "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
                 "src/usb/CmsisDapFunction\\.cpp")
     endif ()
-    foreach (_file ${_vsl_other_protocol_files})
+    foreach (_file ${_vsl_other_protocol_files} ${_vsl_settings_files})
         list(FILTER VSL_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
     endforeach ()
     if (VSL_DEBUG_CDC)
@@ -182,7 +185,7 @@ if (CMAKE_CROSSCOMPILING)
     set(COMMON_OPTIONS -Os -ffunction-sections -fdata-sections -g -fno-common -fmessage-length=0 -fsigned-char -Werror=odr --specs=nano.specs --specs=nosys.specs)
     set(C_OPTIONS -std=gnu11)
     set(DEBUG_OPTIONS -Wall -Wextra -Og)
-    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -T${VSL_MEMORY_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -Wl,--defsym=__vsl_settings_size=${VSL_SETTINGS_PAGE_SIZE} -T${VSL_MEMORY_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
 endif ()
 
 # Central interface target to unify compile/link flags and defines across all used libraries and executables
