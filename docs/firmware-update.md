@@ -14,6 +14,13 @@ Use one of these methods:
 A firmware image built with `VSL_PROTOCOL=cmsis-dap` has no Versaloon interface.
 It has no `VERSALOON_FW_UPDATE` command.
 Use the key to start the bootloader.
+A dual image in the CMSIS-DAP personality has no `VERSALOON_FW_UPDATE` command either.
+Change it to the Versaloon personality first, or use the key (see [Dual image](usb-device.md#dual-image)).
+
+A dual image stores its personality in the flash page at `0x0800FC00`.
+`stm32flash -w` erases only the pages of the image, so an update keeps the stored personality.
+A mass erase of the flash also erases this page.
+The firmware then starts with its default personality.
 
 The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 

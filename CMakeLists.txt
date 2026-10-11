@@ -78,12 +78,19 @@ option(VSL_BOOTLOADER "Link the application behind versaloon-bootloader at 0x080
 # for the board. Only for boards that the bootloader supports, and only with VSL_BOOTLOADER.
 option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 
-# USB personality of the firmware image. One image has one personality.
+# USB personality of the firmware image.
 #   versaloon  the Versaloon interface of OpenOCD (default)
 #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
-set(VSL_PROTOCOLS versaloon cmsis-dap)
+#   dual       both personalities. One is active after each start. A switch
+#              command or the key selects the other one, and a flash page at
+#              the end of the application area stores it (src/personality/).
+set(VSL_PROTOCOLS versaloon cmsis-dap dual)
 set(VSL_PROTOCOL "versaloon" CACHE STRING "USB personality: ${VSL_PROTOCOLS}")
 set_property(CACHE VSL_PROTOCOL PROPERTY STRINGS ${VSL_PROTOCOLS})
+# The personality of a dual image when no personality is stored
+set(VSL_DEFAULT_PROTOCOLS versaloon cmsis-dap)
+set(VSL_DEFAULT_PROTOCOL "versaloon" CACHE STRING "Default personality of a dual image: ${VSL_DEFAULT_PROTOCOLS}")
+set_property(CACHE VSL_DEFAULT_PROTOCOL PROPERTY STRINGS ${VSL_DEFAULT_PROTOCOLS})
 
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
@@ -137,6 +144,9 @@ if (CMAKE_CROSSCOMPILING)
     if (NOT VSL_PROTOCOL IN_LIST VSL_PROTOCOLS)
         message(FATAL_ERROR "Unknown VSL_PROTOCOL '${VSL_PROTOCOL}'. Supported protocols: ${VSL_PROTOCOLS}")
     endif ()
+    if (NOT VSL_DEFAULT_PROTOCOL IN_LIST VSL_DEFAULT_PROTOCOLS)
+        message(FATAL_ERROR "Unknown VSL_DEFAULT_PROTOCOL '${VSL_DEFAULT_PROTOCOL}'. Supported: ${VSL_DEFAULT_PROTOCOLS}")
+    endif ()
 
     # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
@@ -148,12 +158,25 @@ if (CMAKE_CROSSCOMPILING)
     endif ()
     # An image has the sources of its personality only: the CMSIS-DAP image
     # does not link the Versaloon command buffers (usb/VersaloonFunction.h).
+    # The dual image has all sources.
     set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
     # The flash page of the stored personality: only in a dual image
     set(_vsl_settings_files "src/board/SettingsFlashPage\\.cpp")
     set(VSL_SETTINGS_PAGE_SIZE 0)
     # VSL_WITH_VERSALOON and VSL_WITH_CMSIS_DAP: the personalities in the image
-    if (VSL_PROTOCOL STREQUAL "cmsis-dap")
+    if (VSL_PROTOCOL STREQUAL "dual")
+        list(APPEND PROJECT_DEFINES VSL_WITH_VERSALOON VSL_WITH_CMSIS_DAP VSL_DUAL_PERSONALITY)
+        if (VSL_DEFAULT_PROTOCOL STREQUAL "cmsis-dap")
+            list(APPEND PROJECT_DEFINES VSL_DEFAULT_CMSIS_DAP)
+            set(VSL_IMAGE_TAG "-dual-cmsis-dap")
+        else ()
+            set(VSL_IMAGE_TAG "-dual")
+        endif ()
+        set(_vsl_other_protocol_files "")
+        set(_vsl_settings_files "")
+        # One STM32F103 flash page at the end of the application area
+        set(VSL_SETTINGS_PAGE_SIZE 1024)
+    elseif (VSL_PROTOCOL STREQUAL "cmsis-dap")
         list(APPEND PROJECT_DEFINES VSL_WITH_CMSIS_DAP)
         set(VSL_IMAGE_TAG "-cmsis-dap")
         set(_vsl_other_protocol_files
@@ -210,7 +233,7 @@ if (CMAKE_CROSSCOMPILING)
     else ()
         set(VSL_LINK_VARIANT direct)
     endif ()
-    MESSAGE(STATUS "Building versaloon-next-gen version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (" ${VSL_LINK_VARIANT} ", " ${VSL_MEMORY_LDSCRIPT} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ")")
+    MESSAGE(STATUS "Building versaloon-next-gen version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (" ${VSL_LINK_VARIANT} ", " ${VSL_MEMORY_LDSCRIPT} ", protocol: " ${VSL_PROTOCOL} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program

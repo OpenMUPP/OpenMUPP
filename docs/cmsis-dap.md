@@ -29,9 +29,9 @@ The `cmsis-dap` image has these properties:
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
   On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
 
-Only one personality is in an image.
-To change the personality, write another image.
-The runtime selection is a later work item.
+A `cmsis-dap` image has only this personality.
+A `dual` image (`VSL_PROTOCOL=dual`) has both personalities.
+Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, or with the key (see [Dual image](usb-device.md#dual-image)).
 
 ## Limits
 
