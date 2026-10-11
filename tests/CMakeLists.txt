@@ -39,6 +39,7 @@ add_executable(vsl-tests
         TestUartBridge.cpp
         TestSerialEventQueue.cpp
         TestBootloaderEntry.cpp
+        TestPersonalityStore.cpp
         TestCommandAssembler.cpp
         TestCommandProcessor.cpp
         TestUsbToAll.cpp
