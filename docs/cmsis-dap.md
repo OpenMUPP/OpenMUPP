@@ -29,9 +29,9 @@ The `cmsis-dap` image has these properties:
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
   On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
 
-Only one personality is in an image.
-To change the personality, write another image.
-The runtime selection is a later work item.
+A `cmsis-dap` image has only this personality.
+A `dual` image (`VSL_PROTOCOL=dual`) has both personalities.
+Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, or with the key (see [Dual image](usb-device.md#dual-image)).
 
 ## Limits
 
@@ -133,6 +133,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
 | `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
 | `0x1D` | `DAP_SWD_Sequence` | Replies an error when SWD is not connected. |
+| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a dual image: `[0x80][personality u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `1` for another personality code. The firmware then stores the personality and resets. An image with one personality replies `ID_DAP_Invalid`. See [Dual image](usb-device.md#dual-image). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 

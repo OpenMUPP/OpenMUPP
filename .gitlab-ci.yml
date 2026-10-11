@@ -67,6 +67,8 @@ run-tool-tests:
     PROTOCOL: versaloon
     # Empty for the default personality
     PROTOCOL_TAG: ""
+    # Only for PROTOCOL=dual (VSL_DEFAULT_PROTOCOL in CMakeLists.txt)
+    DEFAULT_PROTOCOL: versaloon
   script:
     - cd "$CI_PROJECT_DIR"
     - BUILDDIR=${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build
@@ -74,6 +76,7 @@ run-tool-tests:
       -D GCC_TOOLCHAIN_PREFIX:STRING=${GCC_TOOLCHAIN_PREFIX}
       -D BOARD:STRING=${BOARD}
       -D VSL_PROTOCOL:STRING=${PROTOCOL}
+      -D VSL_DEFAULT_PROTOCOL:STRING=${DEFAULT_PROTOCOL}
       -D VSL_BOOTLOADER:BOOL=ON
       -D CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
       -D CMAKE_BUILD_TYPE:STRING=${BUILD_TYPE}
@@ -134,3 +137,35 @@ build-stlinkv2-cmsis-dap:
   extends: .build-cmsis-dap-template
   variables:
     BOARD: stlinkv2
+
+# The dual image (VSL_PROTOCOL=dual) on all boards. The last 1 KB flash
+# page holds the stored personality, so the image limit is 53 KB.
+.build-dual-template:
+  extends: .build-board-template
+  variables:
+    PROTOCOL: dual
+    PROTOCOL_TAG: "-dual"
+    FLASH_LIMIT_BYTES: "54272"
+
+build-mini-dual:
+  extends: .build-dual-template
+  variables:
+    BOARD: mini
+
+build-otheruse-dual:
+  extends: .build-dual-template
+  variables:
+    BOARD: otheruse
+
+build-stlinkv2-dual:
+  extends: .build-dual-template
+  variables:
+    BOARD: stlinkv2
+
+# The dual image with CMSIS-DAP as the default personality
+build-mini-dual-cmsis-dap:
+  extends: .build-dual-template
+  variables:
+    BOARD: mini
+    DEFAULT_PROTOCOL: cmsis-dap
+    PROTOCOL_TAG: "-dual-cmsis-dap"

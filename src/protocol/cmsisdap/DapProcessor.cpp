@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include "personality/PersonalitySwitch.h"
+
 namespace cmsisdap {
 
 // Reads the fields of a request. A read past the end gives 0 and clears ok().
@@ -166,12 +168,18 @@ constexpr char protocolVersion[] = "2.1.0";
 
 } // namespace
 
-Processor::Processor(DapSwd &swd, protocol::GpioPins &gpio, Platform &platform, const DeviceInfo &info, protocol::JtagPort *jtag)
+Processor::Processor(DapSwd &swd,
+                     protocol::GpioPins &gpio,
+                     Platform &platform,
+                     const DeviceInfo &info,
+                     protocol::JtagPort *jtag,
+                     personality::PersonalitySwitch *personalitySwitch)
    : swd_(swd)
    , jtag_(jtag)
    , gpio_(gpio)
    , platform_(platform)
-   , info_(info) {
+   , info_(info)
+   , personalitySwitch_(personalitySwitch) {
    if(jtag_.available()) {
       info_.capabilities = static_cast<uint16_t>(info_.capabilities | capability::jtag);
    }
@@ -341,6 +349,12 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       return jtagConfigure(in, out);
    case command::jtagIdcode:
       return jtagIdcode(in, out);
+   case command::vendor0:
+      if(personalitySwitch_ != nullptr) {
+         return switchPersonality(in, out);
+      }
+      out.u8(command::invalid);
+      return true;
    case command::executeCommands:
    case command::queueCommands:
       if(!nested) {
@@ -371,6 +385,24 @@ bool Processor::executeCommands(uint8_t id, PacketReader &in, PacketWriter &out)
       ++executed;
    }
    out.set(countPosition, executed);
+   return true;
+}
+
+bool Processor::switchPersonality(PacketReader &in, PacketWriter &out) {
+   const uint8_t code = in.u8();
+   if(!in.ok()) {
+      return false;
+   }
+   out.u8(command::vendor0);
+   const auto target = personality::fromCode(code);
+   if(!target) {
+      out.u8(statusError);
+      return true;
+   }
+   // The main loop stores the personality and resets after the reply
+   // delay: the transport sends this response first.
+   personalitySwitch_->request(*target);
+   out.u8(statusOk);
    return true;
 }
 

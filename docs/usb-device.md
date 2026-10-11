@@ -45,10 +45,11 @@ In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log ins
 ## CMSIS-DAP personality
 
 The firmware has a second USB personality: CMSIS-DAP v2 instead of the Versaloon protocol.
-Only one personality is active in a firmware image.
+Only one personality is active at a time.
 The USB peripheral has 512 bytes of packet memory.
 The Versaloon interface and a CMSIS-DAP interface do not fit together.
 The build option `VSL_PROTOCOL` selects the personality (see [Select the personality](#select-the-personality)).
+A dual image has both personalities, and selects one at each start (see [Dual image](#dual-image)).
 The Versaloon personality is the default.
 
 `src/usb/CmsisDapDescriptors.h` has the descriptors.
@@ -88,12 +89,14 @@ The CMake option `VSL_PROTOCOL` selects the personality of the image:
 |---|---|---|---|
 | `versaloon` (default) | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/`) |
 | `cmsis-dap` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
+| `dual` | One of the two, selected at each start | One of the two | All, and `personality/`, `board/SettingsFlashPage.cpp` |
 
-The option defines `VSL_PROTOCOL_CMSIS_DAP` for the `cmsis-dap` image.
-`usb::UsbStack` and `main.cpp` use the define to select the USB function, the descriptors and the protocol objects.
+The option defines `VSL_WITH_VERSALOON` for the `versaloon` image and `VSL_WITH_CMSIS_DAP` for the `cmsis-dap` image.
+The `dual` image gets both defines and `VSL_DUAL_PERSONALITY`.
+`usb::UsbStack` and `main.cpp` use the defines to select the USB function, the descriptors and the protocol objects.
 The CMake file also removes the source files of the other personality.
 Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
-Both images share the CDC-ACM serial port, the UART bridge, the debug log, the heartbeat and the LEDs.
+All images share the CDC-ACM serial port, the UART bridge, the debug log, the heartbeat and the LEDs.
 
 The CMSIS-DAP image differs from the Versaloon image in these points:
 
@@ -102,8 +105,59 @@ The CMSIS-DAP image differs from the Versaloon image in these points:
 - It has no target power switch and no `GET_TVCC`.
 - JTAG uses the CMSIS-DAP JTAG commands instead of the `JTAG_RAW` block (see [JTAG](cmsis-dap.md#jtag)).
 
-The runtime selection of the personality is a later work item.
 The names of the image files have the text `-cmsis-dap` after the board name.
+
+### Dual image
+
+A dual image (`VSL_PROTOCOL=dual`) has both personalities.
+One personality is active after each start.
+The active personality has its descriptors, its USB function and its commands, as in the image with one personality.
+The firmware changes the personality only with a reset.
+
+The firmware stores the personality in the last 1 KB flash page of the application area, at `0x0800FC00`.
+The linker script keeps this page out of the image, so a dual image has 53 KB instead of 54 KB.
+When the page holds no personality, the image uses `VSL_DEFAULT_PROTOCOL` (default `versaloon`).
+`src/personality/PersonalityStore.h` has the page format.
+The page is a log of 16-bit records, so the firmware erases the page only one time in 512 switches.
+
+To change the personality, use one of these methods:
+
+- In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
+- In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)).
+- Hold the key down for 3 s while the firmware runs, then release it. The firmware then selects the other personality.
+
+The personality code is `0` for Versaloon and `1` for CMSIS-DAP.
+`tools/vsl_personality.py` sends the commands from the host.
+It needs the `pyusb` package:
+
+```sh
+python3 tools/vsl_personality.py show
+python3 tools/vsl_personality.py switch cmsis-dap
+python3 tools/vsl_personality.py switch versaloon
+```
+
+After a command, the firmware sends the reply, and then waits 10 ms.
+Then the firmware disconnects from USB, writes the flash page and resets.
+The host sees a disconnect, and then the device with the other VID:PID.
+A switch to the active personality does not reset.
+It also cancels a switch that the firmware did not do yet.
+If the flash write fails, the firmware starts again with the old personality.
+
+The key gesture has these rules:
+
+- The switch starts when you release the key, after at least 3 s.
+  A shorter press does nothing.
+  The firmware does not switch while the key is down, because a key that is down at reset starts the bootloader.
+- The firmware counts the key only after it saw the key released.
+  Thus a key that sticks does not change the personality at each start.
+- The key at reset starts the bootloader, as before (see [Firmware update](firmware-update.md)).
+- The ST-Link/V2 has no key. Use the commands.
+
+The Versaloon personality of a dual image has `VERSALOON_FW_UPDATE`, as the Versaloon image.
+The CMSIS-DAP personality has no command to start the bootloader: use the key at reset, or change to the Versaloon personality first.
+
+The dual image links the objects of both personalities.
+The Versaloon command and reply buffers (2 x 4096 bytes) are always in RAM.
 
 ## Versaloon commands
 
@@ -132,9 +186,16 @@ The common commands are:
 | `GET_INFO` | `[0x00]` | `[buffer size u16][version text][0x00]` |
 | `GET_TVCC` | `[0x01]` | `[target voltage in mV u16]`, from the Vref sense (see [POWER block](#power-block)). The value is 0 when the board has no sense or the measurement fails. |
 | `GET_HARDWARE` | `[0x02]` | `[hardware ID u8]`, from the board definition (see [Boards](boards.md)). |
+| `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
 The version text has the form `versaloon-next-gen <version>, board <board>`.
+
+`SWITCH_PERSONALITY` changes the USB personality of a dual image (see [Dual image](#dual-image)).
+The firmware sends the reply, stores the personality and resets.
+An image with one personality refuses the command.
+The firmware also refuses a personality code other than `0` and `1`.
+A switch to the active personality gets status `0`, and the firmware does not reset.
 Other common commands have no reply.
 The `USB_TO_XXX` commands go to the `USB_TO_ALL` dispatcher (see [USB_TO_ALL](#usb_to_all)).
 

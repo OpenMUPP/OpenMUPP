@@ -16,6 +16,11 @@
 // voltage of its Vref sense. During a long JTAG or SWD command, the
 // engines call the serial service (protocol/Background.h): it runs the
 // serial port of the USB device and the UART bridge, or the debug log.
+// A CMSIS-DAP image runs the CMSIS-DAP processor
+// (protocol/cmsisdap/DapProcessor.h) instead of USB_TO_ALL. A dual image
+// has both: the stored personality (personality/PersonalityStore.h)
+// selects one at the start. A switch command or the release of a key that
+// was down for 3 s stores the other personality and resets (personality/PersonalitySwitch.h).
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -37,12 +42,13 @@
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
 #include <peripherals/Uid.h>
 
 #include "protocol/cmsisdap/BitBangDapSwd.h"
 #include "protocol/cmsisdap/DapProcessor.h"
-#else
+#endif
+#if defined(VSL_WITH_VERSALOON)
 #include "board/BoardPower.h"
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
@@ -50,6 +56,13 @@
 #include "protocol/PowerBlock.h"
 #include "protocol/SwdBlock.h"
 #include "protocol/UsbToAll.h"
+#endif
+#if defined(VSL_DUAL_PERSONALITY)
+#include "board/BoardPins.h"
+#include "board/SettingsFlashPage.h"
+#include "personality/KeyGesture.h"
+#include "personality/PersonalityStore.h"
+#include "personality/PersonalitySwitch.h"
 #endif
 
 namespace {
@@ -64,7 +77,36 @@ class SerialService final : public protocol::Background {
 
 SerialService serialService;
 
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+board::BoardGpio boardGpio;
+board::SwdPins swdPins;
+board::BoardSwd boardSwd{ swdPins, &serialService };
+board::JtagPins jtagPins;
+board::BoardJtag boardJtag{ jtagPins, &serialService };
+
+#if defined(VSL_DUAL_PERSONALITY)
+
+using personality::Personality;
+
+// The personality when the settings page has none
+#if defined(VSL_DEFAULT_CMSIS_DAP)
+constexpr Personality defaultPersonality = Personality::CmsisDap;
+#else
+constexpr Personality defaultPersonality = Personality::Versaloon;
+#endif
+
+Personality loadPersonality() {
+   board::SettingsFlashPage page;
+   return personality::PersonalityStore{ page }.load().value_or(defaultPersonality);
+}
+
+// The personality of this start. Before the USB stack, which takes it.
+const Personality activePersonality = loadPersonality();
+personality::PersonalitySwitch personalitySwitch{ activePersonality };
+personality::KeyGesture keyGesture;
+
+#endif
+
+#if defined(VSL_WITH_CMSIS_DAP)
 
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
 // processor keeps a pointer to the serial number text.
@@ -99,23 +141,27 @@ class DapPlatform final : public cmsisdap::Platform {
 };
 
 DapPlatform dapPlatform;
-board::BoardGpio boardGpio;
-board::SwdPins swdPins;
-board::BoardSwd boardSwd{ swdPins, &serialService };
 cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
-board::JtagPins jtagPins;
-board::BoardJtag boardJtag{ jtagPins, &serialService };
-cmsisdap::Processor dapProcessor{ dapSwd, boardGpio, dapPlatform,
+cmsisdap::Processor dapProcessor{ dapSwd,
+                                  boardGpio,
+                                  dapPlatform,
                                   cmsisdap::DeviceInfo{
                                   .vendor = dapVendor,
                                   .product = dapProduct,
                                   .serialNumber = dapSerialNumber.data(),
                                   .firmwareVersion = versionString,
                                   },
-                                  &boardJtag };
-usb::UsbStack usbStack{ dapProcessor };
-
+                                  &boardJtag,
+#if defined(VSL_DUAL_PERSONALITY)
+                                  &personalitySwitch
 #else
+                                  nullptr
+#endif
+};
+
+#endif
+
+#if defined(VSL_WITH_VERSALOON)
 
 // The DELAY block busy-waits: the main loop stops for the delay, up to
 // 32.767 s. The host waits for the reply in this time.
@@ -132,19 +178,21 @@ class BusyWaitDelay final : public protocol::Delay {
 BusyWaitDelay busyWaitDelay;
 
 protocol::UsbToAll usbToAll{ busyWaitDelay };
-board::BoardGpio boardGpio;
 protocol::GpioBlock gpioBlock{ boardGpio };
-board::JtagPins jtagPins;
-board::BoardJtag boardJtag{ jtagPins, &serialService };
 protocol::JtagRawBlock jtagRawBlock{ boardJtag };
-board::SwdPins swdPins;
-board::BoardSwd boardSwd{ swdPins, &serialService };
 protocol::SwdBlock swdBlock{ boardSwd };
 board::BoardPower boardPower;
 protocol::PowerBlock powerBlock{ boardPower, busyWaitDelay };
 boot::BootloaderEntry bootloaderEntry;
-usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll };
 
+#endif
+
+#if defined(VSL_DUAL_PERSONALITY)
+usb::UsbStack usbStack{ activePersonality, boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll, personalitySwitch, dapProcessor };
+#elif defined(VSL_WITH_CMSIS_DAP)
+usb::UsbStack usbStack{ dapProcessor };
+#else
+usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll };
 #endif
 
 // A command runs only after usbStack.start(), so the USB device and the
@@ -155,7 +203,7 @@ void SerialService::service() {
    uart::pollBridge();
 }
 
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
 // string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one
@@ -170,22 +218,12 @@ void setDapSerialNumber() {
    }
 }
 
-// Before the first command
-void startProtocol() {
-   setDapSerialNumber();
-}
+#endif
 
-// The processor has no periodic work: UsbStack::poll() runs it.
-void beforeUsbPoll(uint64_t /*nowMs*/) {
-}
-
-void afterUsbPoll(uint64_t /*nowMs*/) {
-}
-
-#else
+#if defined(VSL_WITH_VERSALOON)
 
 // Adds the blocks of USB_TO_ALL before the first command
-void startProtocol() {
+void addUsbToAllBlocks() {
    if(!usbToAll.add(gpioBlock)) {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the GPIO block");
    }
@@ -202,17 +240,66 @@ void startProtocol() {
    usbToAll.setTargetVoltage(&powerBlock);
 }
 
-void beforeUsbPoll(uint64_t nowMs) {
-   if(bootloaderEntry.isDue(nowMs)) {
-      boot::enterBootloader();
+#endif
+
+#if defined(VSL_DUAL_PERSONALITY)
+
+// Stores the personality and resets. The USB device then enumerates with
+// the descriptors of that personality. When the store fails, the reset
+// keeps the active personality.
+[[noreturn]] void switchPersonality(Personality target) {
+   LOG_INFO(debug::appLog, "Switch to the %s personality", target == Personality::CmsisDap ? "CMSIS-DAP" : "Versaloon");
+   usbStack.disconnect();
+   board::SettingsFlashPage page;
+   static_cast<void>(personality::PersonalityStore{ page }.store(target));
+   NVIC_SystemReset();
+   for(;;) {
    }
 }
 
-void afterUsbPoll(uint64_t nowMs) {
-   powerBlock.poll(nowMs);
+// The key gesture and the switch commands. The key gesture gives the
+// request at the release of the key: a key that is down at the reset
+// starts the bootloader.
+void pollPersonality(uint64_t nowMs) {
+   if(const auto key = board::current.key) {
+      if(keyGesture.update(board::isAsserted(*key), nowMs)) {
+         personalitySwitch.request(personality::other(personalitySwitch.active()));
+      }
+   }
+   if(personalitySwitch.isDue(nowMs)) {
+      switchPersonality(*personalitySwitch.requested());
+   }
 }
 
 #endif
+
+// Before the first command
+void startProtocol() {
+#if defined(VSL_WITH_CMSIS_DAP)
+   setDapSerialNumber();
+#endif
+#if defined(VSL_WITH_VERSALOON)
+   addUsbToAllBlocks();
+#endif
+}
+
+// The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
+void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
+#if defined(VSL_WITH_VERSALOON)
+   if(bootloaderEntry.isDue(nowMs)) {
+      boot::enterBootloader();
+   }
+#endif
+#if defined(VSL_DUAL_PERSONALITY)
+   pollPersonality(nowMs);
+#endif
+}
+
+void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
+#if defined(VSL_WITH_VERSALOON)
+   powerBlock.poll(nowMs);
+#endif
+}
 
 } // namespace
 

@@ -1,6 +1,7 @@
 #include "usb/UsbStack.h"
 
 #include <array>
+#include <delaybusywait.h>
 #include <peripherals/Rcc.h>
 #include <peripherals/Uid.h>
 
@@ -10,7 +11,7 @@
 #include "board/BoardPins.h"
 #include "debug/DebugLog.h"
 #include "usb/UsbDescriptors.h"
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
 #include "usb/CmsisDapDescriptors.h"
 #endif
 
@@ -18,26 +19,26 @@ namespace usb {
 
 namespace {
 
-// The identity of the personality in this image
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
-namespace identity = ::usb::dap;
-constexpr uint8_t protocolOutEndpoint = dap::outEndpoint;
-#else
-namespace identity = ::usb;
-constexpr uint8_t protocolOutEndpoint = versaloonOutEndpoint;
-#endif
+using personality::Personality;
 
 static_assert(art::usb::CdcAcmFunctionBase::kDataPacketSize == cdcDataPacketSize);
 static_assert(hw::Uid::SizeBytes == uidBytes);
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
 static_assert(dap::packetMemoryUsed <= hw::UsbDevice::PacketMemorySize);
-#else
+// The two personalities share the endpoint numbers, so the OUT endpoint is
+// double-buffered in each.
+static_assert(dap::outEndpoint == versaloonOutEndpoint);
+#endif
+#if defined(VSL_WITH_VERSALOON)
 // The packet memory: the buffer descriptor table, EP0 (64 bytes each way),
 // two buffers for the double-buffered Versaloon OUT endpoint, and one for
 // each other endpoint.
 static_assert(endpointCount * 8 + 2 * 64 + 2 * versaloonPacketSize + versaloonPacketSize + cdcNotificationPacketSize + 2 * cdcDataPacketSize <=
               hw::UsbDevice::PacketMemorySize);
 #endif
+
+// How long D+ stays low before a reset, so the host sees a disconnect
+constexpr uint32_t disconnectMs = 20;
 
 constexpr art::usb::CdcAcmEndpoints serialPortEndpoints{
    .notification = cdcNotificationEndpoint,
@@ -48,51 +49,88 @@ constexpr art::usb::CdcAcmEndpoints serialPortEndpoints{
 
 SerialNumber serialNumber;
 
-#if !defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_VERSALOON)
 const protocol::DeviceInfo deviceInfo{
    .version = versionString,
    .board = board::current.name,
    .hardwareId = board::current.hardwareId,
 };
-#endif
 
-const std::array<art::span<const uint8_t>, identity::stringCount> strings{
-   desc::asSpan(identity::languageDescriptor),   desc::asSpan(identity::manufacturerDescriptor),
-   desc::asSpan(identity::productDescriptor),    serialNumber.bytes(),
-   desc::asSpan(identity::serialPortDescriptor),
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
-   desc::asSpan(dap::interfaceStringDescriptor),
-#endif
+const std::array<art::span<const uint8_t>, stringCount> versaloonStrings{
+   desc::asSpan(languageDescriptor),   desc::asSpan(manufacturerDescriptor),
+   desc::asSpan(productDescriptor),    serialNumber.bytes(),
+   desc::asSpan(serialPortDescriptor),
 };
 
-const art::usb::Descriptors descriptors{
-   .device = desc::asSpan(identity::deviceDescriptor),
-   .configuration = desc::asSpan(identity::configurationDescriptor),
-   .strings = art::span<const art::span<const uint8_t>>(strings.data(), strings.size()),
+const art::usb::Descriptors versaloonDescriptors{
+   .device = desc::asSpan(deviceDescriptor),
+   .configuration = desc::asSpan(configurationDescriptor),
+   .strings = art::span<const art::span<const uint8_t>>(versaloonStrings.data(), versaloonStrings.size()),
 };
+#endif
+
+#if defined(VSL_WITH_CMSIS_DAP)
+const std::array<art::span<const uint8_t>, dap::stringCount> dapStrings{
+   desc::asSpan(dap::languageDescriptor),   desc::asSpan(dap::manufacturerDescriptor),
+   desc::asSpan(dap::productDescriptor),    serialNumber.bytes(),
+   desc::asSpan(dap::serialPortDescriptor), desc::asSpan(dap::interfaceStringDescriptor),
+};
+
+const art::usb::Descriptors dapDescriptors{
+   .device = desc::asSpan(dap::deviceDescriptor),
+   .configuration = desc::asSpan(dap::configurationDescriptor),
+   .strings = art::span<const art::span<const uint8_t>>(dapStrings.data(), dapStrings.size()),
+};
+#endif
+
+#if defined(VSL_WITH_VERSALOON) && defined(VSL_WITH_CMSIS_DAP)
+const art::usb::Descriptors &descriptorsOf(Personality personality) {
+   return personality == Personality::CmsisDap ? dapDescriptors : versaloonDescriptors;
+}
+#endif
 
 } // namespace
 
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_VERSALOON) && defined(VSL_WITH_CMSIS_DAP)
+UsbStack::UsbStack(Personality active,
+                   boot::BootloaderEntry *bootloader,
+                   protocol::UsbToXxxHandler &usbToXxx,
+                   personality::PersonalitySwitch &personalitySwitch,
+                   cmsisdap::Processor &processor)
+   : controller_(hardware_, events_)
+   , active_(active)
+   , device_(controller_, descriptorsOf(active))
+   , versaloon_(deviceInfo, bootloader, &usbToXxx, &personalitySwitch)
+   , dap_(processor)
+#elif defined(VSL_WITH_CMSIS_DAP)
 UsbStack::UsbStack(cmsisdap::Processor &processor)
    : controller_(hardware_, events_)
-   , device_(controller_, descriptors)
-   , protocol_(processor)
+   , active_(Personality::CmsisDap)
+   , device_(controller_, dapDescriptors)
+   , dap_(processor)
 #else
 UsbStack::UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler &usbToXxx)
    : controller_(hardware_, events_)
-   , device_(controller_, descriptors)
-   , protocol_(deviceInfo, bootloader, &usbToXxx)
+   , active_(Personality::Versaloon)
+   , device_(controller_, versaloonDescriptors)
+   , versaloon_(deviceInfo, bootloader, &usbToXxx)
 #endif
    , serialPort_(cdcControlInterface, serialPortEndpoints) {
-   controller_.setDoubleBufferedOut(protocolOutEndpoint);
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
-   // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
-   events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
-#endif
+   controller_.setDoubleBufferedOut(versaloonOutEndpoint);
    // Fails only for an interface range that does not fit the device: a
    // static configuration error, which the host tests catch.
-   static_cast<void>(device_.addFunction(protocol_));
+#if defined(VSL_WITH_CMSIS_DAP)
+   if(active_ == Personality::CmsisDap) {
+      // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
+      events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
+      static_cast<void>(device_.addFunction(dap_));
+   }
+#endif
+#if defined(VSL_WITH_VERSALOON)
+   if(active_ == Personality::Versaloon) {
+      static_cast<void>(device_.addFunction(versaloon_));
+   }
+#endif
    static_cast<void>(device_.addFunction(serialPort_));
 }
 
@@ -115,14 +153,32 @@ void UsbStack::start() {
 
 void UsbStack::poll() {
    controller_.poll();
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
-   protocol_.poll();
+#if defined(VSL_WITH_CMSIS_DAP)
+   if(active_ == Personality::CmsisDap) {
+      dap_.poll();
+   }
 #endif
    // Without VSL_DEBUG_CDC the UART bridge reads the serial port
    // (uart/SerialBridge.h).
    if constexpr(debug::cdcLog) {
       discardSerialInput();
    }
+}
+
+void UsbStack::disconnect() {
+   NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
+   if(const auto pullUp = board::current.usbPullUp) {
+      board::write(*pullUp, false);
+   } else {
+      // Stop the transceiver and reset the USB peripheral, then turn off
+      // its clock. The GPIO then drives D+ (PA12) low.
+      USB->CNTR = USB_CNTR_FRES | USB_CNTR_PDWN;
+      RCC->APB1RSTR |= RCC_APB1RSTR_USBRST;
+      RCC->APB1RSTR &= ~RCC_APB1RSTR_USBRST;
+      RCC->APB1ENR &= ~RCC_APB1ENR_USBEN;
+      board::configureOutput(board::Signal{ { board::Port::A, 12 }, board::Active::High }, false);
+   }
+   delaymS(disconnectMs);
 }
 
 void UsbStack::pollSerial() {

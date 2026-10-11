@@ -87,7 +87,8 @@ The CMake options are:
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
 | `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. The firmware then refuses `VERSALOON_FW_UPDATE`. The ST-Link/V2 has no bootloader: its firmware always refuses `VERSALOON_FW_UPDATE`. |
 | `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse, and only with `VSL_BOOTLOADER=ON`. |
-| `VSL_PROTOCOL` | `versaloon` | USB personality of the image: `versaloon` or `cmsis-dap`. A `cmsis-dap` image has the CMSIS-DAP v2 interface, `0403:9b3c`, instead of the Versaloon interface. The serial port and the UART bridge are in both. See [docs/cmsis-dap.md](docs/cmsis-dap.md). |
+| `VSL_PROTOCOL` | `versaloon` | USB personality of the image: `versaloon`, `cmsis-dap` or `dual`. A `cmsis-dap` image has the CMSIS-DAP v2 interface, `0403:9b3c`, instead of the Versaloon interface. A `dual` image has both personalities, and one is active after each start (see [docs/usb-device.md](docs/usb-device.md#dual-image)). The serial port and the UART bridge are in all images. See [docs/cmsis-dap.md](docs/cmsis-dap.md). |
+| `VSL_DEFAULT_PROTOCOL` | `versaloon` | Only for `VSL_PROTOCOL=dual`: the personality when no personality is stored. `versaloon` or `cmsis-dap`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [docs/boards.md](docs/boards.md#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [docs/debug-log.md](docs/debug-log.md)). Not allowed in a `Release` build. |
@@ -133,6 +134,11 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
 A firmware image built with `-DVSL_PROTOCOL=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `Versaloon CMSIS-DAP`.
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 The serial port works as in the default image.
+
+A firmware image built with `-DVSL_PROTOCOL=dual` has both personalities.
+To change the personality, hold the key down for 3 s, or send a switch command.
+The dongle then resets and shows as the other USB device.
+See [docs/usb-device.md](docs/usb-device.md#dual-image).
 
 The state LED shows a short flash one time each second when the firmware runs.
 See [docs/boards.md](docs/boards.md#start-up-and-leds) for the meaning of the LEDs.
