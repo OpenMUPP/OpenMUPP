@@ -170,7 +170,11 @@ void UsbStack::disconnect() {
    if(const auto pullUp = board::current.usbPullUp) {
       board::write(*pullUp, false);
    } else {
-      // Without the USB clock, the GPIO drives D+ (PA12) low.
+      // Stop the transceiver and reset the USB peripheral, then turn off
+      // its clock. The GPIO then drives D+ (PA12) low.
+      USB->CNTR = USB_CNTR_FRES | USB_CNTR_PDWN;
+      RCC->APB1RSTR |= RCC_APB1RSTR_USBRST;
+      RCC->APB1RSTR &= ~RCC_APB1RSTR_USBRST;
       RCC->APB1ENR &= ~RCC_APB1ENR_USBEN;
       board::configureOutput(board::Signal{ { board::Port::A, 12 }, board::Active::High }, false);
    }
