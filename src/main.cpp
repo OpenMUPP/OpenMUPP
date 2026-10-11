@@ -37,7 +37,7 @@
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
 #include <peripherals/Uid.h>
 
 #include "protocol/cmsisdap/BitBangDapSwd.h"
@@ -64,7 +64,7 @@ class SerialService final : public protocol::Background {
 
 SerialService serialService;
 
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
 
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
 // processor keeps a pointer to the serial number text.
@@ -155,7 +155,7 @@ void SerialService::service() {
    uart::pollBridge();
 }
 
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
 // string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one

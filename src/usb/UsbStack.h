@@ -7,7 +7,7 @@
 //
 //   versaloon (default)  the Versaloon vendor interface of OpenOCD
 //                        (usb/UsbDescriptors.h, usb/VersaloonFunction.h)
-//   cmsis-dap            the CMSIS-DAP v2 interface, VSL_PROTOCOL_CMSIS_DAP
+//   cmsis-dap            the CMSIS-DAP v2 interface, VSL_WITH_CMSIS_DAP
 //                        (usb/CmsisDapDescriptors.h, usb/CmsisDapFunction.h)
 //
 // Only one personality is in an image. The serial port is the same.
@@ -25,7 +25,7 @@
 #include <usb/Stm32UsbDeviceController.h>
 
 #include "usb/SerialEventQueue.h"
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
 #include "usb/CmsisDapFunction.h"
 #else
 #include "usb/VersaloonFunction.h"
@@ -39,7 +39,7 @@ namespace usb {
 
 class UsbStack {
    public:
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
    // processor: runs the CMSIS-DAP commands (see usb/CmsisDapFunction.h).
    // It must outlive the stack.
    explicit UsbStack(cmsisdap::Processor &processor);
@@ -93,7 +93,7 @@ class UsbStack {
    SerialEventQueue<16> events_;
    Stm32UsbDeviceController controller_;
    art::usb::Device device_;
-#if defined(VSL_PROTOCOL_CMSIS_DAP)
+#if defined(VSL_WITH_CMSIS_DAP)
    CmsisDapFunction protocol_;
 #else
    VersaloonFunction protocol_;

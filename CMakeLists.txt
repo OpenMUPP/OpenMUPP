@@ -149,8 +149,9 @@ if (CMAKE_CROSSCOMPILING)
     # An image has the sources of its personality only: the CMSIS-DAP image
     # does not link the Versaloon command buffers (usb/VersaloonFunction.h).
     set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
+    # VSL_WITH_VERSALOON and VSL_WITH_CMSIS_DAP: the personalities in the image
     if (VSL_PROTOCOL STREQUAL "cmsis-dap")
-        list(APPEND PROJECT_DEFINES VSL_PROTOCOL_CMSIS_DAP)
+        list(APPEND PROJECT_DEFINES VSL_WITH_CMSIS_DAP)
         set(VSL_IMAGE_TAG "-cmsis-dap")
         set(_vsl_other_protocol_files
                 "src/protocol/CommandAssembler\\.cpp" "src/protocol/CommandProcessor\\.cpp"
@@ -160,6 +161,7 @@ if (CMAKE_CROSSCOMPILING)
                 "src/usb/VersaloonFunction\\.cpp" "src/board/BoardPower\\.cpp"
                 "src/boot/Bootloader\\.cpp")
     else ()
+        list(APPEND PROJECT_DEFINES VSL_WITH_VERSALOON)
         set(VSL_IMAGE_TAG "")
         set(_vsl_other_protocol_files "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
                 "src/usb/CmsisDapFunction\\.cpp")

@@ -89,7 +89,7 @@ The CMake option `VSL_PROTOCOL` selects the personality of the image:
 | `versaloon` (default) | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/`) |
 | `cmsis-dap` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
 
-The option defines `VSL_PROTOCOL_CMSIS_DAP` for the `cmsis-dap` image.
+The option defines `VSL_WITH_VERSALOON` for the `versaloon` image and `VSL_WITH_CMSIS_DAP` for the `cmsis-dap` image.
 `usb::UsbStack` and `main.cpp` use the define to select the USB function, the descriptors and the protocol objects.
 The CMake file also removes the source files of the other personality.
 Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
