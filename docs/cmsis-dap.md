@@ -236,7 +236,6 @@ Other tests send `DAP_TransferAbort` and other packets during a transfer command
 
 This section has the SWD tests. The JTAG tests follow in [JTAG hardware test](#jtag-hardware-test).
 
-
 Date: 2026-10-10.
 Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`). The build is `v0.2.0-63-g10d84fa-dirty`. The `-dirty` suffix is from the merge of `dev`, which was not committed at build time. The `src/` tree equals commit `75d93cd`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
 The same checks first ran on `v0.2.0-57-g59614cb` (before E6). All checks passed there too. Only the read speed differs (see below).
@@ -314,13 +313,18 @@ The DAP is next to TDO, so it is device 0.
 
 | Check | OpenOCD | pyOCD |
 |---|---|---|
-| Find both TAPs, read IDCODE | pass | pass (`DAP_JTAG_IDCODE`, device 0) |
-| Flash and verify (32 KiB random image) at 1000, 4500 and 9000 kHz | pass | pass |
-| Read back (`cmp`, 32 KiB) at 1000, 4500 and 9000 kHz | pass | pass |
-| Reset and halt, `pc` and `sp` from the vector table | pass | pass |
-| Single step | pass | pass |
-| Hardware breakpoint, resume and halt | pass | pass |
-| RAM write and read (words, 8 KiB block) | pass | pass |
+| Find the TAPs, read IDCODE | pass (scan chain finds both TAPs) | pass (IDCODE of device 0; the script sets the chain) |
+| Flash and verify at 1000, 4500 and 9000 kHz | pass (32 KiB random image) | pass (32 KiB image, see below) |
+| Read back at 1000, 4500 and 9000 kHz | pass (`cmp`) | pass (compared in Python) |
+| Reset and halt, `pc` and `sp` from the vector table | pass (2 KiB loop image) | pass |
+| Single step | pass (2 KiB loop image) | pass |
+| Hardware breakpoint, resume and halt | pass (2 KiB loop image) | pass |
+| RAM write and read (words, 8 KiB block) | pass (words only) | pass |
+
+The OpenOCD flash checks use a random 32 KiB image.
+The OpenOCD debug checks use a 2 KiB image that has a vector table and the loop `adds r1, #1` / `b`.
+The pyOCD script builds one 32 KiB image for all checks: the vector table, the same loop and random data.
+The pyOCD checks come from `tools/pyocd_jtag_test.py`.
 
 All runs passed (0 failures).
 OpenOCD uses `DAP_JTAG_Sequence` for all JTAG scans.
@@ -337,13 +341,14 @@ JTAG flash time of 32 KiB (target at 64 MHz, one run per rate):
 
 | TCK request | OpenOCD write | OpenOCD verify | OpenOCD read | pyOCD write | pyOCD read |
 |---|---|---|---|---|---|
-| 1000 kHz | 8.66 s | 0.23 s | 7.66 s | 1.67 s | 1.37 s |
-| 4500 kHz | 8.07 s | 0.22 s | 7.11 s | 1.13 s | 0.94 s |
-| 9000 kHz | 8.16 s | 0.21 s | 7.14 s | 1.08 s | 0.90 s |
+| 1000 kHz | 8.66 s | 0.23 s | 7.66 s | 2.36 s | 1.37 s |
+| 4500 kHz | 8.07 s | 0.22 s | 7.11 s | 1.03 s | 0.94 s |
+| 9000 kHz | 8.16 s | 0.21 s | 7.14 s | 0.98 s | 0.90 s |
 
-The OpenOCD verify uses a CRC check on the target, so it reads no flash data over the probe.
+The OpenOCD verify time is much shorter than the read time. Thus OpenOCD probably checks a CRC on the target and does not read the flash data over the probe. This test did not confirm it.
+The pyOCD write time at 1000 kHz was 1.67 s in an earlier run of the same check. Thus the write times vary by about 40%.
 
-`DAP_JTAG_Configure` and `DAP_JTAG_IDCODE` checks (pyOCD, raw commands):
+`DAP_JTAG_Configure` and `DAP_JTAG_IDCODE` checks (raw commands in `tools/pyocd_jtag_test.py`):
 
 | Check | Result |
 |---|---|
@@ -353,7 +358,7 @@ The OpenOCD verify uses a CRC check on the target, so it reads no flash data ove
 
 Findings:
 
-- OpenOCD in JTAG mode is slow. The write rate is about 4 KiB/s and the read rate about 4.5 KiB/s. The rate does not depend on TCK from 1000 kHz to 9000 kHz. pyOCD is 5 to 8 times faster with the same probe. SWD with OpenOCD (see [Hardware test](#hardware-test)) is faster too. The cause is not measured. OpenOCD sends one `DAP_JTAG_Sequence` per scan, so the USB round trips probably limit the rate. This test did not check whether the firmware or the host causes it.
+- OpenOCD in JTAG mode is slow. The write rate is about 4 KiB/s and the read rate about 4.5 KiB/s. The rate does not depend on TCK from 1000 kHz to 9000 kHz. pyOCD is 4 to 8 times faster with the same probe. SWD with OpenOCD (see [Hardware test](#hardware-test)) is faster too. The cause is not measured. OpenOCD sends one `DAP_JTAG_Sequence` per scan, so the USB round trips probably limit the rate. This test did not check whether the firmware or the host causes it.
 - pyOCD 0.45.1 does not work with the STM32F1 on JTAG without a change. It sends `DAP_JTAG_Configure` with one device of IR length 4, and the chain has two TAPs. The first transfer fails with ACK 0. With the chain set to the IR lengths 4 and 5, all transfers pass. The test script `tools/pyocd_jtag_test.py` sets the chain to the IR lengths 4 and 5 in a patch of the pyOCD protocol class.
 - The pyOCD target `stm32f103ze` (from the Keil DFP) fails on JTAG before the first transfer with `'bytes' object cannot be interpreted as an integer`. The error is in the debug sequence code of pyOCD (`hex()` of a `bytes` result in a trace call). It is not a probe problem. The test uses the built-in target `stm32f103rc`.
 - `DAP_JTAG_IDCODE` for device 1 (the boundary-scan TAP) returns 0. The firmware loads the IR value `0x0E`, as the reference implementation of Arm does. This is the IDCODE instruction of the Cortex-M3 DAP. The boundary-scan TAP of the STM32F1 probably does not decode it as IDCODE. OpenOCD reads `0x06414041` from this TAP with its own scan, so the TAP does answer. No debug host uses `DAP_JTAG_IDCODE` of this TAP.
