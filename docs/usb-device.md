@@ -127,6 +127,15 @@ To change the personality, use one of these methods:
 - Hold the key down for 3 s while the firmware runs. The firmware then selects the other personality.
 
 The personality code is `0` for Versaloon and `1` for CMSIS-DAP.
+`tools/vsl_personality.py` sends the commands from the host.
+It needs the `pyusb` package:
+
+```sh
+python3 tools/vsl_personality.py show
+python3 tools/vsl_personality.py switch cmsis-dap
+python3 tools/vsl_personality.py switch versaloon
+```
+
 After a command, the firmware sends the reply, and then waits 10 ms.
 Then the firmware disconnects from USB, writes the flash page and resets.
 The host sees a disconnect, and then the device with the other VID:PID.
