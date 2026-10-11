@@ -148,7 +148,7 @@ The key gesture has these rules:
 - The LEDs flash when the key has been down for 3 s.
   A shorter press does nothing.
   The switch itself starts when you release the key, after the flashes.
-  The firmware does not reset while the key is down, because a key that is down at reset starts the bootloader.
+  The firmware does not reset while the key is down, and waits 50 ms after the release, because a key that is down at reset starts the bootloader.
 - The firmware counts the key only after it saw the key released.
   Thus a key that sticks does not change the personality at each start.
 - The key at reset starts the bootloader, as before (see [Firmware update](firmware-update.md)).

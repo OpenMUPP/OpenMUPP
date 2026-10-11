@@ -192,3 +192,17 @@ TEST_CASE("The reset waits for the release of the key") {
    CHECK_FALSE(personalitySwitch.isDue(due + 5000, true));
    CHECK(personalitySwitch.isDue(due + 5001, false));
 }
+
+TEST_CASE("A bounce of the key contact does not start the reset") {
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   personalitySwitch.request(Personality::CmsisDap, PersonalitySwitch::flashDelayMs);
+   constexpr uint64_t due = 1000 + PersonalitySwitch::flashDelayMs;
+
+   CHECK_FALSE(personalitySwitch.isDue(1000, true));
+   // The key goes up, bounces down, and goes up again
+   CHECK_FALSE(personalitySwitch.isDue(due + 10, false));
+   CHECK_FALSE(personalitySwitch.isDue(due + 12, true));
+   CHECK_FALSE(personalitySwitch.isDue(due + 14, false));
+   CHECK_FALSE(personalitySwitch.isDue(due + 14 + PersonalitySwitch::releaseDebounceMs - 1, false));
+   CHECK(personalitySwitch.isDue(due + 14 + PersonalitySwitch::releaseDebounceMs, false));
+}
