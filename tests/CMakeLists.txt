@@ -29,6 +29,8 @@ add_executable(vsl-tests
         TestVersion.cpp
         TestBoards.cpp
         TestHeartbeat.cpp
+        TestActivityLed.cpp
+        TestTargetPowerLed.cpp
         TestUptimeMicros.cpp
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
