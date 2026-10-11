@@ -136,7 +136,7 @@ The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cm
 The serial port works as in the default image.
 
 A firmware image built with `-DVSL_PROTOCOL=dual` has both personalities.
-To change the personality, hold the key down for 3 s, or send a switch command.
+To change the personality, hold the key down for 3 s until all LEDs flash, then release it, or send a switch command.
 The dongle then resets and shows as the other USB device.
 See [docs/usb-device.md](docs/usb-device.md#dual-image).
 

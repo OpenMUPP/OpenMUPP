@@ -167,7 +167,8 @@ TEST_CASE("The key gesture delay gives three flashes of all LEDs") {
    CHECK(flashes == 3);
    CHECK_FALSE(personalitySwitch.isDue(1000 + PersonalitySwitch::flashDelayMs - 1));
    CHECK(personalitySwitch.isDue(1000 + PersonalitySwitch::flashDelayMs));
-   CHECK_FALSE(personalitySwitch.indication(1000 + PersonalitySwitch::flashDelayMs).has_value());
+   // After the flashes the LEDs stay on until the reset
+   CHECK(personalitySwitch.indication(1000 + PersonalitySwitch::flashDelayMs) == true);
 }
 
 TEST_CASE("A switch command gives no LED indication") {

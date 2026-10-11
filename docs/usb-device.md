@@ -124,7 +124,7 @@ To change the personality, use one of these methods:
 
 - In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
 - In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)).
-- Hold the key down for 3 s while the firmware runs, then release it. All LEDs flash three times, and the firmware then selects the other personality.
+- Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the other personality.
 
 The personality code is `0` for Versaloon and `1` for CMSIS-DAP.
 `tools/vsl_personality.py` sends the commands from the host.
@@ -145,9 +145,10 @@ If the flash write fails, the firmware starts again with the old personality.
 
 The key gesture has these rules:
 
-- The switch starts when you release the key, after at least 3 s.
+- The LEDs flash when the key has been down for 3 s.
   A shorter press does nothing.
-  The firmware does not switch while the key is down, because a key that is down at reset starts the bootloader.
+  The switch itself starts when you release the key, after the flashes.
+  The firmware does not reset while the key is down, because a key that is down at reset starts the bootloader.
 - The firmware counts the key only after it saw the key released.
   Thus a key that sticks does not change the personality at each start.
 - The key at reset starts the bootloader, as before (see [Firmware update](firmware-update.md)).

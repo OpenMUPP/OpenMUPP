@@ -16,8 +16,10 @@
 //
 // The key gesture asks for a longer delay, flashDelayMs. During that time
 // indication() tells the main loop to flash all LEDs, so the user sees
-// that the switch starts. The user can press the key again in that time,
-// so the reset waits for the release of the key (see isDue()).
+// that the switch starts. The request comes when the key has been down
+// long enough, so the key is still down. The reset waits for the release
+// of the key (see isDue()). After the flashes, all LEDs stay on until the
+// release, so the user sees that the key can go up.
 
 #include <cstdint>
 #include <optional>
@@ -82,9 +84,13 @@ class PersonalitySwitch {
    // The state of the indication LEDs at the uptime nowMs: on or off. No
    // value when the main loop must not override the LEDs. Call it after
    // isDue(). The flashes start on, with one flash each flashPeriodMs.
+   // After the flashes the LEDs stay on, until the reset.
    [[nodiscard]] std::optional<bool> indication(uint64_t nowMs) const {
-      if(!requested_ || !dueMs_ || delayMs_ <= replyDelayMs || nowMs >= *dueMs_) {
+      if(!requested_ || !dueMs_ || delayMs_ <= replyDelayMs) {
          return std::nullopt;
+      }
+      if(nowMs >= *dueMs_) {
+         return true;
       }
       const uint64_t elapsed = nowMs - (*dueMs_ - delayMs_);
       return elapsed % flashPeriodMs < flashPeriodMs / 2;
