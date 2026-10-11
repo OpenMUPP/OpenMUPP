@@ -175,6 +175,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PROTOCOL=cmsis-dap`, plus the size check.
 - `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PROTOCOL=dual`, plus the size check.
   The limit of the dual image is 53 KB, because the last flash page holds the stored personality.
+- `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
   The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files and the bootloader images as artifacts.
 
 ## Branches
