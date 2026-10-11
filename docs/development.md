@@ -11,6 +11,7 @@ The build writes these files into the build directory:
 - Copies of the `.hex` and `.bin` files with the board, the link variant, the build type and the version in the name.
   An example is `versaloon-next-gen-mini-bootloader-Release-v0.1.0.hex`.
   An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-next-gen-mini-cmsis-dap-bootloader-Release-v0.1.0.hex`.
+  An image with `VSL_PROTOCOL=dual` has `-dual` after the board, or `-dual-cmsis-dap` with `VSL_DEFAULT_PROTOCOL=cmsis-dap`.
 - `versaloon-next-gen.map`, the linker map.
 - `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
 
@@ -172,6 +173,8 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   The jobs for the Mini and the OtherUse also build `versaloon-bootloader` for the board.
 - `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
 - `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PROTOCOL=cmsis-dap`, plus the size check.
+- `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PROTOCOL=dual`, plus the size check.
+  The limit of the dual image is 53 KB, because the last flash page holds the stored personality.
   The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files and the bootloader images as artifacts.
 
 ## Branches

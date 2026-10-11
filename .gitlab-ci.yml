@@ -134,3 +134,27 @@ build-stlinkv2-cmsis-dap:
   extends: .build-cmsis-dap-template
   variables:
     BOARD: stlinkv2
+
+# The dual image (VSL_PROTOCOL=dual) on all boards. The last 1 KB flash
+# page holds the stored personality, so the image limit is 53 KB.
+.build-dual-template:
+  extends: .build-board-template
+  variables:
+    PROTOCOL: dual
+    PROTOCOL_TAG: "-dual"
+    FLASH_LIMIT_BYTES: "54272"
+
+build-mini-dual:
+  extends: .build-dual-template
+  variables:
+    BOARD: mini
+
+build-otheruse-dual:
+  extends: .build-dual-template
+  variables:
+    BOARD: otheruse
+
+build-stlinkv2-dual:
+  extends: .build-dual-template
+  variables:
+    BOARD: stlinkv2
