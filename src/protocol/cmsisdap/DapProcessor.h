@@ -1,23 +1,23 @@
 #pragma once
 
-// The CMSIS-DAP v2.1 command processor for SWD. Hardware-independent: it
-// runs on a DapSwd object, a protocol::GpioPins object and a Platform
-// object, and the host unit tests use mock ones. usb::CmsisDapFunction
-// moves the packets.
+// The CMSIS-DAP v2.1 command processor for SWD and JTAG. Hardware-
+// independent: it runs on a DapSwd object, a protocol::JtagPort object, a
+// protocol::GpioPins object and a Platform object, and the host unit tests
+// use mock ones. usb::CmsisDapFunction moves the packets.
 //
 // The transport calls submit() for each request packet (at most
 // packetSize bytes). submit() only stores the packet. run() runs the
 // stored packets, in the main loop. The transport sends the response
 // packets in order. Commands:
 //
-//   0x00 DAP_Info             0x10 DAP_SWJ_Pins        0x1D DAP_SWD_Sequence
-//   0x01 DAP_HostStatus       0x11 DAP_SWJ_Clock       0x7E DAP_QueueCommands
-//   0x02 DAP_Connect          0x12 DAP_SWJ_Sequence    0x7F DAP_ExecuteCommands
-//   0x03 DAP_Disconnect       0x13 DAP_SWD_Configure
-//   0x04 DAP_TransferConfigure
-//   0x05 DAP_Transfer
-//   0x06 DAP_TransferBlock
-//   0x08 DAP_WriteABORT
+//   0x00 DAP_Info               0x10 DAP_SWJ_Pins       0x7E DAP_QueueCommands
+//   0x01 DAP_HostStatus         0x11 DAP_SWJ_Clock      0x7F DAP_ExecuteCommands
+//   0x02 DAP_Connect            0x12 DAP_SWJ_Sequence
+//   0x03 DAP_Disconnect         0x13 DAP_SWD_Configure
+//   0x04 DAP_TransferConfigure  0x14 DAP_JTAG_Sequence
+//   0x05 DAP_Transfer           0x15 DAP_JTAG_Configure
+//   0x06 DAP_TransferBlock      0x16 DAP_JTAG_IDCODE
+//   0x08 DAP_WriteABORT         0x1D DAP_SWD_Sequence
 //   0x09 DAP_Delay
 //   0x0A DAP_ResetTarget
 //
@@ -27,7 +27,13 @@
 // skip of the requests after an error.
 //
 // - A command that is unknown replies ID_DAP_Invalid (0xFF).
-// - JTAG is not available yet: DAP_Connect to JTAG replies 0 (failed).
+// - Without a JTAG port, DAP_Connect to JTAG replies 0 (failed), and
+//   DAP_Info does not report JTAG. On JTAG, the transfer commands, and
+//   DAP_WriteABORT, use the device index of the request and the chain of
+//   DAP_JTAG_Configure (DapJtag.h). A device index that is not in the
+//   chain gives no transfer.
+// - DAP_SWJ_Clock sets SWCLK and TCK. TCK is in kHz, rounded down, and at
+//   least 1 kHz.
 // - DAP_TransferAbort (0x07) has no response and takes no slot. It stops
 //   the transfer commands of the packets that came before it: the packet
 //   that runs, and the packets that wait. A DAP_Transfer or
@@ -69,6 +75,8 @@
 #include <utils/compat/span.h>
 
 #include "protocol/GpioBlock.h"
+#include "protocol/JtagPort.h"
+#include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
 
 namespace cmsisdap {
@@ -89,6 +97,9 @@ inline constexpr uint8_t swjPins = 0x10;
 inline constexpr uint8_t swjClock = 0x11;
 inline constexpr uint8_t swjSequence = 0x12;
 inline constexpr uint8_t swdConfigure = 0x13;
+inline constexpr uint8_t jtagSequence = 0x14;
+inline constexpr uint8_t jtagConfigure = 0x15;
+inline constexpr uint8_t jtagIdcode = 0x16;
 inline constexpr uint8_t swdSequence = 0x1D;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
@@ -131,7 +142,8 @@ struct DeviceInfo {
    // The chip UID, as text
    const char *serialNumber{ nullptr };
    const char *firmwareVersion{ nullptr };
-   // JTAG and the UART port come with their commands.
+   // The processor adds JTAG when it has a JTAG port. The UART port comes
+   // with its commands.
    uint16_t capabilities{ capability::swd | capability::atomicCommands };
 };
 
@@ -168,7 +180,8 @@ class Processor {
    // The longest wait of DAP_SWJ_Pins
    static constexpr uint32_t maxPinWaitUs = 3'000'000;
 
-   Processor(DapSwd &swd, protocol::GpioPins &gpio, Platform &platform, const DeviceInfo &info);
+   // jtag: nullptr for a board without JTAG.
+   Processor(DapSwd &swd, protocol::GpioPins &gpio, Platform &platform, const DeviceInfo &info, protocol::JtagPort *jtag = nullptr);
 
    [[nodiscard]] bool canSubmit() const {
       return requests_ + responses_ < packetCount;
@@ -206,10 +219,12 @@ class Processor {
    }
 
    [[nodiscard]] bool connected() const {
-      return connected_;
+      return port_ != Port::None;
    }
 
    private:
+   enum class Port : uint8_t { None, Swd, Jtag };
+
    using Packet = std::array<uint8_t, packetSize>;
    // One byte more than a packet: a longer request gives ID_DAP_Invalid.
    using Request = std::array<uint8_t, packetSize + 1>;
@@ -239,16 +254,28 @@ class Processor {
    [[nodiscard]] bool swjSequence(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool swdConfigure(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool swdSequence(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool jtagSequence(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool jtagConfigure(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool jtagIdcode(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool executeCommands(uint8_t id, PacketReader &in, PacketWriter &out);
 
    [[nodiscard]] uint8_t pinsIn() const;
+   void applySettings();
+   void setJtagClock();
+   // Selects the device of a transfer command: true when the port can do
+   // the transfers.
+   [[nodiscard]] bool selectDevice(uint8_t index);
+   // One transfer on the connected port, as DapSwd::transfer()
+   [[nodiscard]] uint8_t dpTransfer(uint8_t request, uint32_t &data);
 
    DapSwd &swd_;
+   JtagDp jtag_;
    protocol::GpioPins &gpio_;
    Platform &platform_;
    DeviceInfo info_;
 
-   bool connected_{ false };
+   Port port_{ Port::None };
+   // Also the idle cycles and the WAIT retries of JTAG
    SwdSettings settings_;
    uint16_t matchRetries_{ 0 };
    uint32_t matchMask_{ 0 };

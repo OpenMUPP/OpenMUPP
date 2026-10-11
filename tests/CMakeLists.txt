@@ -50,6 +50,7 @@ add_executable(vsl-tests
         TestSwdBlock.cpp
         TestSwdBitBang.cpp
         TestCmsisDap.cpp
+        TestCmsisDapJtag.cpp
         TestPowerBlock.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp

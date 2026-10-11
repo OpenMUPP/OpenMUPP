@@ -138,6 +138,7 @@ constexpr uint8_t statusError = 1;
 // The ports of DAP_Connect
 constexpr uint8_t portDefault = 0;
 constexpr uint8_t portSwd = 1;
+constexpr uint8_t portJtag = 2;
 
 // The pins of DAP_SWJ_Pins, and the GPIO bit of each. nTRST and nRESET are
 // open-drain: a 1 releases the pin.
@@ -165,13 +166,28 @@ constexpr char protocolVersion[] = "2.1.0";
 
 } // namespace
 
-Processor::Processor(DapSwd &swd, protocol::GpioPins &gpio, Platform &platform, const DeviceInfo &info)
+Processor::Processor(DapSwd &swd, protocol::GpioPins &gpio, Platform &platform, const DeviceInfo &info, protocol::JtagPort *jtag)
    : swd_(swd)
+   , jtag_(jtag)
    , gpio_(gpio)
    , platform_(platform)
    , info_(info) {
-   swd_.apply(settings_);
+   if(jtag_.available()) {
+      info_.capabilities = static_cast<uint16_t>(info_.capabilities | capability::jtag);
+   }
+   applySettings();
    swd_.setClockHz(clockHz_);
+}
+
+void Processor::applySettings() {
+   swd_.apply(settings_);
+   jtag_.apply(settings_);
+}
+
+// TCK in kHz, rounded down: the JTAG engines take kHz, and 0 is adaptive
+// clocking.
+void Processor::setJtagClock() {
+   static_cast<void>(jtag_.port().setSpeed(std::max<uint32_t>(clockHz_ / 1000u, 1)));
 }
 
 art::span<const uint8_t> Processor::response() const {
@@ -319,6 +335,12 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       return swdConfigure(in, out);
    case command::swdSequence:
       return swdSequence(in, out);
+   case command::jtagSequence:
+      return jtagSequence(in, out);
+   case command::jtagConfigure:
+      return jtagConfigure(in, out);
+   case command::jtagIdcode:
+      return jtagIdcode(in, out);
    case command::executeCommands:
    case command::queueCommands:
       if(!nested) {
@@ -433,30 +455,44 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
       return false;
    }
    out.u8(command::connect);
-   if(port != portDefault && port != portSwd) {
-      // JTAG is not available yet.
+   const bool jtag = port == portJtag && jtag_.available();
+   if(port != portDefault && port != portSwd && !jtag) {
       out.u8(0);
       return true;
    }
-   if(connected_) {
+   if(port_ == Port::Swd) {
       swd_.fini();
+   } else if(port_ == Port::Jtag) {
+      jtag_.port().fini();
    }
    // Another user of the engine may have changed it.
-   swd_.apply(settings_);
+   applySettings();
+   if(jtag) {
+      setJtagClock();
+      jtag_.port().init();
+      // The TAP state and the IR are not known.
+      jtag_.invalidate();
+      port_ = Port::Jtag;
+      out.u8(portJtag);
+      return true;
+   }
    swd_.setClockHz(clockHz_);
    if((gpio_.available() & protocol::gpio::tdo) != 0) {
       gpio_.configure(protocol::gpio::tdo, protocol::PinMode::Input, false);
    }
    swd_.init();
-   connected_ = true;
+   port_ = Port::Swd;
    out.u8(portSwd);
    return true;
 }
 
 void Processor::disconnect() {
-   if(connected_) {
+   if(port_ == Port::Swd) {
       swd_.fini();
-      connected_ = false;
+      port_ = Port::None;
+   } else if(port_ == Port::Jtag) {
+      jtag_.port().fini();
+      port_ = Port::None;
    } else {
       // DAP_SWJ_Pins can drive SWCLK and SWDIO without a connection.
       for(const uint16_t bit : { protocol::gpio::tck, protocol::gpio::tms }) {
@@ -486,7 +522,7 @@ bool Processor::transferConfigure(PacketReader &in, PacketWriter &out) {
    if(!in.ok()) {
       return false;
    }
-   swd_.apply(settings_);
+   applySettings();
    out.u8(command::transferConfigure);
    out.u8(statusOk);
    return true;
@@ -499,7 +535,7 @@ bool Processor::swdConfigure(PacketReader &in, PacketWriter &out) {
    }
    settings_.turnaround = static_cast<uint8_t>((configuration & 0x03u) + 1);
    settings_.dataPhase = (configuration & 0x04u) != 0;
-   swd_.apply(settings_);
+   applySettings();
    out.u8(command::swdConfigure);
    out.u8(statusOk);
    return true;
@@ -517,6 +553,9 @@ bool Processor::swjClock(PacketReader &in, PacketWriter &out) {
    }
    clockHz_ = hz;
    swd_.setClockHz(hz);
+   if(port_ == Port::Jtag) {
+      setJtagClock();
+   }
    out.u8(statusOk);
    return true;
 }
@@ -530,7 +569,12 @@ bool Processor::swjSequence(PacketReader &in, PacketWriter &out) {
       return false;
    }
    out.u8(command::swjSequence);
-   if(!connected_) {
+   if(port_ == Port::Jtag) {
+      // The sequence is on TMS.
+      out.u8(jtag_.tmsSequence(static_cast<uint16_t>(bits), data) ? statusOk : statusError);
+      return true;
+   }
+   if(port_ != Port::Swd) {
       out.u8(statusError);
       return true;
    }
@@ -564,7 +608,8 @@ bool Processor::swdSequence(PacketReader &in, PacketWriter &out) {
    }
    out.u8(command::swdSequence);
    const std::size_t statusPosition = out.reserve(1);
-   if(!connected_) {
+   const bool swd = port_ == Port::Swd;
+   if(!swd) {
       out.set(statusPosition, statusError);
    }
    for(uint8_t i = 0; i < count; ++i) {
@@ -573,14 +618,14 @@ bool Processor::swdSequence(PacketReader &in, PacketWriter &out) {
       const std::size_t bits = (info & 0x3Fu) == 0 ? 64 : (info & 0x3Fu);
       const std::size_t bytes = (bits + 7) / 8;
       if((info & 0x80u) != 0) {
-         if(connected_) {
+         if(swd) {
             std::array<uint8_t, 8> data{};
             swd_.sequenceIn(static_cast<uint16_t>(bits), { data.data(), bytes });
             out.bytes({ data.data(), bytes });
          }
       } else {
          const auto data = in.bytes(bytes);
-         if(connected_ && in.ok()) {
+         if(swd && in.ok()) {
             swd_.sequenceOut(static_cast<uint16_t>(bits), data);
          }
       }
@@ -588,6 +633,84 @@ bool Processor::swdSequence(PacketReader &in, PacketWriter &out) {
          return false;
       }
    }
+   return true;
+}
+
+bool Processor::jtagSequence(PacketReader &in, PacketWriter &out) {
+   const uint8_t count = in.u8();
+   if(!in.ok()) {
+      return false;
+   }
+   // Check the whole request and the room for the TDO data before the
+   // first sequence.
+   {
+      PacketReader check = in;
+      std::size_t inputBytes = 0;
+      for(uint8_t i = 0; i < count; ++i) {
+         const uint8_t info = check.u8();
+         const std::size_t bytes = ((((info & 0x3Fu) == 0) ? 64 : (info & 0x3Fu)) + 7) / 8;
+         check.skip(bytes);
+         if((info & 0x80u) != 0) {
+            inputBytes += bytes;
+         }
+      }
+      if(!check.ok() || inputBytes + 2 > out.room()) {
+         return false;
+      }
+   }
+   out.u8(command::jtagSequence);
+   const std::size_t statusPosition = out.reserve(1);
+   const bool jtag = port_ == Port::Jtag;
+   if(!jtag) {
+      out.set(statusPosition, statusError);
+   }
+   for(uint8_t i = 0; i < count; ++i) {
+      // A cycle count of 0 is 64 cycles. Bit 6: TMS. Bit 7: read TDO.
+      const uint8_t info = in.u8();
+      const std::size_t bits = (info & 0x3Fu) == 0 ? 64 : (info & 0x3Fu);
+      const std::size_t bytes = (bits + 7) / 8;
+      const auto tdi = in.bytes(bytes);
+      if(!in.ok()) {
+         return false;
+      }
+      if(jtag) {
+         const bool capture = (info & 0x80u) != 0;
+         std::array<uint8_t, 8> tdo{};
+         if(!jtag_.sequence(static_cast<uint8_t>(bits), (info & 0x40u) != 0, tdi, { tdo.data(), capture ? bytes : 0 })) {
+            out.set(statusPosition, statusError);
+         }
+         if(capture) {
+            out.bytes({ tdo.data(), bytes });
+         }
+      }
+   }
+   return true;
+}
+
+bool Processor::jtagConfigure(PacketReader &in, PacketWriter &out) {
+   const uint8_t count = in.u8();
+   const auto irLengths = in.bytes(count);
+   if(!in.ok()) {
+      return false;
+   }
+   out.u8(command::jtagConfigure);
+   out.u8(jtag_.available() && jtag_.configure(irLengths) ? statusOk : statusError);
+   return true;
+}
+
+bool Processor::jtagIdcode(PacketReader &in, PacketWriter &out) {
+   const uint8_t index = in.u8();
+   if(!in.ok()) {
+      return false;
+   }
+   out.u8(command::jtagIdcode);
+   uint32_t value = 0;
+   if(port_ != Port::Jtag || !jtag_.select(index) || !jtag_.readIdcode(value)) {
+      out.u8(statusError);
+      return true;
+   }
+   out.u8(statusOk);
+   out.u32(value);
    return true;
 }
 
@@ -640,6 +763,8 @@ bool Processor::swjPins(PacketReader &in, PacketWriter &out) {
    if(!in.ok()) {
       return false;
    }
+   // TCK and TMS pulses can change the TAP state and the IR.
+   jtag_.invalidate();
    uint8_t selected = 0;
    for(const SwjPin &pin : swjPinTable) {
       if(pin.output && (select & pin.bit) != 0 && (gpio_.available() & pin.gpio) != 0) {
@@ -660,26 +785,45 @@ bool Processor::swjPins(PacketReader &in, PacketWriter &out) {
    return true;
 }
 
+bool Processor::selectDevice(uint8_t index) {
+   if(port_ == Port::Jtag) {
+      return jtag_.select(index);
+   }
+   // SWD ignores the index.
+   return port_ == Port::Swd;
+}
+
+uint8_t Processor::dpTransfer(uint8_t request, uint32_t &data) {
+   if(port_ == Port::Jtag) {
+      return jtag_.transfer(request, data);
+   }
+   return swd_.transfer(request, data);
+}
+
 bool Processor::writeAbort(PacketReader &in, PacketWriter &out) {
-   in.u8();
+   const uint8_t index = in.u8();
    uint32_t data = in.u32();
    if(!in.ok()) {
       return false;
    }
    out.u8(command::writeAbort);
-   if(!connected_) {
+   if(!selectDevice(index)) {
       out.u8(statusError);
       return true;
    }
-   // The address of ABORT is 0.
-   static_cast<void>(swd_.transfer(0, data));
+   if(port_ == Port::Jtag) {
+      jtag_.writeAbort(data);
+   } else {
+      // The address of ABORT is 0.
+      static_cast<void>(swd_.transfer(0, data));
+   }
    out.u8(statusOk);
    return true;
 }
 
 bool Processor::transfer(PacketReader &in, PacketWriter &out) {
    using namespace dap;
-   in.u8();
+   const uint8_t index = in.u8();
    uint8_t todo = in.u8();
    if(!in.ok()) {
       return false;
@@ -705,6 +849,8 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
    }
    out.u8(command::transfer);
    const std::size_t head = out.reserve(2);
+   // A device that is not in the chain gives no transfer and the value 0.
+   const bool ready = selectDevice(index);
    uint8_t done = 0;
    uint8_t value = 0;
    bool postedRead = false;
@@ -712,7 +858,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
    uint32_t data = 0;
    uint32_t unused = 0;
 
-   while(todo != 0 && connected_ && !aborted()) {
+   while(todo != 0 && ready && !aborted()) {
       --todo;
       const uint8_t request = in.u8();
       if((request & requestRead) != 0) {
@@ -723,7 +869,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
             // Another AP read continues the posted one. Else read the data
             // of the posted read from RDBUFF.
             const bool continued = (request & (requestApNotDp | requestMatchValue)) == requestApNotDp;
-            value = swd_.transfer(continued ? request : readRdbuff, data);
+            value = dpTransfer(continued ? request : readRdbuff, data);
             postedRead = continued;
             if(value != ackOk) {
                break;
@@ -732,14 +878,14 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
          }
          if((request & requestMatchValue) != 0) {
             if((request & requestApNotDp) != 0) {
-               value = swd_.transfer(request, unused);
+               value = dpTransfer(request, unused);
                if(value != ackOk) {
                   break;
                }
             }
             uint16_t retries = matchRetries_;
             while(true) {
-               value = swd_.transfer(request, data);
+               value = dpTransfer(request, data);
                if(value != ackOk) {
                   break;
                }
@@ -756,14 +902,14 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
             }
          } else if((request & requestApNotDp) != 0) {
             if(!postedRead) {
-               value = swd_.transfer(request, unused);
+               value = dpTransfer(request, unused);
                if(value != ackOk) {
                   break;
                }
                postedRead = true;
             }
          } else {
-            value = swd_.transfer(request, data);
+            value = dpTransfer(request, data);
             if(value != ackOk) {
                break;
             }
@@ -773,7 +919,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
       } else {
          uint32_t word = in.u32();
          if(postedRead) {
-            value = swd_.transfer(readRdbuff, data);
+            value = dpTransfer(readRdbuff, data);
             if(value != ackOk) {
                break;
             }
@@ -784,7 +930,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
             matchMask_ = word;
             value = ackOk;
          } else {
-            value = swd_.transfer(request, word);
+            value = dpTransfer(request, word);
             if(value != ackOk) {
                break;
             }
@@ -811,12 +957,12 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
 
    if(value == ackOk) {
       if(postedRead) {
-         value = swd_.transfer(readRdbuff, data);
+         value = dpTransfer(readRdbuff, data);
          if(value == ackOk) {
             out.u32(data);
          }
       } else if(checkWrite) {
-         value = swd_.transfer(readRdbuff, unused);
+         value = dpTransfer(readRdbuff, unused);
       }
    }
    out.set(head, done);
@@ -826,7 +972,7 @@ bool Processor::transfer(PacketReader &in, PacketWriter &out) {
 
 bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
    using namespace dap;
-   in.u8();
+   const uint8_t index = in.u8();
    uint16_t todo = in.u16();
    uint8_t request = in.u8();
    if(!in.ok()) {
@@ -846,11 +992,11 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
    uint32_t data = 0;
    uint32_t unused = 0;
 
-   if(connected_ && todo != 0 && !aborted()) {
+   if(todo != 0 && !aborted() && selectDevice(index)) {
       if(read) {
          if((request & requestApNotDp) != 0) {
             // Post the first AP read.
-            value = swd_.transfer(request, unused);
+            value = dpTransfer(request, unused);
          } else {
             value = ackOk;
          }
@@ -860,7 +1006,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
                // The last AP read gives the data from RDBUFF.
                request = readRdbuff;
             }
-            value = swd_.transfer(request, data);
+            value = dpTransfer(request, data);
             if(value != ackOk) {
                break;
             }
@@ -870,7 +1016,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
          if(todo != 0 && value == ackOk && (request & requestApNotDp) != 0) {
             // An abort stopped the block with an AP read posted. Read its
             // data from RDBUFF, as at the end of the block.
-            value = swd_.transfer(readRdbuff, data);
+            value = dpTransfer(readRdbuff, data);
             if(value == ackOk) {
                out.u32(data);
                ++done;
@@ -880,7 +1026,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
          while(todo != 0 && !aborted()) {
             --todo;
             data = in.u32();
-            value = swd_.transfer(request, data);
+            value = dpTransfer(request, data);
             if(value != ackOk || !in.ok()) {
                break;
             }
@@ -888,7 +1034,7 @@ bool Processor::transferBlock(PacketReader &in, PacketWriter &out) {
          }
          // Check the last write.
          if(value == ackOk) {
-            value = swd_.transfer(readRdbuff, unused);
+            value = dpTransfer(readRdbuff, unused);
          }
       }
    }

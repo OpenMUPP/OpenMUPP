@@ -365,7 +365,7 @@ TEST_CASE("DAP_HostStatus sets the LEDs") {
 TEST_CASE("DAP_Connect and DAP_Disconnect") {
    Bench b;
    CHECK_FALSE(b.dap.connected());
-   // JTAG is not available yet.
+   // A processor without a JTAG port
    CHECK(b.run({ 0x02, 0x02 }) == V{ 0x02, 0x00 });
    CHECK(b.pins.inits == 0);
    // The default port is SWD.
@@ -1026,8 +1026,9 @@ TEST_CASE("Unknown commands, DAP_TransferAbort and bad packets") {
    CHECK(b.run({ 0x55 }) == V{ 0xFF });
    CHECK(b.run({ 0x80, 0x01 }) == V{ 0xFF });
    CHECK(b.run({ 0xFF }) == V{ 0xFF });
-   // JTAG commands: not available yet
-   CHECK(b.run({ 0x14, 0x00 }) == V{ 0xFF });
+   // Unused IDs between the JTAG and the SWD commands
+   CHECK(b.run({ 0x17 }) == V{ 0xFF });
+   CHECK(b.run({ 0x1C }) == V{ 0xFF });
    CHECK(b.run({ 0x7F, 0x02, 0x55, 0x09, 0x01, 0x00 })[0] == 0x7F);
 
    // DAP_TransferAbort has no response.
