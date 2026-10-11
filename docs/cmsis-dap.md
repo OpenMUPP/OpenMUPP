@@ -27,7 +27,7 @@ The `cmsis-dap` image has these properties:
 - The CDC-ACM serial port, the UART bridge, the debug log and the heartbeat are as in the Versaloon image.
 - The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
-  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path.
+  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
 
 Only one personality is in an image.
 To change the personality, write another image.
@@ -37,6 +37,9 @@ The runtime selection is a later work item.
 
 - JTAG has no adaptive clocking (RTCK). TCK is in whole kHz, at least 1 kHz. See [JTAG](#jtag).
 - A JTAG chain has up to 8 devices. The IR length of a device is 1 to 32 bits.
+- On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
+  Else the next scan has an extra TCK edge or a missing TCK edge.
+  The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
 - The hardware test with OpenOCD and pyOCD in JTAG mode is not done yet.
 - No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
 - `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one transfer. It does not stop other commands, for example `DAP_Delay`.
@@ -187,7 +190,8 @@ Thus the order of `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigur
 
 `DAP_Connect` with port 2 releases the SWD pins and starts the JTAG engine.
 The JTAG engine is the one of the Versaloon image (`board::BoardJtag`).
-On the Mini and the OtherUse, it shifts whole bytes with SPI and DMA, and the other bits with GPIO bit-bang.
+On the Mini and the OtherUse, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
+This starts at a TCK of 1125 kHz. The other bits, and the slower rates, use GPIO bit-bang.
 `DAP_SWJ_Clock` sets TCK in kHz, rounded down, and at least 1 kHz.
 
 `DAP_JTAG_Configure` gives the device chain: the IR length of each device.
