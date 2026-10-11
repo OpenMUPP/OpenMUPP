@@ -13,7 +13,8 @@ constexpr std::size_t slotCount = SettingsFlashPage::sizeBytes / sizeof(uint16_t
 
 // Unlocks the flash controller. The flash controller needs the HSI on to
 // erase and write (RM0008 3.3.3). The system clock runs from the PLL, so
-// the HSI can be off.
+// the HSI can be off. The HSI stays on after the write: a reset always
+// follows the write.
 void unlock() {
    RCC->CR |= RCC_CR_HSION;
    while((RCC->CR & RCC_CR_HSIRDY) == 0) {
