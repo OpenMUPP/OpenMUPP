@@ -54,7 +54,7 @@ This function does these steps:
    With `VSL_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
    Then a debug probe can run and step the firmware.
 3. It puts the board pins into a safe state:
-   - All LEDs are off, but the power LED is on.
+   - All LEDs are off, but the power LED is on. The main loop then drives the LEDs (see below).
    - The USB pull-up is off, so the host does not see the device.
    - The target power is off (the switch pin floats).
    - The key pin has a pull resistor to the released level.
@@ -62,14 +62,25 @@ This function does these steps:
 The JTAG, SWD, UART and Vref pins stay inputs until their drivers configure them.
 
 `main()` starts the USB device when the clock comes from the crystal (see [USB device](usb-device.md)).
-The main loop runs the USB device and the UART bridge. It shows a heartbeat on the state LED:
+The main loop runs the USB device and the UART bridge. It also drives the LEDs:
 
-| State LED | Meaning |
+| LED | Meaning |
 |---|---|
-| Short flash, one time each second | The firmware runs. The clock comes from the crystal. |
-| Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. |
-| On or off all the time | The main loop does not run. |
+| Power | On when the Vref pin has a voltage above 1.8 V. Off when the voltage is below 1.5 V. The dongle measures the voltage each 100 ms. |
+| State | Off when the dongle is idle. One flash of 40 ms for each command of the host (Versaloon or CMSIS-DAP). |
+| USB | On when the host has configured the USB device. |
 
-The USB LED is on when the host has configured the USB device.
+The power LED shows the target voltage, from the target supply or from the dongle supply.
+A board without a Vref sense keeps the power LED on all the time.
+A continuous command stream gives a steady flicker on the state LED, because the LED stays off for at least 40 ms after each flash.
+
+Two fault and event patterns replace the normal function:
+
+| LED | Pattern | Meaning |
+|---|---|---|
+| State | Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. The power LED still shows the target voltage. |
+| All | Three flashes in 0.6 s | The key gesture (hold the key for 3 s, then release it) switches the personality of a dual image. The dongle then resets. |
+
+The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
 

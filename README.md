@@ -9,7 +9,7 @@ A build option selects a second USB personality, CMSIS-DAP v2, for OpenOCD, pyOC
 
 The project is at an early stage. The current firmware does these functions:
 
-- It sets up the board and shows a heartbeat on an LED.
+- It sets up the board and shows the target power, the command activity and the USB state on the LEDs.
 - It enumerates as a USB composite device with the USB identity of the original Versaloon firmware.
 - It bridges the serial port to the UART.
 - It starts the bootloader on request, for a firmware update.
@@ -140,7 +140,7 @@ To change the personality, hold the key down for 3 s, or send a switch command.
 The dongle then resets and shows as the other USB device.
 See [docs/usb-device.md](docs/usb-device.md#dual-image).
 
-The state LED shows a short flash one time each second when the firmware runs.
+The power LED shows the target power. The state LED flashes for each command of the host. The USB LED shows the USB state.
 See [docs/boards.md](docs/boards.md#start-up-and-leds) for the meaning of the LEDs.
 
 ## Documentation
