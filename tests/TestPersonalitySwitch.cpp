@@ -190,7 +190,8 @@ TEST_CASE("The reset waits for the release of the key") {
    // The key is pressed again in the flash window and stays down
    CHECK_FALSE(personalitySwitch.isDue(due, true));
    CHECK_FALSE(personalitySwitch.isDue(due + 5000, true));
-   CHECK(personalitySwitch.isDue(due + 5001, false));
+   CHECK_FALSE(personalitySwitch.isDue(due + 5001, false));
+   CHECK(personalitySwitch.isDue(due + 5001 + PersonalitySwitch::releaseDebounceMs, false));
 }
 
 TEST_CASE("A bounce of the key contact does not start the reset") {
