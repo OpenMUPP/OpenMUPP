@@ -48,7 +48,7 @@ The runtime selection is a later work item.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
 - Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
-- The hardware test with OpenOCD, pyOCD and probe-rs is a later work item. The host tools below follow their documentation.
+- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs, with SWD only. Windows, the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test)).
 
 ## Use the probe
 
@@ -230,3 +230,69 @@ The target is the JTAG chain of `tests/MockJtagDp.h`: a TAP state machine, and d
 One device of the chain is a JTAG-DP with a memory AP.
 The tests cover the JTAG commands, IDCODE, DPACC and APACC reads and writes, posted reads, WAIT, value match, block transfers, ABORT and chains with more than one device.
 Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.
+
+## Hardware test
+
+Date: 2026-10-10.
+Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`). The build is `v0.2.0-63-g10d84fa-dirty`. The `-dirty` suffix is from the merge of `dev`, which was not committed at build time. The `src/` tree equals commit `75d93cd`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
+The same checks first ran on `v0.2.0-57-g59614cb` (before E6). All checks passed there too. Only the read speed differs (see below).
+Probe: OtherUse board.
+Target: STM32F103ZET6 (512 KiB flash) on SWD.
+Host: Linux 6.18.55.
+Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4.1), probe-rs 0.32.0.
+
+| Check | OpenOCD | pyOCD | probe-rs |
+|---|---|---|---|
+| Connect, DPIDR `0x1ba01477` | pass | pass | connect passes, DPIDR value not shown (see findings) |
+| Flash and verify (32 KiB) | pass | pass | pass |
+| Read back (`cmp`) | pass | pass | not run |
+| Halt, step, reset | pass | pass | pass (halt and step through GDB) |
+| Memory write and read | pass | not run | read only (`probe-rs read`), run before E6 only |
+| UART bridge during flash (256 KiB, image verified after) | pass | pass | pass |
+
+Enumeration: the product string is `Versaloon CMSIS-DAP`.
+Interface 0 is a vendor class interface with the string `Versaloon CMSIS-DAP v2`.
+The `cdc_acm` driver binds interfaces 1 and 2 and gives `/dev/ttyACM0`.
+The `ftdi_sio` driver does not bind to the device.
+OpenOCD opens the probe with VID:PID 0x0403:0x9b3c.
+
+Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with E6):
+
+| SWCLK request | Write | Verify | Read | Read before E6 |
+|---|---|---|---|---|
+| 250 kHz | 4.51 s | 0.16 s | 3.41 s | 3.40 s |
+| 1000 kHz | 2.59 s | 0.13 s | 1.15 s | 0.95 s |
+| 2000 kHz | 2.55 s | 0.13 s | 0.70 s | 0.56 s |
+| 4000 kHz | 2.55 s | 0.13 s | 0.73 s | 0.56 s |
+
+All runs passed (0 failures in 3 runs for each rate).
+Only the run before E6 includes 100 kHz and 500 kHz (write 9.75 s and 2.78 s, read 8.27 s and 1.77 s).
+
+The Versaloon personality (OtherUse board, same firmware version before E6, `vsllink` driver) gave these times:
+
+| Clock | Write | Read |
+|---|---|---|
+| 235 kHz (`vsllink` step) | 5.20 s | 4.26 s |
+| 1.85 MHz (untimed) | 2.54 s | 0.81 s |
+
+The `vsllink` driver has fixed SWD steps. Thus the comparison is not exact at 250 kHz, where the clocks are 250 kHz and 235 kHz.
+At 2000 kHz, both personalities run the untimed engine.
+The write time is the same (2.55 s and 2.54 s).
+The read time with E6 is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon personality (91 and 79 KiB/s).
+Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
+
+Maximum SWD clock: 1.85 MHz (the untimed engine, `maxClockHz` in `src/swd/SwdBitBang.h`).
+All runs passed up to this clock with the wiring of this test.
+A request above 1.85 MHz gives the same clock.
+
+Findings:
+
+- Write time does not improve above 1 MHz. The flash programming time is probably the limit. This test did not measure it.
+- The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine runs untimed from 1.85 MHz, so both requests give the same clock.
+- E6 made the read time about 20% to 25% longer at 1000 kHz and 2000 kHz (0.56 s to 0.70 s at 2000 kHz). The 4000 kHz run shows 30%, but it is noisy. Write time and the 250 kHz read time did not change. The cause is not measured. Issue #35 tracks it.
+- After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause is probably the wiring. No log proves this, and the exact wire is not known.
+- `probe-rs info` does not print the DPIDR value. Without `--verbose`, it prints "Connecting to the chip was unsuccessful", although `download`, `verify`, `gdb` and `reset` connect. With `--verbose` (run before E6), it shows the DPv1 MemoryAP and the ROM table, and stops with "does not support SWD multidrop". This is normal for an STM32F1 target.
+- `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is how probe-rs behaves. It is not a probe finding.
+- In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
+- The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a 256 KiB flash passes with all three tools (60 of 60 runs at 115200 baud, 8N1).
+
