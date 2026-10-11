@@ -54,6 +54,8 @@ class JtagDp {
    static constexpr std::size_t maxIrScanBits = 4 + maxDevices * maxIrLength + 2;
    static constexpr std::size_t maxDrScanBits = 3 + (maxDevices - 1) + 35 + 2 + 255;
    static constexpr std::size_t maxScanBits = std::max(maxIrScanBits, maxDrScanBits);
+   // DAP_SWJ_Sequence has up to 256 bits.
+   static_assert(maxScanBits >= 256);
 
    // port: nullptr for a board without JTAG.
    explicit JtagDp(protocol::JtagPort *port)
