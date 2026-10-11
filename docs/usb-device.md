@@ -96,7 +96,7 @@ The `dual` image gets both defines and `VSL_DUAL_PERSONALITY`.
 `usb::UsbStack` and `main.cpp` use the defines to select the USB function, the descriptors and the protocol objects.
 The CMake file also removes the source files of the other personality.
 Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
-All images share the CDC-ACM serial port, the UART bridge, the debug log, the heartbeat and the LEDs.
+All images share the CDC-ACM serial port, the UART bridge, the debug log and the LEDs.
 
 The CMSIS-DAP image differs from the Versaloon image in these points:
 

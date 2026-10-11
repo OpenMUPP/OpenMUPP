@@ -179,3 +179,15 @@ TEST_CASE("A switch command gives no LED indication") {
    CHECK_FALSE(personalitySwitch.indication(1).has_value());
    CHECK(personalitySwitch.isDue(PersonalitySwitch::replyDelayMs));
 }
+
+TEST_CASE("The reset waits for the release of the key") {
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   personalitySwitch.request(Personality::CmsisDap, PersonalitySwitch::flashDelayMs);
+   constexpr uint64_t due = 1000 + PersonalitySwitch::flashDelayMs;
+
+   CHECK_FALSE(personalitySwitch.isDue(1000, false));
+   // The key is pressed again in the flash window and stays down
+   CHECK_FALSE(personalitySwitch.isDue(due, true));
+   CHECK_FALSE(personalitySwitch.isDue(due + 5000, true));
+   CHECK(personalitySwitch.isDue(due + 5001, false));
+}

@@ -24,7 +24,7 @@ TEST_CASE("Heartbeat keeps the pattern after a long uptime") {
    CHECK(heartbeat.isOn(start + 1000));
 }
 
-TEST_CASE("The clock fault pattern flashes faster than the normal pattern") {
+TEST_CASE("The clock fault pattern flashes five times each second") {
    static_assert(Heartbeat::clockFault.periodMs == 200);
    constexpr Heartbeat heartbeat{ Heartbeat::clockFault };
 

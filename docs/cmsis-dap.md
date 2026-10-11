@@ -24,7 +24,7 @@ All boards build with both values.
 The `cmsis-dap` image has these properties:
 
 - USB interface 0 is CMSIS-DAP v2, with `0403:9B3C`. The Versaloon interface is not in the image.
-- The CDC-ACM serial port, the UART bridge, the debug log and the heartbeat are as in the Versaloon image.
+- The CDC-ACM serial port, the UART bridge, the debug log and the LEDs are as in the Versaloon image.
 - The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
   On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
@@ -46,7 +46,7 @@ Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Ve
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
 - No target power switch and no Vref sense in this personality.
-- The LEDs show the heartbeat and the USB state. `DAP_HostStatus` does not change them.
+- The LEDs show the target power, the command activity and the USB state. `DAP_HostStatus` does not change them.
 - Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
 - The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs on JTAG, Windows, the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
 

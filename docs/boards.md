@@ -71,7 +71,8 @@ The main loop runs the USB device and the UART bridge. It also drives the LEDs:
 | USB | On when the host has configured the USB device. |
 
 The power LED shows the target voltage, from the target supply or from the dongle supply.
-A board without a Vref sense keeps the power LED on all the time.
+A board without a working Vref sense keeps the power LED on all the time. This includes a board where the ADC calibration failed.
+The dongle has no idle indication of the firmware. An idle dongle with no target and no USB host has all LEDs off. A hung main loop shows the same.
 A continuous command stream gives a steady flicker on the state LED, because the LED stays off for at least 40 ms after each flash.
 
 Two fault and event patterns replace the normal function:
@@ -81,6 +82,7 @@ Two fault and event patterns replace the normal function:
 | State | Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. The power LED still shows the target voltage. |
 | All | Three flashes in 0.6 s | The key gesture (hold the key for 3 s, then release it) switches the personality of a dual image. The dongle then resets. |
 
+The reset of the switch waits for the release of the key, because a key that is down at the reset starts the bootloader.
 The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
 

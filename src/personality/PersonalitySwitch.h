@@ -16,7 +16,8 @@
 //
 // The key gesture asks for a longer delay, flashDelayMs. During that time
 // indication() tells the main loop to flash all LEDs, so the user sees
-// that the switch starts. The key is already released at that time.
+// that the switch starts. The user can press the key again in that time,
+// so the reset waits for the release of the key (see isDue()).
 
 #include <cstdint>
 #include <optional>
@@ -65,15 +66,17 @@ class PersonalitySwitch {
    }
 
    // True when the main loop must store requested() and reset at the
-   // uptime nowMs.
-   [[nodiscard]] bool isDue(uint64_t nowMs) {
+   // uptime nowMs. keyDown: the key is down. The reset waits for the
+   // release of the key, because a key that is down at the reset starts
+   // the bootloader.
+   [[nodiscard]] bool isDue(uint64_t nowMs, bool keyDown = false) {
       if(!requested_) {
          return false;
       }
       if(!dueMs_) {
          dueMs_ = nowMs + delayMs_;
       }
-      return nowMs >= *dueMs_;
+      return nowMs >= *dueMs_ && !keyDown;
    }
 
    // The state of the indication LEDs at the uptime nowMs: on or off. No

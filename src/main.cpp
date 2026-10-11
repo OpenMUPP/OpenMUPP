@@ -28,8 +28,8 @@
 
 #include <array>
 
-#include "Hardware.h"
 #include "ActivityLed.h"
+#include "Hardware.h"
 #include "Heartbeat.h"
 #include "TargetPowerLed.h"
 #include "UptimeMicros.h"
@@ -266,12 +266,15 @@ void addUsbToAllBlocks() {
 // request at the release of the key: a key that is down at the reset
 // starts the bootloader.
 void pollPersonality(uint64_t nowMs) {
+   bool keyDown = false;
    if(const auto key = board::current.key) {
-      if(keyGesture.update(board::isAsserted(*key), nowMs)) {
+      keyDown = board::isAsserted(*key);
+      if(keyGesture.update(keyDown, nowMs)) {
          personalitySwitch.request(personality::other(personalitySwitch.active()), personality::PersonalitySwitch::flashDelayMs);
       }
    }
-   if(personalitySwitch.isDue(nowMs)) {
+   // The reset waits for the release of the key (PersonalitySwitch.h)
+   if(personalitySwitch.isDue(nowMs, keyDown)) {
       switchPersonality(*personalitySwitch.requested());
    }
 }
