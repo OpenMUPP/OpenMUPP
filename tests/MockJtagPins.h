@@ -4,12 +4,26 @@
 // simple target: a chain of flip-flops from TDI to TDO. The chain samples
 // TDI on the rising edge of TCK and changes TDO on the falling edge, as a
 // JTAG target does. Thus TDO is TDI delayed by the chain length.
+//
+// A JtagTarget replaces the chain: it sees each TCK edge and gives TDO
+// (MockJtagDp.h has a JTAG-DP).
 
 #include <cstdint>
 #include <deque>
 #include <vector>
 
 namespace vsltest {
+
+class JtagTarget {
+   public:
+   // A rising edge of TCK, with the TMS and TDI levels
+   virtual void rising(bool tms, bool tdi) = 0;
+   // A falling edge of TCK. Returns the new TDO level.
+   virtual bool falling() = 0;
+
+   protected:
+   ~JtagTarget() = default;
+};
 
 template <bool Rtck = true>
 class MockJtagPins {
@@ -28,6 +42,11 @@ class MockJtagPins {
    explicit MockJtagPins(std::deque<bool> chain = { false })
       : chain_(std::move(chain))
       , tdo_(chain_.back()) {
+   }
+
+   explicit MockJtagPins(JtagTarget &target)
+      : target_(&target)
+      , tdo_(false) {
    }
 
    // Sets the TCK level without an edge: the tests count only the edges
@@ -52,10 +71,14 @@ class MockJtagPins {
       edges.push_back(time);
       if(level) {
          rising.push_back({ time, tms_, tdi_, dataWritten_ });
-         chain_.push_front(tdi_);
-         chain_.pop_back();
+         if(target_ != nullptr) {
+            target_->rising(tms_, tdi_);
+         } else {
+            chain_.push_front(tdi_);
+            chain_.pop_back();
+         }
       } else {
-         tdo_ = chain_.back();
+         tdo_ = target_ != nullptr ? target_->falling() : chain_.back();
       }
    }
    void tms(bool level) {
@@ -102,6 +125,7 @@ class MockJtagPins {
    int begins{ 0 };
 
    private:
+   JtagTarget *target_{ nullptr };
    std::deque<bool> chain_;
    bool tck_{ false };
    bool tms_{ false };
