@@ -3,7 +3,7 @@
 #include <doctest/doctest.h>
 
 TEST_CASE("Heartbeat flashes at the start of each period") {
-   constexpr Heartbeat heartbeat{ Heartbeat::normal };
+   constexpr Heartbeat heartbeat{ Heartbeat::Pattern{ .periodMs = 1000, .onMs = 100 } };
 
    CHECK(heartbeat.isOn(0));
    CHECK(heartbeat.isOn(99));
@@ -15,7 +15,7 @@ TEST_CASE("Heartbeat flashes at the start of each period") {
 }
 
 TEST_CASE("Heartbeat keeps the pattern after a long uptime") {
-   constexpr Heartbeat heartbeat{ Heartbeat::normal };
+   constexpr Heartbeat heartbeat{ Heartbeat::Pattern{ .periodMs = 1000, .onMs = 100 } };
    // More than 2^32 ms (about 50 days) of uptime
    constexpr uint64_t start = 5'000'000'000'000;
 
@@ -24,8 +24,8 @@ TEST_CASE("Heartbeat keeps the pattern after a long uptime") {
    CHECK(heartbeat.isOn(start + 1000));
 }
 
-TEST_CASE("The clock fault pattern flashes faster than the normal pattern") {
-   static_assert(Heartbeat::clockFault.periodMs < Heartbeat::normal.periodMs);
+TEST_CASE("The clock fault pattern flashes five times each second") {
+   static_assert(Heartbeat::clockFault.periodMs == 200);
    constexpr Heartbeat heartbeat{ Heartbeat::clockFault };
 
    CHECK(heartbeat.isOn(0));

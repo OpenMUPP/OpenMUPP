@@ -96,7 +96,7 @@ The `dual` image gets both defines and `VSL_DUAL_PERSONALITY`.
 `usb::UsbStack` and `main.cpp` use the defines to select the USB function, the descriptors and the protocol objects.
 The CMake file also removes the source files of the other personality.
 Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
-All images share the CDC-ACM serial port, the UART bridge, the debug log, the heartbeat and the LEDs.
+All images share the CDC-ACM serial port, the UART bridge, the debug log and the LEDs.
 
 The CMSIS-DAP image differs from the Versaloon image in these points:
 
@@ -124,7 +124,7 @@ To change the personality, use one of these methods:
 
 - In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
 - In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)).
-- Hold the key down for 3 s while the firmware runs, then release it. The firmware then selects the other personality.
+- Hold the key down for 3 s while the firmware runs, then release it. All LEDs flash three times, and the firmware then selects the other personality.
 
 The personality code is `0` for Versaloon and `1` for CMSIS-DAP.
 `tools/vsl_personality.py` sends the commands from the host.

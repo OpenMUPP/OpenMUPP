@@ -148,3 +148,46 @@ TEST_CASE("ID_DAP_Vendor0 is invalid in an image with one personality") {
    REQUIRE(bench.write({ cmsisdap::command::vendor0, 0x00 }));
    CHECK(bench.read() == Bytes{ cmsisdap::command::invalid });
 }
+
+TEST_CASE("The key gesture delay gives three flashes of all LEDs") {
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   personalitySwitch.request(Personality::CmsisDap, PersonalitySwitch::flashDelayMs);
+
+   CHECK_FALSE(personalitySwitch.isDue(1000));
+   unsigned flashes = 0;
+   bool wasOn = false;
+   for(uint64_t t = 1000; t < 1000 + PersonalitySwitch::flashDelayMs; ++t) {
+      const auto flash = personalitySwitch.indication(t);
+      REQUIRE(flash.has_value());
+      if(*flash && !wasOn) {
+         ++flashes;
+      }
+      wasOn = *flash;
+   }
+   CHECK(flashes == 3);
+   CHECK_FALSE(personalitySwitch.isDue(1000 + PersonalitySwitch::flashDelayMs - 1));
+   CHECK(personalitySwitch.isDue(1000 + PersonalitySwitch::flashDelayMs));
+   CHECK_FALSE(personalitySwitch.indication(1000 + PersonalitySwitch::flashDelayMs).has_value());
+}
+
+TEST_CASE("A switch command gives no LED indication") {
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+
+   CHECK_FALSE(personalitySwitch.indication(0).has_value());
+   personalitySwitch.request(Personality::CmsisDap);
+   CHECK_FALSE(personalitySwitch.isDue(0));
+   CHECK_FALSE(personalitySwitch.indication(1).has_value());
+   CHECK(personalitySwitch.isDue(PersonalitySwitch::replyDelayMs));
+}
+
+TEST_CASE("The reset waits for the release of the key") {
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   personalitySwitch.request(Personality::CmsisDap, PersonalitySwitch::flashDelayMs);
+   constexpr uint64_t due = 1000 + PersonalitySwitch::flashDelayMs;
+
+   CHECK_FALSE(personalitySwitch.isDue(1000, false));
+   // The key is pressed again in the flash window and stays down
+   CHECK_FALSE(personalitySwitch.isDue(due, true));
+   CHECK_FALSE(personalitySwitch.isDue(due + 5000, true));
+   CHECK(personalitySwitch.isDue(due + 5001, false));
+}

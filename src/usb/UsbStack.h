@@ -92,6 +92,19 @@ class UsbStack {
       return device_.isConfigured();
    }
 
+   // Number of commands of the host so far, for the activity LED. It wraps
+   // at 2^32: only the difference between two values counts.
+   [[nodiscard]] uint32_t commandCount() const {
+      uint32_t count = 0;
+#if defined(VSL_WITH_VERSALOON)
+      count += versaloon_.commandCount();
+#endif
+#if defined(VSL_WITH_CMSIS_DAP)
+      count += dap_.commandCount();
+#endif
+      return count;
+   }
+
    // The personality of the descriptors and of interface 0
    [[nodiscard]] personality::Personality personality() const {
       return active_;
