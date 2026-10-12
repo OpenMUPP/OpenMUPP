@@ -13,7 +13,8 @@
 // MS OS 2.0 platform capability, and the MS OS 2.0 descriptor set gives
 // interface 0 the compatible ID "WINUSB" and a device interface GUID.
 // UsbStack answers the vendor request for the set. The CDC interfaces get
-// no MS OS 2.0 descriptors: Windows binds its own CDC driver (usbser.sys).
+// no MS OS 2.0 descriptors: Windows 10 and later bind their own CDC driver
+// (usbser.sys).
 //
 // The endpoint numbers and sizes are those of the Versaloon personality
 // (usb/UsbDescriptors.h), so the packet memory budget does not change. Only

@@ -63,11 +63,16 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="9b3c", MODE="0660"
 
 Then reload the rules with `udevadm control --reload` and plug in the probe again.
 
-On Windows 8.1 or later, the probe needs no driver installation and no Zadig.
+On Windows 10 or later, the probe needs no driver installation and no Zadig.
 The device has MS OS 2.0 descriptors (see [MS OS 2.0 descriptors](usb-device.md#ms-os-20-descriptors)).
 Windows binds WinUSB to the CMSIS-DAP interface and its own CDC driver (`usbser.sys`) to the serial port.
-If you installed a driver for the probe before, for example with Zadig, remove it in the Device Manager.
-Select "Delete the driver software for this device", then plug in the probe again.
+Windows 8.1 binds WinUSB to the CMSIS-DAP interface too, but the serial port needs a driver setup file there.
+
+If you installed a driver for the probe before, for example with Zadig, Windows keeps that driver.
+Uninstall the device in the Device Manager, and also remove its driver.
+Windows 10 calls this option "Delete the driver software for this device".
+Windows 11 calls it "Attempt to remove the driver for this device".
+Then plug in the probe again.
 
 OpenOCD:
 

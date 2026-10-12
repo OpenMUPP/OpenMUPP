@@ -85,7 +85,7 @@ Thus queued packets alone do not hold the OUT endpoint, and each queued packet g
 ### MS OS 2.0 descriptors
 
 Windows 8.1 and later bind WinUSB to interface 0 of the CMSIS-DAP personality with no driver installation.
-The serial port keeps the CDC driver of Windows (`usbser.sys`).
+The serial port keeps the CDC driver of Windows (`usbser.sys`), which binds with no setup file from Windows 10.
 `src/usb/CmsisDapDescriptors.h` has these descriptors, built with `usb/MsOs20.h` of libArT:
 
 1. The device descriptor has `bcdUSB` `0x0201`. Thus Windows reads the BOS descriptor.
@@ -100,9 +100,12 @@ The serial port keeps the CDC driver of Windows (`usbser.sys`).
 
 The Versaloon personality has `bcdUSB` `0x0200` and no BOS. It still needs a WinUSB driver from Zadig.
 
-Windows stores the result for each VID, PID and `bcdDevice`.
-Thus a probe that was connected before with the same values keeps its old driver.
-Remove that driver in the Device Manager, or flash a firmware with a different version.
+A driver that was installed before for the probe, for example with Zadig, has priority over the WinUSB compatible ID.
+Thus such a probe keeps its old driver.
+Uninstall the device and its driver in the Device Manager (see [Use the probe](cmsis-dap.md#use-the-probe)).
+Windows also keeps data about the descriptors of a device in the registry key `HKLM\SYSTEM\CurrentControlSet\Control\usbflags\04039B3Crrrr`.
+`rrrr` is the `bcdDevice` in hexadecimal.
+If the probe does not get WinUSB after that, delete this key and plug in the probe again.
 
 ### Select the personality
 
