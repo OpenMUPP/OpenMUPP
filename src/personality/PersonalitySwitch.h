@@ -16,8 +16,10 @@
 //
 // The key gesture asks for a longer delay, flashDelayMs. During that time
 // indication() tells the main loop to flash all LEDs, so the user sees
-// that the switch starts. The user can press the key again in that time,
-// so the reset waits for the release of the key (see isDue()).
+// that the switch starts. The request comes when the key has been down
+// long enough, so the key is still down. The reset waits for the release
+// of the key, with a debounce (see isDue()). After the flashes, all LEDs stay on until the
+// release, so the user sees that the key can go up.
 
 #include <cstdint>
 #include <optional>
@@ -33,6 +35,9 @@ class PersonalitySwitch {
    // Delay of the key gesture: three flashes of all LEDs
    static constexpr uint32_t flashPeriodMs = 200;
    static constexpr uint32_t flashDelayMs = 3 * flashPeriodMs;
+   // The key must stay up for this time before the reset. A bounce of the
+   // contact must not look like a key that is down at the reset.
+   static constexpr uint32_t releaseDebounceMs = 50;
 
    // active: the personality of this start
    explicit constexpr PersonalitySwitch(Personality active)
@@ -52,6 +57,8 @@ class PersonalitySwitch {
       if(personality == active_) {
          requested_.reset();
          dueMs_.reset();
+         keyWasDown_ = false;
+         keyUpSinceMs_.reset();
          return;
       }
       requested_ = personality;
@@ -68,7 +75,9 @@ class PersonalitySwitch {
    // True when the main loop must store requested() and reset at the
    // uptime nowMs. keyDown: the key is down. The reset waits for the
    // release of the key, because a key that is down at the reset starts
-   // the bootloader.
+   // the bootloader. When the key was down after the request, the key must
+   // stay up for releaseDebounceMs. A switch command with no key press has
+   // no such wait.
    [[nodiscard]] bool isDue(uint64_t nowMs, bool keyDown = false) {
       if(!requested_) {
          return false;
@@ -76,15 +85,32 @@ class PersonalitySwitch {
       if(!dueMs_) {
          dueMs_ = nowMs + delayMs_;
       }
-      return nowMs >= *dueMs_ && !keyDown;
+      if(keyDown) {
+         keyWasDown_ = true;
+         keyUpSinceMs_.reset();
+         return false;
+      }
+      if(keyWasDown_) {
+         if(!keyUpSinceMs_) {
+            keyUpSinceMs_ = nowMs;
+         }
+         if(nowMs - *keyUpSinceMs_ < releaseDebounceMs) {
+            return false;
+         }
+      }
+      return nowMs >= *dueMs_;
    }
 
    // The state of the indication LEDs at the uptime nowMs: on or off. No
    // value when the main loop must not override the LEDs. Call it after
    // isDue(). The flashes start on, with one flash each flashPeriodMs.
+   // After the flashes the LEDs stay on, until the reset.
    [[nodiscard]] std::optional<bool> indication(uint64_t nowMs) const {
-      if(!requested_ || !dueMs_ || delayMs_ <= replyDelayMs || nowMs >= *dueMs_) {
+      if(!requested_ || !dueMs_ || delayMs_ <= replyDelayMs) {
          return std::nullopt;
+      }
+      if(nowMs >= *dueMs_) {
+         return true;
       }
       const uint64_t elapsed = nowMs - (*dueMs_ - delayMs_);
       return elapsed % flashPeriodMs < flashPeriodMs / 2;
@@ -95,6 +121,8 @@ class PersonalitySwitch {
    std::optional<Personality> requested_;
    std::optional<uint64_t> dueMs_;
    uint32_t delayMs_{ replyDelayMs };
+   bool keyWasDown_{ false };
+   std::optional<uint64_t> keyUpSinceMs_;
 };
 
 } // namespace personality

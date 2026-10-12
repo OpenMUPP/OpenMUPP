@@ -80,9 +80,9 @@ Two fault and event patterns replace the normal function:
 | LED | Pattern | Meaning |
 |---|---|---|
 | State | Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. The power LED still shows the target voltage. |
-| All | Three flashes in 0.6 s | The key gesture (hold the key for 3 s, then release it) switches the personality of a dual image. The dongle then resets. |
+| All | Three flashes in 0.6 s, then on | The key has been down for 3 s: the dongle switches the personality of a dual image. After the flashes, all LEDs stay on until you release the key. The dongle then resets. |
 
-The reset of the switch waits for the release of the key, because a key that is down at the reset starts the bootloader.
+The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
 

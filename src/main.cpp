@@ -20,8 +20,8 @@
 // A CMSIS-DAP image runs the CMSIS-DAP processor
 // (protocol/cmsisdap/DapProcessor.h) instead of USB_TO_ALL. A dual image
 // has both: the stored personality (personality/PersonalityStore.h)
-// selects one at the start. A switch command or the release of a key that
-// was down for 3 s stores the other personality and resets (personality/PersonalitySwitch.h).
+// selects one at the start. A switch command, or a key that is down for 3 s
+// (then the key release), stores the other personality and resets (personality/PersonalitySwitch.h).
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -263,8 +263,9 @@ void addUsbToAllBlocks() {
 }
 
 // The key gesture and the switch commands. The key gesture gives the
-// request at the release of the key: a key that is down at the reset
-// starts the bootloader.
+// request when the key has been down for 3 s, and the LEDs flash. The
+// reset waits for the release of the key, with a 50 ms debounce: a key
+// that is down at the reset starts the bootloader.
 void pollPersonality(uint64_t nowMs) {
    bool keyDown = false;
    if(const auto key = board::current.key) {
