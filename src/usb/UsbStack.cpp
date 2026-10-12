@@ -66,6 +66,8 @@ const art::usb::Descriptors versaloonDescriptors{
    .device = desc::asSpan(deviceDescriptor),
    .configuration = desc::asSpan(configurationDescriptor),
    .strings = art::span<const art::span<const uint8_t>>(versaloonStrings.data(), versaloonStrings.size()),
+   // No BOS: the Versaloon personality is a USB 2.00 device.
+   .bos = {},
 };
 #endif
 
