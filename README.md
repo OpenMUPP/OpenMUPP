@@ -36,7 +36,8 @@ Hardware test status:
 
 - The Versaloon personality passed the OpenOCD test in JTAG and SWD mode.
 - The CMSIS-DAP personality passed the test on Linux with OpenOCD, pyOCD and probe-rs in SWD mode (see [docs/cmsis-dap.md](docs/cmsis-dap.md#hardware-test)).
-- The CMSIS-DAP JTAG mode, Windows and the dual image need a test on the hardware.
+- The CMSIS-DAP personality passed the test on Linux with OpenOCD and pyOCD in JTAG mode (see [docs/cmsis-dap.md](docs/cmsis-dap.md#jtag-hardware-test)).
+- probe-rs in JTAG mode, Windows (also the driverless WinUSB binding) and the dual image need a test on the hardware.
 
 See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
@@ -173,6 +174,7 @@ The Python scripts in `tools/` need Python 3.
 | `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a dual image to `versaloon` or `cmsis-dap`. | `pyusb` |
 | `tools/serial_loopback_test.py` | Tests the UART bridge with a loopback wire from TX to RX (see [docs/uart-bridge.md](docs/uart-bridge.md)). | `pyserial` |
 | `tools/flash_benchmark.py` | Measures the flash speed with OpenOCD (see [docs/development.md](docs/development.md#flash-speed-benchmark)). | OpenOCD |
+| `tools/pyocd_jtag_test.py` | Runs the pyOCD JTAG test on an STM32F1 target with the CMSIS-DAP personality (see [docs/cmsis-dap.md](docs/cmsis-dap.md#jtag-hardware-test)). It erases the flash of the target. | pyOCD |
 
 The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 
