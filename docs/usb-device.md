@@ -60,6 +60,7 @@ The Versaloon personality is the default.
 | VID:PID | `0x0403:0x9B3C` |
 | Product string | `Versaloon CMSIS-DAP` |
 | Interface 0 string | `Versaloon CMSIS-DAP v2` |
+| `bcdUSB` | `0x0201` (USB 2.0 with a BOS descriptor) |
 | Other items | As in the Versaloon personality |
 
 The host tools find a CMSIS-DAP v2 interface by the vendor class and the text `CMSIS-DAP` in the interface string.
@@ -80,6 +81,28 @@ When a bus reset or `SET_CONFIGURATION 0` closes the interface, the function cal
 A suspend only releases the target pins, because the USB transfer state stays.
 When a `DAP_QueueCommands` packet takes the last free slot, the processor runs the queue at once.
 Thus queued packets alone do not hold the OUT endpoint, and each queued packet gets its response.
+
+### MS OS 2.0 descriptors
+
+Windows 8.1 and later bind WinUSB to interface 0 of the CMSIS-DAP personality with no driver installation.
+The serial port keeps the CDC driver of Windows (`usbser.sys`).
+`src/usb/CmsisDapDescriptors.h` has these descriptors, built with `usb/MsOs20.h` of libArT:
+
+1. The device descriptor has `bcdUSB` `0x0201`. Thus Windows reads the BOS descriptor.
+2. The BOS descriptor has one device capability: the MS OS 2.0 platform capability.
+   It gives the vendor code `0x20` and the size of the descriptor set (170 bytes).
+3. Windows reads the descriptor set with a vendor request: `bmRequestType` `0xC0`, `bRequest` `0x20`, `wIndex` `7`.
+   `UsbStack` answers it with `msos20::DescriptorSetHandler`, in the Address and Configured states.
+4. The set has one function subset, for interface 0.
+   It has the compatible ID `WINUSB` and the device interface GUID `{CDB3B5AD-293B-4663-AA36-1AAE46463776}`.
+   This is the GUID of the Arm CMSIS-DAP and DAPLink firmware.
+   The device has one configuration, so the set has no configuration subset.
+
+The Versaloon personality has `bcdUSB` `0x0200` and no BOS. It still needs a WinUSB driver from Zadig.
+
+Windows stores the result for each VID, PID and `bcdDevice`.
+Thus a probe that was connected before with the same values keeps its old driver.
+Remove that driver in the Device Manager, or flash a firmware with a different version.
 
 ### Select the personality
 

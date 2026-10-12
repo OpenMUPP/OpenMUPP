@@ -47,8 +47,7 @@ Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Ve
 - 64-byte packets, and up to 4 packets in flight.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the target power, the command activity and the USB state. `DAP_HostStatus` does not change them.
-- Windows needs a WinUSB driver for interface 0, for example from Zadig, until the driverless descriptors exist.
-- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs on JTAG, Windows, the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
+- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs on JTAG, Windows (also the driverless WinUSB binding), the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
 
 ## Use the probe
 
@@ -63,6 +62,12 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="9b3c", MODE="0660"
 ```
 
 Then reload the rules with `udevadm control --reload` and plug in the probe again.
+
+On Windows 8.1 or later, the probe needs no driver installation and no Zadig.
+The device has MS OS 2.0 descriptors (see [MS OS 2.0 descriptors](usb-device.md#ms-os-20-descriptors)).
+Windows binds WinUSB to the CMSIS-DAP interface and its own CDC driver (`usbser.sys`) to the serial port.
+If you installed a driver for the probe before, for example with Zadig, remove it in the Device Manager.
+Select "Delete the driver software for this device", then plug in the probe again.
 
 OpenOCD:
 

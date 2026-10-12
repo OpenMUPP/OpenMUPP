@@ -12,6 +12,7 @@
 #include <FakeDeviceController.h>
 #include <doctest/doctest.h>
 #include <usb/Device.h>
+#include <usb/MsOs20.h>
 
 #include <array>
 #include <cstdint>
@@ -120,6 +121,7 @@ class DapBench {
       const std::array<uint8_t, usb::uidBytes> uid{ 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
                                                     0xDE, 0xF0, 0x01, 0x02, 0x03, 0x04 };
       serial_.set(uid);
+      device_.setVendorRequestHandler(&msOs20Handler_);
       REQUIRE(device_.addFunction(function));
       REQUIRE(device_.addFunction(cdc_));
       device_.start();
@@ -190,7 +192,10 @@ class DapBench {
       .device = usb::desc::asSpan(usb::dap::deviceDescriptor),
       .configuration = usb::desc::asSpan(usb::dap::configurationDescriptor),
       .strings = art::span<const art::span<const uint8_t>>(strings_.data(), strings_.size()),
+      .bos = usb::desc::asSpan(usb::dap::bosDescriptor),
    };
+   art::usb::msos20::DescriptorSetHandler msOs20Handler_{ usb::dap::msOs20VendorCode,
+                                                          usb::desc::asSpan(usb::dap::msOs20DescriptorSet) };
    art::usb::Device device_;
    art::usb::Function cdc_;
 };
