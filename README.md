@@ -4,22 +4,41 @@ Firmware for the Versaloon Mini and OtherUse debug adapters (STM32F103C8/CB, 12 
 The firmware is compatible with the original Versaloon USB protocol, so unmodified OpenOCD can use it.
 It also has a USB-CDC (Communication Device Class) serial port, which is bridged to a UART.
 A build option selects a second USB personality, CMSIS-DAP v2, for OpenOCD, pyOCD and probe-rs (see [docs/cmsis-dap.md](docs/cmsis-dap.md)).
+A dual image has both personalities and selects one at run time.
 
 ## Status
 
-The project is at an early stage. The current firmware does these functions:
+The firmware has these functions:
 
 - It sets up the board and shows the target power, the command activity and the USB state on the LEDs.
-- It enumerates as a USB composite device with the USB identity of the original Versaloon firmware.
+- It enumerates as a USB composite device: one debug interface and a CDC-ACM serial port.
 - It bridges the serial port to the UART.
+  The bridge continues to run during long JTAG and SWD commands.
 - It starts the bootloader on request, for a firmware update.
+
+The Versaloon personality has the USB identity of the original Versaloon firmware:
+
 - It receives Versaloon commands and replies to the common commands, for example `GET_INFO`.
 - It runs the `USB_TO_ALL` command of OpenOCD, with the `INFO`, `DELAY`, `GPIO`, `JTAG_RAW`, `SWD` and `POWER` blocks. OpenOCD controls SRST and TRST through the `GPIO` block.
 - It shifts JTAG bits through the `JTAG_RAW` block, with a fixed TCK frequency or with adaptive clocking (RTCK). The Mini and the OtherUse use SPI and DMA up to 9 MHz TCK. The other bits and speeds use GPIO bit-bang.
 - It runs SWD transfers with GPIO bit-bang through the `SWD` block, at the SWCLK frequencies of the OpenOCD `vsllink` driver.
 - It switches the 3.3 V target supply through the `POWER` block, and replies the target voltage to `GET_TVCC`. It refuses to switch on a target that has its own supply.
 
-The JTAG and SWD modes, the target power switch and the Vref sense need a test on the hardware.
+The CMSIS-DAP personality is a CMSIS-DAP v2 probe:
+
+- It runs SWD and JTAG transfers, and `DAP_TransferAbort` during a transfer command.
+- It has no SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
+
+The dual image has both personalities.
+A switch command or the key selects the other personality, and a flash page stores it.
+
+Hardware test status:
+
+- The Versaloon personality passed the OpenOCD test in JTAG and SWD mode.
+- The CMSIS-DAP personality passed the test on Linux with OpenOCD, pyOCD and probe-rs in SWD mode (see [docs/cmsis-dap.md](docs/cmsis-dap.md#hardware-test)).
+- The CMSIS-DAP personality passed the test on Linux with OpenOCD and pyOCD in JTAG mode (see [docs/cmsis-dap.md](docs/cmsis-dap.md#jtag-hardware-test)).
+- probe-rs in JTAG mode, Windows (also the driverless WinUSB binding) and the dual image need a test on the hardware.
+
 See [docs/plan.md](docs/plan.md) for the plan and the work items.
 
 ## Boards
@@ -124,9 +143,8 @@ See [docs/firmware-update.md](docs/firmware-update.md) for the other ways to sta
 Connect the dongle to the host with USB.
 It shows as a USB device with the ID `0483:a038` and the product name `Versaloon`.
 
-- **Debug adapter:** use OpenOCD with `-f interface/vsllink.cfg`.
+- **Debug adapter:** use OpenOCD with `-f interface/vsllink.cfg`, in JTAG or SWD mode.
   On Windows, OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
-  JTAG and SWD mode are available. They need a test on the hardware (see [Status](#status)).
 - **Serial port:** the dongle has a serial port (`/dev/ttyACM*` on Linux, a COM port on Windows).
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini and the OtherUse.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
@@ -137,13 +155,28 @@ The serial port works as in the default image.
 
 A firmware image built with `-DVSL_PROTOCOL=dual` has both personalities.
 To change the personality, send a switch command, or use the key.
-Hold the key down for 3 s until all LEDs flash.
+`tools/vsl_personality.py` sends the switch command (see [Tools](#tools)).
+To use the key, hold it down for 3 s until all LEDs flash.
 Then release the key.
 The dongle then resets and shows as the other USB device.
+The dongle keeps the personality after a power cycle and after a firmware update with `stm32flash`.
 See [docs/usb-device.md](docs/usb-device.md#dual-image).
 
 The power LED shows the target power. The state LED flashes for each command of the host. The USB LED shows the USB state.
 See [docs/boards.md](docs/boards.md#start-up-and-leds) for the meaning of the LEDs.
+
+## Tools
+
+The Python scripts in `tools/` need Python 3.
+
+| Script | Function | Needs |
+|---|---|---|
+| `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a dual image to `versaloon` or `cmsis-dap`. | `pyusb` |
+| `tools/serial_loopback_test.py` | Tests the UART bridge with a loopback wire from TX to RX (see [docs/uart-bridge.md](docs/uart-bridge.md)). | `pyserial` |
+| `tools/flash_benchmark.py` | Measures the flash speed with OpenOCD (see [docs/development.md](docs/development.md#flash-speed-benchmark)). | OpenOCD |
+| `tools/pyocd_jtag_test.py` | Runs the pyOCD JTAG test on an STM32F1 target with the CMSIS-DAP personality (see [docs/cmsis-dap.md](docs/cmsis-dap.md#jtag-hardware-test)). It erases the flash of the target. | pyOCD |
+
+The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 
 ## Documentation
 
