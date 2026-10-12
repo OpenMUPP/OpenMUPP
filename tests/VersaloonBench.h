@@ -141,6 +141,8 @@ class Bench {
       .device = usb::desc::asSpan(usb::deviceDescriptor),
       .configuration = usb::desc::asSpan(usb::configurationDescriptor),
       .strings = art::span<const art::span<const uint8_t>>(strings_.data(), strings_.size()),
+      // No BOS: the Versaloon personality is a USB 2.00 device.
+      .bos = {},
    };
    art::usb::Device device_;
    art::usb::Function cdc_;

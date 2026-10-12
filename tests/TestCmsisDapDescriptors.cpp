@@ -92,7 +92,8 @@ TEST_CASE("The CMSIS-DAP device descriptor has the CMSIS-DAP identity and the IA
    CHECK(d.size() == 18);
    CHECK(d[0] == 18);
    CHECK(d[1] == descriptorType(DescriptorType::Device));
-   CHECK(word(&d[2]) == 0x0200);
+   // USB 2.01: Windows reads the BOS
+   CHECK(word(&d[2]) == 0x0201);
    CHECK(d[4] == 0xEF);
    CHECK(d[5] == 0x02);
    CHECK(d[6] == 0x01);
@@ -237,4 +238,76 @@ TEST_CASE("The CMSIS-DAP strings contain CMSIS-DAP in the product and interface 
    CHECK(d[14] < usb::dap::stringCount);
    CHECK(d[15] < usb::dap::stringCount);
    CHECK(d[16] < usb::dap::stringCount);
+}
+
+TEST_CASE("The BOS has one device capability: the MS OS 2.0 platform capability") {
+   const auto &bos = usb::dap::bosDescriptor;
+   const auto &set = usb::dap::msOs20DescriptorSet;
+
+   REQUIRE(bos.size() == 5 + 28);
+   CHECK(bos[0] == 5);
+   CHECK(bos[1] == descriptorType(DescriptorType::Bos));
+   CHECK(word(&bos[2]) == bos.size());
+   CHECK(bos[4] == 1);
+
+   const uint8_t *capability = &bos[5];
+   CHECK(capability[0] == 28);
+   CHECK(capability[1] == descriptorType(DescriptorType::DeviceCapability));
+   CHECK(capability[2] == 0x05); // PLATFORM
+   // {D8DD60DF-4589-4CC7-9CD2-659D9E648A9F}
+   const std::vector<uint8_t> uuid{ 0xDF, 0x60, 0xDD, 0xD8, 0x89, 0x45, 0xC7, 0x4C,
+                                    0x9C, 0xD2, 0x65, 0x9D, 0x9E, 0x64, 0x8A, 0x9F };
+   CHECK(std::vector<uint8_t>(capability + 4, capability + 20) == uuid);
+   // Windows 8.1, the size of the set, the vendor code, no alternate enumeration
+   CHECK(std::vector<uint8_t>(capability + 20, capability + 24) == std::vector<uint8_t>{ 0x00, 0x00, 0x03, 0x06 });
+   CHECK(word(capability + 24) == set.size());
+   CHECK(capability[26] == usb::dap::msOs20VendorCode);
+   CHECK(capability[27] == 0);
+}
+
+TEST_CASE("The MS OS 2.0 descriptor set gives WinUSB to interface 0 only") {
+   const auto &set = usb::dap::msOs20DescriptorSet;
+   // Set header, function subset header, compatible ID, registry property
+   REQUIRE(set.size() == 10 + 8 + 20 + 132);
+
+   // Set header: Windows 8.1, wTotalLength
+   CHECK(word(&set[0]) == 10);
+   CHECK(word(&set[2]) == 0);
+   CHECK(std::vector<uint8_t>(set.begin() + 4, set.begin() + 8) == std::vector<uint8_t>{ 0x00, 0x00, 0x03, 0x06 });
+   CHECK(word(&set[8]) == set.size());
+
+   // One function subset, for interface 0: the CDC interfaces keep the
+   // driver of Windows.
+   const uint8_t *subset = &set[10];
+   CHECK(word(subset) == 8);
+   CHECK(word(subset + 2) == 2);
+   CHECK(subset[4] == usb::dap::dapInterface);
+   CHECK(word(subset + 6) == set.size() - 10);
+
+   const uint8_t *compatibleId = subset + 8;
+   CHECK(word(compatibleId) == 20);
+   CHECK(word(compatibleId + 2) == 3);
+   CHECK(std::string(reinterpret_cast<const char *>(compatibleId + 4), 8) == std::string("WINUSB\0\0", 8));
+   CHECK(std::vector<uint8_t>(compatibleId + 12, compatibleId + 20) == std::vector<uint8_t>(8, 0));
+
+   const uint8_t *property = compatibleId + 20;
+   CHECK(word(property) == 132);
+   CHECK(word(property + 2) == 4);
+   CHECK(word(property + 4) == 7); // REG_MULTI_SZ
+   CHECK(word(property + 6) == 42);
+   std::string name;
+   for(int i = 0; i < 20; ++i) {
+      CHECK(property[9 + 2 * i] == 0);
+      name.push_back(static_cast<char>(property[8 + 2 * i]));
+   }
+   CHECK(name == "DeviceInterfaceGUIDs");
+   CHECK(word(property + 50) == 80);
+   std::string guid;
+   for(int i = 0; i < 38; ++i) {
+      CHECK(property[53 + 2 * i] == 0);
+      guid.push_back(static_cast<char>(property[52 + 2 * i]));
+   }
+   CHECK(guid == "{CDB3B5AD-293B-4663-AA36-1AAE46463776}");
+   // The null of the GUID and the null that ends the list
+   CHECK(std::vector<uint8_t>(property + 128, property + 132) == std::vector<uint8_t>(4, 0));
 }

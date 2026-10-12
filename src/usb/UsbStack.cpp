@@ -66,6 +66,8 @@ const art::usb::Descriptors versaloonDescriptors{
    .device = desc::asSpan(deviceDescriptor),
    .configuration = desc::asSpan(configurationDescriptor),
    .strings = art::span<const art::span<const uint8_t>>(versaloonStrings.data(), versaloonStrings.size()),
+   // No BOS: the Versaloon personality is a USB 2.00 device.
+   .bos = {},
 };
 #endif
 
@@ -80,7 +82,11 @@ const art::usb::Descriptors dapDescriptors{
    .device = desc::asSpan(dap::deviceDescriptor),
    .configuration = desc::asSpan(dap::configurationDescriptor),
    .strings = art::span<const art::span<const uint8_t>>(dapStrings.data(), dapStrings.size()),
+   .bos = desc::asSpan(dap::bosDescriptor),
 };
+
+// Answers the request of Windows for the MS OS 2.0 descriptor set
+art::usb::msos20::DescriptorSetHandler msOs20Handler(dap::msOs20VendorCode, desc::asSpan(dap::msOs20DescriptorSet));
 #endif
 
 #if defined(VSL_WITH_VERSALOON) && defined(VSL_WITH_CMSIS_DAP)
@@ -123,6 +129,7 @@ UsbStack::UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler 
    if(active_ == Personality::CmsisDap) {
       // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
       events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
+      device_.setVendorRequestHandler(&msOs20Handler);
       static_cast<void>(device_.addFunction(dap_));
    }
 #endif

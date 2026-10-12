@@ -4,6 +4,7 @@
 #include "CmsisDapBench.h"
 
 #include <doctest/doctest.h>
+#include <usb/MsOs20.h>
 
 #include <cstdint>
 #include <string>
@@ -42,6 +43,36 @@ TEST_CASE("The host reads the descriptors of the CMSIS-DAP device") {
    CHECK(serial[2] == '1');
    CHECK(serial[4] == '2');
    CHECK(serial[48] == '4');
+}
+
+TEST_CASE("Windows reads the BOS and the MS OS 2.0 descriptor set before SET_CONFIGURATION") {
+   DapBench bench;
+   auto &controller = bench.controller();
+   controller.busReset();
+   bench.request(vsltest::setAddress, 5);
+
+   // The BOS header, then the whole BOS
+   const auto header = bench.descriptor(DescriptorType::Bos, 0, 5).data;
+   REQUIRE(header.size() == 5);
+   const uint16_t bosLength = static_cast<uint16_t>(header[2] | header[3] << 8);
+   CHECK(bench.descriptor(DescriptorType::Bos, 0, bosLength).data == bytes(usb::dap::bosDescriptor));
+
+   // The vendor request with the vendor code of the platform capability:
+   // bmRequestType 0xC0, wIndex 7. The set is longer than one packet.
+   bool ok = false;
+   const auto set = controller.controlIn(vsltest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
+                                                              static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())),
+                                         &ok);
+   CHECK(ok);
+   CHECK_FALSE(set.stalled);
+   CHECK(set.data == bytes(usb::dap::msOs20DescriptorSet));
+   CHECK(set.packetSizes == std::vector<std::size_t>{ 64, 64, 42 });
+
+   // Another vendor code stalls.
+   CHECK(
+   controller.controlIn(vsltest::setupPacket(0xC0, static_cast<uint8_t>(usb::dap::msOs20VendorCode + 1), 0, 7, 16)).stalled);
+
+   bench.request(vsltest::setConfiguration, 1);
 }
 
 TEST_CASE("SET_CONFIGURATION opens the endpoints of all three CMSIS-DAP interfaces") {
