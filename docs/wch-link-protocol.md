@@ -570,7 +570,15 @@ This was not tested on a dongle. The line of a pulse must go high in about 370 n
 Thus the engine (`src/rvswd/RvSwdEngine.h`, pins in `src/board/BoardRvSwd.h`) drives the line high in the high level of each bit and when the line is idle.
 In a read bit, the engine releases the line after its short low pulse. The target can then hold the line low for a 0.
 The engine samples the line 600 ns after the falling edge. When the line is high again, the engine drives it high.
-A hardware test must show that the pull-up lets a 1 rise before the sample point.
+The engine does not drive the line high while the line is low. Thus it does not fight a target that holds the line low.
+
+Risk for a read bit: only the internal pull-up raises the line for a 1. The STM32F1 pull-up is 30 to 50 kΩ.
+With 20 to 50 pF of line and target pin, the time constant is 0.6 to 2.5 µs. At the sample point (600 ns), the line can still be below the input high level, and each 1 then reads as 0.
+The capture shows a fast rise after a 1 of the target (low for 246 to 374 ns). Thus the WCH-LinkE or the target drives the line high.
+A hardware test must measure the rise time on a dongle. If the rise is too slow, use one of these fixes:
+
+- An external pull-up of about 1 kΩ on SWDIO.
+- A later sample point, from the measured rise time. The shortest 0 of the target is 824 ns, so the sample point must stay below that time.
 
 USB ID: the decision of the epic stays. The default is an own ID. The ID `1a86:8010` is a build option for personal use.
 wlink and minichlink find the probe by this ID. Without it, they need a flag or a patch.
