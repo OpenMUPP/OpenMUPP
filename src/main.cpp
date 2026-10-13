@@ -19,8 +19,9 @@
 // engines call the serial service (protocol/Background.h): it runs the
 // serial port of the USB device and the UART bridge, or the debug log.
 // A CMSIS-DAP image runs the CMSIS-DAP processor
-// (protocol/cmsisdap/DapProcessor.h) instead of USB_TO_ALL. A dual image
-// has both: the stored personality (personality/PersonalityStore.h)
+// (protocol/cmsisdap/DapProcessor.h) instead of USB_TO_ALL. Its DAP_UART_*
+// commands can take the UART from the bridge (uart/DapUartChannel.h). A
+// dual image has both: the stored personality (personality/PersonalityStore.h)
 // selects one at the start. A switch command, or a key that is down for 3 s
 // (then the key release), stores the next personality and resets (personality/PersonalitySwitch.h).
 // A wch-link image runs the WCH-Link processor (protocol/wchlink/WchLinkProcessor.h)
@@ -192,11 +193,11 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   },
                                   &boardJtag,
 #if defined(VSL_DUAL_PERSONALITY)
-                                  &personalitySwitch
+                                  &personalitySwitch,
 #else
-                                  nullptr
+                                  nullptr,
 #endif
-};
+                                  uart::dapUart() };
 
 #endif
 

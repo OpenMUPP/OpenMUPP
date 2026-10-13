@@ -5,6 +5,9 @@
 
 #include <optional>
 
+#if defined(VSL_WITH_CMSIS_DAP)
+#include "uart/DapUartChannel.h"
+#endif
 #include "uart/UartBridge.h"
 #include "uart/UartPort.h"
 #include "usb/UsbStack.h"
@@ -20,6 +23,9 @@ UartPort port{ buffers };
 // Static storage: the serial port of the USB stack is known only in
 // startBridge().
 std::optional<Bridge> bridge;
+#if defined(VSL_WITH_CMSIS_DAP)
+DapUartChannel<UartPort, bridgeBufferSize> dapChannel{ port, buffers };
+#endif
 
 } // namespace
 
@@ -27,13 +33,25 @@ void startBridge(usb::UsbStack &usbStack) {
    port.start();
    bridge.emplace(usbStack.serialPort(), port, buffers);
    bridge->start();
+#if defined(VSL_WITH_CMSIS_DAP)
+   dapChannel.start(&*bridge);
+#endif
 }
 
 void pollBridge() {
    if(bridge) {
       bridge->poll();
+#if defined(VSL_WITH_CMSIS_DAP)
+      dapChannel.poll();
+#endif
    }
 }
+
+#if defined(VSL_WITH_CMSIS_DAP)
+cmsisdap::DapUart *dapUart() {
+   return &dapChannel;
+}
+#endif
 
 } // namespace uart
 

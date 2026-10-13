@@ -28,7 +28,7 @@ The Versaloon personality has the USB identity of the original Versaloon firmwar
 The CMSIS-DAP personality is a CMSIS-DAP v2 probe:
 
 - It runs SWD and JTAG transfers, and `DAP_TransferAbort` during a transfer command.
-- It has no SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
+- It has no SWO. The `DAP_UART_*` commands can take the UART from the CDC-ACM serial port (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-commands)).
 
 The dual image has both personalities.
 A switch command or the key selects the other personality, and a flash page stores it.
