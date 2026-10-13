@@ -100,11 +100,18 @@ class MockRvSwdTarget {
    }
    void swdioRelease() {
       hostAction();
+      const bool before = line();
       hostDrives_ = false;
       lineChanged();
+      // One wire: the target sees the line rise also from the pull-up.
+      // Two wires: a release is no start or stop condition.
+      if(wire_ == rvswd::Wire::One && before != line()) {
+         oneWireEdge(line());
+      }
    }
    void swdioWrite(bool level) {
       REQUIRE(hostDrives_);
+      time += swdioWriteCycles;
       hostAction();
       const bool before = line();
       hostLevel_ = level;
@@ -169,6 +176,8 @@ class MockRvSwdTarget {
    // Two wires: the bits that the target sampled in the last frame, bit 1
    // first (the numbering of the document)
    std::vector<bool> frameBits;
+   // Two wires: SWDIO at the rising edges outside a frame
+   std::vector<bool> idleBits;
    std::vector<uint32_t> risingEdges;
    std::vector<LineEdge> lineEdges;
    int starts{ 0 };
@@ -183,8 +192,10 @@ class MockRvSwdTarget {
    int finis{ 0 };
    int begins{ 0 };
    int locks{ 0 };
-   // The loop code of the engine: time added at each SWCLK edge
+   // The loop code of the engine: time added at each SWCLK edge, and at
+   // each SWDIO write
    uint32_t swclkEdgeCycles{ 0 };
+   uint32_t swdioWriteCycles{ 0 };
    // Starts near the wrap of the counter.
    uint32_t time{ 0xFFFFF000u };
 
@@ -209,8 +220,10 @@ class MockRvSwdTarget {
       return true;
    }
 
+   // Two wires: each overlap of the drivers. One wire: the host drives
+   // high while the target holds the line low (both low is no fight).
    void lineChanged() {
-      if(hostDrives_ && targetDrives_) {
+      if(hostDrives_ && targetDrives_ && (wire_ == rvswd::Wire::Two || hostLevel_ != targetLevel_)) {
          ++contentions;
       }
       const bool level = line();
@@ -319,6 +332,7 @@ class MockRvSwdTarget {
       }
       const bool level = line();
       if(!started_) {
+         idleBits.push_back(level);
          // A line reset: clocks with SWDIO high from the host
          highClocks_ = hostDrives_ && level ? highClocks_ + 1 : 0;
          if(highClocks_ == resetClocks) {

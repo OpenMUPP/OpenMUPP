@@ -66,23 +66,34 @@
 //   oneWireReleaseTimeoutNs ends the frame with lineLowFlag, and SWDIO
 //   stays released.
 // - After bit 8 of a read, the high level is oneWireTurnaroundHighNs.
+// - While SWDIO is released (after lineLowFlag, or after a reset with the
+//   line held low), the engine drives SWDIO again only when the line is
+//   high. Else the frame or the reset ends with SWDIO released, and a
+//   frame returns lineLowFlag. Thus the host never drives the line high
+//   against a target that holds it low.
 //
 // An interrupt in a one-wire bit makes the low pulse of a 1 long enough
 // for a 0. Thus the interrupts are off for each one-wire frame (about
-// 45 us). Each phase waits from its edge, so the pulses are longer than
-// the constants by the time of the loop code. The constants are the
-// WCH-LinkE values. They are not measured on a dongle.
+// 45 us). Each phase ends at a time from the start of the phase before,
+// not from its own pin write: the loop code does not add to the frame.
+// After the wait for a released line, the next phase starts from the
+// end of that wait. The constants are the WCH-LinkE values. They are not
+// measured on a dongle.
 //
-// Line reset: two wires, lineResetClocks clocks with SWDIO high. One
-// wire, oneWireResetLowUs with SWDIO low. The WCH-LinkE sends both before
-// its first frame. That they reset the line is not confirmed. The probe
-// also sends other patterns at connect (the 85-clock frames). Their
-// meaning is open, and the engine does not send them.
+// Line reset: two wires, the clocks of the WCH-LinkE before its first
+// frame: lineResetHighClocks clocks with SWDIO high, one clock with
+// SWDIO low, lineResetTailClocks clocks with SWDIO high. SWDIO changes
+// while SWCLK is low. One wire, oneWireResetLowUs with SWDIO low. That
+// these sequences reset the line is not confirmed. The probe also sends
+// other patterns at connect (the 85-clock frames). Their meaning is
+// open, and the engine does not send them.
 //
 // With a protocol::Background, the engine calls Background::service()
-// before each frame and in the reset, at most once per
-// backgroundIntervalMs (protocol/Background.h). The interrupts are on
-// then: the service can run USB (UsbStack::poll()).
+// before each frame (two wires: SWCLK low), and in the low level of the
+// one-wire reset, at most once per backgroundIntervalMs
+// (protocol/Background.h). The interrupts are on then. The engine runs
+// in a command, inside UsbStack::poll(): the service must not start a
+// command, and must return within some microseconds.
 
 #include <bit>
 #include <cstdint>
@@ -114,9 +125,12 @@ inline constexpr uint32_t lowClockHz = 478'000;
 inline constexpr uint32_t highClockHz = 907'000;
 inline constexpr uint32_t defaultClockHz = lowClockHz;
 
-// Two wires: the clocks of a line reset. The WCH-LinkE sends 90 before its
-// first frame.
-inline constexpr uint32_t lineResetClocks = 100;
+// Two wires: the clocks of a line reset, as the WCH-LinkE sends them
+// before its first frame: 9 with SWDIO high, 1 with SWDIO low, 90 with
+// SWDIO high.
+inline constexpr uint32_t lineResetHighClocks = 9;
+inline constexpr uint32_t lineResetTailClocks = 90;
+inline constexpr uint32_t lineResetClocks = lineResetHighClocks + 1 + lineResetTailClocks;
 
 // Two wires: the core cycles of the loop code in one half period. The
 // value of the SWD engine (swd/SwdBitBang.h). Not measured for this engine.
@@ -201,24 +215,32 @@ class RvSwdEngine {
       if(wire_ == Wire::Two) {
          pins_.swdioDrive(true);
          for(uint32_t i = 0; i < lineResetClocks; ++i) {
+            pins_.swdioWrite(i != lineResetHighClocks);
+            waitHalfPeriod();
             pins_.swclk(true);
             waitHalfPeriod();
             pins_.swclk(false);
-            waitHalfPeriod();
          }
+         pins_.swdioWrite(true);
+         waitHalfPeriod();
       } else {
+         // Driving low is safe also when the target holds the line low.
          pins_.swdioDrive(false);
          const uint32_t edge = pins_.now();
          const uint32_t low = cyclesOfNs(pins_.coreHz(), oneWireResetLowUs * 1000u);
          while(pins_.now() - edge < low) {
             background_.poll(pins_);
          }
-         pins_.swdioWrite(true);
+         pins_.swdioRelease();
+         released_ = true;
+         static_cast<void>(driveIfHigh(pins_.now()));
          waitFrom(pins_.now(), frameGap_);
       }
    }
 
-   // DMI write. Returns the flags (0: no error).
+   // DMI write. Returns the flags (0: no error). The flags do not check
+   // the target: a two-wire write without a target also returns 0 (with
+   // the response and tail bits 1111). W3 must check head() and tail().
    uint8_t write(uint8_t address, uint32_t data) {
       return frame(address, true, data);
    }
@@ -366,24 +388,28 @@ class RvSwdEngine {
 
    uint8_t frameOne(uint32_t request, bool write, uint32_t &data) {
       const uint32_t irq = pins_.lockIrq();
-      // The start bit drives SWDIO: it can be released after an error.
-      pins_.swdioDrive(true);
-      sendBit(true, high_);
+      if(!driveIfHigh(pins_.now())) {
+         pins_.unlockIrq(irq);
+         return lineLowFlag;
+      }
+      // Each phase ends at a time from the start of the phase before.
+      uint32_t time = pins_.now();
+      sendBit(time, true, high_);
       for(uint32_t i = 8; i > 1; --i) {
-         sendBit(((request >> (i - 1)) & 1u) != 0, high_);
+         sendBit(time, ((request >> (i - 1)) & 1u) != 0, high_);
       }
       uint8_t flags = 0;
       if(write) {
-         sendBit(true, high_);
+         sendBit(time, true, high_);
          for(uint32_t i = 32; i > 0; --i) {
-            sendBit(((data >> (i - 1)) & 1u) != 0, high_);
+            sendBit(time, ((data >> (i - 1)) & 1u) != 0, high_);
          }
       } else {
-         sendBit(false, turnaroundHigh_);
+         sendBit(time, false, turnaroundHigh_);
          uint32_t value = 0;
          for(uint32_t i = 0; i < 32 && flags == 0; ++i) {
             bool level = false;
-            flags = receiveBit(level);
+            flags = receiveBit(time, level);
             value = value << 1 | (level ? 1u : 0u);
          }
          data = value;
@@ -393,29 +419,55 @@ class RvSwdEngine {
       return flags;
    }
 
-   void sendBit(bool level, uint32_t high) {
-      pins_.swdioWrite(false);
-      waitFrom(pins_.now(), level ? shortLow_ : longLow_);
-      pins_.swdioWrite(true);
-      waitFrom(pins_.now(), high);
-   }
-
-   // Returns the flags.
-   uint8_t receiveBit(bool &level) {
-      pins_.swdioWrite(false);
-      const uint32_t edge = pins_.now();
-      waitFrom(edge, shortLow_);
-      pins_.swdioRelease();
-      waitFrom(edge, sample_);
-      level = pins_.swdio();
+   // While SWDIO is released: drives it high when the line is high.
+   // Returns false when the line stays low (SWDIO stays released).
+   bool driveIfHigh(uint32_t start) {
+      if(!released_) {
+         return true;
+      }
       while(!pins_.swdio()) {
-         if(pins_.now() - edge >= releaseTimeout_) {
-            return lineLowFlag;
+         if(pins_.now() - start >= releaseTimeout_) {
+            return false;
          }
       }
       pins_.swdioDrive(true);
-      waitFrom(pins_.now(), high_);
+      released_ = false;
+      return true;
+   }
+
+   // A low pulse and a high level, from `time` on. `time` becomes the end
+   // of the bit.
+   void sendBit(uint32_t &time, bool level, uint32_t high) {
+      pins_.swdioWrite(false);
+      time += level ? shortLow_ : longLow_;
+      waitUntil(time);
+      pins_.swdioWrite(true);
+      time += high;
+      waitUntil(time);
+   }
+
+   // Returns the flags. `time` becomes the end of the bit.
+   uint8_t receiveBit(uint32_t &time, bool &level) {
+      const uint32_t edge = time;
+      pins_.swdioWrite(false);
+      waitUntil(edge + shortLow_);
+      pins_.swdioRelease();
+      released_ = true;
+      waitUntil(edge + sample_);
+      level = pins_.swdio();
+      if(!driveIfHigh(edge)) {
+         return lineLowFlag;
+      }
+      time = pins_.now() + high_;
+      waitUntil(time);
       return 0;
+   }
+
+   // Waits until a time of the cycle counter. Signed difference: correct
+   // across the wrap of the counter.
+   [[gnu::always_inline]] void waitUntil(uint32_t time) {
+      while(static_cast<int32_t>(pins_.now() - time) < 0) {
+      }
    }
 
    // Waits until `cycles` after `edge`.
@@ -441,6 +493,8 @@ class RvSwdEngine {
    uint32_t frameGap_{ 0 };
    uint8_t head_{ 0 };
    uint8_t tail_{ 0 };
+   // One wire: SWDIO is released after an error.
+   bool released_{ false };
 };
 
 } // namespace rvswd

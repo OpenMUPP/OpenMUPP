@@ -270,6 +270,15 @@ TEST_CASE("RVSWD two wires: line reset") {
    CHECK(bench.pins.lineResets == 1);
    CHECK(bench.pins.risingEdges.size() == rvswd::lineResetClocks);
    CHECK(bench.pins.starts == 0);
+   // The WCH-LinkE before its first frame: 9 clocks with SWDIO high, 1 with
+   // SWDIO low, 90 with SWDIO high. SWDIO changes only while SWCLK is low.
+   std::vector<bool> expected(9, true);
+   expected.push_back(false);
+   expected.insert(expected.end(), 90, true);
+   CHECK(bench.pins.idleBits == expected);
+   for(const auto &edge : bench.pins.lineEdges) {
+      CHECK_FALSE(edge.swclk);
+   }
    bench.checkIdle();
    CHECK(bench.engine.write(0x10, 1) == 0);
    CHECK(bench.pins.registers[0x10] == 1);
@@ -396,6 +405,20 @@ TEST_CASE("RVSWD one wire: pulse widths of a write and the turnaround of a read"
    bench.checkIdle();
 }
 
+TEST_CASE("RVSWD one wire: the loop code does not add to a frame") {
+   // Each phase ends at a time from the start of the phase before. With
+   // 8 cycles of code at each SWDIO write (82 writes), a write frame keeps
+   // the duration of the capture (39.67 us).
+   Bench bench(Wire::One);
+   bench.pins.swdioWriteCycles = 8;
+   bench.pins.lineEdges.clear();
+   CHECK(bench.engine.write(0x7E, 0x5AA5'0400) == 0);
+   const auto &edges = bench.pins.lineEdges;
+   REQUIRE(edges.size() >= 82);
+   CHECK(nsOf(edges[81].time - edges[0].time) == doctest::Approx(39'670).epsilon(0.02));
+   bench.checkIdle();
+}
+
 TEST_CASE("RVSWD one wire: the clock rate has no effect") {
    Bench bench(Wire::One);
    bench.pins.lineEdges.clear();
@@ -422,6 +445,31 @@ TEST_CASE("RVSWD one wire: a line held low ends the read") {
    CHECK_FALSE(bench.pins.irqLocked());
    CHECK(bench.pins.contentions == 0);
    // A line reset brings the target back in step.
+   bench.pins.stuckLow = false;
+   bench.pins.registers[0x11] = 0x0000'0382;
+   bench.engine.lineReset();
+   CHECK(bench.engine.read(0x11, data) == 0);
+   CHECK(data == 0x0000'0382);
+   bench.checkIdle();
+}
+
+TEST_CASE("RVSWD one wire: the host does not drive a line that the target holds low") {
+   Bench bench(Wire::One);
+   bench.pins.stuckLow = true;
+   uint32_t data = 0x1234;
+   CHECK(bench.engine.read(0x11, data) == rvswd::lineLowFlag);
+   // The line is still low: the next frames end at once, with SWDIO
+   // released.
+   CHECK(bench.engine.read(0x11, data) == rvswd::lineLowFlag);
+   CHECK(bench.engine.write(0x10, 1) == rvswd::lineLowFlag);
+   CHECK(data == 0x1234);
+   CHECK_FALSE(bench.pins.hostDrives());
+   CHECK_FALSE(bench.pins.irqLocked());
+   // A reset drives low (no fight) and releases the line again.
+   bench.engine.lineReset();
+   CHECK_FALSE(bench.pins.hostDrives());
+   CHECK(bench.pins.contentions == 0);
+   // When the target lets the line go, the frames run again.
    bench.pins.stuckLow = false;
    bench.pins.registers[0x11] = 0x0000'0382;
    bench.engine.lineReset();
