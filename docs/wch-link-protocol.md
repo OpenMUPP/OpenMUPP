@@ -382,10 +382,14 @@ The speed byte has no visible effect on the one-wire line:
 - The most common pulses of the later phase are the same (low 0.8 µs and 0.2 µs).
 - The run time is the same (93 ms).
 
-The probe may ignore the speed byte for the one-wire interface, or the speed applies to a part that this test does not use.
-The cause is not known. A flash program or a memory read at the three speeds could show a difference. This was not captured.
+`v003-wlink-dump-timing.csv` and `v003-wlink-dump-low-timing.csv` hold `wlink dump 0x08000000 256` at the default speed and at `--speed low`.
+They also match each other: the same first frame, the same pulse widths in the later phase, and the same long gaps (1.2 ms, 4.9 ms).
+The run is 95 ms in both captures, and the dump adds about 3800 edges to the status run.
 
-Not measured on the CH32V003: the bit framing, and the wire timing of a memory read or a flash program.
+The probe may ignore the speed byte for the one-wire interface, or the speed applies to a part that this test does not use.
+The cause is not known. A flash program at the three speeds could show a difference. This was not captured (a program of 16 KB needs 3.5 s).
+
+Not measured on the CH32V003: the bit framing, and the wire timing of a flash program.
 
 Not measured on the CH32V208:
 
@@ -422,7 +426,7 @@ The table lists the questions of epic #63 and their state.
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
-| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: bit framing, and the timing of a memory read or a flash program. |
+| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: bit framing, and the timing of a flash program. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
