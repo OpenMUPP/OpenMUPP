@@ -408,7 +408,7 @@ The table lists the questions of epic #63 and their state.
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
-| Wire timing of the one-wire and the two-wire interface | **Partly answered.** Two-wire timing at the default speed is in [Wire timing](#wire-timing-ch32v208-two-wires). Open: bit framing, and the speed settings on the CH32V003. |
+| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) (three speeds) and [one-wire timing](#wire-timing-ch32v003-one-wire) (default speed). Open: bit framing, and the speed settings on the CH32V003. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
