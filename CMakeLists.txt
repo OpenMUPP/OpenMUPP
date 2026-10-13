@@ -322,6 +322,13 @@ if (CMAKE_CROSSCOMPILING)
         vsl_add_app_image(${_image})
         string(APPEND _images_list "versaloon-next-gen-${_image}.bin ${VSL_APP_LIMIT_${_image}}\n")
     endforeach ()
+    # The firmware must fit behind the legacy bootloader on all boards
+    # (docs/firmware-update.md). A board without the app-10k image checks its
+    # standalone image against the app-10k limit too.
+    if (NOT "app-10k" IN_LIST VSL_APP_IMAGES)
+        math(EXPR _limit "65536 - ${VSL_APP_OFFSET_app-10k} - ${VSL_SETTINGS_PAGE_SIZE}")
+        string(APPEND _images_list "versaloon-next-gen-standalone.bin ${_limit}\n")
+    endif ()
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_images_list}")
 
     include(Bootloader)
