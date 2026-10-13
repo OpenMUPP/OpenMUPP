@@ -446,3 +446,22 @@ TEST_CASE("The write program is valid RV32EC code") {
    CHECK(bench.module.execute(dm::execute) == Status::Ok);
    CHECK(bench.target.load(0x2000'0100, 4) == 0x8765'4321);
 }
+
+TEST_CASE("Resume of a running hart ends at allrunning") {
+   for(const Wire wire : wires) {
+      CAPTURE(wire);
+      Bench bench(wire);
+      SUBCASE("After a DM reset") {
+         REQUIRE(bench.module.resetDm() == Status::Ok);
+      }
+      SUBCASE("After a resume") {
+         bench.connect();
+         REQUIRE(bench.module.resume() == Status::Ok);
+      }
+      bench.take();
+      CHECK(bench.module.resume() == Status::Ok);
+      // resumereq cleared resumeack: the poll ends at allrunning.
+      CHECK(bench.take() == std::vector{ W(dm::dmcontrol, 0x4000'0001), R(dm::dmstatus, 0x0000'0c82) });
+      CHECK_FALSE(bench.target.halted);
+   }
+}

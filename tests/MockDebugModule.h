@@ -163,9 +163,9 @@ class MockDebugModule {
          if(!neverHalts) {
             halted = true;
          }
-      } else if((value & rvswd::dm::resumereq) != 0 && halted) {
+      } else if((value & rvswd::dm::resumereq) != 0) {
+         resumeAck = halted;
          halted = false;
-         resumeAck = true;
       }
       // resumereq reads 0.
       value &= ~rvswd::dm::resumereq;

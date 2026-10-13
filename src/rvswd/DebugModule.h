@@ -13,8 +13,12 @@
 // - Halt: dmcontrol haltreq twice, then dmstatus until allhalted (the
 //   connect command of the probe). haltreq stays set, as on the probe:
 //   the host tools read dmcontrol 80000001 after a connect.
-// - Resume: dmcontrol resumereq, then dmstatus until allresumeack (the
-//   quit command of the probe). The write also clears haltreq.
+// - Resume: dmcontrol resumereq, then dmstatus until allresumeack or
+//   allrunning (the first two accesses of the quit command of the probe).
+//   The write also clears haltreq. A resumereq to a running hart clears
+//   allresumeack and sets nothing (debug spec), so allrunning also ends
+//   the poll. The quit of the probe also writes dmcontrol 40000000
+//   (dmactive 0) after the poll. resume() does not do that write.
 // - Abstract register access: command 0x0022xxxx (read) and 0x0023xxxx
 //   (write), with the value in data0.
 // - Memory access, two methods:
@@ -242,7 +246,7 @@ class DebugModule {
       if(status != Status::Ok) {
          return status;
       }
-      return pollDmstatus(dm::allresumeack);
+      return pollDmstatus(dm::allresumeack | dm::allrunning);
    }
 
    // Runs an abstract command and waits for its end. Status::Command
@@ -373,6 +377,7 @@ class DebugModule {
       return flags != 0 ? Status::Wire : Status::Ok;
    }
 
+   // Until one of the bits is 1
    Status pollDmstatus(uint32_t bits) {
       for(uint32_t i = 0; i < pollLimit; ++i) {
          uint32_t value = 0;
@@ -380,7 +385,7 @@ class DebugModule {
          if(status != Status::Ok) {
             return status;
          }
-         if((value & bits) == bits) {
+         if((value & bits) != 0) {
             return Status::Ok;
          }
       }
