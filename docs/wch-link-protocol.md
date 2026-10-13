@@ -2,16 +2,16 @@
 
 This document describes the USB protocol of the WCH-LinkE in RISC-V mode.
 The `wch-link` personality (epic #63) must speak this protocol.
-All facts come from USB captures of a real probe. No vendor code was copied.
+The facts come from USB captures and logic analyzer captures of a real probe. A statement that has no capture behind it says so. No vendor code was copied.
 
-Status: the USB protocol is captured on a CH32V003 (one wire) and on a CH32V208 (two wires).
-The wire timing is open (see [Open questions](#open-questions)).
+Status: the USB protocol and the wire frames are captured on a CH32V003 (one wire) and on a CH32V208 (two wires).
+A few fields are open (see [Open questions](#open-questions)).
 
 ## Capture setup
 
 | Item | Value |
 |---|---|
-| Probe | WCH-LinkE, USB ID `1a86:8010`, `bcdDevice` 2.19, product string `WCH-Link` |
+| Probe | WCH-LinkE, USB ID `1a86:8010`, `bcdDevice` 2.19, product string `WCH-Link` (from `lsusb`, not in the captures) |
 | Probe type | wlink reports `WCH-Link v2.19(v39) (WCH-LinkE-CH32V305)`. The info response holds `02 13 12 00` (see [Command 0x0d](#command-0x0d-info-connect-quit)). The source of `v39` is open |
 | Target 1 | CH32V003F4P6 (16 KB flash), chip ID `0x00300500`, one-wire interface on PD1 |
 | Target 2 | CH32V208WBU6 (160 KB flash), chip ID `0x2080053c`, two-wire interface on PA13 (SWDIO) and PA14 (SWCLK), external power |
@@ -62,7 +62,7 @@ Two cases do not follow this rule:
 
 - **Error.** The probe sends an error frame `81 REASON LEN payload`. The first byte is `0x81`, not `0x82`.
   Seen: a connect command (`0d 01 02`) with no target gives `81 55 01 01` (reason `0x55`, payload `01`).
-  wlink retries four times (about 100 ms apart) and then stops (`v208-wlink-connect-fail.pcapng`).
+  wlink makes four connect attempts (about 100 ms apart) and then stops (`v208-wlink-connect-fail.pcapng`).
   An unknown command (`7f`) gives a normal-looking frame `82 81 01 ff`. The reason for the difference is open.
   No other reason code was seen.
 - **Chip information.** Command `0x11` answers with 20 raw bytes. The packet has no `0x82` header and no length.
@@ -87,7 +87,7 @@ The payload column does not show the `LEN` byte.
 For example, `81 03 08 08000000 00004000` is command `0x03` with a payload of 8 bytes.
 
 The captures use no other commands.
-The public notes of the epic also mention `0x0e` (disable debug). The captures did not use it.
+The notes of epic #63 also mention `0x0e` (disable debug). No capture used it.
 
 ## Command `0x0d`: info, connect, quit
 
@@ -95,22 +95,24 @@ The public notes of the epic also mention `0x0e` (disable debug). The captures d
 |---|---|---|
 | `01` | Probe information | `02 13 12 00` |
 | `02` | Connect to the target (RISC-V) | `09 00 30 05 00` (CH32V003), `05 20 80 05 3c` (CH32V208) |
-| `03` | Unknown. minichlink sends it first. | `03` |
+| `03` | Unknown. minichlink sends it first. wlink does not. | `03` |
 | `04` | Unknown. wlink sends it on the CH32V208 after the first protection query. | `00` |
-| `ff` | Quit. Release the target. | `ff` |
+| `ff` | Quit. The probe resumes the core and releases the target (see [Probe actions at connect and quit](#probe-actions-at-connect-and-quit)). | `ff` |
 
 - **Probe information.** Byte 0 and byte 1 are the major and minor version of the firmware (2 and 19). This matches `bcdDevice` 2.19. Byte 2 (`0x12`) is the probe type. wlink maps it to `WCH-LinkE-CH32V305`. Byte 3 is `0x00`.
-- **Connect.** The probe starts the debug interface and does the chip detection. This takes about 90 ms on the CH32V003 after a normal start and about 900 ms after an erase or a protect command. On the CH32V208 it takes about 60 ms. Byte 0 is a chip family code (`0x09` for the CH32V003, `0x05` for the CH32V208). Bytes 1 to 4 are the chip ID (u32 BE: `0x00300500`, `0x2080053c`).
+- **Connect.** The probe starts the debug interface and does the chip detection. This takes about 90 ms on the CH32V003 and about 59 ms on the CH32V208. A connect after an erase or a protect command takes the same time. Byte 0 is a chip family code (`0x09` for the CH32V003, `0x05` for the CH32V208). Bytes 1 to 4 are the chip ID (u32 BE: `0x00300500`, `0x2080053c`).
 - **Quit.** The host sends this at the end of every session. A session is connect to quit.
-- **Sub-command `03`.** The probe needs about 74 ms to answer. The reason is not known.
-- Any other sub-command value is echoed (`0d 01 05` gives `82 0d 01 05`). The probe does not report an error.
+- **Sub-command `03`.** The probe needed about 74 ms to answer in 5 of 7 CH32V003 runs. It needed 1 ms in the other 2. On the CH32V208 it needed 0.9 ms or less. The reason is not known.
+- **Other values.** `0d 01 05` echoes `82 0d 01 05`, but it is not a no-op. The reply took 184 ms (CH32V003) and 97 ms (CH32V208). The next quit took 46 ms and 24 ms, instead of 0.2 ms (`v003-raw-errors.pcapng`, `v208-raw-errors.pcapng`). The effect is not known.
+- **Length check.** A memory read with a wrong length (`81 03 01 00`) gets a normal reply `82 03 01 01`. The probe does not check the length.
 
 ## Command `0x0c`: configure
 
 Request payload: `chip-type speed`.
 
 - wlink sends `01 speed` before the connect command and `family speed` after it. Here `family` is the first byte of the connect response (`09` or `05`).
-  With the generic code `01`, the connect command still works on both chips. minichlink sends only the second form.
+  With the generic code `01`, the connect command still works on both chips.
+  minichlink sends only `09 speed`, before the connect command, also on the CH32V208 (family `05`). The connect command still works.
 - The speed byte: `01` is high (the default), `02` is medium (wlink: 4000 kHz), `03` is low (wlink: 400 kHz). Captures of `wlink --speed low|medium|high` show this.
 - The probe answers `01`.
 
@@ -121,10 +123,13 @@ Request payload: `06` (wlink) or `05` (minichlink). The answer was the same for 
 | Bytes | Content (CH32V003 / CH32V208) |
 |---|---|
 | 0 to 3 | `ff ff 00 10` / `ff ff 00 a0`. Bytes 2 and 3 (u16 BE) give the flash size in KB (16 / 160). |
-| 4 to 11 | Unique ID. Each 4-byte group is in reversed byte order, as in the memory read path (see [Byte order](#byte-order)). |
-| 12 to 15 | `ff ff ff ff` / `e3 39 e3 39`. minichlink calls this field `PFlags`. |
+| 4 to 11 | Unique ID (two words) |
+| 12 to 15 | `ff ff ff ff` / `e3 39 e3 39` |
 | 16 to 19 | Chip ID (u32 BE, `0x00300500` / `0x2080053c`). |
 
+On the CH32V208, bytes 0 to 15 are four words of the target, in big-endian byte order: the words at `0x1ffff7e0`, `0x1ffff7e8`, `0x1ffff7ec` and `0x1ffff7f0`.
+The wire capture shows the probe reading these four words during the connect command. The `0x11` command causes no target traffic.
+The low 16 bits of the first word give the flash size in KB. The first word reads `0xffff00a0` on the CH32V208. The same layout fits the CH32V003 (`0xffff0010`), but the wire capture of the CH32V003 connect phase is not decoded.
 The difference between sub-command `05` and `06` is open.
 
 ## Command `0x06`: read protection
@@ -132,17 +137,17 @@ The difference between sub-command `05` and `06` is open.
 | Sub-command | Meaning | Response payload |
 |---|---|---|
 | `01` | Query | `02` unprotected, `01` protected |
-| `02` | Unprotect | `02` (CH32V003: about 1.1 s. CH32V208: about 2.1 s) |
-| `03` | Protect | `03` (CH32V003: about 1.0 s. CH32V208: about 0.6 s) |
+| `02` | Unprotect | `02` (CH32V003: 108 ms. CH32V208: 210 ms) |
+| `03` | Protect | `03` (CH32V003: 103 ms. CH32V208: 59 ms) |
 | `04` | Unknown. wlink sends it after a query that returned `02`. | `00` |
 
 Facts about the protection:
 
 - Protect takes effect only after a reset. A query directly after `wlink protect` still returns `02`. After `wlink reset`, it returns `01`.
-- The unprotect command erases the flash of the chip. wlink `flash` sends it by itself when the query returns `01`.
+- wlink `flash` sends the unprotect command by itself when the query returns `01`. The captures do not show whether unprotect erases the flash (no capture reads the flash after it).
 - A memory read of a protected chip does not fail. It returns a fixed word, repeated. The word is `0x00000300` on the CH32V003 (`v003-wlink-dump-protected.pcapng`). On the CH32V208 the bytes arrive as `00 34 04 0a` (`v208-wlink-dump-protected.pcapng`).
 - DMI access still works on a protected chip (`v003-wlink-status-protected.pcapng`).
-- The CH32V208 behaves the same: protect, reset, query returns `01`, unprotect erases the flash.
+- The CH32V208 behaves the same: protect, reset, then the query returns `01`.
 
 ## Command `0x08`: DMI access
 
@@ -159,7 +164,7 @@ Request payload (6 bytes): `address (u8)`, `data (u32 BE)`, `op (u8)`.
 The response payload has the same layout. The `op` field now holds the status:
 
 - `00`: success. For a read, the data field has the register value, in the same response. The read is not pipelined.
-- `02`: failure (public notes). The captures show no failure.
+- `02`: failure (from the notes of epic #63). The captures show no failure.
 
 Registers seen (the CH32V003 and the CH32V208 use the same set):
 
@@ -172,9 +177,10 @@ Registers seen (the CH32V003 and the CH32V208 use the same set):
 | `0x16` | `abstractcs` | |
 | `0x17` | `command` | abstract command |
 | `0x18` | `abstractauto` | |
-| `0x20` to `0x27` | `progbuf0` to `progbuf7` | minichlink uses `progbuf0` to `progbuf2` |
+| `0x20` to `0x22` | `progbuf0` to `progbuf2` | Seen over USB. minichlink writes them. |
 | `0x40` | `haltsum0` | |
-| `0x7d`, `0x7e` | WCH-specific | minichlink writes `5aa50400` at start-up |
+| `0x7d`, `0x7e` | WCH-specific | minichlink writes `5aa50400` at start-up. The probe writes `0x7d` itself at connect. |
+| `0x7f` | WCH-specific | The probe reads the chip ID (`0x2080053c`) at connect (CH32V208 wire) |
 
 The register layout follows the RISC-V debug specification.
 The probe does not change the value of a register on the way.
@@ -207,9 +213,9 @@ The table starts at the second connect.
 |---|---|---|
 | 1 | out | `0d 01 02` connect, then `06 01 01` (query) and `06 01 04` |
 | 2 | out | `01 08 08000000 00004000`: flash address and length |
-| 3 | out | `02 01 05`: start of the stub transfer. Response `02 01 05` after 67 ms. |
+| 3 | out | `02 01 05`: start of the stub transfer. Response `02 01 05` after 6.7 ms (CH32V208: 0.4 to 1.6 ms). |
 | 4 | out `0x02` | The stub: 512 bytes, 8 packets |
-| 5 | out | `02 01 07`: the probe takes about 170 ms. Response `02 01 07`. (Likely: erase and prepare. This is not confirmed.) |
+| 5 | out | `02 01 07`: the probe takes about 17 ms (CH32V208: 2 to 9 ms). Response `02 01 07`. (Likely: prepare the flash. This is not confirmed.) |
 | 6 | out | `02 01 02`: start of the data phase. Immediate response `02 01 02`. |
 | 7 | out `0x02` | The image in blocks of 1024 bytes (16 packets). After each block the probe sends `41 01 01 04` on `0x82`. |
 | 8 | out | `02 01 08`: end. Response `02 01 08`. |
@@ -222,7 +228,7 @@ Facts about the data phase:
 - The host waits for the block acknowledge before the next block. A block takes about 136 ms, so the whole flash needs about 2.2 s.
 - The block size depends on the chip: 1024 bytes on the CH32V003, 4096 bytes on the CH32V208 (see below).
 - The image bytes go out in file order. They are not reversed (see [Byte order](#byte-order)).
-- The host did not send a verify command. wlink checks the result with a separate memory read. The probe has a verify sub-command in the public notes, but no capture used it.
+- The flash captures hold no verify command and no memory read. The notes of epic #63 list a verify sub-command. No capture used it.
 
 ### CH32V208
 
@@ -232,25 +238,44 @@ The sequence is the same. The differences:
 - The stub is a different 512-byte block.
 - The data blocks have 4096 bytes (64 packets). The probe needs about 350 ms for each block.
 - A program of 160 KB takes 15.2 s (about 10.8 KB/s).
-- Erased flash reads as `0xe339e339`, not `0xff`.
+- Erased flash reads as `0xe339e339`, not `0xff`. A `wlink dump` after `wlink erase` showed this. That dump is not in the capture set.
 
 ## Erase (`wlink erase`)
 
-`06 01 01`, `06 01 04`, then `02 01 01` (about 75 ms, response `02 01 01`), then a new connect (`0d 01 02`, about 900 ms), then quit.
-The whole command took 0.19 s (CH32V003) and 0.26 s (CH32V208). The erase step `02 01 01` takes about 140 ms on the CH32V208.
+`06 01 01`, `06 01 04`, then `02 01 01` (response `02 01 01` after 7.6 ms on the CH32V003 and 138 ms on the CH32V208), then a new connect (`0d 01 02`, 90 ms and 59 ms), then quit.
+The whole command took 0.19 s (CH32V003) and 0.26 s (CH32V208).
 The erase command needs no data transfer and no stub.
 
 ## Reset (`0x0b`)
 
-`0b 01 01` resets the target and lets it run. The response comes after about 160 ms.
+`0b 01 01` resets the target and lets it run. The response comes after about 15 ms (CH32V003) and 10 ms (CH32V208).
 The `wlink reset` command waits 300 ms and then quits.
 
 ## Halt and resume
 
 wlink and minichlink do both through DMI. No special command exists.
 
-- **Halt.** The core is already halted when wlink reads `dmstatus` after the connect command. In `v003-wlink-halt.pcapng` the host writes only `dmactive` (`00000001`) and reads `dmstatus`. A halt of a running core (`haltreq`, bit 31) is open.
-- **Resume.** wlink writes `dmcontrol` four times: `80000001` twice (`haltreq`), `00000001` (clear), `40000001` (`resumereq`, bit 30). Then it reads `dmstatus` twice and checks `allresumeack`.
+- **Halt.** The core is already halted when the host reads `dmstatus` after the connect command, because the connect command halts the core (see [Probe actions at connect and quit](#probe-actions-at-connect-and-quit)). In `v003-wlink-halt.pcapng` the host writes `dmcontrol` `00000000`, `00000001`, reads `dmcontrol` and `dmstatus`, writes `00000001` and reads `dmstatus`. A halt request for a running core is not in the captures.
+- **Resume.** In `v003-wlink-resume.pcapng` the host reads `dmcontrol`, writes `a0000001`, reads `dmstatus`, and then writes `dmcontrol` five times in total: `a0000001`, `80000001` twice (`haltreq`), `00000001`, and `40000001` (`resumereq`, bit 30). Then it reads `dmstatus` twice.
+
+## Probe actions at connect and quit
+
+The probe does its own DMI accesses at connect and at quit. The host does not send them. A personality must do the same, or the host tools get a different target state.
+The CH32V208 wire capture (`v208-wlink-status-timing.csv`, decoded with `tools/wch_link_frames_2wire.py`) shows this order after the first 46 ms:
+
+1. Write `0x7d` with `5aa50400`.
+2. Read `dmstatus`: `0x00000c82` (running). Write `dmcontrol` `80000001` (`haltreq`) twice. Read `dmstatus`: `0x00000382` (halted). So the connect command halts the core.
+3. Read `0x7f`: `0x2080053c`, the chip ID.
+4. Read and write target memory with the abstract command (`data1` holds the address, `command` `0x02200000` reads, `0x02210000` writes, `data0` holds the data). It accesses `0x40021000`, `0x40021004`, `0x40021008`, `0x4002102c` and `0x40023800`. The value at `0x40021004` changes from `0x0035040a` to `0x00350000`, `0x00340400` and `0x00340402`, and reads `0x0034040a` at the end. The probe appears to change the clock setup of the target. The meaning of the registers is not checked against the CH32V20x manual.
+5. Read the words at `0x1ffff7e0`, `0x1ffff7e8`, `0x1ffff7ec` and `0x1ffff7f0` (`ffff00a0`, `6213f0eb`, `2f30dc32`, `e339e339`). These are the bytes of the `0x11` answer. Then read `0x4002201c` (`000000fc`), `0x40022020` (`ffffffff`) and `0x1ffff802` (`0000003f`).
+6. The connect response goes to the host at about 59.7 ms.
+
+At quit (`0d 01 ff`), the probe writes `dmcontrol` `40000001` (`resumereq`), reads `dmstatus` (`0x00030c82`: running, resume acknowledged) and writes `dmcontrol` `40000000`.
+The USB capture shows no host command for this. The CH32V003 wire capture shows the same three accesses at the end (`v003-wlink-status-timing.csv`, 92.96 to 93.07 ms).
+So quit resumes the core. This is why a halted core runs again after `wlink status`.
+
+The probe answers the later `0x11` and `06 01` commands without target traffic. The CH32V208 wire capture shows no frames for them.
+The CH32V003 connect phase is not decoded.
 
 ## minichlink path
 
@@ -262,7 +287,8 @@ On the CH32V208, minichlink uses the stub flow of wlink (it prints "binary blob 
 `01` (area), `02 05`, the 512-byte stub on `0x02`, `02 07`, `02 02`, the data on `0x02`, then quit.
 It differs from wlink in these points (`v208-mc-write.pcapng`):
 
-- It sends the stub in transfers of 256 bytes and the data in transfers of 4096 bytes, not 64 bytes.
+- It sends the stub and the data in transfers of 256 bytes (2 transfers for the stub, 16 for the 4 KB), not 64 bytes.
+- Its stub is not the stub of wlink (the two share 85 percent of the bytes). The first bytes differ. The probe runs the stub that the host sends, so the stub is not fixed in the probe.
 - It does not read the block acknowledge and does not send `02 08`. It sends quit, and the probe answers after 0.3 s.
 - It writes `dmcontrol` with `ndmreset` (`80000003`) before the transfer. A protection query just after that returned `01` (protected) on an unprotected chip. The reason is open.
 - A write of 4 KB takes 0.66 s.
@@ -271,7 +297,7 @@ Consequences for the personality:
 
 - A probe with the commands `0x0d`, `0x0c`, `0x11`, `0x06 01` and `0x08` is enough for minichlink on a CH32V003.
 - This is a good first target (work item #68). A CH32V20x needs the commands `0x01` and `0x02` and endpoint `0x02` for both tools.
-- minichlink needs about 32 000 DMI round trips to write 16 KB on the CH32V003. This took 3.7 s, almost the same as wlink (3.5 s).
+- On the CH32V003, a minichlink write of 16 KB took about 32 000 DMI round trips and 3.7 s, almost the same as wlink (3.5 s). The committed `v003-mc-write-head.pcapng` holds only the first 4000 frames. The full capture is not in the repository.
 
 Observations:
 
@@ -280,23 +306,23 @@ Observations:
 
 ## Byte order
 
-Memory read data on endpoint `0x82` has the bytes of each 32-bit word in reversed order.
-The host reverses each group of 4 bytes to get the memory content.
+Memory read data on endpoint `0x82` holds each 32-bit word with the most significant byte first.
+The host reverses each group of 4 bytes to get the little-endian memory content.
 Example: the word at `0x08000000` is `6f 00 20 12` in memory and arrives as `12 20 00 6f`. On the CH32V208, `6f 20 e0 42` arrives as `42 e0 20 6f`.
-The unique ID in the `0x11` answer uses the same order.
+The words in the `0x11` answer also have the most significant byte first.
 Flash write data does not use this reversal. The image goes out in file order.
 
 ## Timing seen on USB
 
 | Operation | Time |
 |---|---|
-| Connect (`0d 01 02`) | CH32V003: about 90 ms (about 900 ms after erase or protect). CH32V208: about 60 ms |
+| Connect (`0d 01 02`) | CH32V003: about 90 ms. CH32V208: about 59 ms |
 | DMI round trip | about 0.1 ms |
 | Read of 16 KB (wlink) | about 0.2 s |
 | Program of 16 KB (wlink, CH32V003) | 3.5 s, of this 2.2 s for the data blocks |
 | Program of 160 KB (wlink, CH32V208) | 15.2 s |
 | Erase (wlink) | 0.19 s (CH32V003), 0.26 s (CH32V208) |
-| Protect, unprotect | CH32V003: about 1.0 s, about 1.1 s. CH32V208: about 0.6 s, about 2.1 s |
+| Protect, unprotect | CH32V003: 103 ms, 108 ms. CH32V208: 59 ms, 210 ms |
 
 ## Wire timing (CH32V208, two wires)
 
@@ -315,17 +341,17 @@ Measured facts:
 | SWCLK high time | about 1.0 µs (median 1004 ns) |
 | SWCLK period, first part of a frame | about 3.08 µs (325 kHz) |
 | SWCLK period, rest of a frame | about 2.09 µs (478 kHz, range 1.98 to 2.30 µs) |
-| Idle time between frames | about 7 µs |
+| Idle time between 85-clock frames | about 7 µs |
 | SWDIO change after SWCLK falling edge | median 62 ns (5th percentile 4 ns, 95th percentile 728 ns) |
 
 Observations about the frames:
 
-- During the connect command (the first 60 ms), the probe sends about 200 identical frames of 85 clocks. They repeat every 227 µs.
+- During the first 46 ms of the connect command, the probe sends about 200 identical frames of 85 clocks. They repeat every 227 µs and end at 45.6 ms.
   Each frame has a first part of about 40 clocks at the slow period, and a longer part at the fast period.
-  The first part holds the pattern `0010001` followed by 33 zero bits. The value `0x11` is the address of `dmstatus`.
-  The rest of the frame is high, which suggests that the target answers and the probe releases the line.
-  The 85 clocks of a frame may hold a read of `dmstatus`. This is **not confirmed**. The bit framing is not decoded.
-- Then the probe sends shorter frames of 53 and 54 clocks, spaced about 120 µs apart (chip detection).
+  The first part holds the pattern `0010001` followed by 33 zero bits. The rest of the frame is high.
+  The meaning of these frames is **not known**. They are not decoded.
+- From 46 ms the probe sends frames of 54 clocks, about 120 µs apart. These frames are decoded (see [Wire frame format](#wire-frame-format)). They hold the probe actions at connect (see [Probe actions at connect and quit](#probe-actions-at-connect-and-quit)).
+  Some frames have a pause of about 7 µs after the start clock. A decoder must join the start clock with the rest of the frame.
 - The connect command ends at about 59.7 ms. This matches the USB capture (`v208-wlink-status.pcapng`, 59.7 ms).
 - After that, each DMI access from the host is one frame of 54 clocks. The spacing is 120 to 200 µs, so one access takes about 0.12 ms in total, with the USB round trip.
 
@@ -335,15 +361,15 @@ Observations about the frames:
 
 | Phase | Default speed (`01`) | Medium speed (`02`) | Low speed (`03`) |
 |---|---|---|---|
-| Connect (first 60 ms) | 85-clock frames, periods 3.08 µs and 2.09 µs | The same | The same |
+| Connect, 85-clock frames (first 46 ms) | periods 3.08 µs and 2.09 µs | The same | The same |
 | Host DMI frames of 54 clocks | Some with a period of about 1.10 µs (frame time 63 µs), some with about 2.09 µs (115 µs) | The same as default | All with about 2.09 µs (111 to 115 µs) |
-| First accesses after connect | Three long bursts (648, 324, 162 clocks) with a period of about 120 ns (minimum 60 ns) | Seven bursts of 162 clocks (251 µs) with a period of about 1.12 µs | None |
+| Probe reads of the chip ID words (after 59.6 ms) | Three long bursts (648, 324, 162 clocks) with a period of about 120 ns (minimum 60 ns) | Seven bursts of 162 clocks (251 µs) with a period of about 1.12 µs | None |
 
 Conclusions:
 
 - The speed byte does not change the clock during the connect command. The probe runs the chip detection at a fixed rate.
 - The speed byte changes the clock of the later accesses. Only the long bursts change between the default and the medium speed (about 120 ns against about 1.12 µs). At low speed, the frames take about 111 to 115 µs. The 400 kHz of the wlink help text is not the measured rate (the measured rate is about 478 kHz).
-- At the default speed, the clock is faster in some frames. The long bursts with a period near 120 ns may hold several accesses with gaps shorter than 5 µs. This is **not confirmed**: the frames are not decoded.
+- At the default speed, the clock is faster in some frames. The long bursts with a period near 120 ns hold 12, 6 and 3 frames of 54 clocks without a pause. They are the memory reads of the chip ID words (see [Probe actions at connect and quit](#probe-actions-at-connect-and-quit)).
 
 ## Wire timing (CH32V003, one wire)
 
@@ -389,18 +415,16 @@ The run is 95 ms in both captures, and the dump adds about 3800 edges to the sta
 The probe may ignore the speed byte for the one-wire interface, or the speed applies to a part that this test does not use.
 The cause is not known. A flash program at the three speeds could show a difference. This was not captured (a program of 16 KB needs 3.5 s).
 
-Not measured on the CH32V003: the bit framing, and the wire timing of a flash program.
+Not measured on the CH32V003: the wire timing of a flash program, and the decoding of the connect phase.
 
-Not measured on the CH32V208:
-
-- The 85-clock frames of the connect phase and the bits that the table above marks as open.
+Not measured on the CH32V208: the wire timing of a flash program, the meaning of the 85-clock frames, and the bits that the table below marks as open.
 
 ## Wire frame format
 
-The captures show one frame format on the wire. A frame has 54 clocks. SWDIO is stable at the rising edge of SWCLK. Bit 0 is the first clock.
-The decoder is `tools/wch-link/decode_frames.py`. It works on the CSV files of the CH32V208.
-I checked the format against the 15 DMI accesses that the USB capture of the same run shows.
-The address and the data of every access match. The order matches too.
+The two-wire captures show one frame format on the wire, after the 85-clock frames. A frame has 54 clocks. SWDIO is stable at the rising edge of SWCLK. Bit 0 is the first clock.
+The decoder is `tools/wch_link_frames_2wire.py`. It works on the CSV files of the CH32V208. It skips the 85-clock frames and counts them.
+The format was checked against the 15 DMI accesses that the USB capture of the same run shows. The address and the data of every access match, and the order matches.
+The decoder decodes all 144 frames of the status run, and the parity is right in all of them.
 
 | Bits | Content | Driven by |
 |---|---|---|
@@ -409,17 +433,18 @@ The address and the data of every access match. The order matches too.
 | 8 to 9 | Operation field | Probe |
 | 10 to 14 | Five response bits | Target |
 | 15 to 46 | Data, MSB first | Probe (write), target (read) |
-| 47 to 48 | Parity of the 32 data bits: `11` if the number of ones is odd, `00` if even | See below |
-| 49 to 53 | `00110` after a write, `01110` after a read | Probe and target |
+| 47 to 48 | Parity of the 32 data bits: `11` if the number of ones is odd, `00` if even | Not determined |
+| 49 to 53 | Five tail bits: `00110` or `01110` | Not determined |
 
 Observations:
 
 - **Operation field.** `10` for a write of `dmcontrol`, `data0` and `abstractcs`. `11` for a write of `command` (`0x17`) and `data1` (`0x05`). `01` for most reads. `00` for reads of `dmstatus` and `hartinfo`. The reason for `11` and `00` is open.
 - **Response bits.** `00000` after a write, `10000` after a write of `command`, `10100` after a read at the slow clock, `10000` after a read at the fast clock (about 120 ns). Their meaning is open (acknowledge or status).
-- **Parity.** Both parity bits matched the data in all 60 frames of the CH32V208 capture. They may be one parity bit sent two times.
-- **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 12 ns after the falling edge. The read data and the response bits follow the target pattern. The write data follows the probe pattern.
+- **Parity.** Both parity bits matched the data in all 144 frames. They may be one parity bit sent two times.
+- **Tail bits.** `00110` follows all writes (106 frames). After reads, `01110` follows 27 frames and `00110` follows 11 frames, so the tail does not tell a read from a write. The meaning is open.
+- **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 12 ns after the falling edge. The read data and the response bits follow the target pattern. The write data follows the probe pattern. The parity and tail bits have too few edges to tell (4 edges in the parity bits).
 - **Clock for each access.** At the default speed, a write uses 1.10 µs for each bit (about 907 kHz). A read uses 2.09 µs (about 478 kHz). At low speed, all accesses use 2.09 µs.
-- **Fast triples.** The long bursts at about 120 ns for each bit (default speed) hold frames in the order `data1` write, `command` write, `data0` read. The probe sends them after the connect command. They look like abstract-command memory reads at the highest clock rate. The values were not matched to a USB access.
+- **Fast triples.** The long bursts at about 120 ns for each bit (default speed) hold frames in the order `data1` write, `command` write, `data0` read. These are the memory reads of the chip ID words that the probe does at connect. The values match the `0x11` answer byte for byte.
 - **Connect frames.** The 85-clock frames of the connect phase do not follow this format. They are not decoded.
 
 ### One-wire frame format (CH32V003)
@@ -433,7 +458,9 @@ Each bit is one low pulse followed by a high level. The width of the low pulse g
 | 0 | about 860 ns | about 370 ns | about 1.23 µs |
 
 Frames follow each other with a high level of 50 to 100 µs between them. The connect phase has other pulse patterns (see above).
-The decoder is `tools/wch-link/decode_frames_1wire.py`. It works on the CH32V003 CSV files.
+The decoder is `tools/wch_link_frames_1wire.py`. It checks the start bit of each frame. A low pulse longer than 1.5 µs is a break, not a bit.
+It decodes the host phase of the status runs. It does not decode the bursts of the `dump` captures: there, the frames fall out of step after 12 frames (`abstractauto`, `data1`, the program buffer writes), and the decoder reports the pulses it could not decode.
+The cause is open. The frame length may differ for some access types.
 
 | Bits | Content |
 |---|---|
@@ -445,10 +472,9 @@ The decoder is `tools/wch-link/decode_frames_1wire.py`. It works on the CH32V003
 The frame has no response bits, no parity and no tail. The two-wire frame has 13 more bits (a second operation bit, 5 response bits, 2 parity bits, 5 tail bits).
 The one-wire line may carry them in another way, or the probe may not send them. This is open.
 
-I checked the format against the USB capture of the same type of run. The 15 accesses of the host match in order and in address.
+The format was checked against the USB capture of the same type of run. The 15 accesses of the host match in order and in address.
 The values match, except for `dmstatus` (`0x004f0382` on the wire, `0x004c0382` in the USB capture, from an earlier run; the bits 16 to 19 change between runs).
-The wire capture has three more accesses at the end (a write of `dmcontrol` with `0x40000001`, a read of `dmstatus`, a write of `dmcontrol` with `0x40000000`). They match a resume that the `status` command does at the end.
-I did not check them against a USB capture.
+The wire capture has three more accesses at the end. They are the resume that the probe does at quit (see [Probe actions at connect and quit](#probe-actions-at-connect-and-quit)).
 
 Pulse widths are the same for reads and writes, and for the speeds `01`, `02` and `03`.
 A frame lasts 50 to 150 µs, depending on the number of 0 bits (about 105 µs for typical data).
@@ -457,20 +483,20 @@ A frame lasts 50 to 150 µs, depending on the number of 0 bits (about 105 µs fo
 
 | Target | Pin on target | Probe signal |
 |---|---|---|
-| CH32V003 | PD1 (SWIO) | One wire. The probe signal is SWDIO (open drain, with pull-up). |
+| CH32V003 | PD1 (SWIO) | One wire, on the SWDIO signal. The drive type is not known (a logic analyzer cannot show it). |
 | CH32V20x | PA13 (SWDIO), PA14 (SWCLK) | SWDIO and SWCLK (confirmed on a CH32V208 with a WCH-LinkE) |
 
-The Versaloon board definitions (`src/board/boards/`) have no SWD pin names. They have JTAG pins.
-On the Mini, this mapping is proposed (derived from the JTAG pins; not tested):
+The board definitions (`src/board/BoardDefinition.h`) say: SWCLK is the TCK pin, and SWDIO is the TMS pin. `src/board/BoardSwd.h` uses them for SWD.
+The pins on the dongle:
 
-| Signal | Pin | Source |
-|---|---|---|
-| SWDIO (output) | PB4 (TMS out) | `Mini.h` |
-| SWDIO (input) | PB6 (TMS in) | `Mini.h` |
-| SWCLK | PB13 (TCK) | `Mini.h` |
+| Board | SWCLK (TCK) | SWDIO output (TMS out) | SWDIO input (TMS in) | NRST (SRST) |
+|---|---|---|---|---|
+| Mini, OtherUse | PB13 | PB4 | PB6 | PB11 |
+| ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
 
-The single wire of the CH32V003 would use the SWDIO pair.
-The wire level of the single-wire interface is open (needs a logic analyzer). The pin choice is not confirmed on hardware.
+The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
+This was not tested on a dongle. Open for the engine (work item #66): the line of a pulse must go high in about 370 ns.
+`board::SwdPins::swdioRelease()` releases the line to a pull-up input. A pull-up may be too slow, so the engine may need to drive the line high.
 
 USB ID: the decision of the epic stays. The default is an own ID. The ID `1a86:8010` is a build option for personal use.
 wlink and minichlink find the probe by this ID. Without it, they need a flag or a patch.
@@ -481,7 +507,7 @@ The table lists the questions of epic #63 and their state.
 
 | Question | State |
 |---|---|
-| Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
+| Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). minichlink does not send `08`. |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
 | Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: the response and parity bits on the one-wire line, and the timing of a flash program. |
@@ -489,5 +515,7 @@ The table lists the questions of epic #63 and their state.
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
 | Verify sub-command (`02 01 06`?) | **Open.** No capture used it. |
-| Meaning of `0d 03`, `0d 04`, `06 01 04`, `11 01 05/06`, `02 01 05/07` | **Open.** The observed behavior is in this document. |
+| Meaning of `0d 03`, `0d 04`, `0d 05`, `06 01 04`, `11 01 05/06`, `02 01 05/07` | **Open.** The observed behavior is in this document. |
+| Does the probe do target accesses of its own? | Answered: the connect command halts the core and reads the chip ID words. The quit command resumes the core (see [Probe actions at connect and quit](#probe-actions-at-connect-and-quit)). |
+| Meaning of the 85-clock frames, the operation field values `11` and `00`, the response bits, the tail bits, and the failure of one-wire frames in the `dump` captures | **Open.** |
 | `0x0e` (disable debug) | **Open.** No capture used it. |
