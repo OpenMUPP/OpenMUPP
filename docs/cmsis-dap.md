@@ -287,6 +287,8 @@ Other rules:
 - When the host goes away (USB reset or unconfigure), the serial port gets the UART again.
   A host tool that ends without this event must send `DAP_UART_Transport` `1` itself.
 
+`tools/dap_uart_loopback_test.py` tests the commands with a loopback wire from TX to RX (see [UART hardware test](#uart-hardware-test)).
+
 ## SWD engine rules
 
 The adapter sets the CMSIS-DAP rules of the engine (see `TransferRules` in `src/swd/SwdBitBang.h`).
@@ -487,3 +489,35 @@ Findings:
 - The probe re-enumerated once on the USB bus, about 2 minutes after the firmware started (device number 7 to 8). The first OpenOCD tries failed with "No such device" in that time. It then stayed on device number 8 for the rest of the test. The cause is not known. A second run did not repeat it.
 - The probe-rs JTAG test is not done. The issue asks for OpenOCD and pyOCD only.
 
+## UART hardware test
+
+`tools/dap_uart_loopback_test.py` tests the `DAP_UART_*` commands on the dongle.
+pyOCD, OpenOCD and probe-rs do not use these commands, so the script sends them directly on interface 0.
+It needs the pyusb Python package and Python 3.
+
+1. Write a `cmsis-dap` or a `dual` image, and select the CMSIS-DAP personality.
+2. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini and the OtherUse).
+3. Run the script:
+
+```sh
+python3 tools/dap_uart_loopback_test.py
+python3 tools/dap_uart_loopback_test.py --serial-port /dev/ttyACM0
+```
+
+The script gets the UART with `DAP_UART_Transport` `2`.
+For each baud rate and frame format, it sends a byte pattern with `DAP_UART_Transfer` and compares the echo.
+A test fails when a byte is wrong or missing, or when the status shows lost data, a framing error or a parity error.
+At most half of a ring buffer is on the way, so the receive buffer does not overflow.
+At the end, the script gives the UART back to the serial port.
+With `--serial-port`, the script also checks that the serial port gets no data during the tests.
+
+The default run tests the baud rates from 9600 to 2000000 baud, and the formats 8N1, 8E1, 8O1, 7E1, 7O1, 8N2 and 8N1.5.
+Useful options: `--bauds`, `--formats`, `--size`, `--repeat` and `--serial`.
+
+The unit tests of the script need no pyusb and no hardware:
+
+```sh
+python3 -m unittest discover -s tools -p "test_*.py"
+```
+
+Status: the host tests pass. The test on a Mini and an OtherUse is not done yet.
