@@ -36,6 +36,15 @@ class TwoWire(unittest.TestCase):
         self.assertEqual(sorted(collections.Counter(c for _, c in skipped).items()),
                          [(2, 2), (3, 1), (85, 201), (99, 1)])
 
+    def test_same_frames_at_all_three_speeds(self):
+        # A frame with a stray clock before or after it must still decode
+        for name in ('v208-wlink-status-timing.csv', 'v208-wlink-status-medium-timing.csv',
+                     'v208-wlink-status-low-timing.csv'):
+            got, skipped = two_wire(name)
+            self.assertEqual(len(got), 147, name)
+            self.assertTrue(all(d['parity_ok'] for _, d in got), name)
+            self.assertFalse([c for _, c in skipped if c > 53 and c != 85 and c != 99], name)
+
     def test_frames_with_a_pause_after_the_start_clock_are_joined(self):
         got, _ = two_wire('v208-wlink-status-timing.csv', 45)
         # 46.046 ms: the start clock is the last clock of a longer burst

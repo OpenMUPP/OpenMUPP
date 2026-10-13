@@ -289,7 +289,8 @@ CH32V003 (`v003-wlink-status-timing.csv`). The line is slow and not decoded from
 3. Read `0x7f`: `0x00300500`, the chip ID.
 4. Write `data1` with `0x1ffff7c4`. Write the program buffer (`progbuf0` to `progbuf7`, 8 words). Run it with the command `0x00040000` (execute the program buffer). Read `data0` (`00300500`).
 5. Write CSR `0x7c0` with `0x00000300` (command `0x002307c0`).
-6. The connect response goes to the host about 90 ms after the command.
+6. Write `abstractcs` with `ffffffff` (at 89.9 ms, just before the chip information reads).
+7. The connect response goes to the host about 90 ms after the command.
 
 The CH32V003 reads memory with a program in the program buffer (command `0x00040000`). The CH32V208 uses the abstract memory access (command `0x02200000`).
 
@@ -394,7 +395,7 @@ Observations about the frames:
   Each frame has a first part of about 40 clocks at the slow period, and a longer part at the fast period.
   The first part holds the pattern `0010001` followed by 33 zero bits. The rest of the frame is high.
   The meaning of these frames is **not known**. They are not decoded.
-- From 46 ms the probe sends frames of 54 clocks, about 120 µs apart. These frames are decoded (see [Wire frame format](#wire-frame-format)). They hold the probe actions at connect (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)).
+- From 46 ms the probe sends frames of 54 clocks, about 120 µs apart. These frames are decoded (see [Wire frame format](#wire-frame-format)). They hold the probe actions, the target reads and the host accesses (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)).
   Some frames have a pause of about 7 µs after the start clock. A decoder must join the start clock with the rest of the frame.
 - The connect command ends at about 59 ms. On USB, the connect response comes 59.4 ms after the command (`v208-wlink-status.pcapng`).
 - After that, each DMI access from the host is one frame of 54 clocks. The spacing is 120 to 200 µs, so one access takes about 0.12 ms in total, with the USB round trip.
@@ -407,7 +408,7 @@ Observations about the frames:
 |---|---|---|---|
 | Connect, 85-clock frames (first 46 ms) | periods 3.08 µs and 2.09 µs | The same | The same |
 | Host DMI frames of 54 clocks | Some with a period of about 1.10 µs (frame time 63 µs), some with about 2.09 µs (115 µs) | The same as default | All with about 2.09 µs (111 to 115 µs) |
-| Target reads for `0x11`, `06 01` and `0d 04` (after 59.6 ms) | Three long bursts (648, 324, 162 clocks) with a period of about 120 ns (minimum 60 ns) | Seven bursts of 162 clocks (251 µs) with a period of about 1.12 µs | Frames of 54 clocks with a period of about 2.09 µs, spread over 59.6 to 62 ms |
+| Target reads for `0x11`, `06 01` and `0d 04` (after 59.6 ms) | Three long bursts (648, 324, 162 clocks) with a period of about 120 ns (minimum 60 ns) | Seven bursts of 162 clocks (251 µs) with a period of about 1.12 µs | Frames of 54 clocks with a period of about 2.09 µs, spread over 59.6 to 62.4 ms |
 
 Conclusions:
 
@@ -459,7 +460,7 @@ The run is 95 ms in both captures, and the dump adds about 3800 edges to the sta
 The probe may ignore the speed byte for the one-wire interface, or the speed applies to a part that this test does not use.
 The cause is not known. A flash program at the three speeds could show a difference. This was not captured (a program of 16 KB needs 3.5 s).
 
-Not measured on the CH32V003: the wire timing of a flash program, and the decoding of the connect phase.
+Not measured on the CH32V003: the wire timing of a flash program, and the slow pattern from 46 to 77 ms.
 
 Not measured on the CH32V208: the wire timing of a flash program. The meaning of the 85-clock frames is open. The bits that the table below marks as open are open too.
 
@@ -502,11 +503,11 @@ Each bit is one low pulse followed by a high level. The width of the low pulse g
 | 1 | about 250 ns | about 370 ns | about 0.62 µs |
 | 0 | about 860 ns | about 370 ns | about 1.23 µs |
 
-A frame lasts 32 to 48 µs (median 45 µs). Inside the burst of target reads, the next frame starts 4 to 12 µs after the end of a frame (median 7 µs).
+A frame lasts 27 to 48 µs (median 45 µs). A frame of only 1 bits is the shortest. Inside the burst of target reads, the next frame starts 4 to 12 µs after the end of a frame (median 7 µs).
 Between host accesses, the gap is 51 to 106 µs (median 61 µs). The connect phase has other pulse patterns (see above).
 The decoder is `tools/wch_link_frames_1wire.py`. It checks the start bit of each frame. A low pulse longer than 1.5 µs is a break, not a bit.
-It decodes the host phase of the status runs. It does not decode the later bursts of the `dump` captures.
-The first burst decodes 13 frames (`abstractauto`, `data1`, `progbuf0` to `progbuf7`, `command`, `data0`). Then the frames fall out of step. The decoder reports the pulses it could not decode.
+It decodes the host phase of the status runs. It does not decode all frames of the `dump` captures.
+The first burst decodes 12 frames (`abstractauto`, `data1`, `progbuf0` to `progbuf7`, `command`, `data0`). Each later burst decodes 4 frames (`abstractauto`, `data1`, `command`, `data0`). Then the frames fall out of step. The decoder reports the pulses it could not decode.
 The cause is open. The frame length may differ for some access types.
 
 | Bits | Content |

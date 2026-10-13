@@ -13,6 +13,7 @@ import sys
 
 FRAME_BITS = 54
 FRAME_GAP = 5e-6  # clocks further apart than this belong to different bursts
+MAX_STRAY = 2  # a burst of 55 or 56 clocks holds one frame and stray clocks
 START_GAP = 20e-6  # a lone start clock and the rest of its frame are this close
 
 
@@ -55,12 +56,26 @@ def frames(path, start_ms=0.0, skipped=None):
             continue
         # SWDIO is stable at the rising edge: sample just before it
         bits = ''.join(str(rows[bisect.bisect_right(times, t - 5e-9) - 1][1]) for t in burst)
+        if FRAME_BITS < len(bits) <= FRAME_BITS + MAX_STRAY:
+            # a frame with 1 or 2 stray clocks before or after it: keep the part with right parity
+            for k in range(len(bits) - FRAME_BITS + 1):
+                if valid(bits[k:k + FRAME_BITS]):
+                    yield burst[k], bits[k:k + FRAME_BITS]
+                    break
+            else:
+                if skipped is not None:
+                    skipped.append((burst[0], len(bits)))
+            continue
         if len(bits) % FRAME_BITS:
             if skipped is not None:
                 skipped.append((burst[0], len(bits)))
             continue
         for k in range(0, len(bits), FRAME_BITS):
             yield burst[k], bits[k:k + FRAME_BITS]
+
+
+def valid(f):
+    return f[0] == '1' and f[47:49] == ('11' if f[15:47].count('1') % 2 else '00')
 
 
 def decode(f):
