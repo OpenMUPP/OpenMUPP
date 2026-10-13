@@ -40,7 +40,9 @@
 //   the transfer commands of the packets that came before it: the packet
 //   that runs, and the packets that wait. A DAP_Transfer or
 //   DAP_TransferBlock checks it before each transfer, and replies the
-//   transfers that it did. A packet after the abort runs normally. When no
+//   transfers that it did. On SWD, the engine also checks it after each
+//   WAIT (DapSwd::setAbort()): the abort stops the WAIT retries, and the
+//   response value is WAIT. A packet after the abort runs normally. When no
 //   packet runs or waits, the abort has no effect.
 // - A request that is shorter than its command needs, or a response that
 //   does not fit in a packet, gives ID_DAP_Invalid. In a DAP_ExecuteCommands

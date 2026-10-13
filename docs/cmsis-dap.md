@@ -42,7 +42,7 @@ Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Ve
   The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
 - No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
-- `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one transfer. It does not stop other commands, for example `DAP_Delay`.
+- On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
 - No target power switch and no Vref sense in this personality.
@@ -182,6 +182,8 @@ The processor handles `DAP_TransferAbort` in `submit()`:
   The CMSIS-DAP specification requires no response for it.
 
 `DAP_Transfer` and `DAP_TransferBlock` check the abort before each transfer.
+On SWD, the engine also checks the abort after each WAIT acknowledge (see [SWD engine rules](#swd-engine-rules)).
+The abort then stops the WAIT retries of the transfer, and the response value is WAIT.
 After an abort, the command stops and skips the rest of its request data.
 The response gives the number of transfers that the command did.
 A value match also stops, with the mismatch bit set.
@@ -198,6 +200,14 @@ It disconnects, releases the pins, and drops the queued packets and the response
 The adapter sets the CMSIS-DAP rules of the engine (see `TransferRules` in `src/swd/SwdBitBang.h`).
 It never calls `configure()`, which sets the clock from an OpenOCD delay value.
 Thus the order of `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure` does not matter.
+
+The adapter is also the `RetryStop` of the engine.
+After each WAIT acknowledge, the engine asks it for `DAP_TransferAbort`, and the adapter asks the processor.
+When an abort is set, the engine stops the WAIT retries and returns WAIT.
+The engine asks only after a WAIT, so a transfer without WAIT has no extra cost.
+The abort arrives through the serial service, which the engine calls before each retry, at most once per millisecond.
+Thus the engine does one more attempt after the abort arrives.
+The Versaloon personality sets no `RetryStop`, so its WAIT retries do not change.
 `DAP_Connect` sets the configuration and the clock again, because the engine can run another personality in between.
 
 ## JTAG
@@ -244,6 +254,7 @@ The target is the JTAG chain of `tests/MockJtagDp.h`: a TAP state machine, and d
 One device of the chain is a JTAG-DP with a memory AP.
 The tests cover the JTAG commands, IDCODE, DPACC and APACC reads and writes, posted reads, WAIT, value match, block transfers, ABORT and chains with more than one device.
 Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.
+One test sends the abort during the WAIT retries of one SWD transfer, from the serial service of the engine.
 
 ## Hardware test
 
