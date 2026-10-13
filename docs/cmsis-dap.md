@@ -111,7 +111,9 @@ It uses these objects:
 The USB function calls `submit()` for each request packet.
 `submit()` only stores the packet.
 `UsbStack::poll()` then calls `CmsisDapFunction::poll()` in the main loop.
-This calls `runNext()` for each stored packet, in order, and sends each response immediately.
+Each call runs one stored packet with `runNext()` and sends its response immediately.
+Between two packets, `UsbStack::poll()` delivers the USB events again.
+Thus the InComplete event of the last response frees the IN endpoint, and the next response goes out while the next packet runs.
 Thus the OUT endpoint stays armed while a command runs, if a slot is free.
 During a USB suspend, `CmsisDapFunction::poll()` runs no packet. The stored packets run after the resume.
 A packet that arrives during a command waits until that command ends.
