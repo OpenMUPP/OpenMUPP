@@ -109,6 +109,9 @@ The build writes these files into the build directory:
 - `versaloon-next-gen-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-next-gen-app-10k.bin`.
 - `versaloon-bootloader/versaloon-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
   Only the Mini and the OtherUse have a bootloader.
+- `versaloon-next-gen-with-bootloader.hex` and `.bin`: the combined image of the Mini and the OtherUse.
+  It has `versaloon-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
+  The `.bin` file has `0xFF` between the two.
 
 See [docs/development.md](docs/development.md#build-outputs) for all build outputs.
 
@@ -159,12 +162,16 @@ The `app-10k` image refuses `VERSALOON_FW_UPDATE`, because the legacy bootloader
 
 A new board needs `versaloon-bootloader` one time.
 An existing board can also change to it.
-Write the bootloader with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
+Write the combined image with a debug probe on the SWD pins of the dongle MCU.
+It has the bootloader and the firmware, so one step is sufficient.
+For example, with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-bootloader/versaloon-bootloader-mini.hex verify reset exit"
+        -c "program versaloon-next-gen-with-bootloader.hex verify reset exit"
 ```
+
+To write only the bootloader, use `versaloon-bootloader/versaloon-bootloader-<board>.hex` in the same command.
 
 `versaloon-bootloader` write-protects its 8 KB area.
 To write a new bootloader over it, remove the write protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).

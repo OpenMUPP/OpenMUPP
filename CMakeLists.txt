@@ -312,9 +312,10 @@ if (CMAKE_CROSSCOMPILING)
                 COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin")
     endfunction()
 
-    # vsl-images.txt lists each application image with its size limit, one
-    # line "<bin-file> <limit-in-bytes>". CI runs ci/check-size.sh on each
-    # line. The limit is the FLASH region of ldscripts/mem-f103.ld.
+    # vsl-images.txt lists each image with its size limit, one line
+    # "<bin-file> <limit-in-bytes>". CI runs ci/check-size.sh on each line.
+    # The limit of an application image is the FLASH region of
+    # ldscripts/mem-f103.ld. The combined image is added below.
     set(_images_list "")
     foreach (_image ${VSL_APP_IMAGES})
         vsl_add_app_image(${_image})
@@ -326,6 +327,33 @@ if (CMAKE_CROSSCOMPILING)
     if (VSL_BUILD_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
         vsl_add_bootloader()
         MESSAGE(STATUS "Building versaloon-bootloader for board " ${BOARD} " into " ${VSL_BOOTLOADER_DIR})
+
+        # The combined image: versaloon-bootloader and the app-8k image in
+        # one file from 0x08000000, for a new board and a debug probe. The
+        # gap between the two is 0xFF (tools/vsl_combine_images.py).
+        find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
+        set(_name versaloon-next-gen-with-bootloader)
+        set(_file versaloon-next-gen-${BOARD}${VSL_IMAGE_TAG}-with-bootloader-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
+        add_custom_command(
+                OUTPUT ${_name}.bin ${_name}.hex
+                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py"
+                    --bootloader "${VSL_BOOTLOADER_DIR}/versaloon-bootloader-${BOARD}.bin"
+                    --app versaloon-next-gen-app-8k.bin --app-offset ${VSL_APP_OFFSET_app-8k}
+                    --bin ${_name}.bin --hex ${_name}.hex
+                COMMAND ${CMAKE_COMMAND} -E copy ${_name}.hex ${_file}.hex
+                COMMAND ${CMAKE_COMMAND} -E copy ${_name}.bin ${_file}.bin
+                DEPENDS versaloon-bootloader versaloon-next-gen-app-8k.elf
+                    "${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py"
+                    "${VSL_BOOTLOADER_DIR}/versaloon-bootloader-${BOARD}.bin"
+                    "${CMAKE_CURRENT_BINARY_DIR}/versaloon-next-gen-app-8k.bin"
+                BYPRODUCTS ${_file}.hex ${_file}.bin
+                COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin"
+                VERBATIM)
+        add_custom_target(versaloon-next-gen-with-bootloader ALL DEPENDS ${_name}.bin ${_name}.hex)
+        # The combined image ends where the app-8k image ends: its limit is the
+        # flash without the settings page.
+        math(EXPR _limit "65536 - ${VSL_SETTINGS_PAGE_SIZE}")
+        file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_name}.bin ${_limit}\n")
     endif ()
 else ()
     enable_testing()

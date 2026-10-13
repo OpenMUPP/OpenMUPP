@@ -55,15 +55,19 @@ The Mini and the OtherUse use one of two bootloaders:
 
 A board with the legacy bootloader can continue to use it.
 To change a board to `versaloon-bootloader`, write the new bootloader one time with a debug probe.
-Then write the `app-8k` image.
+Then write the `app-8k` image, or write the combined image to do both in one step.
 
-The firmware build makes the bootloader image `versaloon-bootloader/versaloon-bootloader-<board>.hex` (see [Build the firmware](../README.md#build-the-firmware)).
-Write it at `0x08000000` with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
+The firmware build makes the combined image `versaloon-next-gen-with-bootloader.hex` (see [Build the firmware](../README.md#build-the-firmware)).
+It has the bootloader at `0x08000000` and the `app-8k` image at `0x08002000`.
+Write it with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-bootloader/versaloon-bootloader-mini.hex verify reset exit"
+        -c "program versaloon-next-gen-with-bootloader.hex verify reset exit"
 ```
+
+The build also makes the bootloader image alone, `versaloon-bootloader/versaloon-bootloader-<board>.hex`.
+Write it in the same way when the board must keep its firmware.
 
 At its first start, `versaloon-bootloader` write-protects its 8 KB area.
 To write a new bootloader over it, remove the write protection first:

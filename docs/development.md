@@ -20,6 +20,9 @@ Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTR
 One linker script, `ldscripts/mem-f103.ld`, links all images.
 CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
 - `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
+- `versaloon-next-gen-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
+  `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
+- `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 
 For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
 The target is `versaloon-bootloader`.
