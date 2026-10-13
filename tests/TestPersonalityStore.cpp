@@ -61,8 +61,39 @@ TEST_CASE("The personality codes") {
    CHECK(personality::fromCode(1) == Personality::CmsisDap);
    CHECK_FALSE(personality::fromCode(2).has_value());
    CHECK_FALSE(personality::fromCode(0xFF).has_value());
-   CHECK(personality::other(Personality::Versaloon) == Personality::CmsisDap);
-   CHECK(personality::other(Personality::CmsisDap) == Personality::Versaloon);
+   CHECK(personality::next(Personality::Versaloon) == Personality::CmsisDap);
+   CHECK(personality::next(Personality::CmsisDap) == Personality::Versaloon);
+}
+
+TEST_CASE("The cycle visits three and four personalities in order") {
+   constexpr auto a = Personality::Versaloon;
+   constexpr auto b = Personality::CmsisDap;
+   constexpr auto c = static_cast<Personality>(2);
+   constexpr auto d = static_cast<Personality>(3);
+   constexpr std::array<Personality, 3> three{ a, b, c };
+   constexpr std::array<Personality, 4> four{ a, b, c, d };
+   const auto next3 = [&](Personality p) { return personality::nextIn(art::span<const Personality>(three.data(), three.size()), p); };
+   const auto next4 = [&](Personality p) { return personality::nextIn(art::span<const Personality>(four.data(), four.size()), p); };
+
+   CHECK(next3(a) == b);
+   CHECK(next3(b) == c);
+   CHECK(next3(c) == a);
+   CHECK(next4(c) == d);
+   CHECK(next4(d) == a);
+}
+
+TEST_CASE("The records of four personalities are distinct and none is a subset of another") {
+   for(uint8_t x = 0; x < personality::maxPersonalities; ++x) {
+      CHECK(__builtin_popcount(PersonalityStore::recordOfCode(x)) == 8);
+      for(uint8_t y = 0; y < personality::maxPersonalities; ++y) {
+         if(x != y) {
+            const uint16_t rx = PersonalityStore::recordOfCode(x);
+            const uint16_t ry = PersonalityStore::recordOfCode(y);
+            CHECK(rx != ry);
+            CHECK((rx & ry) != ry);
+         }
+      }
+   }
 }
 
 TEST_CASE("An erased page has no stored personality") {
@@ -104,7 +135,7 @@ TEST_CASE("A full page is erased before the next record") {
    auto personality = Personality::CmsisDap;
    for(std::size_t i = 0; i < FakeFlashPage::slotCount; ++i) {
       REQUIRE(store.store(personality));
-      personality = personality::other(personality);
+      personality = personality::next(personality);
    }
    CHECK(page.erases == 0);
    CHECK(store.load() == Personality::Versaloon);
