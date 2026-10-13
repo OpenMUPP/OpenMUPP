@@ -23,8 +23,10 @@
 // - DAP_UART_Configure maps its control byte to a FrameFormat
 //   (fromDapControl()), with the formats of the table in
 //   uart/FrameFormat.h. The UART gets the new format when the TX path is
-//   empty, as in the bridge. Until then, write() takes no bytes. The bytes
-//   that the UART received in the old format are discarded. A configuration that fails leaves the UART
+//   empty, as in the bridge. Until then, write() takes no bytes, and
+//   read() and rxCount() give no bytes. At the change, the bytes that the
+//   UART received in the old format are discarded, and the errors until
+//   then are not reported. A configuration that fails leaves the UART
 //   not configured, and disables the receiver and the transmitter.
 // - DAP_UART_Control enables the receiver or the transmitter only when
 //   the UART is configured. An enable of the receiver empties the rx ring.
@@ -35,7 +37,9 @@
 // - The status bits: data lost for the bytes that the rx ring dropped and
 //   the overruns, parity error for the parity errors, framing error for
 //   the other receive errors (framing and noise). Each bit tells of the
-//   errors since the last read of the status.
+//   errors since the last read of the status, enable of the receiver or
+//   format change. The receive interrupt stays on while the receiver is
+//   disabled, so the errors of that time are not reported.
 //
 // A switch away from the DAP commands forgets their configuration. When
 // the host goes away (hostGone()), the UART goes back to the default
@@ -170,6 +174,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
          uart_.setFormat(*pending_);
          pending_.reset();
          buffers_.flushRx();
+         seen_ = counters();
       }
       if(!rxEnabled_) {
          buffers_.flushRx();
@@ -247,6 +252,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
             ok = false;
          } else if(!rxEnabled_) {
             buffers_.flushRx();
+            seen_ = counters();
             rxEnabled_ = true;
          }
       }
@@ -296,7 +302,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
    }
 
    [[nodiscard]] uint32_t rxCount() const override {
-      return isDap() && rxEnabled_ ? static_cast<uint32_t>(buffers_.rx.size()) : 0;
+      return canRead() ? static_cast<uint32_t>(buffers_.rx.size()) : 0;
    }
 
    [[nodiscard]] uint32_t txCount() const override {
@@ -315,7 +321,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
    }
 
    [[nodiscard]] std::size_t read(art::span<uint8_t> data) override {
-      if(!isDap() || !rxEnabled_ || data.empty()) {
+      if(!canRead() || data.empty()) {
          return 0;
       }
       return buffers_.rx.try_pop_bulk(data.data(), data.size());
@@ -338,6 +344,12 @@ class DapUartChannel final : public cmsisdap::DapUart {
 
    [[nodiscard]] bool isDap() const {
       return transport_ == cmsisdap::uartTransport::dap;
+   }
+
+   // No received bytes while a new format waits: they are in the old
+   // format.
+   [[nodiscard]] bool canRead() const {
+      return isDap() && rxEnabled_ && !pending_;
    }
 
    [[nodiscard]] Counters counters() const {

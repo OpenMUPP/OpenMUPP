@@ -410,6 +410,60 @@ TEST_CASE("DapUartChannel: the status reports each error once") {
    CHECK(bench.channel.status() == enabled);
 }
 
+TEST_CASE("DapUartChannel: errors while the receiver is disabled are not reported") {
+   Bench bench;
+   REQUIRE(bench.channel.setTransport(transport::dap));
+   // The target talks before the configuration.
+   bench.buffers.receiveError();
+   bench.buffers.receiveError(true);
+   bench.buffers.overrun();
+   uint32_t baud = 9600;
+   REQUIRE(bench.channel.configure(config7E2, baud) == 0);
+   REQUIRE(bench.channel.control(control::rxEnable | control::txEnable));
+   bench.poll();
+   const uint8_t enabled = status::rxEnabled | status::txEnabled;
+   CHECK(bench.channel.status() == enabled);
+
+   // The same after a disable and an enable of the receiver
+   REQUIRE(bench.channel.control(control::rxDisable));
+   bench.buffers.receiveError();
+   bench.buffers.overrun();
+   REQUIRE(bench.channel.control(control::rxEnable));
+   CHECK(bench.channel.status() == enabled);
+}
+
+TEST_CASE("DapUartChannel: errors before a format change are not reported") {
+   Bench bench;
+   bench.takeForDap();
+   uint32_t baud = 115200;
+   REQUIRE(bench.channel.configure(0, baud) == 0);
+   bench.buffers.receiveError();
+   bench.poll();
+   const uint8_t enabled = status::rxEnabled | status::txEnabled;
+   CHECK(bench.channel.status() == enabled);
+}
+
+TEST_CASE("DapUartChannel: no received bytes while a new format waits") {
+   Bench bench;
+   bench.takeForDap();
+   REQUIRE(bench.write(pattern(5)) == 5);
+   bench.buffers.received(0x41);
+   uint32_t baud = 115200;
+   REQUIRE(bench.channel.configure(0, baud) == 0);
+   bench.buffers.received(0x42);
+   bench.poll();
+   CHECK(bench.channel.rxCount() == 0);
+   CHECK(bench.read(10).empty());
+
+   bench.uart.sendAll(bench.buffers);
+   bench.uart.shifting = false;
+   bench.poll();
+   REQUIRE(bench.uart.formats.back() == format115200);
+   CHECK(bench.channel.rxCount() == 0);
+   bench.buffers.received(0x43);
+   CHECK(bench.read(10) == std::vector<uint8_t>{ 0x43 });
+}
+
 TEST_CASE("DapUartChannel: the switch back to the COM port") {
    Bench bench;
    REQUIRE(bench.setLineCoding(19200, 8, 0, 0));
@@ -596,4 +650,14 @@ TEST_CASE("hostGone gives the UART back to the COM port") {
    b.dap.hostGone();
    CHECK(b.channel.transport() == transport::comPort);
    CHECK(b.bridge().isActive());
+}
+
+TEST_CASE("DAP_UART_Configure and DAP_UART_Transfer in one packet give no bytes of the old format") {
+   DapBench b;
+   b.takeForDap();
+   REQUIRE(b.write(pattern(3)) == 3);
+   b.buffers.received(0x55);
+   // Configure 115200 8N1, then a transfer of 1 byte each way
+   CHECK(b.run(cat({ { 0x7F, 0x02, 0x20, 0x00 }, word(115200), { 0x21, 0x10, 0x00, 0x01, 0x00, 0xAA } })) ==
+         cat({ { 0x7F, 0x02, 0x20, 0x00 }, word(115200), { 0x21, 0x11, 0x00, 0x00, 0x00, 0x00 } }));
 }

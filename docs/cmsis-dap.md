@@ -267,8 +267,9 @@ Else the response has the real baud rate of the UART, for example 230032 for 230
 A configuration that fails disables the receiver and the transmitter.
 
 The UART gets a new format when the transmit buffer is empty and the last byte is sent.
-Until then, `DAP_UART_Transfer` takes no data to send.
-The bytes that the UART received in the old format are discarded.
+Until then, `DAP_UART_Transfer` takes no data to send and gives no received data, and the receive count of `DAP_UART_Status` is 0.
+At the change, the firmware discards the bytes that the UART received in the old format.
+The errors before the change are not reported.
 
 Other rules:
 
@@ -279,7 +280,8 @@ Other rules:
 - While the receiver is disabled, the firmware discards the received data.
 - The status has these bits: bit 0 receiver enabled, bit 1 data lost, bit 2 framing error, bit 3 parity error, bit 4 transmitter enabled.
 - "Data lost" includes the bytes that the full receive buffer dropped and the overruns of the UART. "Framing error" includes the noise errors.
-- Each error bit shows the errors since the last read of the status. `DAP_UART_Status` and `DAP_UART_Transfer` read the status.
+- Each error bit shows the errors since the last read of the status, the last enable of the receiver or the last format change. `DAP_UART_Status` and `DAP_UART_Transfer` read the status.
+- The UART receives also while the receiver is disabled. The errors of that time are not reported.
 - `DAP_UART_Transfer` takes the bytes that fit in the transmit buffer, and gives the received bytes that fit in the response.
   The response gives the status after the transfer.
 - A `DAP_UART_Transfer` with a Tx Count that is larger than its data gives `ID_DAP_Invalid`.
