@@ -331,24 +331,23 @@ Observations about the frames:
 
 ### Speed setting
 
-`v208-wlink-status-low-timing.csv` is the same run with `wlink --speed low status` (speed byte `03`). Same channels and sample rate.
+`v208-wlink-status-low-timing.csv` and `v208-wlink-status-medium-timing.csv` are the same run with `wlink --speed low status` (speed byte `03`) and `--speed medium status` (`02`). Same channels and sample rate.
 
-| Phase | Default speed (`01`) | Low speed (`03`) |
-|---|---|---|
-| Connect (first 60 ms) | 85-clock frames, periods 3.08 µs and 2.09 µs | The same |
-| Host DMI frames of 54 clocks | Some with a period of about 1.10 µs (frame time 63 µs), some with about 2.09 µs (115 µs) | All with about 2.09 µs (111 to 115 µs) |
-| First accesses after connect | Three long bursts (648, 324, 162 clocks) with a period of about 120 ns (minimum 60 ns) | None |
+| Phase | Default speed (`01`) | Medium speed (`02`) | Low speed (`03`) |
+|---|---|---|---|
+| Connect (first 60 ms) | 85-clock frames, periods 3.08 µs and 2.09 µs | The same | The same |
+| Host DMI frames of 54 clocks | Some with a period of about 1.10 µs (frame time 63 µs), some with about 2.09 µs (115 µs) | The same as default | All with about 2.09 µs (111 to 115 µs) |
+| First accesses after connect | Three long bursts (648, 324, 162 clocks) with a period of about 120 ns (minimum 60 ns) | Seven bursts of 162 clocks (251 µs) with a period of about 1.12 µs | None |
 
 Conclusions:
 
 - The speed byte does not change the clock during the connect command. The probe runs the chip detection at a fixed rate.
-- The speed byte changes the clock of the later accesses. At low speed, the frames take about 111 to 115 µs. The 400 kHz of the wlink help text is not the measured rate (the measured rate is about 478 kHz).
+- The speed byte changes the clock of the later accesses. Only the long bursts change between the default and the medium speed (about 120 ns against about 1.12 µs). At low speed, the frames take about 111 to 115 µs. The 400 kHz of the wlink help text is not the measured rate (the measured rate is about 478 kHz).
 - At the default speed, the clock is faster in some frames. The long bursts with a period near 120 ns may hold several accesses with gaps shorter than 5 µs. This is **not confirmed**: the frames are not decoded.
 
 Not measured:
 
 - The bit-level framing (start, address, data, operation, parity) is not decoded.
-- The medium speed (`02`) was not captured.
 - The CH32V003 one-wire interface was not captured.
 
 ## Pins and USB ID
@@ -382,7 +381,7 @@ The table lists the questions of epic #63 and their state.
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
-| Wire timing of the one-wire and the two-wire interface | **Partly answered.** Two-wire timing at the default speed is in [Wire timing](#wire-timing-ch32v208-two-wires). Open: bit framing, the speed `02`, the one-wire interface. |
+| Wire timing of the one-wire and the two-wire interface | **Partly answered.** Two-wire timing at the default speed is in [Wire timing](#wire-timing-ch32v208-two-wires). Open: bit framing and the one-wire interface. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
