@@ -464,6 +464,61 @@ TEST_CASE("DapUartChannel: no received bytes while a new format waits") {
    CHECK(bench.read(10) == std::vector<uint8_t>{ 0x43 });
 }
 
+TEST_CASE("DapUartChannel: a switch stops the TX interrupt before it drops the TX ring") {
+   Bench bench;
+   REQUIRE(bench.hostSends(pattern(20)));
+   bench.poll();
+   REQUIRE(bench.uart.txInterruptOn);
+   std::size_t txAtStop = 0;
+   bench.uart.onStopTx = [&bench, &txAtStop] { txAtStop = bench.buffers.tx.size(); };
+   REQUIRE(bench.channel.setTransport(transport::dap));
+   CHECK(txAtStop == 20);
+   CHECK(bench.buffers.tx.empty());
+
+   // The same for the TX flush and disable of the DAP side
+   bench.takeForDap();
+   for(const uint8_t bits : { control::txFlush, control::txDisable }) {
+      REQUIRE(bench.channel.control(control::txEnable));
+      REQUIRE(bench.write(pattern(7)) == 7);
+      txAtStop = 0;
+      REQUIRE(bench.channel.control(bits));
+      CHECK(txAtStop == 7);
+      CHECK(bench.buffers.tx.empty());
+   }
+}
+
+TEST_CASE("DapUartChannel: transport 0 gives the UART to nobody") {
+   Bench bench;
+   bench.buffers.received(0x41);
+   REQUIRE(bench.channel.setTransport(transport::none));
+   CHECK(bench.channel.transport() == transport::none);
+   CHECK_FALSE(bench.bridge().isActive());
+   CHECK(bench.buffers.rx.empty());
+
+   // Nobody gets data.
+   bench.buffers.received(0x42);
+   REQUIRE(bench.hostSends(pattern(10)));
+   bench.poll();
+   CHECK(bench.buffers.rx.empty());
+   CHECK(bench.buffers.tx.empty());
+   CHECK(bench.hostReceives().empty());
+   uint32_t baud = 9600;
+   CHECK(bench.channel.configure(config7E2, baud) == configError::all);
+   CHECK(bench.channel.status() == 0);
+
+   // To the DAP commands, back to nobody, then to the COM port
+   bench.takeForDap();
+   REQUIRE(bench.channel.setTransport(transport::none));
+   CHECK(bench.channel.status() == 0);
+   REQUIRE(bench.channel.setTransport(transport::comPort));
+   CHECK(bench.bridge().isActive());
+   bench.poll();
+   CHECK(bench.uart.formats.back() == format115200);
+   bench.buffers.received(0x43);
+   bench.poll();
+   CHECK(bench.hostReceives() == std::vector<uint8_t>{ 0x43 });
+}
+
 TEST_CASE("DapUartChannel: the switch back to the COM port") {
    Bench bench;
    REQUIRE(bench.setLineCoding(19200, 8, 0, 0));

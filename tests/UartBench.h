@@ -15,6 +15,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <utility>
 #include <vector>
 
@@ -45,6 +46,8 @@ struct FakeUart {
    bool shifting = false;
    // The bytes on the TX pin, each with the format it went out in.
    std::vector<std::pair<uint8_t, FrameFormat>> sent;
+   // Runs in stopTx(), for example to check the state of the rings then.
+   std::function<void()> onStopTx;
 
    [[nodiscard]] uint32_t clockFrequency() const {
       return clock;
@@ -65,6 +68,9 @@ struct FakeUart {
 
    void stopTx() {
       txInterruptOn = false;
+      if(onStopTx) {
+         onStopTx();
+      }
    }
 
    // Runs the TX interrupt until the ring is empty. The last byte stays in
