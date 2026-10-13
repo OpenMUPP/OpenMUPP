@@ -7,15 +7,15 @@ This document is for developers of the firmware: build outputs, CMake presets, t
 The README shows how to build the firmware.
 The build writes these files into the build directory:
 
-- `versaloon-next-gen-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
+- `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
   The README lists the images and their start addresses.
 - Copies of the `.hex` and `.bin` files with the board, the image, the build type and the version in the name.
-  An example is `versaloon-next-gen-mini-app-8k-Release-v0.1.0.hex`.
-  An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-next-gen-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
+  An example is `versaloon-ng-mini-app-8k-Release-v0.1.0.hex`.
+  An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-ng-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
   An image with `VSL_PROTOCOL=dual` has `-dual` after the board, or `-dual-cmsis-dap` with `VSL_DEFAULT_PROTOCOL=cmsis-dap`.
-- `versaloon-next-gen-<image>.map`, the linker map of each image.
+- `versaloon-ng-<image>.map`, the linker map of each image.
 - `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
-- `versaloon-next-gen-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
+- `versaloon-ng-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
   `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
 - `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 

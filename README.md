@@ -1,6 +1,6 @@
-# versaloon-next-gen
+# versaloon-NG
 
-Firmware for the Versaloon Mini and OtherUse debug adapters (STM32F103C8/CB, 12 MHz crystal, 72 MHz).
+versaloon-NG is the firmware for the Versaloon Mini and OtherUse debug adapters (STM32F103C8/CB, 12 MHz crystal, 72 MHz).
 The firmware is compatible with the original Versaloon USB protocol, so unmodified OpenOCD can use it.
 It also has a USB-CDC (Communication Device Class) serial port, which is bridged to a UART.
 A build option selects a second USB personality, CMSIS-DAP v2, for OpenOCD, pyOCD and probe-rs (see [docs/cmsis-dap.md](docs/cmsis-dap.md)).
@@ -58,7 +58,7 @@ The libraries are Git submodules in `dependencies/`.
 Clone with the submodules:
 
 ```sh
-git clone --recurse-submodules ssh://git@gitlab.vandertogt.org:3022/embedded-projects/versaloon-next-gen.git
+git clone --recurse-submodules ssh://git@gitlab.vandertogt.org:3022/embedded-projects/versaloon-ng.git
 ```
 
 In an existing clone, run `git submodule update --init --recursive`.
@@ -125,10 +125,10 @@ A dual image (`VSL_PROTOCOL=dual`) has 1 KB less flash, because the last flash p
 
 The build writes these files into the build directory:
 
-- `versaloon-next-gen-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-next-gen-app-10k.bin`.
+- `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-ng-app-10k.bin`.
 - `versaloon-bootloader/versaloon-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
   Only the Mini and the OtherUse have a bootloader.
-- `versaloon-next-gen-with-bootloader.hex` and `.bin`: the combined image of the Mini and the OtherUse.
+- `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of the Mini and the OtherUse.
   It has `versaloon-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
   The `.bin` file has `0xFF` between the two.
 
@@ -170,7 +170,7 @@ To write the firmware, do these steps:
 2. Write the `.bin` file of the `app-10k` image with `stm32flash`:
 
    ```sh
-   stm32flash -w versaloon-next-gen-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
+   stm32flash -w versaloon-ng-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Disconnect the board and connect it again. The firmware starts.
@@ -187,7 +187,7 @@ For example, with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-next-gen-with-bootloader.hex verify reset exit"
+        -c "program versaloon-ng-with-bootloader.hex verify reset exit"
 ```
 
 To write only the bootloader, use `versaloon-bootloader/versaloon-bootloader-<board>.hex` in the same command.
@@ -202,7 +202,7 @@ To write the firmware through the bootloader, do these steps:
 2. Write the `.bin` file of the `app-8k` image with `stm32flash`, and start it:
 
    ```sh
-   stm32flash -w versaloon-next-gen-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
+   stm32flash -w versaloon-ng-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
    ```
 
 ### Board without a bootloader
@@ -211,7 +211,7 @@ Write the `standalone` image with a debug probe, for example with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-next-gen-standalone.hex verify reset exit"
+        -c "program versaloon-ng-standalone.hex verify reset exit"
 ```
 
 The `standalone` image refuses `VERSALOON_FW_UPDATE`.

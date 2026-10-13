@@ -57,13 +57,13 @@ A board with the legacy bootloader can continue to use it.
 To change a board to `versaloon-bootloader`, write the new bootloader one time with a debug probe.
 Then write the `app-8k` image, or write the combined image to do both in one step.
 
-The firmware build makes the combined image `versaloon-next-gen-with-bootloader.hex` (see [Build the firmware](../README.md#build-the-firmware)).
+The firmware build makes the combined image `versaloon-ng-with-bootloader.hex` (see [Build the firmware](../README.md#build-the-firmware)).
 It has the bootloader at `0x08000000` and the `app-8k` image at `0x08002000`.
 Write it with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-next-gen-with-bootloader.hex verify reset exit"
+        -c "program versaloon-ng-with-bootloader.hex verify reset exit"
 ```
 
 The build also makes the bootloader image alone, `versaloon-bootloader/versaloon-bootloader-<board>.hex`.
@@ -92,9 +92,9 @@ If the write fails, the option bytes of the board were changed: run `stm32f1x un
 
    ```sh
    # versaloon-bootloader (8 KB)
-   stm32flash -w versaloon-next-gen-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
+   stm32flash -w versaloon-ng-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
    # legacy bootloader (10 KB)
-   stm32flash -w versaloon-next-gen-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
+   stm32flash -w versaloon-ng-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Reset the board, or disconnect it and connect it again. The firmware starts.
@@ -127,7 +127,7 @@ The `standalone` image has no header.
 To check an image, use the stamp tool with the start address:
 
 ```sh
-dependencies/versaloon-bootloader/tools/vsl-stamp-image.py --check versaloon-next-gen-app-8k.bin --base 0x08002000
+dependencies/versaloon-bootloader/tools/vsl-stamp-image.py --check versaloon-ng-app-8k.bin --base 0x08002000
 ```
 
 ## Start-up behind the bootloader

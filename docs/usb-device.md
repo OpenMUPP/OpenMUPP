@@ -221,7 +221,7 @@ The common commands are:
 | `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
-The version text has the form `versaloon-next-gen <version>, board <board>`.
+The version text has the form `versaloon-ng <version>, board <board>`.
 
 `SWITCH_PERSONALITY` changes the USB personality of a dual image (see [Dual image](#dual-image)).
 The firmware sends the reply, stores the personality and resets.
@@ -678,7 +678,7 @@ On Linux:
 2. Make sure that the kernel log (`dmesg`) shows a new `/dev/ttyACM*` port.
 3. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini). Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
 4. Run OpenOCD with `-f interface/vsllink.cfg`.
-   Make sure that OpenOCD shows the version text of `GET_INFO`, for example `versaloon-next-gen v0.1.0, board mini`.
+   Make sure that OpenOCD shows the version text of `GET_INFO`, for example `versaloon-ng v0.1.0, board mini`.
    Make sure that OpenOCD shows the capabilities, `USB_TO_XXX abilities: 0x00000008:0x000000C0:0xC0000002`.
    In JTAG mode, OpenOCD then scans the JTAG chain.
    In SWD mode, OpenOCD reads the DPIDR of the target.
