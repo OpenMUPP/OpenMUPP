@@ -42,6 +42,9 @@ function(vsl_add_bootloader)
                 -DCMAKE_TOOLCHAIN_FILE=${_src_dir}/cmake/gcc_arm.cmake
                 -DGCC_TOOLCHAIN_PREFIX=${_toolchain_root}
                 -DVERSALOON_BOOTLOADER_BOARDS=${BOARD}
+                # The bootloader area ends where the app-8k image starts. One
+                # value sets both, so they cannot disagree.
+                -DVERSALOON_BOOTLOADER_AREA_SIZE=${VSL_APP_OFFSET_app-8k}
                 -DVSL_SYSTEM_STM32_DIR=${PROJECT_SOURCE_DIR}/dependencies/system-stm32
                 -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
             BUILD_ALWAYS ON
