@@ -12,8 +12,9 @@ When an issue and this document do not agree, the issue is correct. Update this 
   It is not a supported board now, but a port must be easy.
 
 The firmware runs behind `versaloon-bootloader`.
-The bootloader uses the first 10 KB of flash, so the application starts at `0x08002800`.
-The OtherUse has an STM32F103C8 (64 KB flash), so the application must not be larger than 54 KB.
+The legacy bootloader uses the first 10 KB of flash, so the application starts at `0x08002800`.
+The new `versaloon-bootloader` uses 8 KB, so the application starts at `0x08002000`.
+The OtherUse has an STM32F103C8 (64 KB flash), so the application must not be larger than 54 KB: it must also fit behind the legacy bootloader.
 
 The firmware is compatible with the original Versaloon USB protocol.
 Unmodified upstream OpenOCD (`interface/vsllink.cfg`) must work with it.

@@ -91,9 +91,22 @@ cmake --build build/mini -j
 Use `-DBOARD=otheruse` or `-DBOARD=stlinkv2` for the other boards.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
 
+The build links the same firmware into one or more application images.
+Each image has a different start address:
+
+| Image | Start address | Flash for the application | Use |
+|---|---|---|---|
+| `standalone` | `0x08000000` | 64 KB | No bootloader. Write it with a debug probe. |
+| `app-8k` | `0x08002000` | 56 KB | Behind the new 8 KB `versaloon-bootloader`. |
+| `app-10k` | `0x08002800` | 54 KB | Behind the legacy 10 KB Versaloon bootloader of the existing boards. |
+
+The Mini and the OtherUse get all three images.
+The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
+A dual image (`VSL_PROTOCOL=dual`) has 1 KB less flash, because the last flash page holds the stored personality.
+
 The build writes these files into the build directory:
 
-- `versaloon-next-gen.elf`, `versaloon-next-gen.hex` and `versaloon-next-gen.bin`: the firmware.
+- `versaloon-next-gen-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-next-gen-app-10k.bin`.
 - `versaloon-bootloader/versaloon-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
   Only the Mini and the OtherUse have a bootloader.
 
@@ -104,8 +117,7 @@ The CMake options are:
 | Option | Default | Description |
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
-| `VSL_BOOTLOADER` | `ON` | `ON`: link at `0x08002800`, behind `versaloon-bootloader`. `OFF`: link at `0x08000000`, for development with a debug probe and no bootloader. The firmware then refuses `VERSALOON_FW_UPDATE`. The ST-Link/V2 has no bootloader: its firmware always refuses `VERSALOON_FW_UPDATE`. |
-| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse, and only with `VSL_BOOTLOADER=ON`. |
+| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse. |
 | `VSL_PROTOCOL` | `versaloon` | USB personality of the image: `versaloon`, `cmsis-dap` or `dual`. A `cmsis-dap` image has the CMSIS-DAP v2 interface, `0403:9b3c`, instead of the Versaloon interface. A `dual` image has both personalities, and one is active after each start (see [docs/usb-device.md](docs/usb-device.md#dual-image)). The serial port and the UART bridge are in all images. See [docs/cmsis-dap.md](docs/cmsis-dap.md). |
 | `VSL_DEFAULT_PROTOCOL` | `versaloon` | Only for `VSL_PROTOCOL=dual`: the personality when no personality is stored. `versaloon` or `cmsis-dap`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
@@ -115,7 +127,10 @@ The CMake options are:
 
 ## Flash the firmware
 
-The firmware runs behind `versaloon-bootloader`.
+The Mini and the OtherUse run the firmware behind a bootloader.
+Write the image that agrees with the bootloader on the board (see [Build the firmware](#build-the-firmware)).
+A board without a bootloader gets the `standalone` image from a debug probe.
+
 A new board needs the bootloader one time.
 Write it with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
 
@@ -128,10 +143,10 @@ To write the firmware through the bootloader, do these steps:
 
 1. Start the bootloader. Hold the key (PB9) down and reset the board.
    A new serial port with the ID `0483:5740` shows, for example `/dev/ttyACM0`.
-2. Write the `.bin` file with `stm32flash`:
+2. Write the `.bin` file of the `app-10k` image with `stm32flash`:
 
    ```sh
-   stm32flash -w versaloon-next-gen.bin -v -S 0x08002800 /dev/ttyACM0
+   stm32flash -w versaloon-next-gen-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Reset the board. The firmware starts.

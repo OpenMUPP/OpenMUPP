@@ -8,8 +8,6 @@ variables:
   GIT_SUBMODULE_FORCE_HTTPS: "true"
   GIT_DEPTH: 0
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
-  # 64 KB STM32F103C8 minus the 10 KB versaloon-bootloader
-  FLASH_LIMIT_BYTES: "55296"
 
 # Build on:
 # - Tags
@@ -54,11 +52,12 @@ run-tool-tests:
     - cd "$CI_PROJECT_DIR"
     - python3 -m unittest discover -s tools -p "test_*.py" -v
 
-# Build linked behind versaloon-bootloader (0x08002800, 54 KB). Release by
-# default; a Debug build has the debug log on the CDC port and SWD on.
-# The linker script fails the link when the image does not fit; the size
-# check reports the size and fails on the same limit. The default target
-# also builds versaloon-bootloader for the Mini and the OtherUse.
+# Builds the application images of the board (standalone, app-8k, app-10k;
+# README "Build the firmware"). Release by default; a Debug build has the
+# debug log on the CDC port and SWD on. The linker script fails the link
+# when an image does not fit; the size check reports the size of each image
+# in vsl-images.txt and fails on the same limit. The default target also
+# builds versaloon-bootloader for the Mini and the OtherUse.
 .build-board-template:
   stage: build
   variables:
@@ -77,7 +76,6 @@ run-tool-tests:
       -D BOARD:STRING=${BOARD}
       -D VSL_PROTOCOL:STRING=${PROTOCOL}
       -D VSL_DEFAULT_PROTOCOL:STRING=${DEFAULT_PROTOCOL}
-      -D VSL_BOOTLOADER:BOOL=ON
       -D CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
       -D CMAKE_BUILD_TYPE:STRING=${BUILD_TYPE}
       -D CMAKE_TOOLCHAIN_FILE=${CI_PROJECT_DIR}/cmake/gcc_arm.cmake
@@ -85,14 +83,14 @@ run-tool-tests:
       -S .
       -B "${BUILDDIR}"
     - cmake --build ${BUILDDIR} -- -j`nproc`
-    - ci/check-size.sh ${BUILDDIR}/versaloon-next-gen.bin ${FLASH_LIMIT_BYTES}
+    - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/vsl-images.txt"
   artifacts:
     name: "versaloon-next-gen-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
     paths:
       - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-*.hex
       - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-*.bin
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen.elf
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen.map
+      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-*.elf
+      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-*.map
       - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-bootloader/versaloon-bootloader-*
 
 build-mini:
@@ -139,13 +137,12 @@ build-stlinkv2-cmsis-dap:
     BOARD: stlinkv2
 
 # The dual image (VSL_PROTOCOL=dual) on all boards. The last 1 KB flash
-# page holds the stored personality, so the image limit is 53 KB.
+# page holds the stored personality, so each image limit is 1 KB smaller.
 .build-dual-template:
   extends: .build-board-template
   variables:
     PROTOCOL: dual
     PROTOCOL_TAG: "-dual"
-    FLASH_LIMIT_BYTES: "54272"
 
 build-mini-dual:
   extends: .build-dual-template

@@ -71,11 +71,20 @@ set(VSL_BOOTLOADER_BOARDS mini otheruse)
 set(BOARD "mini" CACHE STRING "Board to build for: ${VSL_BOARDS}")
 set_property(CACHE BOARD PROPERTY STRINGS ${VSL_BOARDS})
 
-# Link the application behind versaloon-bootloader (0x08002800, 54 KB) or
-# at the start of FLASH (0x08000000) for development without a bootloader.
-option(VSL_BOOTLOADER "Link the application behind versaloon-bootloader at 0x08002800" ON)
+# Application images. Each image is the same firmware, linked for one start
+# address (ldscripts/mem-f103.ld). The value is the space in bytes in front
+# of the application:
+#   standalone  0       0x08000000, no bootloader: flash with a debug probe
+#   app-8k      8192    0x08002000, behind versaloon-bootloader (8 KB)
+#   app-10k     10240   0x08002800, behind the legacy Versaloon bootloader
+#                       (10 KB) of the existing boards
+# The boards in VSL_BOOTLOADER_BOARDS get all images. The other boards have
+# no bootloader and get the standalone image only.
+set(VSL_APP_OFFSET_standalone 0)
+set(VSL_APP_OFFSET_app-8k 8192)
+set(VSL_APP_OFFSET_app-10k 10240)
 # Build versaloon-bootloader (dependencies/versaloon-bootloader, cmake/Bootloader.cmake)
-# for the board. Only for boards that the bootloader supports, and only with VSL_BOOTLOADER.
+# for the board. Only for boards that the bootloader supports.
 option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 
 # USB personality of the firmware image.
@@ -115,10 +124,10 @@ if (CMAKE_CROSSCOMPILING)
         set(SYSTEM_STM32_HSE_VALUE "12000000" CACHE STRING "HSE crystal frequency in Hz" FORCE)
     endif ()
 
-    if (VSL_BOOTLOADER)
-        set(VSL_MEMORY_LDSCRIPT mem-f103-bootloader.ld)
+    if (BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
+        set(VSL_APP_IMAGES standalone app-8k app-10k)
     else ()
-        set(VSL_MEMORY_LDSCRIPT mem-f103.ld)
+        set(VSL_APP_IMAGES standalone)
     endif ()
 
     # Debug log over the CDC-ACM port (src/debug/DebugLog.h). The option
@@ -151,11 +160,6 @@ if (CMAKE_CROSSCOMPILING)
     # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
     set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER})
-    # FW_UPDATE enters the bootloader only when the firmware is linked behind
-    # one and the board has one (src/boot/BootloaderEntry.h)
-    if (VSL_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
-        list(APPEND PROJECT_DEFINES VSL_HAS_BOOTLOADER_ENTRY)
-    endif ()
     # An image has the sources of its personality only: the CMSIS-DAP image
     # does not link the Versaloon command buffers (usb/VersaloonFunction.h).
     # The dual image has all sources.
@@ -207,7 +211,7 @@ if (CMAKE_CROSSCOMPILING)
     set(COMMON_OPTIONS -Os -ffunction-sections -fdata-sections -g -fno-common -fmessage-length=0 -fsigned-char -Werror=odr --specs=nano.specs --specs=nosys.specs)
     set(C_OPTIONS -std=gnu11)
     set(DEBUG_OPTIONS -Wall -Wextra -Og)
-    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -Wl,--defsym=__vsl_settings_size=${VSL_SETTINGS_PAGE_SIZE} -T${VSL_MEMORY_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -Wl,--defsym=__vsl_settings_size=${VSL_SETTINGS_PAGE_SIZE} -Tmem-f103.ld -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
 endif ()
 
 # Central interface target to unify compile/link flags and defines across all used libraries and executables
@@ -227,48 +231,75 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    if (VSL_BOOTLOADER)
-        set(VSL_LINK_VARIANT bootloader)
-    else ()
-        set(VSL_LINK_VARIANT direct)
-    endif ()
-    MESSAGE(STATUS "Building versaloon-next-gen version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (" ${VSL_LINK_VARIANT} ", " ${VSL_MEMORY_LDSCRIPT} ", protocol: " ${VSL_PROTOCOL} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ")")
+    MESSAGE(STATUS "Building versaloon-next-gen version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", protocol: " ${VSL_PROTOCOL} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program
     #----------------------------------------------------------------------------------------------------#
-    add_executable(versaloon-next-gen.elf ${VSL_FIRMWARE_SOURCES})
+    # All sources except src/main.cpp are compiled one time and linked into
+    # each application image. src/main.cpp is compiled per image, because
+    # VSL_HAS_BOOTLOADER_ENTRY (src/boot/BootloaderEntry.h) depends on it.
+    set(VSL_SHARED_SOURCES ${VSL_FIRMWARE_SOURCES})
+    list(FILTER VSL_SHARED_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
+    add_library(versaloon-next-gen-objects OBJECT ${VSL_SHARED_SOURCES})
     # The JTAG and SWD engines are instantiated in these files (see
     # board/BoardJtag.h and board/BoardSwd.h). They use -O2 instead of
     # -Os. It comes after the -Os of COMMON_OPTIONS, so it wins.
     set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardSwd.cpp
             PROPERTIES COMPILE_OPTIONS -O2)
-
     # Apply unified build configuration
-    target_link_libraries(versaloon-next-gen.elf PUBLIC art-build-config)
-    # Per-target map file name
-    target_link_options(versaloon-next-gen.elf PUBLIC -Wl,-Map,versaloon-next-gen.map)
-    # Relink when a linker script changes
-    set_target_properties(versaloon-next-gen.elf PROPERTIES LINK_DEPENDS
-            "${PROJECT_SOURCE_DIR}/ldscripts/${VSL_MEMORY_LDSCRIPT};${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld")
-    target_include_directories(versaloon-next-gen.elf PUBLIC ${PROJECT_INCLUDE_DIRS})
-    target_link_libraries(versaloon-next-gen.elf PUBLIC art::core art::stm32 system-stm32)
+    target_link_libraries(versaloon-next-gen-objects PUBLIC art-build-config art::core art::stm32 system-stm32)
+    target_include_directories(versaloon-next-gen-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
 
-    ADD_DUMP_TARGET(versaloon-next-gen.elf)
-    PRINT_SIZE_OF_TARGETS(versaloon-next-gen.elf)
+    # Links the application image <image> (one of VSL_APP_IMAGES) as the
+    # target versaloon-next-gen-<image>.elf. The build directory gets
+    # versaloon-next-gen-<image>.hex and .bin, and a copy with the board,
+    # the build type and the version in the name.
+    function(vsl_add_app_image image)
+        set(_target versaloon-next-gen-${image}.elf)
+        set(_name versaloon-next-gen-${image})
+        set(_offset ${VSL_APP_OFFSET_${image}})
+        add_executable(${_target} src/main.cpp)
+        # system-stm32 is an OBJECT library (start-up code, vector table).
+        # CMake adds the objects of an OBJECT library only to the target
+        # that links it directly, so each image links the libraries again.
+        target_link_libraries(${_target} PUBLIC versaloon-next-gen-objects art::core art::stm32 system-stm32)
+        target_link_options(${_target} PUBLIC -Wl,--defsym=__vsl_app_offset=${_offset} -Wl,-Map,${_name}.map)
+        # FW_UPDATE enters the bootloader only behind versaloon-bootloader.
+        # The legacy bootloader of app-10k does not know the boot request
+        # (src/boot/BootloaderEntry.h).
+        if (image STREQUAL "app-8k")
+            target_compile_definitions(${_target} PRIVATE VSL_HAS_BOOTLOADER_ENTRY)
+        endif ()
+        # Relink when a linker script changes
+        set_target_properties(${_target} PROPERTIES LINK_DEPENDS
+                "${PROJECT_SOURCE_DIR}/ldscripts/mem-f103.ld;${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld")
 
-    set(HEX_FILE versaloon-next-gen-${BOARD}${VSL_IMAGE_TAG}-${VSL_LINK_VARIANT}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION}.hex)
-    set(BIN_FILE versaloon-next-gen-${BOARD}${VSL_IMAGE_TAG}-${VSL_LINK_VARIANT}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION}.bin)
+        ADD_DUMP_TARGET(${_target})
+        PRINT_SIZE_OF_TARGETS(${_target})
 
-    add_custom_command(TARGET versaloon-next-gen.elf POST_BUILD
-            COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:versaloon-next-gen.elf> versaloon-next-gen.hex
-            COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:versaloon-next-gen.elf> versaloon-next-gen.bin
-            COMMAND ${CMAKE_COMMAND} -E copy versaloon-next-gen.hex ${HEX_FILE}
-            COMMAND ${CMAKE_COMMAND} -E copy versaloon-next-gen.bin ${BIN_FILE}
-            COMMENT "Building ${HEX_FILE} \nBuilding ${BIN_FILE}")
+        set(_file versaloon-next-gen-${BOARD}${VSL_IMAGE_TAG}-${image}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
+        add_custom_command(TARGET ${_target} POST_BUILD
+                COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:${_target}> ${_name}.hex
+                COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${_target}> ${_name}.bin
+                COMMAND ${CMAKE_COMMAND} -E copy ${_name}.hex ${_file}.hex
+                COMMAND ${CMAKE_COMMAND} -E copy ${_name}.bin ${_file}.bin
+                COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin")
+    endfunction()
+
+    # vsl-images.txt lists each application image with its size limit, one
+    # line "<bin-file> <limit-in-bytes>". CI runs ci/check-size.sh on each
+    # line. The limit is the FLASH region of ldscripts/mem-f103.ld.
+    set(_images_list "")
+    foreach (_image ${VSL_APP_IMAGES})
+        vsl_add_app_image(${_image})
+        math(EXPR _limit "65536 - ${VSL_APP_OFFSET_${_image}} - ${VSL_SETTINGS_PAGE_SIZE}")
+        string(APPEND _images_list "versaloon-next-gen-${_image}.bin ${_limit}\n")
+    endforeach ()
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_images_list}")
 
     include(Bootloader)
-    if (VSL_BUILD_BOOTLOADER AND VSL_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
+    if (VSL_BUILD_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
         vsl_add_bootloader()
         MESSAGE(STATUS "Building versaloon-bootloader for board " ${BOARD} " into " ${VSL_BOOTLOADER_DIR})
     endif ()

@@ -7,12 +7,18 @@ This document is for developers of the firmware: build outputs, tests, the flash
 The README shows how to build the firmware.
 The build writes these files into the build directory:
 
-- `versaloon-next-gen.elf`, `versaloon-next-gen.hex` and `versaloon-next-gen.bin`.
-- Copies of the `.hex` and `.bin` files with the board, the link variant, the build type and the version in the name.
-  An example is `versaloon-next-gen-mini-bootloader-Release-v0.1.0.hex`.
-  An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-next-gen-mini-cmsis-dap-bootloader-Release-v0.1.0.hex`.
+- `versaloon-next-gen-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
+  The README lists the images and their start addresses.
+- Copies of the `.hex` and `.bin` files with the board, the image, the build type and the version in the name.
+  An example is `versaloon-next-gen-mini-app-8k-Release-v0.1.0.hex`.
+  An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-next-gen-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
   An image with `VSL_PROTOCOL=dual` has `-dual` after the board, or `-dual-cmsis-dap` with `VSL_DEFAULT_PROTOCOL=cmsis-dap`.
-- `versaloon-next-gen.map`, the linker map.
+- `versaloon-next-gen-<image>.map`, the linker map of each image.
+
+All images use the same object files.
+Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
+One linker script, `ldscripts/mem-f103.ld`, links all images.
+CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
 - `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
 
 For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
@@ -20,7 +26,7 @@ The target is `versaloon-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
-There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BOOTLOADER` or `VSL_BUILD_BOOTLOADER` is `OFF`.
+There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
 
 ## Unit tests
 

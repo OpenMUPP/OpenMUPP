@@ -1,6 +1,6 @@
 # Firmware update
 
-The firmware runs behind `versaloon-bootloader`.
+The Mini and the OtherUse run the firmware behind a bootloader.
 The bootloader is a USB CDC serial port with the ID `0483:5740`.
 It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
 
@@ -27,7 +27,7 @@ The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 | Status | Meaning |
 |---|---|
 | `0x00` | Accepted. The firmware starts the bootloader. |
-| `0x01` | Refused. The second byte is not the key `0xAA`, the firmware is linked without the bootloader (`VSL_BOOTLOADER=OFF`), or the board has no `versaloon-bootloader` (ST-Link/V2). The firmware continues to run. |
+| `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. The `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The ST-Link/V2 has only the `standalone` image. The firmware continues to run. |
 
 After the reply, the firmware does these steps:
 
@@ -56,22 +56,22 @@ Then write the firmware through the bootloader (see below).
 ## Write the firmware
 
 1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` with the ID `0483:5740` shows.
-2. Write the `.bin` file of a build with `VSL_BOOTLOADER=ON` at `0x08002800`:
+2. Write the `.bin` file of the `app-10k` image at `0x08002800`:
 
    ```sh
-   stm32flash -w versaloon-next-gen.bin -v -S 0x08002800 /dev/ttyACM0
+   stm32flash -w versaloon-next-gen-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Reset the board, or disconnect it and connect it again. The firmware starts.
 
-Do not write a build with `VSL_BOOTLOADER=OFF` through the bootloader.
-That build is linked at `0x08000000`, so it does not start at `0x08002800`.
+Do not write the `standalone` image through the bootloader.
+It is linked at `0x08000000`, so it does not start behind a bootloader.
 
 ## Start-up behind the bootloader
 
 The bootloader starts the firmware after a system reset.
 Thus all peripherals are in their reset state when the firmware starts.
-The bootloader sets `VTOR` to the firmware vector table at `0x08002800`.
+The bootloader sets `VTOR` to the firmware vector table at the start of the application.
 The system-stm32 start-up code sets `VTOR` again from the linker script.
 The bootloader jumps to the firmware with all interrupts masked (`PRIMASK` set).
 `os_startup_initialize_hardware()` clears `PRIMASK` after the pin setup, before the static constructors run.
@@ -80,14 +80,20 @@ The firmware initializes its DATA and BSS sections. It does not use RAM content 
 
 ## Flash layout and size limit
 
-`versaloon-bootloader` uses the first 10 KB of flash (`0x08000000` to `0x080027FF`).
 The OtherUse has an STM32F103C8 with 64 KB flash.
-Thus the application must not be larger than 54 KB.
-This is a hard limit for all boards.
+The bootloader uses the start of the flash, and the application uses the rest:
 
-- `ldscripts/mem-f103-bootloader.ld` has a 54 KB FLASH region at `0x08002800`. The link fails when the application is too large.
-- `ldscripts/mem-f103.ld` has a 64 KB FLASH region at `0x08000000` (`VSL_BOOTLOADER=OFF`).
-- CI reports the image size with `ci/check-size.sh` and fails when the `.bin` file is larger than 54 KB.
+| Image | Bootloader | Application | Size limit | Size limit, dual image |
+|---|---|---|---|---|
+| `standalone` | none | `0x08000000` | 64 KB | 63 KB |
+| `app-8k` | `versaloon-bootloader`, 8 KB | `0x08002000` | 56 KB | 55 KB |
+| `app-10k` | legacy Versaloon bootloader, 10 KB | `0x08002800` | 54 KB | 53 KB |
+
+The limits are hard limits for all boards.
+The firmware must also fit behind the legacy bootloader, because the existing boards need the `app-10k` image.
+
+- `ldscripts/mem-f103.ld` has the FLASH region from the start of the application to the end of the 64 KB. The link of an image fails when the application is too large.
+- CI reports the size of each image with `ci/check-size.sh` and fails when the `.bin` file is larger than its limit.
 
 The main stack is 2 KB (`ldscripts/sections.ld`), because the STM32F103 has only 20 KB RAM.
 The link fails when less than the full main stack is free.
