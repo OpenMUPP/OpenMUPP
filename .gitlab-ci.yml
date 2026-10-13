@@ -41,10 +41,9 @@ run-unit-tests:
   stage: .pre
   script:
     - cd "$CI_PROJECT_DIR"
-    - BUILDDIR=build-tests
-    - cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" -S . -B "${BUILDDIR}"
-    - cmake --build ${BUILDDIR} --target vsl-tests -- -j`nproc`
-    - cd ${BUILDDIR} && ctest --output-on-failure
+    - cmake --preset host-tests -G "Unix Makefiles"
+    - cmake --build --preset host-tests -- -j`nproc`
+    - ctest --preset host-tests
 
 run-tool-tests:
   stage: .pre
@@ -53,8 +52,9 @@ run-tool-tests:
     - python3 -m unittest discover -s tools -p "test_*.py" -v
 
 # Builds the application images of the board (standalone, app-8k, app-10k;
-# README "Build the firmware"). Release by default; a Debug build has the
-# debug log on the CDC port and SWD on. The linker script fails the link
+# README "Build the firmware") with the configure preset PRESET
+# (CMakePresets.json). Release by default; a Debug build has the debug log on
+# the CDC port and SWD on. The linker script fails the link
 # when an image does not fit; the size check reports the size of each image
 # in vsl-images.txt and fails on the same limit. The default target also
 # builds versaloon-bootloader for the Mini and the OtherUse.
@@ -62,27 +62,13 @@ run-tool-tests:
   stage: build
   variables:
     BUILD_TYPE: Release
-    # versaloon or cmsis-dap (VSL_PROTOCOL in CMakeLists.txt)
-    PROTOCOL: versaloon
     # Empty for the default personality
     PROTOCOL_TAG: ""
-    # Only for PROTOCOL=dual (VSL_DEFAULT_PROTOCOL in CMakeLists.txt)
-    DEFAULT_PROTOCOL: versaloon
   script:
     - cd "$CI_PROJECT_DIR"
-    - BUILDDIR=${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build
-    - cmake --no-warn-unused-cli
-      -D GCC_TOOLCHAIN_PREFIX:STRING=${GCC_TOOLCHAIN_PREFIX}
-      -D BOARD:STRING=${BOARD}
-      -D VSL_PROTOCOL:STRING=${PROTOCOL}
-      -D VSL_DEFAULT_PROTOCOL:STRING=${DEFAULT_PROTOCOL}
-      -D CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
-      -D CMAKE_BUILD_TYPE:STRING=${BUILD_TYPE}
-      -D CMAKE_TOOLCHAIN_FILE=${CI_PROJECT_DIR}/cmake/gcc_arm.cmake
-      -G "Unix Makefiles"
-      -S .
-      -B "${BUILDDIR}"
-    - cmake --build ${BUILDDIR} -- -j`nproc`
+    - BUILDDIR=build/${PRESET}
+    - cmake --preset ${PRESET} -G "Unix Makefiles"
+    - cmake --build --preset ${PRESET} -- -j`nproc`
     - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/vsl-images.txt"
   # Only the .hex and .bin files that a user writes, with the board, the
   # image, the build type and the version in the name (README "Build the
@@ -91,22 +77,25 @@ run-tool-tests:
   artifacts:
     name: "versaloon-next-gen-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
     paths:
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-${BOARD}*.hex
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-${BOARD}*.bin
+      - build/${PRESET}/versaloon-next-gen-${BOARD}*.hex
+      - build/${PRESET}/versaloon-next-gen-${BOARD}*.bin
 
 build-mini:
   extends: .build-board-template
   variables:
+    PRESET: mini
     BOARD: mini
 
 build-otheruse:
   extends: .build-board-template
   variables:
+    PRESET: otheruse
     BOARD: otheruse
 
 build-stlinkv2:
   extends: .build-board-template
   variables:
+    PRESET: stlinkv2
     BOARD: stlinkv2
 
 build-mini-debug:
@@ -114,27 +103,30 @@ build-mini-debug:
   variables:
     BOARD: mini
     BUILD_TYPE: Debug
+    PRESET: mini-debug
 
 # The CMSIS-DAP personality (VSL_PROTOCOL=cmsis-dap) on all boards
 .build-cmsis-dap-template:
   extends: .build-board-template
   variables:
-    PROTOCOL: cmsis-dap
     PROTOCOL_TAG: "-cmsis-dap"
 
 build-mini-cmsis-dap:
   extends: .build-cmsis-dap-template
   variables:
+    PRESET: mini-cmsis-dap
     BOARD: mini
 
 build-otheruse-cmsis-dap:
   extends: .build-cmsis-dap-template
   variables:
+    PRESET: otheruse-cmsis-dap
     BOARD: otheruse
 
 build-stlinkv2-cmsis-dap:
   extends: .build-cmsis-dap-template
   variables:
+    PRESET: stlinkv2-cmsis-dap
     BOARD: stlinkv2
 
 # The dual image (VSL_PROTOCOL=dual) on all boards. The last 1 KB flash
@@ -142,28 +134,30 @@ build-stlinkv2-cmsis-dap:
 .build-dual-template:
   extends: .build-board-template
   variables:
-    PROTOCOL: dual
     PROTOCOL_TAG: "-dual"
 
 build-mini-dual:
   extends: .build-dual-template
   variables:
+    PRESET: mini-dual
     BOARD: mini
 
 build-otheruse-dual:
   extends: .build-dual-template
   variables:
+    PRESET: otheruse-dual
     BOARD: otheruse
 
 build-stlinkv2-dual:
   extends: .build-dual-template
   variables:
+    PRESET: stlinkv2-dual
     BOARD: stlinkv2
 
 # The dual image with CMSIS-DAP as the default personality
 build-mini-dual-cmsis-dap:
   extends: .build-dual-template
   variables:
+    PRESET: mini-dual-cmsis-dap
     BOARD: mini
-    DEFAULT_PROTOCOL: cmsis-dap
     PROTOCOL_TAG: "-dual-cmsis-dap"
