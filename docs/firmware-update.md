@@ -1,15 +1,18 @@
 # Firmware update
 
-The Mini and the OtherUse run the firmware behind a bootloader.
-The bootloader is a USB CDC serial port with the ID `0483:5740`.
+The Mini and the OtherUse run the firmware behind a bootloader: `versaloon-bootloader` (8 KB) or the legacy Versaloon bootloader (10 KB).
+See [Install the bootloader](#install-the-bootloader).
+`versaloon-bootloader` is a USB CDC serial port with the ID `0483:5740`.
 It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
 
 ## Start the bootloader
 
-Use one of these methods:
+To start `versaloon-bootloader`, use one of these methods:
 
-- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`.
+- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the `app-8k` image has this command.
 - Hold the key (PB9) down and reset the board.
+
+To start the legacy bootloader, hold the key (PB9) down while you connect the board to USB.
 
 A firmware image built with `VSL_PROTOCOL=cmsis-dap` has no Versaloon interface.
 It has no `VERSALOON_FW_UPDATE` command.
@@ -42,7 +45,18 @@ The next reset starts the firmware again.
 
 ## Install the bootloader
 
-A new board needs the bootloader one time.
+The Mini and the OtherUse use one of two bootloaders:
+
+- The legacy Versaloon bootloader uses 10 KB. The existing boards have it. It runs the `app-10k` image.
+  Hold the key (PB9) down while you connect the board to USB to start it.
+  It does not know the boot request, so `VERSALOON_FW_UPDATE` does not start it.
+- `versaloon-bootloader` uses 8 KB. It runs the `app-8k` image.
+  The submodule `dependencies/versaloon-bootloader` has its source (https://gitlab.vandertogt.org/embedded-projects/versaloon-bootloader).
+
+A board with the legacy bootloader can continue to use it.
+To change a board to `versaloon-bootloader`, write the new bootloader one time with a debug probe.
+Then write the `app-8k` image.
+
 The firmware build makes the bootloader image `versaloon-bootloader/versaloon-bootloader-<board>.hex` (see [Build the firmware](../README.md#build-the-firmware)).
 Write it at `0x08000000` with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
 
@@ -51,21 +65,62 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
         -c "program versaloon-bootloader/versaloon-bootloader-mini.hex verify reset exit"
 ```
 
-Then write the firmware through the bootloader (see below).
+At its first start, `versaloon-bootloader` write-protects its 8 KB area.
+To write a new bootloader over it, remove the write protection first:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "init; reset halt; stm32f1x unlock 0; reset halt; exit"
+```
+
+`stm32f1x unlock 0` erases the option bytes and removes all write protection.
+The bootloader README has the full rules ("Flash protection").
 
 ## Write the firmware
 
-1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` with the ID `0483:5740` shows.
-2. Write the `.bin` file of the `app-10k` image at `0x08002800`:
+1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` shows.
+   `versaloon-bootloader` has the ID `0483:5740`.
+2. Write the `.bin` file of the image for the bootloader:
 
    ```sh
+   # versaloon-bootloader (8 KB)
+   stm32flash -w versaloon-next-gen-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
+   # legacy bootloader (10 KB)
    stm32flash -w versaloon-next-gen-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Reset the board, or disconnect it and connect it again. The firmware starts.
+   With `versaloon-bootloader`, `stm32flash -g 0x08002000` also starts it.
 
-Do not write the `standalone` image through the bootloader.
+Do not write the `standalone` image through a bootloader.
 It is linked at `0x08000000`, so it does not start behind a bootloader.
+Do not write the `app-10k` image behind `versaloon-bootloader`, or the `app-8k` image behind the legacy bootloader.
+The start address of the image must be the end of the bootloader.
+
+## Application image header
+
+`versaloon-bootloader` starts only an application with a valid header.
+Thus it does not start a half-written or damaged image: it stays in bootloader mode.
+The header is in the reserved words of the vector table:
+
+| Offset | Content |
+|---|---|
+| `0x1C` | Magic `0x314C5356` (`"VSL1"` in memory) |
+| `0x20` | Image length in bytes |
+| `0x24` | CRC32 of the image (algorithm of the STM32F1 CRC unit) |
+| `0x28` | Reserved, `0` |
+
+The CRC covers the linked image, so a step after the link must add the header.
+The build calls `vsl_stamp_image()` from the bootloader submodule (`cmake/VslStampImage.cmake`) for the `app-8k` and `app-10k` images.
+It writes the header into the `.elf` file, and it writes the `.hex` and `.bin` files.
+The legacy bootloader ignores the header.
+The `standalone` image has no header.
+
+To check an image, use the stamp tool with the start address:
+
+```sh
+dependencies/versaloon-bootloader/tools/vsl-stamp-image.py --check versaloon-next-gen-app-8k.bin --base 0x08002000
+```
 
 ## Start-up behind the bootloader
 

@@ -127,29 +127,68 @@ The CMake options are:
 
 ## Flash the firmware
 
-The Mini and the OtherUse run the firmware behind a bootloader.
-Write the image that agrees with the bootloader on the board (see [Build the firmware](#build-the-firmware)).
-A board without a bootloader gets the `standalone` image from a debug probe.
+Select the image for the bootloader on the board:
 
-A new board needs the bootloader one time.
-Write it with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
+| Board | Bootloader | Image | Start address |
+|---|---|---|---|
+| Existing Mini or OtherUse | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
+| New Mini or OtherUse | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| Any board, debug probe | none | `standalone` | `0x08000000` |
 
-```sh
-openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-bootloader/versaloon-bootloader-mini.hex verify reset exit"
-```
+The images behind a bootloader have an application image header with a CRC32 (see [docs/firmware-update.md](docs/firmware-update.md#application-image-header)).
+`versaloon-bootloader` starts only an image with a valid header.
 
-To write the firmware through the bootloader, do these steps:
+### Board with the legacy bootloader
 
-1. Start the bootloader. Hold the key (PB9) down and reset the board.
-   A new serial port with the ID `0483:5740` shows, for example `/dev/ttyACM0`.
+An existing board keeps its legacy 10 KB bootloader.
+To write the firmware, do these steps:
+
+1. Start the bootloader. Hold the key (PB9) down while you connect the board to USB.
+   A new serial port shows, for example `/dev/ttyACM0`.
 2. Write the `.bin` file of the `app-10k` image with `stm32flash`:
 
    ```sh
    stm32flash -w versaloon-next-gen-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
-3. Reset the board. The firmware starts.
+3. Disconnect the board and connect it again. The firmware starts.
+
+The `app-10k` image refuses `VERSALOON_FW_UPDATE`, because the legacy bootloader does not know the boot request.
+
+### Board with versaloon-bootloader
+
+A new board needs `versaloon-bootloader` one time.
+An existing board can also change to it.
+Write the bootloader with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "program versaloon-bootloader/versaloon-bootloader-mini.hex verify reset exit"
+```
+
+`versaloon-bootloader` write-protects its 8 KB area.
+To write a new bootloader over it, remove the write protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
+
+To write the firmware through the bootloader, do these steps:
+
+1. Start the bootloader. Hold the key (PB9) down and reset the board, or send `VERSALOON_FW_UPDATE`.
+   A new serial port with the ID `0483:5740` shows, for example `/dev/ttyACM0`.
+2. Write the `.bin` file of the `app-8k` image with `stm32flash`, and start it:
+
+   ```sh
+   stm32flash -w versaloon-next-gen-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
+   ```
+
+### Board without a bootloader
+
+Write the `standalone` image with a debug probe, for example with OpenOCD:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "program versaloon-next-gen-standalone.hex verify reset exit"
+```
+
+The `standalone` image refuses `VERSALOON_FW_UPDATE`.
 
 See [docs/firmware-update.md](docs/firmware-update.md) for the other ways to start the bootloader, and for the flash layout.
 

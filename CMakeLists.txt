@@ -251,14 +251,29 @@ if (CMAKE_CROSSCOMPILING)
     target_link_libraries(versaloon-next-gen-objects PUBLIC art-build-config art::core art::stm32 system-stm32)
     target_include_directories(versaloon-next-gen-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
 
+    # The application image header (magic, length, CRC32) of
+    # versaloon-bootloader. The bootloader starts only an image with a valid
+    # header. The tool is in the bootloader submodule.
+    set(_vsl_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/versaloon-bootloader/cmake/VslStampImage.cmake")
+    if ("app-8k" IN_LIST VSL_APP_IMAGES)
+        if (NOT EXISTS "${_vsl_stamp_cmake}")
+            message(FATAL_ERROR "${_vsl_stamp_cmake} not found. The images behind a bootloader need it. "
+                    "Run: git submodule update --init --recursive")
+        endif ()
+        include("${_vsl_stamp_cmake}")
+    endif ()
+
     # Links the application image <image> (one of VSL_APP_IMAGES) as the
     # target versaloon-next-gen-<image>.elf. The build directory gets
     # versaloon-next-gen-<image>.hex and .bin, and a copy with the board,
-    # the build type and the version in the name.
+    # the build type and the version in the name. An image behind a
+    # bootloader gets the application image header.
     function(vsl_add_app_image image)
         set(_target versaloon-next-gen-${image}.elf)
         set(_name versaloon-next-gen-${image})
         set(_offset ${VSL_APP_OFFSET_${image}})
+        math(EXPR _limit "65536 - ${_offset} - ${VSL_SETTINGS_PAGE_SIZE}")
+        set(VSL_APP_LIMIT_${image} ${_limit} PARENT_SCOPE)
         add_executable(${_target} src/main.cpp)
         # system-stm32 is an OBJECT library (start-up code, vector table).
         # CMake adds the objects of an OBJECT library only to the target
@@ -279,9 +294,19 @@ if (CMAKE_CROSSCOMPILING)
         PRINT_SIZE_OF_TARGETS(${_target})
 
         set(_file versaloon-next-gen-${BOARD}${VSL_IMAGE_TAG}-${image}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
+        if (_offset EQUAL 0)
+            add_custom_command(TARGET ${_target} POST_BUILD
+                    COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:${_target}> ${_name}.hex
+                    COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${_target}> ${_name}.bin)
+        else ()
+            # The stamp step writes the header into the ELF file and makes
+            # the .hex and .bin files. A separate objcopy step would fill the
+            # gaps with 0x00 and give a wrong CRC.
+            vsl_stamp_image(${_target} BIN ${_name}.bin HEX ${_name}.hex MAX_LENGTH ${_limit})
+        endif ()
+        # Post-build steps run in the order of the calls: the copies come
+        # after the stamp step.
         add_custom_command(TARGET ${_target} POST_BUILD
-                COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:${_target}> ${_name}.hex
-                COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${_target}> ${_name}.bin
                 COMMAND ${CMAKE_COMMAND} -E copy ${_name}.hex ${_file}.hex
                 COMMAND ${CMAKE_COMMAND} -E copy ${_name}.bin ${_file}.bin
                 COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin")
@@ -293,8 +318,7 @@ if (CMAKE_CROSSCOMPILING)
     set(_images_list "")
     foreach (_image ${VSL_APP_IMAGES})
         vsl_add_app_image(${_image})
-        math(EXPR _limit "65536 - ${VSL_APP_OFFSET_${_image}} - ${VSL_SETTINGS_PAGE_SIZE}")
-        string(APPEND _images_list "versaloon-next-gen-${_image}.bin ${_limit}\n")
+        string(APPEND _images_list "versaloon-next-gen-${_image}.bin ${VSL_APP_LIMIT_${_image}}\n")
     endforeach ()
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_images_list}")
 
