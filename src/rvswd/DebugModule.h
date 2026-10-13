@@ -32,6 +32,12 @@
 //     it. The read program is the program of the probe. The write program
 //     has the same layout, with a store. No capture shows it. The module
 //     loads a program once, until a DM reset or a DMI write of the host.
+//     A load or store that faults (cmderr 3) stops the program before it
+//     restores a0 and a1. Then the module runs restoreProgram, which
+//     copies dscratch0 and dscratch1 back to a0 and a1.
+//
+// The module refuses a misaligned word or half word address with
+// Status::Misaligned before any frame: the CH32V003 faults on it.
 //
 // After each abstract command, the module reads abstractcs until busy is
 // 0 and checks cmderr. The probe does not do this read in its memory
@@ -44,7 +50,10 @@
 // with the response and the tail bits 1111 (the pull-up, no target
 // drives) gives Status::NoTarget. One wire: a frame without a target
 // reads 0xffffffff. Thus each dmstatus read checks the version field
-// (2: spec 0.13), else Status::NoTarget.
+// (2: spec 0.13), else Status::NoTarget. Other accesses do not detect a
+// missing target on one wire: dmiRead() gives 0xffffffff with Status::Ok,
+// and an abstract command reads abstractcs ffffffff (busy) and ends with
+// Status::Timeout. After a Timeout, readDmstatus() tells the two apart.
 //
 // The Engine type has the members of RvSwdEngine: read(), write(),
 // head(), tail() and wire().
@@ -129,6 +138,18 @@ inline constexpr Program writeWordProgram{
    0x7b251073, 0x7b359073, 0xe0000537, 0x0f452583, 0x0f852503, 0x2573c10c, 0x25f37b20, 0x90027b30,
 };
 
+// Restores a0 and a1 after a fault in the read or the write program. Not
+// captured:
+//   csrr a0, dscratch0;  csrr a1, dscratch1;  c.ebreak
+inline constexpr std::array<uint32_t, 3> restoreProgram{
+   0x7b202573,
+   0x7b3025f3,
+   0x00009002,
+};
+
+// cmderr of an exception in the program buffer
+inline constexpr uint8_t cmderrException = 3;
+
 enum class Status : uint8_t {
    Ok,
    // The engine returned flags: parity error or line low.
@@ -141,6 +162,8 @@ enum class Status : uint8_t {
    Command,
    // The memory access method does not have this width.
    Unsupported,
+   // The address is not aligned to the width.
+   Misaligned,
 };
 
 enum class MemoryAccess : uint8_t {
@@ -300,20 +323,13 @@ class DebugModule {
    // words only. A read of a byte or a half word gives the value in the
    // low bits.
    Status readMemory(uint32_t address, uint32_t &value, Width width = Width::Word) {
-      uint32_t command = dm::readMemory | static_cast<uint32_t>(width) << dm::aamsizeShift;
-      if(memoryAccess_ == MemoryAccess::ProgramBuffer) {
-         if(width != Width::Word) {
-            return Status::Unsupported;
-         }
-         const Status status = load(LoadedProgram::Read);
-         if(status != Status::Ok) {
-            return status;
-         }
-         command = dm::execute;
+      Status status = prepare(address, width, LoadedProgram::Read);
+      if(status != Status::Ok) {
+         return status;
       }
-      Status status = write(dm::data1, address);
+      status = write(dm::data1, address);
       if(status == Status::Ok) {
-         status = execute(command);
+         status = run(dm::readMemory | static_cast<uint32_t>(width) << dm::aamsizeShift);
       }
       uint32_t data = 0;
       if(status == Status::Ok) {
@@ -326,22 +342,15 @@ class DebugModule {
    }
 
    Status writeMemory(uint32_t address, uint32_t value, Width width = Width::Word) {
-      uint32_t command = dm::writeMemory | static_cast<uint32_t>(width) << dm::aamsizeShift;
-      if(memoryAccess_ == MemoryAccess::ProgramBuffer) {
-         if(width != Width::Word) {
-            return Status::Unsupported;
-         }
-         const Status status = load(LoadedProgram::Write);
-         if(status != Status::Ok) {
-            return status;
-         }
-         command = dm::execute;
+      Status status = prepare(address, width, LoadedProgram::Write);
+      if(status != Status::Ok) {
+         return status;
       }
-      Status status = write(dm::data1, address);
+      status = write(dm::data1, address);
       if(status == Status::Ok) {
          status = write(dm::data0, value & widthMask(width));
       }
-      return status == Status::Ok ? execute(command) : status;
+      return status == Status::Ok ? run(dm::writeMemory | static_cast<uint32_t>(width) << dm::aamsizeShift) : status;
    }
 
    private:
@@ -353,6 +362,43 @@ class DebugModule {
 
    static constexpr uint32_t widthMask(Width width) {
       return width == Width::Byte ? 0xFFu : width == Width::Half ? 0xFFFFu : 0xFFFF'FFFFu;
+   }
+
+   // The checks before a memory access, and the program for ProgramBuffer
+   Status prepare(uint32_t address, Width width, LoadedProgram program) {
+      if((address & ((1u << static_cast<uint32_t>(width)) - 1)) != 0) {
+         return Status::Misaligned;
+      }
+      if(memoryAccess_ == MemoryAccess::Abstract) {
+         return Status::Ok;
+      }
+      return width == Width::Word ? load(program) : Status::Unsupported;
+   }
+
+   // The abstract memory command, or the loaded program. After a fault in
+   // the program, the restore program puts a0 and a1 back.
+   Status run(uint32_t command) {
+      if(memoryAccess_ == MemoryAccess::Abstract) {
+         return execute(command);
+      }
+      const Status status = execute(dm::execute);
+      if(status != Status::Command || cmderr_ != cmderrException) {
+         return status;
+      }
+      loaded_ = LoadedProgram::None;
+      Status restore = Status::Ok;
+      for(std::size_t i = 0; i < restoreProgram.size() && restore == Status::Ok; ++i) {
+         restore = write(static_cast<uint8_t>(dm::progbuf0 + i), restoreProgram[i]);
+      }
+      if(restore == Status::Ok) {
+         restore = execute(dm::execute);
+      }
+      if(restore != Status::Ok) {
+         return restore;
+      }
+      // cmderr of the access, not of the restore
+      cmderr_ = cmderrException;
+      return Status::Command;
    }
 
    void forget() {

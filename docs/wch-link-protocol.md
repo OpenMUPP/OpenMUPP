@@ -374,6 +374,14 @@ This costs one frame for each access. A `cmderr` that is not 0 stops all later c
 The CH32V003 shows `abstractcs` `08000602` (`cmderr` 6) after the halt of the connect command. Thus the layer also clears `cmderr` before its first command.
 It does this again after a DM reset and after each DMI write of the host.
 
+Resume and quit:
+
+- The quit command of the probe also writes `dmcontrol` `40000000` (`dmactive` 0) after the `dmstatus` read. The resume of the layer does not do this write. The quit command of the personality must add it, else the DM stays active.
+- A `resumereq` write to a running hart clears `allresumeack` and does not set it again (debug spec 0.13). Thus `allrunning` also ends the poll. For a halted hart, the access sequence stays the sequence of the probe.
+
+The layer refuses a misaligned address before it sends a frame (status `Misaligned`). A word address must be a multiple of 4, and a half-word address a multiple of 2.
+The CH32V003 gets an exception on a misaligned word access.
+
 The layer selects the memory access method from the wire. One wire (CH32V00x) uses the program buffer. Two wires (CH32V20x, CH32V30x) use the abstract memory access.
 The program buffer method has 32-bit accesses only.
 
@@ -408,20 +416,33 @@ lw a1, 0xf4(a0);  lw a0, 0xf8(a0);  c.sw a1, 0(a0)
 csrr a0, dscratch0;  csrr a1, dscratch1;  c.ebreak
 ```
 
-An assembler (`clang --target=riscv32 -march=rv32ec`) gave the same words for both programs.
-The layer loads a program one time. It loads it again after a DM reset, after a DMI write of the host, or for the other program.
+A load or a store in the program can get an exception, for example at an address without memory. The hart then stops the program with `cmderr` 3.
+At that time, `a0` and `a1` hold values of the program, and `dscratch0` and `dscratch1` hold the values of the hart.
+Thus the layer then loads and runs a restore program. It writes `progbuf0` to `progbuf2`:
+
+```
+7b202573 7b3025f3 00009002
+csrr a0, dscratch0;  csrr a1, dscratch1;  c.ebreak
+```
+
+The layer uses the restore program, not an abstract register write of `a0` and `a1`. The restore program needs no extra reads before each access.
+A real CH32V003 must confirm that `dscratch0` and `dscratch1` keep their values after the exception.
+
+An assembler (`clang --target=riscv32 -march=rv32ec`) gave the same words for the three programs.
+The layer loads a program one time. It loads it again after a DM reset, after a DMI write of the host, after the restore program, or for the other program.
 
 ### Errors
 
 | Status | Cause |
 |---|---|
 | `Wire` | The engine returned a flag: a parity error (two wires) or a line that stays low (one wire). |
-| `NoTarget` | Two wires: the response bits and the tail bits are `1111`. No target drives them. One wire: a read without a target gives `ffffffff`. Thus each `dmstatus` read checks the version field (2 for spec 0.13). |
-| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. |
-| `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted). |
+| `NoTarget` | Two wires: the response bits and the tail bits are `1111`. No target drives them. One wire: a read without a target gives `ffffffff`. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
+| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout`: `abstractcs` reads `ffffffff` (`busy` 1). After a `Timeout`, read `dmstatus` to find a missing target. |
+| `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
 | `Unsupported` | A byte or half-word access with the program buffer method. |
+| `Misaligned` | The address is not a multiple of the access width. The layer sends no frame. |
 
-A real target is necessary to confirm the write program, the halt and resume times, and the no-target detection.
+A real target is necessary to confirm the write program, the restore program, the halt and resume times, and the no-target detection.
 
 ## Byte order
 

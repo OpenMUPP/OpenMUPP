@@ -465,3 +465,64 @@ TEST_CASE("Resume of a running hart ends at allrunning") {
       CHECK_FALSE(bench.target.halted);
    }
 }
+
+TEST_CASE("A misaligned address gives Misaligned before any frame") {
+   for(const Wire wire : wires) {
+      CAPTURE(wire);
+      Bench bench(wire);
+      bench.connect();
+      uint32_t value = 0;
+      CHECK(bench.module.readMemory(0x2000'0002, value) == Status::Misaligned);
+      CHECK(bench.module.writeMemory(0x2000'0001, 0) == Status::Misaligned);
+      bench.module.setMemoryAccess(MemoryAccess::Abstract);
+      CHECK(bench.module.readMemory(0x2000'0001, value, Width::Half) == Status::Misaligned);
+      CHECK(bench.module.writeMemory(0x2000'0003, 0, Width::Half) == Status::Misaligned);
+      CHECK(bench.take().empty());
+      CHECK(bench.module.readMemory(0x2000'0003, value, Width::Byte) == Status::Ok);
+      CHECK(bench.module.readMemory(0x2000'0002, value, Width::Half) == Status::Ok);
+   }
+}
+
+TEST_CASE("Program buffer: a fault restores a0 and a1") {
+   Bench bench(Wire::One);
+   bench.connect();
+   bench.target.gprs[10] = 0xaaaa'0010;
+   bench.target.gprs[11] = 0xaaaa'0011;
+   bench.target.faultAddresses.insert(0x2000'0000);
+   bench.target.store(0x2000'0004, 0x1234'5678, 4);
+   uint32_t value = 0;
+
+   SUBCASE("Read") {
+      CHECK(bench.module.readMemory(0x2000'0000, value) == Status::Command);
+   }
+   SUBCASE("Write") {
+      CHECK(bench.module.writeMemory(0x2000'0000, 0x5555'5555) == Status::Command);
+      CHECK(bench.target.memory.count(0x2000'0000) == 0);
+   }
+   CHECK(bench.module.cmderr() == rvswd::cmderrException);
+   CHECK(bench.target.cmderr() == 0);
+   CHECK(bench.target.gprs[10] == 0xaaaa'0010);
+   CHECK(bench.target.gprs[11] == 0xaaaa'0011);
+   const auto accesses = bench.take();
+   // The restore program, then its run
+   const std::vector<Access> tail(accesses.end() - 5, accesses.end());
+   CHECK(tail == std::vector{ W(0x20, 0x7b20'2573), W(0x21, 0x7b30'25f3), W(0x22, 0x0000'9002),
+                              W(dm::command, 0x0004'0000), R(dm::abstractcs, 0x0800'0002) });
+
+   // The next access loads its program again.
+   CHECK(bench.module.readMemory(0x2000'0004, value) == Status::Ok);
+   CHECK(value == 0x1234'5678);
+   CHECK(bench.take().front() == W(dm::abstractauto, 0));
+   CHECK(bench.target.gprs[10] == 0xaaaa'0010);
+   CHECK(bench.target.gprs[11] == 0xaaaa'0011);
+}
+
+TEST_CASE("Abstract memory access: a bus error gives Command") {
+   Bench bench(Wire::Two);
+   bench.connect();
+   bench.target.faultAddresses.insert(0x2000'0000);
+   uint32_t value = 0;
+   CHECK(bench.module.readMemory(0x2000'0000, value) == Status::Command);
+   CHECK(bench.module.cmderr() == 5);
+   CHECK(bench.module.readMemory(0x2000'0004, value) == Status::Ok);
+}

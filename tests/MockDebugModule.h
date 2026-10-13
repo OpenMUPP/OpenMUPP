@@ -17,10 +17,18 @@
 //   lw, sw, c.lw, c.sw, c.ebreak. data0 and data1 are in memory at
 //   0xe00000f4 and 0xe00000f8, as on the CH32V003. Another instruction,
 //   or a program without ebreak, gives cmderr 3 (exception).
+// - A memory access at a misaligned address or at an address of
+//   faultAddresses faults. In the program buffer, the program stops at
+//   the faulting instruction with cmderr 3, and the registers keep the
+//   values of the instructions before it, as on a real hart. The abstract
+//   memory command gives cmderr 5 (bus error).
+// - resumereq clears resumeack, and resumes a halted hart only (debug
+//   spec 0.13). A halted hart then sets resumeack.
 
 #include <array>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <vector>
 
 #include "MockRvSwdTarget.h"
@@ -57,6 +65,8 @@ class MockDebugModule {
    std::map<uint16_t, uint32_t> csrs;
    // Little-endian bytes. A missing byte reads 0.
    std::map<uint32_t, uint8_t> memory;
+   // An access that touches one of these addresses faults.
+   std::set<uint32_t> faultAddresses;
    // The commands that started
    std::vector<uint32_t> commands;
    int programRuns{ 0 };
@@ -244,11 +254,45 @@ class MockDebugModule {
       const uint32_t bytes = 1u << size;
       const uint32_t address = target_.registers[rvswd::dm::data1];
       uint32_t &data = target_.registers[rvswd::dm::data0];
+      if(faults(address, bytes)) {
+         cmderr_ = 5;
+         return;
+      }
       if((value & 1u << 16) != 0) {
          store(address, data, bytes);
       } else {
          data = load(address, bytes);
       }
+   }
+
+   [[nodiscard]] bool faults(uint32_t address, uint32_t bytes) const {
+      if(address % bytes != 0) {
+         return true;
+      }
+      for(uint32_t i = 0; i < bytes; ++i) {
+         if(faultAddresses.count(address + i) != 0) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   // Returns false after an exception.
+   bool loadOp(uint32_t rd, uint32_t address) {
+      if(faults(address, 4)) {
+         exception();
+         return false;
+      }
+      gpr(rd) = load(address, 4);
+      return true;
+   }
+   bool storeOp(uint32_t address, uint32_t value) {
+      if(faults(address, 4)) {
+         exception();
+         return false;
+      }
+      store(address, value, 4);
+      return true;
    }
 
    // The program buffer, as bytes
@@ -313,12 +357,10 @@ class MockDebugModule {
          return false;
       }
       if(funct3 == 0b010) {
-         gpr(rd) = load(gprs[rs1] + offset, 4);
-         return true;
+         return loadOp(rd, gprs[rs1] + offset);
       }
       if(funct3 == 0b110) {
-         store(gprs[rs1] + offset, gprs[rd], 4);
-         return true;
+         return storeOp(gprs[rs1] + offset, gprs[rd]);
       }
       exception();
       return false;
@@ -332,8 +374,8 @@ class MockDebugModule {
       const uint32_t rs1 = insn >> 15 & 0x1F;
       const uint32_t rs2 = insn >> 20 & 0x1F;
       // A store has rs2 and no rd.
-      const bool storeOp = opcode == 0x23;
-      if(rs1 > 15 || (storeOp ? rs2 > 15 : rd > 15)) {
+      const bool isStore = opcode == 0x23;
+      if(rs1 > 15 || (isStore ? rs2 > 15 : rd > 15)) {
          exception();
          return false;
       }
@@ -343,13 +385,11 @@ class MockDebugModule {
          return true;
       }
       if(opcode == 0x03 && funct3 == 0b010) {
-         gpr(rd) = load(gprs[rs1] + immI, 4);
-         return true;
+         return loadOp(rd, gprs[rs1] + immI);
       }
       if(opcode == 0x23 && funct3 == 0b010) {
          const auto immS = static_cast<uint32_t>(static_cast<int32_t>(insn & 0xFE00'0000u) >> 20) | (insn >> 7 & 0x1F);
-         store(gprs[rs1] + immS, gprs[rs2], 4);
-         return true;
+         return storeOp(gprs[rs1] + immS, gprs[rs2]);
       }
       if(opcode == 0x73 && (funct3 == 0b001 || funct3 == 0b010)) {
          const auto csr = static_cast<uint16_t>(insn >> 20);
