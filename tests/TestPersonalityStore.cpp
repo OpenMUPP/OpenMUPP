@@ -84,6 +84,17 @@ TEST_CASE("The cycle visits three and four personalities in order") {
    CHECK(next3(c) == a);
    CHECK(next4(c) == d);
    CHECK(next4(d) == a);
+   CHECK(personality::nextIn(art::span<const Personality>(three.data(), 2), c) == a);
+}
+
+TEST_CASE("The code check rejects a repeated code and a code that is too large") {
+   constexpr std::array<Personality, 2> repeated{ Personality::CmsisDap, Personality::CmsisDap };
+   constexpr std::array<Personality, 2> tooLarge{ Personality::Versaloon, static_cast<Personality>(personality::maxPersonalities) };
+   constexpr std::array<Personality, 3> good{ Personality::Versaloon, Personality::CmsisDap, static_cast<Personality>(3) };
+
+   CHECK(personality::hasValidCodes(art::span<const Personality>(good.data(), good.size())));
+   CHECK_FALSE(personality::hasValidCodes(art::span<const Personality>(repeated.data(), repeated.size())));
+   CHECK_FALSE(personality::hasValidCodes(art::span<const Personality>(tooLarge.data(), tooLarge.size())));
 }
 
 TEST_CASE("The records of four personalities are distinct and none is a subset of another") {

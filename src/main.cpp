@@ -264,7 +264,7 @@ void addUsbToAllBlocks() {
 // the descriptors of that personality. When the store fails, the reset
 // keeps the active personality.
 [[noreturn]] void switchPersonality(Personality target) {
-   LOG_INFO(debug::appLog, "Switch to the %s personality", target == Personality::CmsisDap ? "CMSIS-DAP" : "Versaloon");
+   LOG_INFO(debug::appLog, "Switch to the %s personality", personality::name(target));
    usbStack.disconnect();
    board::SettingsFlashPage page;
    static_cast<void>(personality::PersonalityStore{ page }.store(target));
