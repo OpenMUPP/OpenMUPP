@@ -162,9 +162,13 @@ void UsbStack::poll() {
    controller_.poll();
 #if defined(VSL_WITH_CMSIS_DAP)
    if(active_ == Personality::CmsisDap) {
-      // One command at a time, with the USB events of its time after it:
+      // Run one command, then deliver the USB events that came during it:
       // the InComplete event frees the IN endpoint for the next response,
-      // and the next OUT packet is stored.
+      // and the next OUT packet is stored. The loop has no limit: while
+      // the host keeps a packet stored, the rest of the main loop does not
+      // run (LEDs, key gesture, debug log). This is as before E6, where
+      // the commands ran inside the event delivery. The serial service
+      // still runs during the commands (protocol/Background.h).
       while(dap_.poll()) {
          controller_.poll();
       }

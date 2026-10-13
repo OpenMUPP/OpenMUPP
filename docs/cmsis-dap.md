@@ -114,6 +114,11 @@ The USB function calls `submit()` for each request packet.
 Each call runs one stored packet with `runNext()` and sends its response immediately.
 Between two packets, `UsbStack::poll()` delivers the USB events again.
 Thus the InComplete event of the last response frees the IN endpoint, and the next response goes out while the next packet runs.
+This loop has no limit. It ends only when no packet is stored after an event delivery.
+A host that sends packets in a pipeline (pyOCD, OpenOCD) keeps a packet stored during a long memory read or a flash download.
+During that time, the rest of the main loop does not run: the LEDs do not change, the key gesture of the dual image waits, and the debug log waits.
+The serial service still runs during the commands, so the UART bridge loses no data.
+Before E6, the commands ran inside the event delivery, with the same effect.
 Thus the OUT endpoint stays armed while a command runs, if a slot is free.
 During a USB suspend, `CmsisDapFunction::poll()` runs no packet. The stored packets run after the resume.
 A packet that arrives during a command waits until that command ends.
