@@ -1,9 +1,9 @@
 #pragma once
 
 // The key gesture of a dual image: hold the key for holdMs to switch to
-// the other personality. Hardware-independent: the host unit tests check
+// the next personality. Hardware-independent: the host unit tests check
 // it. The main loop gives the key state and the uptime, and requests the
-// other personality (personality/PersonalitySwitch.h) when update()
+// next personality (personality/PersonalitySwitch.h) when update()
 // returns true. This is the moment that the key has been down long
 // enough: the LEDs flash then, and the user can release the key.
 //

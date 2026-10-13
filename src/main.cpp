@@ -21,7 +21,7 @@
 // (protocol/cmsisdap/DapProcessor.h) instead of USB_TO_ALL. A dual image
 // has both: the stored personality (personality/PersonalityStore.h)
 // selects one at the start. A switch command, or a key that is down for 3 s
-// (then the key release), stores the other personality and resets (personality/PersonalitySwitch.h).
+// (then the key release), stores the next personality and resets (personality/PersonalitySwitch.h).
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -264,7 +264,7 @@ void addUsbToAllBlocks() {
 // the descriptors of that personality. When the store fails, the reset
 // keeps the active personality.
 [[noreturn]] void switchPersonality(Personality target) {
-   LOG_INFO(debug::appLog, "Switch to the %s personality", target == Personality::CmsisDap ? "CMSIS-DAP" : "Versaloon");
+   LOG_INFO(debug::appLog, "Switch to the %s personality", personality::name(target));
    usbStack.disconnect();
    board::SettingsFlashPage page;
    static_cast<void>(personality::PersonalityStore{ page }.store(target));
@@ -282,7 +282,7 @@ void pollPersonality(uint64_t nowMs) {
    if(const auto key = board::current.key) {
       keyDown = board::isAsserted(*key);
       if(keyGesture.update(keyDown, nowMs)) {
-         personalitySwitch.request(personality::other(personalitySwitch.active()), personality::PersonalitySwitch::flashDelayMs);
+         personalitySwitch.request(personality::next(personalitySwitch.active()), personality::PersonalitySwitch::flashDelayMs);
       }
    }
    // The reset waits for the release of the key (PersonalitySwitch.h)

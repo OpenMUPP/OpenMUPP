@@ -1,12 +1,12 @@
 #pragma once
 
-// The switch to the other personality of a dual image. Hardware-
+// The switch to the next personality of a dual image. Hardware-
 // independent: the host unit tests check it.
 //
 // The switch commands call request(): SWITCH_PERSONALITY of the Versaloon
 // protocol (protocol/CommandProcessor.h) and ID_DAP_Vendor0 of CMSIS-DAP
 // (protocol/cmsisdap/DapProcessor.h). The key gesture
-// (personality/KeyGesture.h) requests the other personality. The command
+// (personality/KeyGesture.h) requests the next personality. The command
 // queues its reply before the request takes effect. The main loop calls
 // isDue() with the uptime. isDue() becomes true replyDelayMs after the
 // first isDue() call that sees the request, so the host has time to read

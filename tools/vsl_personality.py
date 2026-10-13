@@ -10,8 +10,8 @@ interface 0:
                                         response [0x80][status], 0 = accepted
 
 The personality code is 0 for Versaloon and 1 for CMSIS-DAP. After the
-reply, the dongle resets and enumerates as the other device. The script
-then waits for the other device. See docs/usb-device.md, "Dual image".
+reply, the dongle resets and enumerates as the target device. The script
+then waits for the target device. See docs/usb-device.md, "Dual image".
 
 Usage:
     python3 vsl_personality.py show
@@ -150,7 +150,7 @@ def command_switch(usb, args):
         return 1
     except usb.core.USBError as error:
         # The command went out, so the switch can be in progress: wait for
-        # the other device.
+        # the target device.
         print("No reply (%s), waiting for the device" % error, file=sys.stderr)
     finally:
         try:

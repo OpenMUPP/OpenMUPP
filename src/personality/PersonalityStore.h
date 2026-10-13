@@ -13,12 +13,13 @@
 // A write clears bits from 1 to 0, so a write that a power loss cut keeps
 // some 1 bits of the erased slot. The record values have 8 bits set each,
 // so no record has all the 1 bits of another one: a cut record is never
-// the record of the other personality. load() then returns no value, and
+// the record of another personality (all records have 8 bits set). load() then returns no value, and
 // the image uses its default personality. A new store() writes after
 // that slot. A page with data after the first erased slot is
 // not a log (for example code of an older, larger image): store() erases
 // it first.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -46,8 +47,15 @@ class PersonalityStore {
    public:
    static constexpr uint16_t erasedSlot = 0xFFFF;
 
+   // The record of a personality code (below maxPersonalities). Each value
+   // has 8 bits set and the values differ, so none has all the bits of another.
+   static constexpr uint16_t recordOfCode(uint8_t code) {
+      constexpr std::array<uint16_t, maxPersonalities> records{ 0xA55A, 0x5AA5, 0x3CC3, 0xC33C };
+      return records[code];
+   }
+
    static constexpr uint16_t recordOf(Personality personality) {
-      return personality == Personality::CmsisDap ? 0x5AA5 : 0xA55A;
+      return recordOfCode(toCode(personality));
    }
 
    explicit PersonalityStore(FlashPage &page)
@@ -62,7 +70,7 @@ class PersonalityStore {
          return std::nullopt;
       }
       const uint16_t record = slots[end - 1];
-      for(const auto personality : { Personality::Versaloon, Personality::CmsisDap }) {
+      for(const auto personality : all) {
          if(record == recordOf(personality)) {
             return personality;
          }

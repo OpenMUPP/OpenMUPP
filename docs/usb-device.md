@@ -155,9 +155,10 @@ To change the personality, use one of these methods:
 
 - In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
 - In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)). The status of a refused switch is `0xFF`.
-- Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the other personality.
+- Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the next personality in the list. With two personalities, this is the other one.
 
 The personality code is `0` for Versaloon and `1` for CMSIS-DAP.
+The settings page has room for four personality codes (`0` to `3`). A new personality gets the next code and one entry in `personality::all`.
 `tools/vsl_personality.py` sends the commands from the host.
 It needs the `pyusb` package:
 
