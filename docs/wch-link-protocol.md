@@ -289,8 +289,8 @@ CH32V003 (`v003-wlink-status-timing.csv`). The line is slow and not decoded from
 3. Read `0x7f`: `0x00300500`, the chip ID.
 4. Write `data1` with `0x1ffff7c4`. Write the program buffer (`progbuf0` to `progbuf7`, 8 words). Run it with the command `0x00040000` (execute the program buffer). Read `data0` (`00300500`).
 5. Write CSR `0x7c0` with `0x00000300` (command `0x002307c0`).
-6. Write `abstractcs` with `ffffffff` (at 89.9 ms, just before the chip information reads).
-7. The connect response goes to the host about 90 ms after the command.
+6. The connect response goes to the host about 90 ms after the command.
+7. Write `abstractcs` with `ffffffff` (at 89.9 ms, just before the chip information reads). It may belong to the `0c` command that follows the connect command. The captures do not show which command causes it.
 
 The CH32V003 reads memory with a program in the program buffer (command `0x00040000`). The CH32V208 uses the abstract memory access (command `0x02200000`).
 
