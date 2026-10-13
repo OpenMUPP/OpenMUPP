@@ -422,8 +422,36 @@ Observations:
 - **Fast triples.** The long bursts at about 120 ns for each bit (default speed) hold frames in the order `data1` write, `command` write, `data0` read. The probe sends them after the connect command. They look like abstract-command memory reads at the highest clock rate. The values were not matched to a USB access.
 - **Connect frames.** The 85-clock frames of the connect phase do not follow this format. They are not decoded.
 
-The CH32V003 one-wire line carries the same bit stream without SWCLK. The decoder needs SWCLK, so it does not work on the CH32V003 files.
-A decoder for the one-wire line must find the bit boundaries from the pulse widths. This was not done.
+### One-wire frame format (CH32V003)
+
+The one-wire line (SWIO) does not carry the 54-bit frame of the two-wire interface. It carries a shorter frame of 41 bits.
+Each bit is one low pulse followed by a high level. The width of the low pulse gives the value:
+
+| Bit | Low pulse | High level after it | Bit time |
+|---|---|---|---|
+| 1 | about 250 ns | about 370 ns | about 0.62 µs |
+| 0 | about 860 ns | about 370 ns | about 1.23 µs |
+
+Frames follow each other with a high level of 50 to 100 µs between them. The connect phase has other pulse patterns (see above).
+The decoder is `tools/wch-link/decode_frames_1wire.py`. It works on the CH32V003 CSV files.
+
+| Bits | Content |
+|---|---|
+| 0 | Start, always `1` |
+| 1 to 7 | DM register address, MSB first |
+| 8 | Operation: `1` is a write, `0` is a read |
+| 9 to 40 | Data, MSB first |
+
+The frame has no response bits, no parity and no tail. The two-wire frame has 13 more bits (a second operation bit, 5 response bits, 2 parity bits, 5 tail bits).
+The one-wire line may carry them in another way, or the probe may not send them. This is open.
+
+I checked the format against the USB capture of the same type of run. The 15 accesses of the host match in order and in address.
+The values match, except for `dmstatus` (`0x004f0382` on the wire, `0x004c0382` in the USB capture, from an earlier run; the bits 16 to 19 change between runs).
+The wire capture has three more accesses at the end (a write of `dmcontrol` with `0x40000001`, a read of `dmstatus`, a write of `dmcontrol` with `0x40000000`). They match a resume that the `status` command does at the end.
+I did not check them against a USB capture.
+
+Pulse widths are the same for reads and writes, and for the speeds `01`, `02` and `03`.
+A frame lasts 50 to 150 µs, depending on the number of 0 bits (about 105 µs for typical data).
 
 ## Pins and USB ID
 
@@ -456,7 +484,7 @@ The table lists the questions of epic #63 and their state.
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
-| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: the frame format on the one-wire line, and the timing of a flash program. |
+| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: the response and parity bits on the one-wire line, and the timing of a flash program. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
