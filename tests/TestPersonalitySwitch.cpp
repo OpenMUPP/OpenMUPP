@@ -134,7 +134,7 @@ TEST_CASE("ID_DAP_Vendor0 refuses a code that is not a personality") {
    bench.enumerate();
 
    REQUIRE(bench.write({ cmsisdap::command::vendor0, 0x07 }));
-   CHECK(bench.read() == Bytes{ cmsisdap::command::vendor0, 0x01 });
+   CHECK(bench.read() == Bytes{ cmsisdap::command::vendor0, 0xFF });
    // A short request
    REQUIRE(bench.write({ cmsisdap::command::vendor0 }));
    CHECK(bench.read() == Bytes{ cmsisdap::command::invalid });

@@ -358,7 +358,7 @@ TEST_CASE("DAP_HostStatus sets the LEDs") {
    CHECK(b.platform.leds[0] == std::pair{ cmsisdap::Led::Connected, true });
    CHECK(b.platform.leds[1] == std::pair{ cmsisdap::Led::Running, true });
    CHECK(b.platform.leds[2] == std::pair{ cmsisdap::Led::Connected, false });
-   CHECK(b.run({ 0x01, 0x02, 0x01 }) == V{ 0x01, 0x01 });
+   CHECK(b.run({ 0x01, 0x02, 0x01 }) == V{ 0x01, 0xFF });
    CHECK(b.platform.leds.size() == 3);
 }
 
@@ -464,7 +464,7 @@ TEST_CASE("DAP_SWJ_Clock sets the clock in Hz") {
    CHECK(b.run(cat({ { 0x11 }, word(10'000'000) })) == V{ 0x11, 0x00 });
    CHECK_FALSE(b.port.isTimed());
    // 0 Hz is an error, and the clock stays.
-   CHECK(b.run(cat({ { 0x11 }, word(0) })) == V{ 0x11, 0x01 });
+   CHECK(b.run(cat({ { 0x11 }, word(0) })) == V{ 0x11, 0xFF });
    CHECK_FALSE(b.port.isTimed());
 }
 
@@ -482,7 +482,7 @@ TEST_CASE("The clock does not depend on the order of the configuration commands"
 TEST_CASE("DAP_SWJ_Sequence") {
    Bench b;
    // Not connected
-   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x01 });
+   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0xFF });
    CHECK(b.pins.risingEdges.empty());
 
    b.connect();
@@ -514,7 +514,7 @@ TEST_CASE("DAP_SWD_Sequence") {
    Bench b;
    b.pins.decodes = false;
    // Not connected: error, and no data
-   CHECK(b.run({ 0x1D, 0x01, 0x84 }) == V{ 0x1D, 0x01 });
+   CHECK(b.run({ 0x1D, 0x01, 0x84 }) == V{ 0x1D, 0xFF });
    CHECK(b.pins.risingEdges.empty());
 
    b.connect();
@@ -912,7 +912,7 @@ TEST_CASE("DAP_TransferBlock: a write needs room for its response") {
 TEST_CASE("DAP_WriteABORT writes the ABORT register") {
    Bench b;
    // Not connected: error
-   CHECK(b.run(cat({ { 0x08, 0x00 }, word(0x1E) })) == V{ 0x08, 0x01 });
+   CHECK(b.run(cat({ { 0x08, 0x00 }, word(0x1E) })) == V{ 0x08, 0xFF });
    CHECK(b.pins.transfers.empty());
    b.connect();
    CHECK(b.run(cat({ { 0x08, 0x00 }, word(0x1E) })) == V{ 0x08, 0x00 });
