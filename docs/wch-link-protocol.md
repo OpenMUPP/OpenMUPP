@@ -393,7 +393,37 @@ Not measured on the CH32V003: the bit framing, and the wire timing of a flash pr
 
 Not measured on the CH32V208:
 
-- The bit-level framing (start, address, data, operation, parity) is not decoded.
+- The 85-clock frames of the connect phase and the bits that the table above marks as open.
+
+## Wire frame format
+
+The captures show one frame format on the wire. A frame has 54 clocks. SWDIO is stable at the rising edge of SWCLK. Bit 0 is the first clock.
+The decoder is `tools/wch-link/decode_frames.py`. It works on the CSV files of the CH32V208.
+I checked the format against the 15 DMI accesses that the USB capture of the same run shows.
+The address and the data of every access match. The order matches too.
+
+| Bits | Content | Driven by |
+|---|---|---|
+| 0 | Start, always `1` | Probe |
+| 1 to 7 | DM register address, MSB first | Probe |
+| 8 to 9 | Operation field | Probe |
+| 10 to 14 | Five response bits | Target |
+| 15 to 46 | Data, MSB first | Probe (write), target (read) |
+| 47 to 48 | Parity of the 32 data bits: `11` if the number of ones is odd, `00` if even | See below |
+| 49 to 53 | `00110` after a write, `01110` after a read | Probe and target |
+
+Observations:
+
+- **Operation field.** `10` for a write of `dmcontrol`, `data0` and `abstractcs`. `11` for a write of `command` (`0x17`) and `data1` (`0x05`). `01` for most reads. `00` for reads of `dmstatus` and `hartinfo`. The reason for `11` and `00` is open.
+- **Response bits.** `00000` after a write, `10000` after a write of `command`, `10100` after a read at the slow clock, `10000` after a read at the fast clock (about 120 ns). Their meaning is open (acknowledge or status).
+- **Parity.** Both parity bits matched the data in all 60 frames of the CH32V208 capture. They may be one parity bit sent two times.
+- **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 12 ns after the falling edge. The read data and the response bits follow the target pattern. The write data follows the probe pattern.
+- **Clock for each access.** At the default speed, a write uses 1.10 µs for each bit (about 907 kHz). A read uses 2.09 µs (about 478 kHz). At low speed, all accesses use 2.09 µs.
+- **Fast triples.** The long bursts at about 120 ns for each bit (default speed) hold frames in the order `data1` write, `command` write, `data0` read. The probe sends them after the connect command. They look like abstract-command memory reads at the highest clock rate. The values were not matched to a USB access.
+- **Connect frames.** The 85-clock frames of the connect phase do not follow this format. They are not decoded.
+
+The CH32V003 one-wire line carries the same bit stream without SWCLK. The decoder needs SWCLK, so it does not work on the CH32V003 files.
+A decoder for the one-wire line must find the bit boundaries from the pulse widths. This was not done.
 
 ## Pins and USB ID
 
@@ -426,7 +456,7 @@ The table lists the questions of epic #63 and their state.
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
-| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: bit framing, and the timing of a flash program. |
+| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: the frame format on the one-wire line, and the timing of a flash program. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
