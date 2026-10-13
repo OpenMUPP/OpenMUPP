@@ -35,20 +35,20 @@ def bursts(rising):
         else:
             cur.append(t)
     out.append(cur)
-    # some frames have a long pause after the start clock: join the two parts
+    # some frames have a long pause after the start clock. The start clock is
+    # the last clock of the burst before it, or a burst of its own.
     joined = []
     for b in out:
-        if joined and len(joined[-1]) == 1 and b[0] - joined[-1][0] < START_GAP:
-            joined[-1] = joined[-1] + b
-        else:
-            joined.append(b)
+        if joined and len(b) == FRAME_BITS - 1 and b[0] - joined[-1][-1] < START_GAP:
+            b = [joined[-1].pop()] + b
+            if not joined[-1]:
+                joined.pop()
+        joined.append(b)
     return joined
 
 
-skipped = []  # (time, clocks) of bursts that are not a multiple of 54 clocks
-
-
-def frames(path, start_ms=0.0):
+def frames(path, start_ms=0.0, skipped=None):
+    """Yield (time, 54 bits). Add (time, clocks) to `skipped` for a burst that is not a multiple of 54."""
     rows, times, rising = load(path)
     for burst in bursts(rising):
         if burst[0] * 1e3 < start_ms:
@@ -56,7 +56,8 @@ def frames(path, start_ms=0.0):
         # SWDIO is stable at the rising edge: sample just before it
         bits = ''.join(str(rows[bisect.bisect_right(times, t - 5e-9) - 1][1]) for t in burst)
         if len(bits) % FRAME_BITS:
-            skipped.append((burst[0], len(bits)))
+            if skipped is not None:
+                skipped.append((burst[0], len(bits)))
             continue
         for k in range(0, len(bits), FRAME_BITS):
             yield burst[k], bits[k:k + FRAME_BITS]
@@ -69,7 +70,8 @@ def decode(f):
 
 
 if __name__ == '__main__':
-    for t, f in frames(sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else 0.0):
+    skipped = []
+    for t, f in frames(sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else 0.0, skipped):
         d = decode(f)
         print(f"{t * 1e3:9.3f} ms A={d['addr']:02x} op={d['op']} ack={d['ack']} D={d['data']:08x} "
               f"par={d['parity']}{'' if d['parity_ok'] else ' BAD'} tail={d['tail']}")
