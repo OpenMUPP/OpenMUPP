@@ -207,7 +207,9 @@ When an abort is set, the engine stops the WAIT retries and returns WAIT.
 The engine asks only after a WAIT, so a transfer without WAIT has no extra cost.
 The abort arrives through the serial service, which the engine calls before each retry, at most once per millisecond.
 Thus the engine does one more attempt after the abort arrives.
-The Versaloon personality sets no `RetryStop`, so its WAIT retries do not change.
+In an image with CMSIS-DAP, the processor sets the `RetryStop` at start, also when the Versaloon personality is active.
+In the Versaloon personality, the processor gets no packets, so the stop always returns false, and the WAIT retries do not change.
+A Versaloon-only image has no `RetryStop`.
 `DAP_Connect` sets the configuration and the clock again, because the engine can run another personality in between.
 
 ## JTAG

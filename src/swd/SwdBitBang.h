@@ -167,7 +167,10 @@ struct TransferRules {
    bool releaseOnAckError{ false };
 };
 
-// Stops the WAIT retries of a transfer. The Versaloon personality has none.
+// Stops the WAIT retries of a transfer. In an image with CMSIS-DAP, the
+// processor sets it at start, also when the Versaloon personality is
+// active. It then gets no packets, so the stop always returns false. A
+// Versaloon-only image has none.
 class RetryStop {
    public:
    // True: no more retries
