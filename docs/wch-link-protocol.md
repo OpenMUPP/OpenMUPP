@@ -298,6 +298,43 @@ Flash write data does not use this reversal. The image goes out in file order.
 | Erase (wlink) | 0.19 s (CH32V003), 0.26 s (CH32V208) |
 | Protect, unprotect | CH32V003: about 1.0 s, about 1.1 s. CH32V208: about 0.6 s, about 2.1 s |
 
+## Wire timing (CH32V208, two wires)
+
+Source: `wch-link-captures/v208-wlink-status-timing.csv`. A Saleae Logic Pro recorded `wlink status` at 500 MS/s (2 ns).
+Channel 0 is SWDIO (PA13). Channel 1 is SWCLK (PA14). Channel 2 is NRST.
+The probe used its default speed (`0c … 01`).
+The file has one row for each state change, with the time in seconds. Time zero is the first falling edge of SWDIO.
+The logic threshold was not recorded.
+
+Measured facts:
+
+| Item | Value |
+|---|---|
+| NRST | Stays high for the whole run. `wlink status` does not pulse it. |
+| SWCLK idle level | Low |
+| SWCLK high time | about 1.0 µs (median 1004 ns) |
+| SWCLK period, first part of a frame | about 3.08 µs (325 kHz) |
+| SWCLK period, rest of a frame | about 2.09 µs (478 kHz, range 1.98 to 2.30 µs) |
+| Idle time between frames | about 7 µs |
+| SWDIO change after SWCLK falling edge | median 62 ns (5th percentile 4 ns, 95th percentile 728 ns) |
+
+Observations about the frames:
+
+- During the connect command (the first 60 ms), the probe sends about 200 identical frames of 85 clocks. They repeat every 227 µs.
+  Each frame has a first part of about 40 clocks at the slow period, and a longer part at the fast period.
+  The first part holds the pattern `0010001` followed by 33 zero bits. The value `0x11` is the address of `dmstatus`.
+  The rest of the frame is high, which suggests that the target answers and the probe releases the line.
+  The 85 clocks of a frame may hold a read of `dmstatus`. This is **not confirmed**. The bit framing is not decoded.
+- Then the probe sends shorter frames of 53 and 54 clocks, spaced about 120 µs apart (chip detection).
+- The connect command ends at about 59.7 ms. This matches the USB capture (`v208-wlink-status.pcapng`, 59.7 ms).
+- After that, each DMI access from the host is one frame of 54 clocks. The spacing is 120 to 200 µs, so one access takes about 0.12 ms in total, with the USB round trip.
+
+Not measured:
+
+- The bit-level framing (start, address, data, operation, parity) is not decoded.
+- The other speed settings (`02`, `03`) were not captured.
+- The CH32V003 one-wire interface was not captured.
+
 ## Pins and USB ID
 
 | Target | Pin on target | Probe signal |
@@ -329,7 +366,7 @@ The table lists the questions of epic #63 and their state.
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
-| Wire timing of the one-wire and the two-wire interface | **Open.** Needs a logic analyzer. |
+| Wire timing of the one-wire and the two-wire interface | **Partly answered.** Two-wire timing at the default speed is in [Wire timing](#wire-timing-ch32v208-two-wires). Open: bit framing, the speeds `02` and `03`, the one-wire interface. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
