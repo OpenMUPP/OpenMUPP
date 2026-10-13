@@ -1,6 +1,6 @@
-# vsl-ng firmware plan
+# versaloon-NG firmware plan
 
-This document is the plan for the Versaloon next generation firmware (vsl-ng).
+This document is the plan for the versaloon-NG firmware.
 The GitLab issues of this project hold the details of each work item.
 This document gives the overview: targets, phases, milestones and dependencies.
 When an issue and this document do not agree, the issue is correct. Update this document then.

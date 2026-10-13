@@ -75,10 +75,10 @@ run-tool-tests:
   # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link/V2
   # has the standalone image only. No .elf, .map or bootloader-only files.
   artifacts:
-    name: "versaloon-next-gen-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
+    name: "versaloon-ng-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
     paths:
-      - build/${PRESET}/versaloon-next-gen-${BOARD}*.hex
-      - build/${PRESET}/versaloon-next-gen-${BOARD}*.bin
+      - build/${PRESET}/versaloon-ng-${BOARD}*.hex
+      - build/${PRESET}/versaloon-ng-${BOARD}*.bin
 
 build-mini:
   extends: .build-board-template

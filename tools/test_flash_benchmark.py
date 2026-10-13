@@ -17,7 +17,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import flash_benchmark as fb  # noqa: E402
 
-FIRMWARE = "versaloon-next-gen v0.1.0, board mini"
+FIRMWARE = "versaloon-ng v0.1.0, board mini"
 
 
 def openocd_log(size, write_s=1.5, verify_s=0.25, read_s=0.5, firmware=FIRMWARE):

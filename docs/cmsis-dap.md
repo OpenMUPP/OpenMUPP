@@ -24,7 +24,7 @@ cmake --build build/mini-dap -j
 
 The default value is `versaloon`.
 The default image does not change.
-The build then writes `versaloon-next-gen-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
+The build then writes `versaloon-ng-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
 All boards build with both values.
 

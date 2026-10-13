@@ -1,4 +1,4 @@
-// Versaloon next generation firmware. os_startup_initialize_hardware()
+// versaloon-NG firmware. os_startup_initialize_hardware()
 // (src/initialize_hardware.cpp) sets up the clocks and the board pins
 // before main() runs. The main loop wakes up on each 1 ms SysTick and on
 // each USB interrupt. It runs the USB device, the UART bridge
@@ -354,7 +354,7 @@ int main() {
 
    debug::startLog();
    // The board names are string literals, so name.data() ends with a NUL.
-   LOG_INFO(debug::appLog, "versaloon-next-gen %s, board %s", versionString, board::current.name.data());
+   LOG_INFO(debug::appLog, "versaloon-ng %s, board %s", versionString, board::current.name.data());
    startProtocol();
 
    // USB needs the 48 MHz clock from the PLL. Without the crystal the
