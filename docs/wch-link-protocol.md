@@ -4,7 +4,8 @@ This document describes the USB protocol of the WCH-LinkE in RISC-V mode.
 The `wch-link` personality (epic #63) must speak this protocol.
 All facts come from USB captures of a real probe. No vendor code was copied.
 
-Status: the CH32V003 part is complete. The CH32V20x part and the wire timing are open (see [Open questions](#open-questions)).
+Status: the USB protocol is captured on a CH32V003 (one wire) and on a CH32V208 (two wires).
+The wire timing is open (see [Open questions](#open-questions)).
 
 ## Capture setup
 
@@ -12,15 +13,18 @@ Status: the CH32V003 part is complete. The CH32V20x part and the wire timing are
 |---|---|
 | Probe | WCH-LinkE, USB ID `1a86:8010`, `bcdDevice` 2.19, product string `WCH-Link` |
 | Probe type | wlink reports `WCH-Link v2.19(v39) (WCH-LinkE-CH32V305)`. The info response holds `02 13 12 00` (see [Command 0x0d](#command-0x0d-info-connect-quit)). The source of `v39` is open |
-| Target | CH32V003F4P6 (16 KB flash), chip ID `0x00300500`, connected through the one-wire interface |
+| Target 1 | CH32V003F4P6 (16 KB flash), chip ID `0x00300500`, one-wire interface on PD1 |
+| Target 2 | CH32V208WBU6 (160 KB flash), chip ID `0x2080053c`, two-wire interface on PA13 (SWDIO) and PA14 (SWCLK), external power |
 | Host tools | wlink 0.1.2 and minichlink (a local build, version not recorded) |
 | Capture | Linux `usbmon` on the bus of the probe, filtered to the probe address |
 
 The captures are in [`wch-link-captures/`](wch-link-captures/).
 Each file has the traffic of one tool command.
-The file name gives the tool and the command, for example `wlink-flash.pcapng`.
-`mc-write-head.pcapng` holds only the first 4000 frames of the minichlink write.
+The file name gives the target, the tool and the command, for example `v003-wlink-flash.pcapng`.
+The prefix `v003-` marks the CH32V003. The prefix `v208-` marks the CH32V208.
+`v003-mc-write-head.pcapng` holds only the first 4000 frames of the minichlink write.
 The full capture had 13 MB.
+On the CH32V208, the minichlink write has 4 KB only.
 
 ## USB interface
 
@@ -56,8 +60,11 @@ A response is always shorter than 64 bytes in the captures.
 
 Two cases do not follow this rule:
 
-- **Error.** An unknown command gives `82 81 01 ff`. The second byte is `0x81`, not the command. The payload is one reason byte (`0xff` here).
-  The captures contain no other error. The reason codes are open.
+- **Error.** The probe sends an error frame `81 REASON LEN payload`. The first byte is `0x81`, not `0x82`.
+  Seen: a connect command (`0d 01 02`) with no target gives `81 55 01 01` (reason `0x55`, payload `01`).
+  wlink retries four times (about 100 ms apart) and then stops (`v208-wlink-connect-fail.pcapng`).
+  An unknown command (`7f`) gives a normal-looking frame `82 81 01 ff`. The reason for the difference is open.
+  No other reason code was seen.
 - **Chip information.** Command `0x11` answers with 20 raw bytes. The packet has no `0x82` header and no length.
 
 Multi-byte values in command payloads are big-endian.
@@ -87,12 +94,13 @@ The public notes of the epic also mention `0x0e` (disable debug). The captures d
 | Sub-command | Meaning | Response payload |
 |---|---|---|
 | `01` | Probe information | `02 13 12 00` |
-| `02` | Connect to the target (RISC-V) | `09 00 30 05 00` |
+| `02` | Connect to the target (RISC-V) | `09 00 30 05 00` (CH32V003), `05 20 80 05 3c` (CH32V208) |
 | `03` | Unknown. minichlink sends it first. | `03` |
+| `04` | Unknown. wlink sends it on the CH32V208 after the first protection query. | `00` |
 | `ff` | Quit. Release the target. | `ff` |
 
 - **Probe information.** Byte 0 and byte 1 are the major and minor version of the firmware (2 and 19). This matches `bcdDevice` 2.19. Byte 2 (`0x12`) is the probe type. wlink maps it to `WCH-LinkE-CH32V305`. Byte 3 is `0x00`.
-- **Connect.** The probe starts the debug interface and does the chip detection. This takes about 90 ms after a normal start. After an erase or a protect command it takes about 900 ms. Byte 0 is a chip family code (`0x09` for the CH32V003). Bytes 1 to 4 are the chip ID (u32 BE, `0x00300500`).
+- **Connect.** The probe starts the debug interface and does the chip detection. This takes about 90 ms on the CH32V003 after a normal start and about 900 ms after an erase or a protect command. On the CH32V208 it takes about 60 ms. Byte 0 is a chip family code (`0x09` for the CH32V003, `0x05` for the CH32V208). Bytes 1 to 4 are the chip ID (u32 BE: `0x00300500`, `0x2080053c`).
 - **Quit.** The host sends this at the end of every session. A session is connect to quit.
 - **Sub-command `03`.** The probe needs about 74 ms to answer. The reason is not known.
 - Any other sub-command value is echoed (`0d 01 05` gives `82 0d 01 05`). The probe does not report an error.
@@ -101,20 +109,21 @@ The public notes of the epic also mention `0x0e` (disable debug). The captures d
 
 Request payload: `chip-type speed`.
 
-- wlink sends `01 speed` before the connect command and `family speed` after it. Here `family` is the first byte of the connect response (`09`). minichlink sends only the second form.
+- wlink sends `01 speed` before the connect command and `family speed` after it. Here `family` is the first byte of the connect response (`09` or `05`).
+  With the generic code `01`, the connect command still works on both chips. minichlink sends only the second form.
 - The speed byte: `01` is high (the default), `02` is medium (wlink: 4000 kHz), `03` is low (wlink: 400 kHz). Captures of `wlink --speed low|medium|high` show this.
 - The probe answers `01`.
 
 ## Command `0x11`: chip information
 
-Request payload: `06` (wlink) or `05` (minichlink). The answer was the same for both on the CH32V003.
+Request payload: `06` (wlink) or `05` (minichlink). The answer was the same for both on both chips.
 
-| Bytes | Content on the CH32V003 |
+| Bytes | Content (CH32V003 / CH32V208) |
 |---|---|
-| 0 to 3 | `ff ff 00 10`. Bytes 2 and 3 (u16 BE) give the flash size in KB (16). |
+| 0 to 3 | `ff ff 00 10` / `ff ff 00 a0`. Bytes 2 and 3 (u16 BE) give the flash size in KB (16 / 160). |
 | 4 to 11 | Unique ID. Each 4-byte group is in reversed byte order, as in the memory read path (see [Byte order](#byte-order)). |
-| 12 to 15 | `ff ff ff ff`. minichlink calls this field `PFlags`. |
-| 16 to 19 | Chip ID (u32 BE, `0x00300500`). |
+| 12 to 15 | `ff ff ff ff` / `e3 39 e3 39`. minichlink calls this field `PFlags`. |
+| 16 to 19 | Chip ID (u32 BE, `0x00300500` / `0x2080053c`). |
 
 The difference between sub-command `05` and `06` is open.
 
@@ -123,16 +132,17 @@ The difference between sub-command `05` and `06` is open.
 | Sub-command | Meaning | Response payload |
 |---|---|---|
 | `01` | Query | `02` unprotected, `01` protected |
-| `02` | Unprotect | `02` (about 1.1 s) |
-| `03` | Protect | `03` (about 1.0 s) |
+| `02` | Unprotect | `02` (CH32V003: about 1.1 s. CH32V208: about 2.1 s) |
+| `03` | Protect | `03` (CH32V003: about 1.0 s. CH32V208: about 0.6 s) |
 | `04` | Unknown. wlink sends it after a query that returned `02`. | `00` |
 
 Facts about the protection:
 
 - Protect takes effect only after a reset. A query directly after `wlink protect` still returns `02`. After `wlink reset`, it returns `01`.
 - The unprotect command erases the flash of the chip. wlink `flash` sends it by itself when the query returns `01`.
-- A memory read of a protected chip does not fail. It returns the word `0x00000300` repeated (see `wlink-dump-protected.pcapng`).
-- DMI access still works on a protected chip (`wlink-status-protected.pcapng`).
+- A memory read of a protected chip does not fail. It returns a fixed word, repeated. The word is `0x00000300` on the CH32V003 (`v003-wlink-dump-protected.pcapng`). On the CH32V208 the bytes arrive as `00 34 04 0a` (`v208-wlink-dump-protected.pcapng`).
+- DMI access still works on a protected chip (`v003-wlink-status-protected.pcapng`).
+- The CH32V208 behaves the same: protect, reset, query returns `01`, unprotect erases the flash.
 
 ## Command `0x08`: DMI access
 
@@ -151,7 +161,7 @@ The response payload has the same layout. The `op` field now holds the status:
 - `00`: success. For a read, the data field has the register value, in the same response. The read is not pipelined.
 - `02`: failure (public notes). The captures show no failure.
 
-Registers seen on the CH32V003:
+Registers seen (the CH32V003 and the CH32V208 use the same set):
 
 | Address | Name | Note |
 |---|---|---|
@@ -187,9 +197,9 @@ The command ends after `len` bytes. No end marker follows.
 
 wlink does not use DMI to write the flash. The probe has a flash algorithm.
 The host sends a stub of 512 bytes (RISC-V code) first. The probe loads it into the RAM of the target.
-The stub is specific to the chip family. The probe runs it.
+The stub is specific to the chip family. The CH32V003 and the CH32V208 use two different stubs of 512 bytes. The probe runs it.
 
-Sequence for a program of 16 KB (`wlink-flash.pcapng`, 3.5 s).
+Sequence for a program of 16 KB on the CH32V003 (`v003-wlink-flash.pcapng`, 3.5 s).
 wlink connects twice: it reads the chip information and the protection state, quits, and connects again.
 The table starts at the second connect.
 
@@ -210,13 +220,24 @@ Facts about the data phase:
 
 - The host sends the whole range, also the blocks that hold only `0xff`. The captured image had 16 blocks of 1024 bytes.
 - The host waits for the block acknowledge before the next block. A block takes about 136 ms, so the whole flash needs about 2.2 s.
+- The block size depends on the chip: 1024 bytes on the CH32V003, 4096 bytes on the CH32V208 (see below).
 - The image bytes go out in file order. They are not reversed (see [Byte order](#byte-order)).
 - The host did not send a verify command. wlink checks the result with a separate memory read. The probe has a verify sub-command in the public notes, but no capture used it.
+
+### CH32V208
+
+The sequence is the same. The differences:
+
+- Step 2 sends `01 08 08000000 00028000` (160 KB).
+- The stub is a different 512-byte block.
+- The data blocks have 4096 bytes (64 packets). The probe needs about 350 ms for each block.
+- A program of 160 KB takes 15.2 s (about 10.8 KB/s).
+- Erased flash reads as `0xe339e339`, not `0xff`.
 
 ## Erase (`wlink erase`)
 
 `06 01 01`, `06 01 04`, then `02 01 01` (about 75 ms, response `02 01 01`), then a new connect (`0d 01 02`, about 900 ms), then quit.
-The whole command took 0.19 s.
+The whole command took 0.19 s (CH32V003) and 0.26 s (CH32V208). The erase step `02 01 01` takes about 140 ms on the CH32V208.
 The erase command needs no data transfer and no stub.
 
 ## Reset (`0x0b`)
@@ -228,31 +249,40 @@ The `wlink reset` command waits 300 ms and then quits.
 
 wlink and minichlink do both through DMI. No special command exists.
 
-- **Halt.** The core is already halted when wlink reads `dmstatus` after the connect command. In `wlink-halt.pcapng` the host writes only `dmactive` (`00000001`) and reads `dmstatus`. A halt of a running core (`haltreq`, bit 31) is open.
+- **Halt.** The core is already halted when wlink reads `dmstatus` after the connect command. In `v003-wlink-halt.pcapng` the host writes only `dmactive` (`00000001`) and reads `dmstatus`. A halt of a running core (`haltreq`, bit 31) is open.
 - **Resume.** wlink writes `dmcontrol` four times: `80000001` twice (`haltreq`), `00000001` (clear), `40000001` (`resumereq`, bit 30). Then it reads `dmstatus` twice and checks `allresumeack`.
 
 ## minichlink path
 
-minichlink uses only commands `0x0d`, `0x0c`, `0x11`, `0x06` (query) and `0x08` (DMI).
+On the CH32V003, minichlink uses only commands `0x0d`, `0x0c`, `0x11`, `0x06` (query) and `0x08` (DMI).
 It does not use `0x01`, `0x02` or `0x03` and does not use endpoint `0x02`.
 It runs the flash write from the host with abstract commands and the program buffer.
 
+On the CH32V208, minichlink uses the stub flow of wlink (it prints "binary blob write"):
+`01` (area), `02 05`, the 512-byte stub on `0x02`, `02 07`, `02 02`, the data on `0x02`, then quit.
+It differs from wlink in these points (`v208-mc-write.pcapng`):
+
+- It sends the stub in transfers of 256 bytes and the data in transfers of 4096 bytes, not 64 bytes.
+- It does not read the block acknowledge and does not send `02 08`. It sends quit, and the probe answers after 0.3 s.
+- It writes `dmcontrol` with `ndmreset` (`80000003`) before the transfer. A protection query just after that returned `01` (protected) on an unprotected chip. The reason is open.
+- A write of 4 KB takes 0.66 s.
+
 Consequences for the personality:
 
-- A probe with the commands `0x0d`, `0x0c`, `0x11`, `0x06 01` and `0x08` is enough for minichlink.
-- This is a good first target (work item #68). The commands `0x01`, `0x02` and `0x03` are only needed for wlink.
-- minichlink needs about 32 000 DMI round trips to write 16 KB. This took 3.7 s, almost the same as wlink (3.5 s).
+- A probe with the commands `0x0d`, `0x0c`, `0x11`, `0x06 01` and `0x08` is enough for minichlink on a CH32V003.
+- This is a good first target (work item #68). A CH32V20x needs the commands `0x01` and `0x02` and endpoint `0x02` for both tools.
+- minichlink needs about 32 000 DMI round trips to write 16 KB on the CH32V003. This took 3.7 s, almost the same as wlink (3.5 s).
 
 Observations:
 
-- `minichlink -r file 0x08000000 16384` fails with "Exception executing abstract command". Reads of 4096, 8192 and 16000 bytes work. This is a minichlink or chip problem, not a probe problem. The capture `mc-read.pcapng` uses 4096 bytes.
+- `minichlink -r file 0x08000000 16384` fails with "Exception executing abstract command". Reads of 4096, 8192 and 16000 bytes work. This is a minichlink or chip problem, not a probe problem. The capture `v003-mc-read.pcapng` uses 4096 bytes.
 - minichlink sends `0d 03` before it does anything else.
 
 ## Byte order
 
 Memory read data on endpoint `0x82` has the bytes of each 32-bit word in reversed order.
 The host reverses each group of 4 bytes to get the memory content.
-Example: the word at `0x08000000` is `6f 00 20 12` in memory and arrives as `12 20 00 6f`.
+Example: the word at `0x08000000` is `6f 00 20 12` in memory and arrives as `12 20 00 6f`. On the CH32V208, `6f 20 e0 42` arrives as `42 e0 20 6f`.
 The unique ID in the `0x11` answer uses the same order.
 Flash write data does not use this reversal. The image goes out in file order.
 
@@ -260,19 +290,20 @@ Flash write data does not use this reversal. The image goes out in file order.
 
 | Operation | Time |
 |---|---|
-| Connect (`0d 01 02`) | about 90 ms (about 900 ms after erase or protect) |
+| Connect (`0d 01 02`) | CH32V003: about 90 ms (about 900 ms after erase or protect). CH32V208: about 60 ms |
 | DMI round trip | about 0.1 ms |
 | Read of 16 KB (wlink) | about 0.2 s |
-| Program of 16 KB (wlink) | 3.5 s, of this 2.2 s for the data blocks |
-| Erase (wlink) | 0.19 s |
-| Protect, unprotect | about 1.0 s, about 1.1 s |
+| Program of 16 KB (wlink, CH32V003) | 3.5 s, of this 2.2 s for the data blocks |
+| Program of 160 KB (wlink, CH32V208) | 15.2 s |
+| Erase (wlink) | 0.19 s (CH32V003), 0.26 s (CH32V208) |
+| Protect, unprotect | CH32V003: about 1.0 s, about 1.1 s. CH32V208: about 0.6 s, about 2.1 s |
 
 ## Pins and USB ID
 
 | Target | Pin on target | Probe signal |
 |---|---|---|
 | CH32V003 | PD1 (SWIO) | One wire. The probe signal is SWDIO (open drain, with pull-up). |
-| CH32V20x | PA13 (SWDIO), PA14 (SWCLK) | SWDIO and SWCLK |
+| CH32V20x | PA13 (SWDIO), PA14 (SWCLK) | SWDIO and SWCLK (confirmed on a CH32V208 with a WCH-LinkE) |
 
 The Versaloon board definitions (`src/board/boards/`) have no SWD pin names. They have JTAG pins.
 On the Mini, this mapping is proposed (derived from the JTAG pins; not tested):
@@ -297,11 +328,11 @@ The table lists the questions of epic #63 and their state.
 |---|---|
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
-| Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses no stub. |
-| Wire timing of the one-wire interface | **Open.** Needs a logic analyzer. |
-| Two-wire (RVSWD) behavior, CH32V20x | **Open.** Needs a V207 board. |
+| Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
+| Wire timing of the one-wire and the two-wire interface | **Open.** Needs a logic analyzer. |
+| USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
-| Error reason codes | **Open.** Only one error seen (`ff` for an unknown command). |
+| Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
 | Verify sub-command (`02 01 06`?) | **Open.** No capture used it. |
-| Meaning of `0d 03`, `06 01 04`, `11 01 05/06` | **Open.** The observed behavior is in this document. |
+| Meaning of `0d 03`, `0d 04`, `06 01 04`, `11 01 05/06`, `02 01 05/07` | **Open.** The observed behavior is in this document. |
 | `0x0e` (disable debug) | **Open.** No capture used it. |
