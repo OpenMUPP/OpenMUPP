@@ -6,7 +6,8 @@
 namespace boot {
 
 // Writes bootRequest to BKP->DR1 and resets the MCU. The bootloader then
-// stays in bootloader mode. Call it only in a build with hasBootloader.
+// stays in bootloader mode. Call it only in the app-8k image
+// (hasBootloaderEntry in src/main.cpp).
 [[noreturn]] void enterBootloader();
 
 } // namespace boot

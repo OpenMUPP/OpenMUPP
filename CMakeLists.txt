@@ -238,7 +238,8 @@ if (CMAKE_CROSSCOMPILING)
     #----------------------------------------------------------------------------------------------------#
     # All sources except src/main.cpp are compiled one time and linked into
     # each application image. src/main.cpp is compiled per image, because
-    # VSL_HAS_BOOTLOADER_ENTRY (src/boot/BootloaderEntry.h) depends on it.
+    # only the app-8k image defines VSL_HAS_BOOTLOADER_ENTRY for it. No other
+    # source may use the define.
     set(VSL_SHARED_SOURCES ${VSL_FIRMWARE_SOURCES})
     list(FILTER VSL_SHARED_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
     add_library(versaloon-next-gen-objects OBJECT ${VSL_SHARED_SOURCES})
@@ -282,7 +283,7 @@ if (CMAKE_CROSSCOMPILING)
         target_link_options(${_target} PUBLIC -Wl,--defsym=__vsl_app_offset=${_offset} -Wl,-Map,${_name}.map)
         # FW_UPDATE enters the bootloader only behind versaloon-bootloader.
         # The legacy bootloader of app-10k does not know the boot request
-        # (src/boot/BootloaderEntry.h).
+        # (hasBootloaderEntry in src/main.cpp).
         if (image STREQUAL "app-8k")
             target_compile_definitions(${_target} PRIVATE VSL_HAS_BOOTLOADER_ENTRY)
         endif ()
