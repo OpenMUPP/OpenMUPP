@@ -7,7 +7,8 @@
 // seconds, but the RX ring of the UART bridge holds only about 89 ms at
 // 115200 baud (uart/UartBridge.h).
 //
-// The bit-bang engines (jtag/JtagBitBang.h, swd/SwdBitBang.h) call
+// The bit-bang engines (jtag/JtagBitBang.h, swd/SwdBitBang.h,
+// rvswd/RvSwdEngine.h) call
 // Background::service() at a safe point of the bit stream, at most once
 // per backgroundIntervalMs:
 //
@@ -16,6 +17,9 @@
 //   path (jtag/JtagFastPath.h), with TCK high.
 // - SWD: before each transfer and each retry, and between bytes of a
 //   sequence, with SWCLK high.
+// - RISC-V debug wire (rvswd/RvSwdEngine.h): before each frame (with
+//   SWCLK low on two wires), and in the low level of the one-wire line
+//   reset.
 //
 // The call makes the clock phase at that point longer. The clock does not
 // get faster: each half period waits from its edge. The JTAG engine starts

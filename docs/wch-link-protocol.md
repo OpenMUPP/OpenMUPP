@@ -474,21 +474,36 @@ It skips bursts that are not a multiple of 54 clocks (the 85-clock frames and a 
 
 | Bits | Content | Driven by |
 |---|---|---|
-| 0 | Start, always `1` | Probe |
+| 0 | The rising edge of SWCLK from the idle level, with SWDIO high. After this edge, SWDIO falls while SWCLK is high: the start condition. | Probe |
 | 1 to 7 | DM register address, MSB first | Probe |
-| 8 to 9 | Operation field | Probe |
-| 10 to 14 | Five response bits | Target |
+| 8 | Write bit: `1` for a write, `0` for a read | Probe |
+| 9 | Parity of bits 1 to 8: `1` if the number of ones is odd | Probe |
+| 10 | The level of bit 9. SWDIO changes direction after the rising edge. | Probe |
+| 11 to 14 | Four response bits: `0000` or `0100` | Target |
 | 15 to 46 | Data, MSB first | Probe (write), target (read) |
-| 47 to 48 | Parity of the 32 data bits: `11` if the number of ones is odd, `00` if even | Not determined |
-| 49 to 53 | Five tail bits: `00110` or `01110` | Not determined |
+| 47 | Parity of the 32 data bits: `1` if the number of ones is odd | Probe (write), target (read) |
+| 48 | The level of bit 47. SWDIO changes direction after the rising edge (write). | Probe (write), target (read) |
+| 49 to 52 | Four tail bits: `0011` or `0111` | Target |
+| 53 | Always `0`. After this edge, SWDIO rises while SWCLK is high: the stop condition. | Probe |
+
+The frame is a start condition, 53 clocks and a stop condition. The start and the stop condition are the same as on an I2C bus.
+The table numbers the bits as the decoder does: bit 0 is the clock before the start condition.
+Bits 1 to 53 are the clocks between the start and the stop condition.
+The rules for bits 9, 10, 47, 48 and 53 hold in all 440 frames of the three status captures (default, medium and low speed).
 
 Observations:
 
-- **Operation field.** `10` for a write of `dmcontrol`, `data0` and `abstractcs`. `11` for a write of `command` (`0x17`) and `data1` (`0x05`). `01` for most reads. `00` for reads of `dmstatus` and `hartinfo`. The reason for `11` and `00` is open.
-- **Response bits.** `00000` after a write, `10000` after a write of `command`, `10100` after a read at the slow clock, `10000` after a read at the fast clock (about 120 ns). Their meaning is open (acknowledge or status).
-- **Parity.** Both parity bits matched the data in all 147 frames. They may be one parity bit sent two times.
-- **Tail bits.** `00110` follows all writes (106 frames). After reads, `01110` follows 27 frames and `00110` follows 11 frames, so the tail does not tell a read from a write. The meaning is open.
-- **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 12 ns after the falling edge. The read data and the response bits follow the target pattern. The write data follows the probe pattern. The parity and tail bits have too few edges to tell (4 edges in the parity bits).
+- **Operation field (bits 8 and 9).** Bit 8 tells a write from a read. Bit 9 is a parity bit over the address and bit 8. This explains the values `11`, `10`, `01` and `00` of the earlier decoder output.
+- **Response bits (11 to 14).** `0000` after all writes. `0100` after most reads, `0000` after the reads of `dmstatus` and `hartinfo`. Their meaning is open (acknowledge or status).
+- **Parity (bits 47 and 48).** Bit 47 is the parity. Bit 48 keeps the level of bit 47 for one more clock, as bit 10 keeps the level of bit 9.
+- **Tail bits (49 to 52).** `0011` follows all writes. After reads, `0111` or `0011` follows. The tail does not tell a read from a write. The meaning is open.
+- **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 4 to 14 ns after the falling edge.
+  Bits 1 to 9 and 53 follow the probe pattern. Bits 11 to 14 and 49 to 52 follow the target pattern. Bits 15 to 47 follow the probe pattern in a write and the target pattern in a read.
+  SWDIO changes while SWCLK is high in bits 10 and 14, and in bit 48 of a write: the line changes direction there.
+- **Longer low phases.** The low phase before bits 1, 15 and 53 is about two half periods: 2.1 to 2.2 µs at the 2.09 µs clock. SWDIO changes direction before bits 15 and 53.
+- **Idle.** Between frames, SWCLK is low and SWDIO is high. The probe keeps SWCLK high for about 1 to 5 µs after the stop condition.
+  Before the start condition, SWCLK rises and stays high for about 1 to 8 µs.
+- **Before the first frame.** After the 85-clock frames, the probe sends 9 clocks with SWDIO high, one clock with SWDIO low, and 90 clocks with SWDIO high. Then the first frame starts. This can be a line reset. This is **not confirmed**.
 - **Clock for each access.** At the default speed, a write uses 1.10 µs for each bit (about 907 kHz). A read uses 2.09 µs (about 478 kHz). At low speed, all accesses use 2.09 µs.
 - **Fast triples.** The long bursts at about 120 ns for each bit (default speed) hold frames in the order `data1` write, `command` write, `data0` read. These are the target reads for `0x11`, `06 01` and `0d 04`. The values of the first four reads match the `0x11` answer byte for byte.
 - **Connect frames.** The 85-clock frames of the connect phase do not follow this format. They are not decoded.
@@ -517,14 +532,22 @@ The cause is open. The frame length may differ for some access types.
 | 8 | Operation: `1` is a write, `0` is a read |
 | 9 to 40 | Data, MSB first |
 
-The frame has no response bits, no parity and no tail. The two-wire frame has 13 more bits (a second operation bit, 5 response bits, 2 parity bits, 5 tail bits).
+The frame has no response bits, no parity and no tail. The two-wire frame has 13 more bits: the address parity, its repeat, 4 response bits, the data parity, its repeat, 4 tail bits and the stop bit.
 The one-wire line may carry them in another way, or the probe may not send them. This is open.
 
 The format was checked against the USB capture of the same type of run. The 15 accesses of the host match in order and in address.
 The values match, except for `dmstatus`. It reads `0x004f0382` on the wire and `0x004c0382` in the USB capture of an earlier run. The bits 16 to 19 change between runs.
 The wire capture has three more accesses at the end. They are the resume that the probe does at quit (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)).
 
-Pulse widths are the same for reads and writes, and for the speeds `01`, `02` and `03`.
+Pulse widths are the same for the speeds `01`, `02` and `03`. The nominal widths are the same for reads and writes.
+
+More pulse details (`v003-wlink-status-timing.csv`, from 78.8 ms):
+
+- In a read, the high level after bit 8 is about 750 ns, not 370 ns. The line changes direction there.
+- In the data bits of a read, the widths spread more: a low pulse of 246 to 374 ns for a 1, 824 to 868 ns for a 0, and a high level of 262 to 538 ns. In the data bits of a write, the widths are constant (248 ns, 864 ns and 368 ns).
+  The spread shows that the target sets the length of the low pulses in a read. The logic analyzer cannot show which device pulls the line low at the start of a bit.
+- The shortest gap between two frames is 3.7 µs.
+- The line is low for 1.98 ms just before the first frame. Before that low level, the line is high for 0.99 ms. The `dump` capture shows the same. This can be a reset of the debug interface. This is **not confirmed**.
 
 ## Pins and USB ID
 
@@ -542,8 +565,20 @@ The pins on the dongle:
 | ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
 
 The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
-This was not tested on a dongle. Open for the engine (work item #66): the line of a pulse must go high in about 370 ns.
-`board::SwdPins::swdioRelease()` releases the line to a pull-up input. A pull-up may be too slow, so the engine may need to drive the line high.
+This was not tested on a dongle. The line of a pulse must go high in about 370 ns.
+`board::SwdPins::swdioRelease()` releases the line to a pull-up input. A pull-up can be too slow for this time.
+Thus the engine (`src/rvswd/RvSwdEngine.h`, pins in `src/board/BoardRvSwd.h`) drives the line high in the high level of each bit and when the line is idle.
+In a read bit, the engine releases the line after its short low pulse. The target can then hold the line low for a 0.
+The engine samples the line 600 ns after the falling edge. When the line is high again, the engine drives it high.
+The engine does not drive the line high while the line is low. Thus it does not fight a target that holds the line low.
+
+Risk for a read bit: only the internal pull-up raises the line for a 1. The STM32F1 pull-up is 30 to 50 kΩ.
+With 20 to 50 pF of line and target pin, the time constant is 0.6 to 2.5 µs. At the sample point (600 ns), the line can still be below the input high level, and each 1 then reads as 0.
+The capture shows a fast rise after a 1 of the target (low for 246 to 374 ns). Thus the WCH-LinkE or the target drives the line high.
+A hardware test must measure the rise time on a dongle. If the rise is too slow, use one of these fixes:
+
+- An external pull-up of about 1 kΩ on SWDIO.
+- A later sample point, from the measured rise time. The shortest 0 of the target is 824 ns, so the sample point must stay below that time.
 
 USB ID: the decision of the epic stays. The default is an own ID. The ID `1a86:8010` is a build option for personal use.
 wlink and minichlink find the probe by this ID. Without it, they need a flag or a patch.
@@ -564,5 +599,5 @@ The table lists the questions of epic #63 and their state.
 | Verify sub-command (`02 01 06`?) | **Open.** No capture used it. |
 | Meaning of `0d 03`, `0d 04`, `0d 05`, `06 01 04`, `11 01 05/06`, `02 01 05/07` | **Open.** The observed behavior is in this document. |
 | Does the probe do target accesses of its own? | Answered: the connect command halts the core. The commands `0x11`, `06 01` and `0d 04` read the target. The quit command resumes the core (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). |
-| Meaning of the 85-clock frames, the operation field values `11` and `00`, the response bits, the tail bits, and the failure of one-wire frames in the `dump` captures | **Open.** |
+| Meaning of the 85-clock frames, the response bits, the tail bits, and the failure of one-wire frames in the `dump` captures | **Open.** The operation field values are answered: a write bit and a parity bit (see [Wire frame format](#wire-frame-format)). |
 | `0x0e` (disable debug) | **Open.** No capture used it. |
