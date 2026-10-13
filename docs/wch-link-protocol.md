@@ -345,10 +345,37 @@ Conclusions:
 - The speed byte changes the clock of the later accesses. Only the long bursts change between the default and the medium speed (about 120 ns against about 1.12 µs). At low speed, the frames take about 111 to 115 µs. The 400 kHz of the wlink help text is not the measured rate (the measured rate is about 478 kHz).
 - At the default speed, the clock is faster in some frames. The long bursts with a period near 120 ns may hold several accesses with gaps shorter than 5 µs. This is **not confirmed**: the frames are not decoded.
 
-Not measured:
+## Wire timing (CH32V003, one wire)
+
+Source: `wch-link-captures/v003-wlink-status-timing.csv`. The same Saleae Logic Pro recorded `wlink status` at 500 MS/s.
+Channel 0 is SWIO (PD1). Channels 1 and 2 were not connected (constant 0 in the file).
+The probe used its default speed. The run took about 95 ms.
+
+Measured facts:
+
+| Item | Value |
+|---|---|
+| Idle level | High |
+| First 45.8 ms (connect) | About 200 identical frames, one every 227 µs |
+| One frame | low 8.2 µs, high 3.1 µs, low 9.2 µs, high 3.1 µs, low 101.6 µs, high 94.5 µs, low 4.0 µs, high 3.3 µs |
+| After 45.8 ms | A different pattern with pulses of 0.2 to 4.2 µs (low 0.8 µs and high 0.4 µs are the most common). Frames repeat about every 1.56 ms. |
+| End of activity | 93 ms |
+
+Comparison with the two-wire capture of the CH32V208 (same probe, same speed):
+
+- The frame time is the same: 227 µs.
+- The first part of the frame has the same edge times as SWDIO of the CH32V208: low 8.2 µs, high 3.1 µs, low 9.2 µs, high 3.1 µs, low 101.5 µs.
+  The low time of 101.5 µs is 33 bit times of 3.08 µs, the first-part period of the CH32V208 clock.
+  So the one-wire line carries the same bit sequence as SWDIO. The bit period is 3.08 µs, and no clock line exists.
+- The rest of the frame differs. The CH32V003 line stays high for 94.5 µs (45 bit times of 2.09 µs). The CH32V208 target pulls the line low in places.
+  The two targets answer differently, or the CH32V003 does not answer this frame. This is **not confirmed**.
+- The later phase of the CH32V003 (after 45.8 ms) is slower than the later phase of the CH32V208. The connect command of the CH32V003 also takes longer (90 ms against 60 ms).
+
+Not measured on the CH32V003: the speed settings `02` and `03`, and the bit framing.
+
+Not measured on the CH32V208:
 
 - The bit-level framing (start, address, data, operation, parity) is not decoded.
-- The CH32V003 one-wire interface was not captured.
 
 ## Pins and USB ID
 
@@ -381,7 +408,7 @@ The table lists the questions of epic #63 and their state.
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
-| Wire timing of the one-wire and the two-wire interface | **Partly answered.** Two-wire timing at the default speed is in [Wire timing](#wire-timing-ch32v208-two-wires). Open: bit framing and the one-wire interface. |
+| Wire timing of the one-wire and the two-wire interface | **Partly answered.** Two-wire timing at the default speed is in [Wire timing](#wire-timing-ch32v208-two-wires). Open: bit framing, and the speed settings on the CH32V003. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
