@@ -349,6 +349,80 @@ Observations:
 - `minichlink -r file 0x08000000 16384` fails with "Exception executing abstract command". Reads of 4096, 8192 and 16000 bytes work. This is a minichlink or chip problem, not a probe problem. The capture `v003-mc-read.pcapng` uses 4096 bytes.
 - minichlink sends `0d 03` before it does anything else.
 
+## Debug module layer
+
+The firmware does the probe actions with `src/rvswd/DebugModule.h`. This layer uses the DMI accesses of the wire engine (`src/rvswd/RvSwdEngine.h`).
+It gives DMI read and write, DM reset, halt, resume, abstract register access and memory access.
+The host tests are in `tests/TestDebugModule.cpp`. They use a mock DM (`tests/MockDebugModule.h`) with a small RV32EC interpreter for the program buffer.
+
+### Sequences
+
+| Operation | DMI accesses | Source |
+|---|---|---|
+| DM reset | Write `dmcontrol` `00000000`, then `00000001`. Read `dmcontrol` until `dmactive` is 1. Read `dmstatus`. | `v003-wlink-halt.pcapng` |
+| Halt | Write `dmcontrol` `80000001` two times. Read `dmstatus` until `allhalted` (bit 9) is 1. `haltreq` stays set. | Connect of the probe |
+| Resume | Write `dmcontrol` `40000001`. Read `dmstatus` until `allresumeack` (bit 17) is 1. | Quit of the probe |
+| Register read | Write `command` `0022xxxx` (`xxxx` is the register number). Read `abstractcs`. Read `data0`. | Chip information reads |
+| Register write | Write `data0`. Write `command` `0023xxxx`. Read `abstractcs`. | Connect (CSR `0x7c0`) |
+| Memory read, abstract | Write `data1` (address). Write `command` `02200000` (word) or `02000000` (byte). Read `abstractcs`. Read `data0`. | CH32V208 |
+| Memory write, abstract | Write `data1` (address) and `data0` (value). Write `command` `02210000`. Read `abstractcs`. | CH32V208 |
+| Memory read, program buffer | Write `data1` (address). Write `command` `00040000`. Read `abstractcs`. Read `data0`. | CH32V003 |
+| Memory write, program buffer | Write `data1` (address) and `data0` (value). Write `command` `00040000`. Read `abstractcs`. | Not captured |
+
+The probe does not read `abstractcs` after a memory access command. The layer reads it after each command, until `busy` (bit 12) is 0. It then checks `cmderr` (bits 8 to 10).
+This costs one frame for each access. A `cmderr` that is not 0 stops all later commands, so the layer clears it after an error.
+The CH32V003 shows `abstractcs` `08000602` (`cmderr` 6) after the halt of the connect command. Thus the layer also clears `cmderr` before its first command.
+It does this again after a DM reset and after each DMI write of the host.
+
+The layer selects the memory access method from the wire. One wire (CH32V00x) uses the program buffer. Two wires (CH32V20x, CH32V30x) use the abstract memory access.
+The program buffer method has 32-bit accesses only.
+
+### Program buffer programs
+
+The probe loads the read program at connect: it writes `abstractauto` `0` and `progbuf0` to `progbuf7`.
+The words come from `v003-wlink-status-timing.csv`. A disassembly gives this program:
+
+```
+progbuf0  7b251073  csrw   dscratch0, a0
+progbuf1  7b359073  csrw   dscratch1, a1
+progbuf2  e0000537  lui    a0, 0xe0000
+progbuf3  0f852583  lw     a1, 0xf8(a0)    # a1 = data1 (the address)
+progbuf4  2a23418c  c.lw   a1, 0(a1)       # (low half) a1 = the word
+                    sw     a1, 0xf4(a0)    # (high half and progbuf5) data0 = a1
+progbuf5  25730eb5  csrr   a0, dscratch0   # (high half and progbuf6)
+progbuf6  25f37b20  csrr   a1, dscratch1   # (high half and progbuf7)
+progbuf7  90027b30  c.ebreak               # (high half)
+```
+
+The CH32V003 maps `data0` to the address `0xe00000f4` and `data1` to `0xe00000f8`. `hartinfo` reads `002120f4`.
+The program keeps `a0` and `a1` in `dscratch0` and `dscratch1`, so the hart registers do not change.
+A 32-bit instruction can start in one word and end in the next word.
+
+No capture shows a memory write by the program buffer: the probe writes the flash with its stub (see [Flash program](#flash-program-wlink)).
+The layer uses its own write program with the same layout:
+
+```
+7b251073 7b359073 e0000537 0f452583 0f852503 2573c10c 25f37b20 90027b30
+csrw dscratch0, a0;  csrw dscratch1, a1;  lui a0, 0xe0000
+lw a1, 0xf4(a0);  lw a0, 0xf8(a0);  c.sw a1, 0(a0)
+csrr a0, dscratch0;  csrr a1, dscratch1;  c.ebreak
+```
+
+An assembler (`clang --target=riscv32 -march=rv32ec`) gave the same words for both programs.
+The layer loads a program one time. It loads it again after a DM reset, after a DMI write of the host, or for the other program.
+
+### Errors
+
+| Status | Cause |
+|---|---|
+| `Wire` | The engine returned a flag: a parity error (two wires) or a line that stays low (one wire). |
+| `NoTarget` | Two wires: the response bits and the tail bits are `1111`. No target drives them. One wire: a read without a target gives `ffffffff`. Thus each `dmstatus` read checks the version field (2 for spec 0.13). |
+| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. |
+| `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted). |
+| `Unsupported` | A byte or half-word access with the program buffer method. |
+
+A real target is necessary to confirm the write program, the halt and resume times, and the no-target detection.
+
 ## Byte order
 
 Memory read data on endpoint `0x82` holds each 32-bit word with the most significant byte first.
