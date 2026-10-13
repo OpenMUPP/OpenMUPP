@@ -67,6 +67,10 @@ struct FakeUart {
       txInterruptOn = true;
    }
 
+   void stopTx() {
+      txInterruptOn = false;
+   }
+
    // Runs the TX interrupt until the ring is empty. The last byte stays in
    // the shift register.
    void sendAll(uart::UartBuffers<ringSize> &buffers) {

@@ -128,6 +128,11 @@ void UartPort::startTx() {
    usart_.enableTxEmptyInterrupt();
 }
 
+void UartPort::stopTx() {
+   Interrupt::CriticalSection cs;
+   usart_.disableTxEmptyInterrupt();
+}
+
 void UartPort::handleInterrupt() {
    // One SR read for all receive flags. On USART v1 the receive interrupt
    // fires for RXNE and for an overrun (ORE). ORE can come without RXNE:
@@ -143,7 +148,7 @@ void UartPort::handleInterrupt() {
       }
       if((status & USART_SR_RXNE) != 0) {
          if((status & (USART_SR_FE | USART_SR_NE | USART_SR_PE)) != 0) {
-            buffers_.receiveError();
+            buffers_.receiveError((status & USART_SR_PE) != 0);
          }
          buffers_.received(byte);
       }

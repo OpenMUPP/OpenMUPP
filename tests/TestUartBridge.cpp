@@ -292,6 +292,106 @@ TEST_CASE("UartBridge stores the DTR and RTS state of the host") {
    CHECK(bench.bridge().controlLines() == 0);
 }
 
+TEST_CASE("UartBuffers count the parity errors among the receive errors") {
+   uart::UartBuffers<ringSize> buffers;
+   buffers.receiveError();
+   buffers.receiveError(true);
+   buffers.receiveError(false);
+   CHECK(buffers.rxErrors == 3);
+   CHECK(buffers.rxParityErrors == 1);
+}
+
+TEST_CASE("UartBuffers flushTx and flushRx empty the rings, also when the data wraps") {
+   uart::UartBuffers<ringSize> buffers;
+   for(int round = 0; round < 3; ++round) {
+      for(std::size_t i = 0; i < ringCapacity; ++i) {
+         buffers.received(static_cast<uint8_t>(i));
+         CHECK(buffers.tx.try_push(static_cast<uint8_t>(i)));
+      }
+      buffers.flushRx();
+      buffers.flushTx();
+      CHECK(buffers.rx.empty());
+      CHECK(buffers.tx.empty());
+      // Move the start of the data, so the next round wraps.
+      buffers.received(0);
+      CHECK(buffers.tx.try_push(0));
+      buffers.flushRx();
+      buffers.flushTx();
+   }
+   CHECK(buffers.rxDropped == 0);
+}
+
+TEST_CASE("UartBridge moves no data while it is not the owner") {
+   Bench bench;
+   bench.enumerate();
+   bench.bridge().setActive(false);
+   CHECK_FALSE(bench.bridge().isActive());
+
+   // The data of the host is lost, and the OUT endpoint does not hold the
+   // host.
+   const auto data = pattern(3 * cdcPacketSize);
+   CHECK(bench.hostSendsUntilNak(data, 0) == data.size());
+   bench.bridge().poll();
+   CHECK(bench.hostSendsUntilNak(data, 0) == data.size());
+   bench.bridge().poll();
+   CHECK(bench.buffers.tx.empty());
+   CHECK_FALSE(bench.uart.txInterruptOn);
+   CHECK(bench.serialPort().readAvailable() == 0);
+
+   // The received bytes stay in the ring for the owner.
+   bench.buffers.received(0x41);
+   bench.bridge().poll();
+   CHECK(bench.hostReceives().empty());
+   CHECK(bench.buffers.rx.size() == 1);
+}
+
+TEST_CASE("UartBridge sets its format again when it gets the UART back") {
+   Bench bench;
+   bench.enumerate();
+   REQUIRE(bench.setLineCoding(9600, 7, 2, 2));
+   bench.bridge().poll();
+   REQUIRE(bench.uart.formats.back() == format9600);
+
+   bench.bridge().setActive(false);
+   // Another owner changes the format.
+   bench.uart.formats.push_back(format115200);
+   bench.uart.shifting = true;
+   bench.bridge().setActive(true);
+   CHECK(bench.bridge().isActive());
+
+   // No data before the format is back: the last byte of the other owner
+   // still goes out.
+   const auto data = pattern(10);
+   REQUIRE(bench.hostSends(data));
+   bench.bridge().poll();
+   CHECK(bench.uart.formats.back() == format115200);
+   CHECK(bench.buffers.tx.empty());
+
+   bench.uart.shifting = false;
+   bench.bridge().poll();
+   CHECK(bench.uart.formats.back() == format9600);
+   bench.bridge().poll();
+   bench.uart.sendAll(bench.buffers);
+   CHECK(bench.uart.sentBytes() == data);
+   CHECK(bench.uart.sent.back().second == format9600);
+}
+
+TEST_CASE("UartBridge takes a line coding while it is not the owner, and applies it when it gets the UART back") {
+   Bench bench;
+   bench.enumerate();
+   bench.bridge().setActive(false);
+   REQUIRE(bench.setLineCoding(9600, 7, 2, 2));
+   bench.bridge().poll();
+   CHECK(bench.uart.formats.back() == format115200);
+   CHECK(bench.bridge().hasPendingFormat());
+
+   bench.bridge().setActive(true);
+   bench.bridge().poll();
+   CHECK(bench.uart.formats.back() == format9600);
+   CHECK(bench.bridge().format() == format9600);
+   CHECK_FALSE(bench.bridge().hasPendingFormat());
+}
+
 namespace {
 
 // The UART receives a byte each 6250 core cycles: 115200 baud at 72 MHz.
