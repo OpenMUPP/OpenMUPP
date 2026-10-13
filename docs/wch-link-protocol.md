@@ -565,8 +565,12 @@ The pins on the dongle:
 | ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
 
 The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
-This was not tested on a dongle. Open for the engine (work item #66): the line of a pulse must go high in about 370 ns.
-`board::SwdPins::swdioRelease()` releases the line to a pull-up input. A pull-up may be too slow, so the engine may need to drive the line high.
+This was not tested on a dongle. The line of a pulse must go high in about 370 ns.
+`board::SwdPins::swdioRelease()` releases the line to a pull-up input. A pull-up can be too slow for this time.
+Thus the engine (`src/rvswd/RvSwdEngine.h`, pins in `src/board/BoardRvSwd.h`) drives the line high in the high level of each bit and when the line is idle.
+In a read bit, the engine releases the line after its short low pulse. The target can then hold the line low for a 0.
+The engine samples the line 600 ns after the falling edge. When the line is high again, the engine drives it high.
+A hardware test must show that the pull-up lets a 1 rise before the sample point.
 
 USB ID: the decision of the epic stays. The default is an own ID. The ID `1a86:8010` is a build option for personal use.
 wlink and minichlink find the probe by this ID. Without it, they need a flag or a patch.

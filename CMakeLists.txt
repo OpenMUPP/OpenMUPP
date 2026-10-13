@@ -243,11 +243,12 @@ if (CMAKE_CROSSCOMPILING)
     set(VSL_SHARED_SOURCES ${VSL_FIRMWARE_SOURCES})
     list(FILTER VSL_SHARED_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
     add_library(versaloon-ng-objects OBJECT ${VSL_SHARED_SOURCES})
-    # The JTAG and SWD engines are instantiated in these files (see
-    # board/BoardJtag.h and board/BoardSwd.h). They use -O2 instead of
-    # -Os. It comes after the -Os of COMMON_OPTIONS, so it wins.
+    # The JTAG, SWD and RISC-V debug wire engines are instantiated in these
+    # files (see board/BoardJtag.h, board/BoardSwd.h and board/BoardRvSwd.h).
+    # They use -O2 instead of -Os. It comes after the -Os of
+    # COMMON_OPTIONS, so it wins.
     set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardSwd.cpp
-            PROPERTIES COMPILE_OPTIONS -O2)
+            src/board/BoardRvSwd.cpp PROPERTIES COMPILE_OPTIONS -O2)
     # Apply unified build configuration
     target_link_libraries(versaloon-ng-objects PUBLIC art-build-config art::core art::stm32 system-stm32)
     target_include_directories(versaloon-ng-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
