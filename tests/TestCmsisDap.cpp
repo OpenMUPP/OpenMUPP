@@ -266,6 +266,9 @@ class HookedSwd final : public cmsisdap::DapSwd {
       }
       return value;
    }
+   void setAbort(const cmsisdap::TransferAbort &abort) override {
+      swd_.setAbort(abort);
+   }
 
    int transfers{ 0 };
    std::function<void()> onTransfer;

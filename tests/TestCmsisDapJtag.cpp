@@ -88,6 +88,8 @@ class CountingSwd final : public cmsisdap::DapSwd {
       ++transfers;
       return cmsisdap::dap::ackOk;
    }
+   void setAbort(const cmsisdap::TransferAbort &) override {
+   }
 
    int inits{ 0 };
    int finis{ 0 };

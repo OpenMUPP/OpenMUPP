@@ -42,6 +42,16 @@ inline constexpr uint8_t requestAddressMask = 0x0C;
 inline constexpr uint8_t readRdbuff = 0x0E;
 } // namespace dap
 
+// The DAP_TransferAbort state of the processor (DapProcessor.h)
+class TransferAbort {
+   public:
+   // True: stop the transfers of the packet that runs
+   [[nodiscard]] virtual bool aborted() const = 0;
+
+   protected:
+   ~TransferAbort() = default;
+};
+
 class DapSwd {
    public:
    // Drives SWCLK and SWDIO high.
@@ -60,6 +70,10 @@ class DapSwd {
    // WAIT retries of the settings. Returns the response value: the
    // acknowledge (bits 0-2), or protocolError for a parity error.
    virtual uint8_t transfer(uint8_t request, uint32_t &data) = 0;
+   // After a WAIT, transfer() stops its retries when abort.aborted() is
+   // true. It then returns the WAIT acknowledge. The processor calls it
+   // once, at its construction. abort must stay valid.
+   virtual void setAbort(const TransferAbort &abort) = 0;
 
    protected:
    ~DapSwd() = default;

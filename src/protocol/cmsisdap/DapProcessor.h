@@ -180,7 +180,7 @@ class Platform {
 class PacketReader;
 class PacketWriter;
 
-class Processor {
+class Processor final : private TransferAbort {
    public:
    // The size of a packet, and the packets in flight. DAP_Info reports
    // both.
@@ -253,8 +253,9 @@ class Processor {
    [[nodiscard]] art::span<uint8_t> request(std::size_t index);
    [[nodiscard]] bool isQueued(std::size_t index);
    [[nodiscard]] bool mustWait();
-   // DAP_TransferAbort stops the packet that runs.
-   [[nodiscard]] bool aborted() const {
+   // DAP_TransferAbort stops the packet that runs. Also asked by the SWD
+   // engine after a WAIT (DapSwd::setAbort()).
+   [[nodiscard]] bool aborted() const override {
       return abortRequests_ != 0;
    }
 

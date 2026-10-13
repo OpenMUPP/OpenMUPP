@@ -63,6 +63,8 @@ class FakeDapSwd final : public cmsisdap::DapSwd {
       data = 0;
       return cmsisdap::dap::ackOk;
    }
+   void setAbort(const cmsisdap::TransferAbort &) override {
+   }
 
    int inits{ 0 };
    int finis{ 0 };

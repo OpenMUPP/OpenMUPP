@@ -185,6 +185,7 @@ Processor::Processor(DapSwd &swd,
    }
    applySettings();
    swd_.setClockHz(clockHz_);
+   swd_.setAbort(*this);
 }
 
 void Processor::applySettings() {
