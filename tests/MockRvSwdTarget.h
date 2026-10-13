@@ -24,12 +24,16 @@
 // SWDIO has a pull-up: it reads 1 when nobody drives it. The mock counts
 // the times that the host and the target drive SWDIO at the same time, and
 // the bits that the target samples while the host does not drive.
+//
+// onRead and onWrite connect a DM model (tests/MockDebugModule.h) to the
+// registers.
 
 #include <doctest/doctest.h>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "rvswd/RvSwdEngine.h"
@@ -171,6 +175,10 @@ class MockRvSwdTarget {
    bool present{ true };
    // One wire: the target holds the line low from the next read bit on.
    bool stuckLow{ false };
+   // Called with the address before the target answers a read, and after
+   // it stores a write
+   std::function<void(uint8_t)> onRead;
+   std::function<void(uint8_t)> onWrite;
 
    std::vector<Access> accesses;
    // Two wires: the bits that the target sampled in the last frame, bit 1
@@ -375,6 +383,7 @@ class MockRvSwdTarget {
          if(!write_) {
             readBadParity_ = badParity;
             badParity = false;
+            notifyRead();
             accesses.push_back({ address_, false, registers[address_] });
          }
       } else if(bit == 10 || (bit == 48 && write_)) {
@@ -390,6 +399,7 @@ class MockRvSwdTarget {
          } else {
             registers[address_] = data_;
             accesses.push_back({ address_, true, data_ });
+            notifyWrite();
          }
       } else if(bit == 53 && level) {
          ++protocolErrors;
@@ -463,6 +473,7 @@ class MockRvSwdTarget {
       } else if(oneBit_ == 8) {
          write_ = level;
          if(!write_) {
+            notifyRead();
             accesses.push_back({ address_, false, registers[address_] });
          }
       } else {
@@ -471,7 +482,19 @@ class MockRvSwdTarget {
       if(++oneBit_ == oneWireFrameBits) {
          registers[address_] = data_;
          accesses.push_back({ address_, true, data_ });
+         notifyWrite();
          endOneWireFrame();
+      }
+   }
+
+   void notifyRead() {
+      if(onRead) {
+         onRead(address_);
+      }
+   }
+   void notifyWrite() {
+      if(onWrite) {
+         onWrite(address_);
       }
    }
 

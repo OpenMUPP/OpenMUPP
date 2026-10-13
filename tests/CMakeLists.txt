@@ -55,6 +55,7 @@ add_executable(vsl-tests
         TestSwdBlock.cpp
         TestSwdBitBang.cpp
         TestRvSwdEngine.cpp
+        TestDebugModule.cpp
         TestCmsisDap.cpp
         TestCmsisDapJtag.cpp
         TestPowerBlock.cpp
