@@ -1,9 +1,12 @@
 // The DAP_UART_* side of the UART (uart/DapUartChannel.h) and the owner
 // switch with the UART bridge, on the bench of the bridge tests: the real
-// CDC-ACM function, a fake UART and small rings.
+// CDC-ACM function, a fake UART and small rings. The last tests run the
+// DAP_UART_* commands of the CMSIS-DAP processor on this channel.
 
+#include "protocol/cmsisdap/DapProcessor.h"
 #include "uart/DapUartChannel.h"
 
+#include "CmsisDapBench.h"
 #include "UartBench.h"
 
 #include <doctest/doctest.h>
@@ -79,6 +82,56 @@ struct Bench : vsltest::UartBench {
    }
 
    Channel channel;
+};
+
+using Bytes = std::vector<uint8_t>;
+
+Bytes word(uint32_t value) {
+   return { static_cast<uint8_t>(value), static_cast<uint8_t>(value >> 8), static_cast<uint8_t>(value >> 16),
+            static_cast<uint8_t>(value >> 24) };
+}
+
+Bytes cat(std::initializer_list<Bytes> parts) {
+   Bytes result;
+   for(const Bytes &part : parts) {
+      result.insert(result.end(), part.begin(), part.end());
+   }
+   return result;
+}
+
+// The processor with the channel of a Bench
+struct DapBench : Bench {
+   explicit DapBench(bool withBridge = true, bool withUart = true)
+      : Bench(withBridge)
+      , info(vsltest::dapTestInfo())
+      , dap(swd, gpio, platform, info, nullptr, nullptr, withUart ? &channel : nullptr) {
+   }
+
+   Bytes run(const Bytes &request) {
+      REQUIRE(dap.canSubmit());
+      dap.submit(request);
+      dap.run();
+      REQUIRE(dap.hasResponse());
+      const auto response = dap.response();
+      Bytes result(response.begin(), response.end());
+      dap.popResponse();
+      return result;
+   }
+
+   // DAP_UART_Transport 2, DAP_UART_Configure 9600 7E2, DAP_UART_Control
+   // RX and TX enable
+   void takeForDap() {
+      REQUIRE(run({ 0x1F, 0x02 }) == Bytes{ 0x1F, 0x00 });
+      REQUIRE(run(cat({ { 0x20, config7E2 }, word(9600) })) == cat({ { 0x20, 0x00 }, word(9600) }));
+      REQUIRE(run({ 0x22, control::rxEnable | control::txEnable }) == Bytes{ 0x22, 0x00 });
+      poll();
+   }
+
+   vsltest::FakeDapSwd swd;
+   vsltest::FakeDapGpio gpio;
+   vsltest::FakeDapPlatform platform;
+   cmsisdap::DeviceInfo info;
+   cmsisdap::Processor dap;
 };
 
 } // namespace
@@ -409,4 +462,138 @@ TEST_CASE("DapUartChannel: the COM port data is lost while the DAP commands own 
    CHECK(bench.hostSendsUntilNak(data, 0) == data.size());
    bench.poll();
    CHECK(bench.channel.txCount() == 0);
+}
+
+TEST_CASE("DAP_Info reports the UART, the USB COM port and the buffer sizes") {
+   DapBench b;
+   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x02, 0x91, 0x01 });
+   CHECK(b.run({ 0x00, 0xFB }) == cat({ { 0x00, 0x04 }, word(ringCapacity) }));
+   CHECK(b.run({ 0x00, 0xFC }) == cat({ { 0x00, 0x04 }, word(ringCapacity) }));
+}
+
+TEST_CASE("DAP_Info: no USB COM port without a bridge") {
+   DapBench b(false);
+   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x91 });
+}
+
+TEST_CASE("Without a DapUart the DAP_UART_* commands are invalid, and DAP_Info reports no UART") {
+   DapBench b(true, false);
+   for(const uint8_t id : { 0x1F, 0x20, 0x21, 0x22, 0x23 }) {
+      CHECK(b.run({ id, 0x00, 0x00, 0x00, 0x00, 0x00 }) == Bytes{ 0xFF });
+   }
+   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x11 });
+   CHECK(b.run({ 0x00, 0xFB }) == Bytes{ 0x00, 0x00 });
+   CHECK(b.run({ 0x00, 0xFC }) == Bytes{ 0x00, 0x00 });
+}
+
+TEST_CASE("DAP_UART_Transport switches the owner") {
+   DapBench b;
+   CHECK(b.run({ 0x1F, 0x02 }) == Bytes{ 0x1F, 0x00 });
+   CHECK(b.channel.transport() == transport::dap);
+   CHECK(b.run({ 0x1F, 0x03 }) == Bytes{ 0x1F, 0xFF });
+   CHECK(b.run({ 0x1F, 0x00 }) == Bytes{ 0x1F, 0x00 });
+   CHECK(b.channel.transport() == transport::none);
+   CHECK(b.run({ 0x1F, 0x01 }) == Bytes{ 0x1F, 0x00 });
+   CHECK(b.bridge().isActive());
+}
+
+TEST_CASE("DAP_UART_Configure replies the errors and the real baud rate") {
+   DapBench b;
+   // The COM port owns the UART.
+   CHECK(b.run(cat({ { 0x20, 0x00 }, word(115200) })) == cat({ { 0x20, 0x07 }, word(0) }));
+   REQUIRE(b.run({ 0x1F, 0x02 }) == Bytes{ 0x1F, 0x00 });
+   CHECK(b.run(cat({ { 0x20, 0x00 }, word(115200) })) == cat({ { 0x20, 0x00 }, word(115200) }));
+   CHECK(b.run(cat({ { 0x20, 0x00 }, word(230400) })) == cat({ { 0x20, 0x00 }, word(230032) }));
+   CHECK(b.run(cat({ { 0x20, config(8, 3, 3) }, word(9600) })) == cat({ { 0x20, 0x06 }, word(0) }));
+   CHECK(b.run(cat({ { 0x20, 0x00 }, word(100) })) == cat({ { 0x20, 0x00 }, word(0) }));
+   // Too short
+   CHECK(b.run({ 0x20, 0x00, 0x00, 0xC2, 0x01 }) == Bytes{ 0xFF });
+}
+
+TEST_CASE("DAP_UART_Control replies DAP_ERROR for an enable before the configuration") {
+   DapBench b;
+   CHECK(b.run({ 0x22, control::rxEnable }) == Bytes{ 0x22, 0xFF });
+   REQUIRE(b.run({ 0x1F, 0x02 }) == Bytes{ 0x1F, 0x00 });
+   CHECK(b.run({ 0x22, control::rxEnable }) == Bytes{ 0x22, 0xFF });
+   CHECK(b.run({ 0x22, control::rxFlush }) == Bytes{ 0x22, 0x00 });
+   CHECK(b.run({ 0x22 }) == Bytes{ 0xFF });
+}
+
+TEST_CASE("DAP_UART_Status replies the status and the counts") {
+   DapBench b;
+   CHECK(b.run({ 0x23 }) == cat({ { 0x23, 0x00 }, word(0), word(0) }));
+   b.takeForDap();
+   b.buffers.received(0x41);
+   b.buffers.received(0x42);
+   REQUIRE(b.write(pattern(3)) == 3);
+   b.buffers.receiveError(true);
+   CHECK(b.run({ 0x23 }) == cat({ { 0x23, 0x19 }, word(2), word(3) }));
+   CHECK(b.run({ 0x23 }) == cat({ { 0x23, 0x11 }, word(2), word(3) }));
+}
+
+TEST_CASE("DAP_UART_Transfer sends and receives") {
+   DapBench b;
+   b.takeForDap();
+   for(const uint8_t byte : { 0x10, 0x20, 0x30 }) {
+      b.buffers.received(byte);
+   }
+   // Rx Count 2, Tx Count 4
+   CHECK(b.run({ 0x21, 0x02, 0x00, 0x04, 0x00, 0xA0, 0xA1, 0xA2, 0xA3 }) == Bytes{ 0x21, 0x11, 0x04, 0x00, 0x02, 0x00, 0x10, 0x20 });
+   b.uart.sendAll(b.buffers);
+   CHECK(b.uart.sentBytes() == Bytes{ 0xA0, 0xA1, 0xA2, 0xA3 });
+   // Receive only
+   CHECK(b.run({ 0x21, 0x10, 0x00, 0x00, 0x00 }) == Bytes{ 0x21, 0x11, 0x00, 0x00, 0x01, 0x00, 0x30 });
+   CHECK(b.run({ 0x21, 0x10, 0x00, 0x00, 0x00 }) == Bytes{ 0x21, 0x11, 0x00, 0x00, 0x00, 0x00 });
+}
+
+TEST_CASE("DAP_UART_Transfer replies the bytes that fit in the TX ring and in the response") {
+   DapBench b;
+   b.takeForDap();
+   for(std::size_t i = 0; i < ringCapacity; ++i) {
+      b.buffers.received(static_cast<uint8_t>(i));
+   }
+   // 64 - 6 bytes of received data fit in the response.
+   const Bytes response = b.run({ 0x21, 0xFF, 0xFF, 0x00, 0x00 });
+   REQUIRE(response.size() == 64);
+   CHECK(response[4] == 58);
+   CHECK(response[5] == 0);
+   CHECK(response[6] == 0);
+   CHECK(response[63] == 57);
+
+   // The TX ring takes ringCapacity - 50 bytes more.
+   REQUIRE(b.write(pattern(50)) == 50);
+   const Bytes data = pattern(40);
+   CHECK(b.run(cat({ { 0x21, 0x00, 0x00, 40, 0x00 }, data })) == Bytes{ 0x21, 0x11, ringCapacity - 50, 0x00, 0x00, 0x00 });
+}
+
+TEST_CASE("DAP_UART_Transfer: a Tx Count that is more than the request has is invalid") {
+   DapBench b;
+   b.takeForDap();
+   CHECK(b.run({ 0x21, 0x00, 0x00, 0x04, 0x00, 0xA0, 0xA1 }) == Bytes{ 0xFF });
+   CHECK(b.run({ 0x21, 0x00, 0x00 }) == Bytes{ 0xFF });
+   CHECK(b.channel.txCount() == 0);
+}
+
+TEST_CASE("DAP_UART_Transfer while the COM port owns the UART moves no data") {
+   DapBench b;
+   b.buffers.received(0x41);
+   CHECK(b.run({ 0x21, 0x10, 0x00, 0x02, 0x00, 0xA0, 0xA1 }) == Bytes{ 0x21, 0x00, 0x00, 0x00, 0x00, 0x00 });
+   CHECK(b.buffers.tx.empty());
+}
+
+TEST_CASE("DAP_UART_* commands in DAP_ExecuteCommands") {
+   DapBench b;
+   b.takeForDap();
+   b.buffers.received(0x55);
+   // Transfer of 1 byte each way, then the status
+   CHECK(b.run({ 0x7F, 0x02, 0x21, 0x01, 0x00, 0x01, 0x00, 0xAA, 0x23 }) ==
+         cat({ { 0x7F, 0x02, 0x21, 0x11, 0x01, 0x00, 0x01, 0x00, 0x55, 0x23, 0x11 }, word(0), word(1) }));
+}
+
+TEST_CASE("hostGone gives the UART back to the COM port") {
+   DapBench b;
+   b.takeForDap();
+   b.dap.hostGone();
+   CHECK(b.channel.transport() == transport::comPort);
+   CHECK(b.bridge().isActive());
 }

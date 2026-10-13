@@ -29,10 +29,6 @@ using uart::FrameFormat;
 using uart::Parity;
 using uart::StopBits;
 
-inline constexpr uint8_t standardDeviceOut = 0x00;
-inline constexpr uint8_t classInterfaceOut = 0x21;
-inline constexpr uint8_t setAddress = 5;
-inline constexpr uint8_t setConfiguration = 9;
 
 // Rings of 63 bytes: small, so the tests fill them and wrap around.
 inline constexpr std::size_t ringSize = 64;
@@ -103,6 +99,11 @@ inline std::vector<uint8_t> pattern(std::size_t size, uint8_t first = 0) {
 }
 
 class UartBench {
+   static constexpr uint8_t standardDeviceOut = 0x00;
+   static constexpr uint8_t classInterfaceOut = 0x21;
+   static constexpr uint8_t setAddress = 5;
+   static constexpr uint8_t setConfiguration = 9;
+
    public:
    UartBench()
       : device_(controller_, descriptors_)
