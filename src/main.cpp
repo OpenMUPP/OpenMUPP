@@ -191,14 +191,25 @@ protocol::SwdBlock swdBlock{ boardSwd };
 protocol::PowerBlock powerBlock{ boardPower, busyWaitDelay };
 boot::BootloaderEntry bootloaderEntry;
 
+// FW_UPDATE enters the bootloader only in the app-8k image, behind
+// versaloon-bootloader. CMake defines VSL_HAS_BOOTLOADER_ENTRY for this file
+// of that image only (vsl_add_app_image() in CMakeLists.txt). The other
+// sources are shared by all images and compiled without the define, so the
+// value is here and not in a shared header.
+#if defined(VSL_HAS_BOOTLOADER_ENTRY)
+constexpr bool hasBootloaderEntry = true;
+#else
+constexpr bool hasBootloaderEntry = false;
+#endif
+
 #endif
 
 #if defined(VSL_DUAL_PERSONALITY)
-usb::UsbStack usbStack{ activePersonality, boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll, personalitySwitch, dapProcessor };
+usb::UsbStack usbStack{ activePersonality, hasBootloaderEntry ? &bootloaderEntry : nullptr, usbToAll, personalitySwitch, dapProcessor };
 #elif defined(VSL_WITH_CMSIS_DAP)
 usb::UsbStack usbStack{ dapProcessor };
 #else
-usb::UsbStack usbStack{ boot::hasBootloader ? &bootloaderEntry : nullptr, usbToAll };
+usb::UsbStack usbStack{ hasBootloaderEntry ? &bootloaderEntry : nullptr, usbToAll };
 #endif
 
 // A command runs only after usbStack.start(), so the USB device and the

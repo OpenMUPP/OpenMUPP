@@ -4,7 +4,7 @@
 // (personality/PersonalityStore.h). Target only.
 //
 // The page is the 1 KB at __vsl_settings_start: the linker script keeps it
-// out of the FLASH region of the image (ldscripts/mem-f103*.ld).
+// out of the FLASH region of the image (ldscripts/mem-f103.ld).
 // stm32flash erases only the pages of the image, so a firmware update
 // keeps the page. A mass erase erases it: the image then starts with its
 // default personality.

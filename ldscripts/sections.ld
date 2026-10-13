@@ -18,10 +18,18 @@
 /*
  * Interrupt::connectHandler() of system-stm32 copies the vector table to
  * SRAM_BASE (0x20000000) and the table needs up to 0x100 bytes. The memory
- * scripts (mem-f103*.ld) start RAM behind it; otherwise the copy overwrites
+ * script (mem-f103.ld) starts RAM behind it; otherwise the copy overwrites
  * .data. system-stm32 checks the table size, this checks the RAM origin.
  */
 ASSERT(ORIGIN(RAM) >= 0x20000100, "keep 0x100 bytes of RAM free for the vector table copy at SRAM_BASE")
+
+/*
+ * The vector table of system-stm32 (g_pfnVectors) must be in the image.
+ * system-stm32 is an OBJECT library: an image that does not link it
+ * directly has no vector table and no start-up code, but the link does not
+ * fail, because the handlers are weak.
+ */
+ASSERT(DEFINED(g_pfnVectors), "the image has no vector table: link system-stm32 directly to the executable")
 
 /*
  * The '__stack' definition is required by crt0, do not remove it.

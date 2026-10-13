@@ -7,20 +7,29 @@ This document is for developers of the firmware: build outputs, tests, the flash
 The README shows how to build the firmware.
 The build writes these files into the build directory:
 
-- `versaloon-next-gen.elf`, `versaloon-next-gen.hex` and `versaloon-next-gen.bin`.
-- Copies of the `.hex` and `.bin` files with the board, the link variant, the build type and the version in the name.
-  An example is `versaloon-next-gen-mini-bootloader-Release-v0.1.0.hex`.
-  An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-next-gen-mini-cmsis-dap-bootloader-Release-v0.1.0.hex`.
+- `versaloon-next-gen-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
+  The README lists the images and their start addresses.
+- Copies of the `.hex` and `.bin` files with the board, the image, the build type and the version in the name.
+  An example is `versaloon-next-gen-mini-app-8k-Release-v0.1.0.hex`.
+  An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-next-gen-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
   An image with `VSL_PROTOCOL=dual` has `-dual` after the board, or `-dual-cmsis-dap` with `VSL_DEFAULT_PROTOCOL=cmsis-dap`.
-- `versaloon-next-gen.map`, the linker map.
+- `versaloon-next-gen-<image>.map`, the linker map of each image.
 - `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
+- `versaloon-next-gen-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
+  `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
+- `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
+
+All images use the same object files.
+Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
+One linker script, `ldscripts/mem-f103.ld`, links all images.
+CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
 
 For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
 The target is `versaloon-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
-There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BOOTLOADER` or `VSL_BUILD_BOOTLOADER` is `OFF`.
+There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
 
 ## Unit tests
 
@@ -170,15 +179,18 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
-- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
-  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` for the board.
-- `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
+- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build of all images of the board, plus the size check of each image in `vsl-images.txt`.
+  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
+- `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
 - `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PROTOCOL=cmsis-dap`, plus the size check.
 - `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PROTOCOL=dual`, plus the size check.
-  The limit of the dual image is 53 KB, because the last flash page holds the stored personality.
+  Each limit of the dual image is 1 KB smaller, because the last flash page holds the stored personality.
 - `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
 
-The build jobs keep the `.hex`, `.bin`, `.elf` and `.map` files and the bootloader images as artifacts.
+The build jobs keep only the `.hex` and `.bin` files as artifacts, with the board, the image, the build type and the version in the name.
+The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
+The ST-Link/V2 has the `standalone` image only.
+The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
 
 ## Branches
 

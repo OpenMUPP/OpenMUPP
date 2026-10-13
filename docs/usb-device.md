@@ -141,7 +141,7 @@ The active personality has its descriptors, its USB function and its commands, a
 The firmware changes the personality only with a reset.
 
 The firmware stores the personality in the last 1 KB flash page of the application area, at `0x0800FC00`.
-The linker script keeps this page out of the image, so a dual image has 53 KB instead of 54 KB.
+The linker script keeps this page out of the image, so a dual image has 1 KB less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
 When the page holds no personality, the image uses `VSL_DEFAULT_PROTOCOL` (default `versaloon`).
 `src/personality/PersonalityStore.h` has the page format.
 The page is a log of 16-bit records, so the firmware erases the page only one time in 512 switches.

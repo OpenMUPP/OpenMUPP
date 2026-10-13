@@ -2,7 +2,7 @@
 
 #include <cmsis_device.h>
 
-// The start of the page (ldscripts/mem-f103*.ld)
+// The start of the page (ldscripts/mem-f103.ld)
 extern "C" const uint16_t __vsl_settings_start[];
 
 namespace board {
