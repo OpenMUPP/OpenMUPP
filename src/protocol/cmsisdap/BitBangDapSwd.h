@@ -7,6 +7,9 @@
 // swd/SwdBitBang.h) and never calls configure(). Thus the order of
 // DAP_SWJ_Clock, DAP_SWD_Configure and DAP_TransferConfigure does not
 // matter.
+//
+// The adapter is the RetryStop of the engine: after a WAIT, it asks the
+// processor for DAP_TransferAbort.
 
 #include "protocol/cmsisdap/DapSwd.h"
 #include "swd/SwdBitBang.h"
@@ -14,7 +17,7 @@
 namespace cmsisdap {
 
 template <typename Port>
-class BitBangDapSwd final : public DapSwd {
+class BitBangDapSwd final : public DapSwd, private swd::RetryStop {
    public:
    explicit BitBangDapSwd(Port &port)
       : port_(port) {
@@ -61,8 +64,18 @@ class BitBangDapSwd final : public DapSwd {
       return ack & protocol::swd::ackMask;
    }
 
+   void setAbort(const TransferAbort &abort) override {
+      abort_ = &abort;
+      port_.setRetryStop(this);
+   }
+
    private:
+   bool stopRetries() override {
+      return abort_->aborted();
+   }
+
    Port &port_;
+   const TransferAbort *abort_{ nullptr };
 };
 
 } // namespace cmsisdap

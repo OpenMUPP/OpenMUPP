@@ -4,12 +4,14 @@
 #include "protocol/cmsisdap/BitBangDapSwd.h"
 #include "protocol/cmsisdap/DapProcessor.h"
 
+#include "MockBackground.h"
 #include "MockSwdPins.h"
 
 #include <doctest/doctest.h>
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <string>
 #include <tuple>
@@ -171,9 +173,11 @@ cmsisdap::DeviceInfo deviceInfo() {
 }
 
 struct Bench {
-   explicit Bench(uint8_t turnaround = 1, uint16_t gpioAvailable = gpio::all & ~(gpio::usr1 | gpio::usr2))
+   explicit Bench(uint8_t turnaround = 1,
+                  uint16_t gpioAvailable = gpio::all & ~(gpio::usr1 | gpio::usr2),
+                  protocol::Background *background = nullptr)
       : pins(turnaround)
-      , port(pins)
+      , port(pins, background)
       , swd(port)
       , gpio(gpioAvailable)
       , info(deviceInfo())
@@ -265,6 +269,9 @@ class HookedSwd final : public cmsisdap::DapSwd {
          onTransfer();
       }
       return value;
+   }
+   void setAbort(const cmsisdap::TransferAbort &abort) override {
+      swd_.setAbort(abort);
    }
 
    int transfers{ 0 };
@@ -1166,6 +1173,40 @@ TEST_CASE("DAP_TransferAbort stops a value match") {
    CHECK(a.pop() == V{ 0x05, 0x00, 0x11 });
    CHECK(a.b.pins.transfers.size() == 5);
    a.b.checkIdle();
+}
+
+TEST_CASE("DAP_TransferAbort stops the WAIT retries of a transfer") {
+   // The abort arrives in the background service of the engine, between
+   // two WAIT retries, as from the USB stack.
+   vsltest::MockBackground background([] { return vsltest::MockBackground::Call{}; });
+   Bench b(1, gpio::all & ~(gpio::usr1 | gpio::usr2), &background);
+   b.connect();
+   // 65535 WAIT retries
+   CHECK(b.run({ 0x04, 0x00, 0xFF, 0xFF, 0x00, 0x00 }) == V{ 0x04, 0x00 });
+   b.pins.acks = std::deque<uint8_t>(10'000, pswd::ackWait);
+   std::size_t transfersAtAbort = 0;
+   background.onService = [&b, &background, &transfersAtAbort] {
+      if(background.calls.size() == 2) {
+         transfersAtAbort = b.pins.transfers.size();
+         b.dap.submit(V{ 0x07 });
+      }
+   };
+   send(b.dap, cat({ { 0x05, 0x00, 0x02, readDpidr, writeSelect }, word(1) }));
+   REQUIRE(transfersAtAbort != 0);
+   // One more attempt after the abort, then the WAIT acknowledge. The
+   // write does not run.
+   CHECK(b.pop() == V{ 0x05, 0x00, 0x02 });
+   CHECK(b.pins.transfers.size() == transfersAtAbort + 1);
+   CHECK(b.seen() == V(b.pins.transfers.size(), readDpidr));
+   CHECK_FALSE(b.dap.hasResponse());
+
+   // The next packet runs normally, with all its retries.
+   b.pins.acks = { pswd::ackWait, pswd::ackWait };
+   b.pins.transfers.clear();
+   b.pins.readData = 0x1BA01477;
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == cat({ { 0x05, 0x01, 0x01 }, word(0x1BA01477) }));
+   CHECK(b.pins.transfers.size() == 3);
+   b.checkIdle();
 }
 
 TEST_CASE("DAP_TransferAbort stops the packets before it, not the packets after it") {
