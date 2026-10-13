@@ -87,6 +87,12 @@ class UsbStack {
    // command (see protocol/Background.h), not in the main loop.
    void pollSerial();
 
+   // True when USB events wait for poll(). The main loop must not sleep
+   // then.
+   [[nodiscard]] bool hasPendingEvents() const {
+      return !events_.empty();
+   }
+
    // True when the host has configured the device.
    [[nodiscard]] bool isConfigured() const {
       return device_.isConfigured();

@@ -375,6 +375,16 @@ int main() {
       }
       afterUsbPoll(nowMs);
       updateLeds(nowMs, clockFromCrystal);
-      __WFI();
+      // Sleep only when no USB event waits. An event that came after the
+      // USB poll has no pending interrupt to end the WFI: the interrupt
+      // handler already ran, or the main loop queued the event itself (the
+      // double-buffered OUT endpoint reports a waiting packet when it is
+      // armed again). With the interrupts masked, an interrupt still ends
+      // the WFI, and its handler runs after __enable_irq().
+      __disable_irq();
+      if(!clockFromCrystal || !usbStack.hasPendingEvents()) {
+         __WFI();
+      }
+      __enable_irq();
    }
 }

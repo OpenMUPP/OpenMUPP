@@ -161,8 +161,18 @@ class DapBench {
    // Returns false if the OUT endpoint NAKs.
    bool write(const std::vector<uint8_t> &command) {
       const bool sent = send(command);
-      function.poll();
+      mainLoop();
       return sent;
+   }
+
+   // One iteration of the main loop, as UsbStack::poll(): the USB events,
+   // then the stored commands one at a time, with the USB events after
+   // each one.
+   void mainLoop() {
+      controller_.deliverQueuedEvents();
+      while(function.poll()) {
+         controller_.deliverQueuedEvents();
+      }
    }
 
    // The host writes one command packet, and the main loop does not run.

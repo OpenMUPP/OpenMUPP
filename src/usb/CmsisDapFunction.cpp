@@ -8,20 +8,18 @@ CmsisDapFunction::CmsisDapFunction(cmsisdap::Processor &processor)
    , processor_(processor) {
 }
 
-void CmsisDapFunction::poll() {
+bool CmsisDapFunction::poll() {
    // A packet that came before the suspend runs after the resume: the
    // target stays released during the suspend.
-   if(suspended_) {
-      return;
+   if(suspended_ || !processor_.runNext()) {
+      return false;
    }
-   // Send each response at once, before the next packet runs.
-   while(processor_.runNext()) {
-      sendResponse();
-   }
+   // Send the response at once, before the next packet runs.
    sendResponse();
    if(processor_.canSubmit()) {
       resumeOut();
    }
+   return true;
 }
 
 bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {

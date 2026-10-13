@@ -4,8 +4,8 @@
 // Hardware-independent: the host unit tests run it on a fake controller.
 //
 // Each OUT packet is one command and goes to the processor
-// (cmsisdap::Processor::submit()). poll() runs the commands in the main
-// loop (cmsisdap::Processor::run()), outside the delivery of the OUT
+// (cmsisdap::Processor::submit()). poll() runs one command in the main
+// loop (cmsisdap::Processor::runNext()), outside the delivery of the OUT
 // packet. Thus the OUT endpoint is armed while a command runs. Each
 // response of the processor is sent as one IN packet, in order. A response of the full packet size has no ZLP:
 // the host reads one packet per response. An empty OUT packet (a ZLP) is
@@ -40,9 +40,12 @@ class CmsisDapFunction final : public art::usb::VendorBulkFunction {
    // The processor must outlive the function.
    explicit CmsisDapFunction(cmsisdap::Processor &processor);
 
-   // Runs the received commands and sends their responses. Call it in the
-   // main loop after the USB events, not during a command.
-   void poll();
+   // Runs the next received command and sends its response. Returns false
+   // when no command ran. Call it in the main loop after the USB events,
+   // not during a command. Deliver the USB events again before the next
+   // call: the IN endpoint is free for the next response only after the
+   // InComplete event.
+   bool poll();
 
    // Number of command packets received. It wraps at 2^32.
    [[nodiscard]] uint32_t commandCount() const {

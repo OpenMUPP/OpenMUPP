@@ -27,6 +27,11 @@ There is one serial port only.
 `src/usb/UsbStack.cpp` runs the libArT USB device stack on the STM32F1 USB peripheral.
 The USB interrupt only puts the events into a queue.
 The main loop runs the USB protocol.
+At the end of each iteration, the main loop sleeps (`WFI`) until the next interrupt.
+It does not sleep while USB events wait in the queue (`UsbStack::hasPendingEvents()`).
+An event that arrives after the USB poll has no pending interrupt to stop the sleep.
+For example, the double-buffered OUT endpoint reports a waiting packet from the main loop when the endpoint is armed again.
+Without this check, such an event waits for the next SysTick interrupt, up to 1 ms.
 The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
 A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.

@@ -405,9 +405,38 @@ TEST_CASE("A response goes out before the next stored packet runs") {
    REQUIRE(bench.send({ 0x06, 0x00, 0x01, 0x00, 0x06 }));
    std::optional<Bytes> first;
    bench.swd.onTransfer = [&bench, &first] { first = bench.read(); };
-   bench.function.poll();
+   bench.mainLoop();
    CHECK(first == Bytes{ 0x00, 0x01, 0x04 });
    CHECK(bench.read() == Bytes{ 0x06, 0x01, 0x00, 0x01, 0, 0, 0, 0 });
+}
+
+TEST_CASE("Stored commands run one at a time, and each response goes out during the next command") {
+   DapBench bench;
+   bench.enumerate();
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+
+   // The events wait for the main loop, as on the target. Three
+   // DAP_TransferBlock packets of one read each are stored.
+   bench.controller().queueEvents(true);
+   const Bytes block{ 0x06, 0x00, 0x01, 0x00, 0x06 };
+   for(int i = 0; i < 3; ++i) {
+      REQUIRE(bench.send(block));
+      bench.controller().deliverQueuedEvents();
+   }
+   // The host reads a response during each command. The IN endpoint is
+   // free again only after the main loop delivered the InComplete event of
+   // the last response.
+   const Bytes response{ 0x06, 0x01, 0x00, 0x01, 0, 0, 0, 0 };
+   std::vector<std::optional<Bytes>> readDuring;
+   bench.swd.onTransfer = [&bench, &readDuring] { readDuring.push_back(bench.read()); };
+   bench.mainLoop();
+   REQUIRE(readDuring.size() == 3);
+   CHECK_FALSE(readDuring[0].has_value());
+   CHECK(readDuring[1] == response);
+   CHECK(readDuring[2] == response);
+   CHECK(bench.read() == response);
+   CHECK_FALSE(bench.read().has_value());
 }
 
 TEST_CASE("A packet before a suspend runs after the resume") {
@@ -417,12 +446,12 @@ TEST_CASE("A packet before a suspend runs after the resume") {
    // The packet and the suspend come in the same poll of the controller.
    REQUIRE(bench.send({ 0x09, 0x05, 0x00 }));
    bench.controller().busSuspend();
-   bench.function.poll();
+   bench.mainLoop();
    CHECK(bench.platform.delays.empty());
    CHECK_FALSE(bench.read().has_value());
 
    bench.controller().busResume();
-   bench.function.poll();
+   bench.mainLoop();
    CHECK(bench.platform.delays == std::vector<uint32_t>{ 5 });
    CHECK(bench.read() == Bytes{ 0x09, 0x00 });
 }
