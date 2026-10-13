@@ -288,7 +288,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
       if(now.parity != seen_.parity) {
          bits |= s::parityError;
       }
-      if(now.errors - now.parity != seen_.errors - seen_.parity) {
+      if(now.framing != seen_.framing) {
          bits |= s::framingError;
       }
       seen_ = now;
@@ -328,7 +328,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
    private:
    struct Counters {
       uint32_t lost;
-      uint32_t errors;
+      uint32_t framing;
       uint32_t parity;
    };
 
@@ -341,7 +341,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
    }
 
    [[nodiscard]] Counters counters() const {
-      return { buffers_.rxDropped + buffers_.rxOverruns, buffers_.rxErrors, buffers_.rxParityErrors };
+      return { buffers_.rxDropped + buffers_.rxOverruns, buffers_.rxFramingErrors, buffers_.rxParityErrors };
    }
 
    void disableTx() {

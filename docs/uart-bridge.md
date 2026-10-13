@@ -56,7 +56,7 @@ Flow control and data loss:
   To prevent overruns, the UART interrupt has a higher priority than the USB interrupt (`src/Hardware.h`).
   At 2 Mbaud, the interrupt must read each byte within 5 µs.
 - The bridge counts the received bytes with a framing, noise or parity error (`UartBridge::rxErrors()`).
-  The ring buffers also count the parity errors separately (`UartBuffers::rxParityErrors`), for the status of the `DAP_UART_*` commands.
+  The ring buffers also count the parity errors (`UartBuffers::rxParityErrors`) and the other errors (`UartBuffers::rxFramingErrors`) separately, for the status of the `DAP_UART_*` commands.
   These bytes still go to the host. Many errors usually show a wrong baud rate or parity setting.
 - When the host has not configured the device, the bridge drops the received UART data.
 

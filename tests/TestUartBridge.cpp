@@ -292,13 +292,14 @@ TEST_CASE("UartBridge stores the DTR and RTS state of the host") {
    CHECK(bench.bridge().controlLines() == 0);
 }
 
-TEST_CASE("UartBuffers count the parity errors among the receive errors") {
+TEST_CASE("UartBuffers count the parity errors and the other receive errors separately") {
    uart::UartBuffers<ringSize> buffers;
    buffers.receiveError();
    buffers.receiveError(true);
    buffers.receiveError(false);
    CHECK(buffers.rxErrors == 3);
    CHECK(buffers.rxParityErrors == 1);
+   CHECK(buffers.rxFramingErrors == 2);
 }
 
 TEST_CASE("UartBuffers flushTx and flushRx empty the rings, also when the data wraps") {

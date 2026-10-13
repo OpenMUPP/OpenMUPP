@@ -81,9 +81,12 @@ struct UartBuffers {
    // Received bytes with a framing, noise or parity error. Only the
    // interrupt writes it.
    volatile uint32_t rxErrors = 0;
-   // The bytes of rxErrors with a parity error. Only the interrupt writes
-   // it.
+   // rxErrors split in two: the bytes with a parity error, and the bytes
+   // with a framing or noise error only. Each status bit of the DAP_UART_*
+   // commands then compares one counter, so the main loop needs no
+   // consistent read of two counters. Only the interrupt writes them.
    volatile uint32_t rxParityErrors = 0;
+   volatile uint32_t rxFramingErrors = 0;
 
    // Interrupt side: stores a received byte.
    void received(uint8_t byte) {
@@ -103,6 +106,8 @@ struct UartBuffers {
       rxErrors = rxErrors + 1;
       if(parity) {
          rxParityErrors = rxParityErrors + 1;
+      } else {
+         rxFramingErrors = rxFramingErrors + 1;
       }
    }
 
