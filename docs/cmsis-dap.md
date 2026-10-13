@@ -8,7 +8,14 @@ The build option `VSL_PROTOCOL=cmsis-dap` puts the function and the processor in
 
 ## Build
 
-Set the CMake option `VSL_PROTOCOL` to `cmsis-dap`:
+Use the preset of the board with the `-cmsis-dap` suffix, for example `mini-cmsis-dap`:
+
+```sh
+cmake --preset mini-cmsis-dap
+cmake --build --preset mini-cmsis-dap -j
+```
+
+Or set the CMake option `VSL_PROTOCOL` to `cmsis-dap`:
 
 ```sh
 cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DVSL_PROTOCOL=cmsis-dap
