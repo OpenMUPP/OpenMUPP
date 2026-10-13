@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include "board/BoardSwd.h"
+#include "rvswd/DebugModule.h"
 #include "rvswd/RvSwdEngine.h"
 
 namespace board {
@@ -30,8 +31,11 @@ class RvSwdPins : public SwdPins {
 };
 
 using BoardRvSwd = rvswd::RvSwdEngine<RvSwdPins>;
+using BoardDebugModule = rvswd::DebugModule<BoardRvSwd>;
 
 } // namespace board
 
 // BoardRvSwd.cpp instantiates the engine, with -O2 (CMakeLists.txt).
 extern template class rvswd::RvSwdEngine<board::RvSwdPins>;
+// BoardDebugModule.cpp instantiates the debug module layer.
+extern template class rvswd::DebugModule<board::BoardRvSwd>;
