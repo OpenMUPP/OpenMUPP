@@ -553,6 +553,60 @@ TEST_CASE("SWD bit-bang: without abortOnWait, WAIT repeats the transfer without 
    }
 }
 
+// A RetryStop that stops at its call number stopAt (1 is the first call)
+class CountingStop final : public swd::RetryStop {
+   public:
+   explicit CountingStop(int stopAt)
+      : stopAt_(stopAt) {
+   }
+
+   bool stopRetries() override {
+      return ++calls >= stopAt_;
+   }
+
+   int calls{ 0 };
+
+   private:
+   int stopAt_;
+};
+
+TEST_CASE("SWD bit-bang: a RetryStop ends the WAIT retries") {
+   SUBCASE("stop after the third WAIT") {
+      Bench bench(1, 1000);
+      bench.port.setRules({ swd::defaultIdleCycles, false, true });
+      CountingStop stop(3);
+      bench.port.setRetryStop(&stop);
+      bench.pins.acks = std::deque<uint8_t>(10, pswd::ackWait);
+      uint32_t data = 0;
+      CHECK(bench.port.transfer(readApDrw, data) == (pswd::ackWait | pswd::retryOutFlag));
+      CHECK(stop.calls == 3);
+      CHECK(bench.pins.transfers.size() == 3);
+      bench.checkIdle();
+   }
+   SUBCASE("no call without WAIT") {
+      Bench bench(1, 1000);
+      CountingStop stop(1);
+      bench.port.setRetryStop(&stop);
+      bench.pins.acks = { pswd::ackOk, pswd::ackFault };
+      uint32_t data = 0;
+      CHECK(bench.port.transfer(readApDrw, data) == pswd::ackOk);
+      CHECK(bench.port.transfer(readApDrw, data) == (pswd::ackFault | pswd::faultFlag));
+      CHECK(stop.calls == 0);
+   }
+   SUBCASE("a stop that returns false lets the retries run") {
+      Bench bench(1, 1000);
+      bench.port.setRules({ swd::defaultIdleCycles, false, true });
+      CountingStop stop(100);
+      bench.port.setRetryStop(&stop);
+      bench.pins.acks = { pswd::ackWait, pswd::ackWait };
+      uint32_t data = 0;
+      CHECK(bench.port.transfer(readApDrw, data) == pswd::ackOk);
+      CHECK(stop.calls == 2);
+      CHECK(bench.pins.transfers.size() == 3);
+      bench.checkIdle();
+   }
+}
+
 TEST_CASE("SWD bit-bang: without dataPhase, WAIT and FAULT end after the turnaround") {
    for(const uint8_t ack : { pswd::ackWait, pswd::ackFault }) {
       for(const bool read : { true, false }) {
