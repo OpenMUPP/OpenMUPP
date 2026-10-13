@@ -405,7 +405,7 @@ TEST_CASE("A response goes out before the next stored packet runs") {
    REQUIRE(bench.send({ 0x06, 0x00, 0x01, 0x00, 0x06 }));
    std::optional<Bytes> first;
    bench.swd.onTransfer = [&bench, &first] { first = bench.read(); };
-   bench.function.poll();
+   bench.mainLoop();
    CHECK(first == Bytes{ 0x00, 0x01, 0x04 });
    CHECK(bench.read() == Bytes{ 0x06, 0x01, 0x00, 0x01, 0, 0, 0, 0 });
 }
@@ -417,12 +417,12 @@ TEST_CASE("A packet before a suspend runs after the resume") {
    // The packet and the suspend come in the same poll of the controller.
    REQUIRE(bench.send({ 0x09, 0x05, 0x00 }));
    bench.controller().busSuspend();
-   bench.function.poll();
+   bench.mainLoop();
    CHECK(bench.platform.delays.empty());
    CHECK_FALSE(bench.read().has_value());
 
    bench.controller().busResume();
-   bench.function.poll();
+   bench.mainLoop();
    CHECK(bench.platform.delays == std::vector<uint32_t>{ 5 });
    CHECK(bench.read() == Bytes{ 0x09, 0x00 });
 }

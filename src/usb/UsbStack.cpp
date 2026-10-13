@@ -162,7 +162,12 @@ void UsbStack::poll() {
    controller_.poll();
 #if defined(VSL_WITH_CMSIS_DAP)
    if(active_ == Personality::CmsisDap) {
-      dap_.poll();
+      // One command at a time, with the USB events of its time after it:
+      // the InComplete event frees the IN endpoint for the next response,
+      // and the next OUT packet is stored.
+      while(dap_.poll()) {
+         controller_.poll();
+      }
    }
 #endif
    // Without VSL_DEBUG_CDC the UART bridge reads the serial port
