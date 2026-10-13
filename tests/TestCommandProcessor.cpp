@@ -75,7 +75,7 @@ TEST_CASE("GET_INFO replies the buffer size and the version text") {
    CHECK((*reply)[1] == (protocol::bufferSize >> 8));
    CHECK(reply->back() == 0);
    const std::string text(reply->begin() + 2, reply->end() - 1);
-   CHECK(text == "versaloon-next-gen v1.2.3, board mini");
+   CHECK(text == "versaloon-ng v1.2.3, board mini");
 }
 
 TEST_CASE("GET_INFO limits the version text") {

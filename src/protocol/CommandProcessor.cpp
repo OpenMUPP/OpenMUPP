@@ -71,7 +71,7 @@ std::size_t CommandProcessor::info(art::span<uint8_t> reply) const {
    putU16(reply, static_cast<uint16_t>(bufferSize));
    uint8_t *const text = reply.data() + 2;
    const uint8_t *const limit = text + maxInfoText;
-   uint8_t *end = append(text, limit, "versaloon-next-gen ");
+   uint8_t *end = append(text, limit, "versaloon-ng ");
    end = append(end, limit, info_.version);
    end = append(end, limit, ", board ");
    end = append(end, limit, info_.board);

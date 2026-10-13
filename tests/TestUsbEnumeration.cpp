@@ -137,7 +137,7 @@ TEST_CASE("GET_INFO over USB") {
    REQUIRE(reply->size() > 3);
    CHECK((*reply)[0] == 0x00);
    CHECK((*reply)[1] == 0x10);
-   CHECK(std::string(reply->begin() + 2, reply->end()) == std::string("versaloon-next-gen v1.2.3, board mini") + '\0');
+   CHECK(std::string(reply->begin() + 2, reply->end()) == std::string("versaloon-ng v1.2.3, board mini") + '\0');
    CHECK(controller.isArmed(versaloonOut));
 }
 
