@@ -40,6 +40,7 @@ add_executable(vsl-tests
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
+        TestDapUart.cpp
         TestSerialEventQueue.cpp
         TestBootloaderEntry.cpp
         TestPersonalityStore.cpp
