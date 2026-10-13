@@ -72,8 +72,12 @@ TEST_CASE("The cycle visits three and four personalities in order") {
    constexpr auto d = static_cast<Personality>(3);
    constexpr std::array<Personality, 3> three{ a, b, c };
    constexpr std::array<Personality, 4> four{ a, b, c, d };
-   const auto next3 = [&](Personality p) { return personality::nextIn(art::span<const Personality>(three.data(), three.size()), p); };
-   const auto next4 = [&](Personality p) { return personality::nextIn(art::span<const Personality>(four.data(), four.size()), p); };
+   const auto next3 = [&](Personality p) {
+      return personality::nextIn(art::span<const Personality>(three.data(), three.size()), p);
+   };
+   const auto next4 = [&](Personality p) {
+      return personality::nextIn(art::span<const Personality>(four.data(), four.size()), p);
+   };
 
    CHECK(next3(a) == b);
    CHECK(next3(b) == c);
