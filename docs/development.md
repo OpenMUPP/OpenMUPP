@@ -1,6 +1,6 @@
 # Development
 
-This document is for developers of the firmware: build outputs, tests, the flash speed benchmark, code format, version, CI and branches.
+This document is for developers of the firmware: build outputs, CMake presets, tests, the flash speed benchmark, code format, version, CI and branches.
 
 ## Build outputs
 
@@ -31,6 +31,48 @@ Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
 There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
 
+## CMake presets
+
+`CMakePresets.json` has the configure, build and test presets.
+It needs CMake 3.21 or later.
+Run `cmake --preset <name>` to configure and `cmake --build --preset <name>` to build.
+Each preset has its own build directory, `build/<name>`.
+The presets for the firmware use the toolchain file `cmake/gcc_arm.cmake`.
+They read `GCC_TOOLCHAIN_PREFIX` from the environment.
+The default is `/usr`.
+
+| Preset | Board | Personality (`VSL_PROTOCOL`) | Build type |
+|---|---|---|---|
+| `mini`, `otheruse`, `stlinkv2` | Mini, OtherUse, ST-Link/V2 | `versaloon` | Release |
+| `mini-cmsis-dap`, `otheruse-cmsis-dap`, `stlinkv2-cmsis-dap` | Mini, OtherUse, ST-Link/V2 | `cmsis-dap` | Release |
+| `mini-dual`, `otheruse-dual`, `stlinkv2-dual` | Mini, OtherUse, ST-Link/V2 | `dual` | Release |
+| `mini-dual-cmsis-dap` | Mini | `dual`, with `VSL_DEFAULT_PROTOCOL=cmsis-dap` | Release |
+| `mini-debug` | Mini | `versaloon` | Debug |
+| `host-tests` | Host | - | Debug |
+
+The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
+The `host-tests` preset has no toolchain file.
+It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
+The names of the firmware presets are the names of the CI jobs, without `build-`.
+CI uses these presets (see [Continuous integration](#continuous-integration)).
+
+Add a preset for a local setup in `CMakeUserPresets.json`.
+Git ignores this file.
+This example inherits the `mini` preset and sets another toolchain:
+
+```json
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "mini-local",
+      "inherits": "mini",
+      "cacheVariables": { "GCC_TOOLCHAIN_PREFIX": "/opt/arm-gnu-toolchain" }
+    }
+  ]
+}
+```
+
 ## Unit tests
 
 The unit tests use doctest and run on the host.
@@ -42,7 +84,16 @@ The UART bridge tests run the bridge with the CDC-ACM function of libArT, the fa
 Two of these tests run a long JTAG shift on mock pins, with and without the serial service of the engines.
 With the service, no UART data is lost.
 Other tests check the serial-only mode of the USB event queue, and the calls of the serial service in the JTAG and SWD engines.
-Configure without the toolchain file:
+Use the `host-tests` presets.
+They configure without the toolchain file, in the Debug build type:
+
+```sh
+cmake --preset host-tests
+cmake --build --preset host-tests -j
+ctest --preset host-tests
+```
+
+The alternative is the plain commands:
 
 ```sh
 cmake -B build/tests -DCMAKE_BUILD_TYPE=Debug
@@ -156,7 +207,7 @@ Write the results into a directory outside the source tree.
 `.clang-format` defines the code style. The `clangformat` target formats all sources and tests in place:
 
 ```sh
-cmake --build build/tests --target clangformat
+cmake --build --preset host-tests --target clangformat
 ```
 
 `etc/pre-commit.hook` formats the staged C and C++ files before each commit.
@@ -177,7 +228,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 `.gitlab-ci.yml` runs these jobs:
 
 - `lint-code`: fails when `clangformat` changes a file.
-- `run-unit-tests`: builds and runs the host unit tests.
+- `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
 - `build-mini`, `build-otheruse`, `build-stlinkv2`: release build of all images of the board, plus the size check of each image in `vsl-images.txt`.
   The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
@@ -187,7 +238,8 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   Each limit of the dual image is 1 KB smaller, because the last flash page holds the stored personality.
 - `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
 
-The build jobs keep only the `.hex` and `.bin` files as artifacts, with the board, the image, the build type and the version in the name.
+Each build job configures and builds the preset with the name of the job, without `build-`.
+The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
 The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
 The ST-Link/V2 has the `standalone` image only.
 The artifacts have no `.elf` or `.map` files, and no bootloader image alone.

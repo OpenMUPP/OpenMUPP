@@ -72,7 +72,7 @@ The submodules are:
 
 ## Requirements
 
-- CMake 3.20 or later. The `versaloon-bootloader` build needs CMake 3.21 or later.
+- CMake 3.20 or later. The `versaloon-bootloader` build and the CMake presets (`CMakePresets.json`) need CMake 3.21 or later.
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
@@ -80,7 +80,26 @@ The submodules are:
 
 ## Build the firmware
 
-Configure and build for one board:
+Select a preset, then configure and build:
+
+```sh
+export GCC_TOOLCHAIN_PREFIX=/opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
+cmake --preset mini
+cmake --build --preset mini -j
+```
+
+The build directory is `build/<preset>`, here `build/mini`.
+The presets `mini`, `otheruse` and `stlinkv2` build the Release images of one board.
+Add `-cmsis-dap` or `-dual` for the other personalities, for example `mini-cmsis-dap`.
+`mini-debug` is the Debug build of the Mini.
+`cmake --list-presets` shows all presets.
+[docs/development.md](docs/development.md#cmake-presets) describes them.
+The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
+If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit it.
+To set local paths or options, add your own presets in `CMakeUserPresets.json`.
+Git ignores this file.
+
+The alternative is to give the options on the command line:
 
 ```sh
 cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
