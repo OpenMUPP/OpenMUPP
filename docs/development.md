@@ -179,15 +179,18 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
-- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
-  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` for the board.
-- `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
+- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build of all images of the board, plus the size check of each image in `vsl-images.txt`.
+  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
+- `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
 - `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PROTOCOL=cmsis-dap`, plus the size check.
 - `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PROTOCOL=dual`, plus the size check.
-  The limit of the dual image is 53 KB, because the last flash page holds the stored personality.
+  Each limit of the dual image is 1 KB smaller, because the last flash page holds the stored personality.
 - `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
 
-The build jobs keep the `.hex`, `.bin`, `.elf` and `.map` files and the bootloader images as artifacts.
+The build jobs keep only the `.hex` and `.bin` files as artifacts, with the board, the image, the build type and the version in the name.
+The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
+The ST-Link/V2 has the `standalone` image only.
+The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
 
 ## Branches
 

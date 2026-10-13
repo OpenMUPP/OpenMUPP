@@ -84,14 +84,15 @@ run-tool-tests:
       -B "${BUILDDIR}"
     - cmake --build ${BUILDDIR} -- -j`nproc`
     - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/vsl-images.txt"
+  # Only the .hex and .bin files that a user writes, with the board, the
+  # image, the build type and the version in the name (README "Build the
+  # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link/V2
+  # has the standalone image only. No .elf, .map or bootloader-only files.
   artifacts:
     name: "versaloon-next-gen-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
     paths:
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-*.hex
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-*.bin
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-*.elf
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-*.map
-      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-bootloader/versaloon-bootloader-*
+      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-${BOARD}*.hex
+      - ${BOARD}-${BUILD_TYPE}${PROTOCOL_TAG}-build/versaloon-next-gen-${BOARD}*.bin
 
 build-mini:
   extends: .build-board-template
