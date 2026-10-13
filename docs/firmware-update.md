@@ -80,6 +80,10 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
 `stm32f1x unlock 0` erases the option bytes and removes all write protection.
 The bootloader README has the full rules ("Flash protection").
 
+The legacy bootloader (tag `v1-legacy` of `versaloon-bootloader`) does not set write protection or readout protection.
+Thus the debug probe can write the combined image over it without `stm32f1x unlock 0`.
+If the write fails, the option bytes of the board were changed: run `stm32f1x unlock 0` first.
+
 ## Write the firmware
 
 1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` shows.

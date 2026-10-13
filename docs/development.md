@@ -14,15 +14,15 @@ The build writes these files into the build directory:
   An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-next-gen-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
   An image with `VSL_PROTOCOL=dual` has `-dual` after the board, or `-dual-cmsis-dap` with `VSL_DEFAULT_PROTOCOL=cmsis-dap`.
 - `versaloon-next-gen-<image>.map`, the linker map of each image.
+- `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
+- `versaloon-next-gen-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
+  `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
+- `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 
 All images use the same object files.
 Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
 One linker script, `ldscripts/mem-f103.ld`, links all images.
 CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
-- `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
-- `versaloon-next-gen-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
-  `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
-- `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 
 For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
 The target is `versaloon-bootloader`.
