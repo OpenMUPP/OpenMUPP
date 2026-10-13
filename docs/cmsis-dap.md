@@ -143,11 +143,14 @@ Each packet without a response takes one of the 4 slots.
 | `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
 | `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
 | `0x1D` | `DAP_SWD_Sequence` | Replies an error when SWD is not connected. |
-| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a dual image: `[0x80][personality u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `1` for another personality code. The firmware then stores the personality and resets. An image with one personality replies `ID_DAP_Invalid`. See [Dual image](usb-device.md#dual-image). |
+| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a dual image: `[0x80][personality u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for another personality code. The firmware then stores the personality and resets. An image with one personality replies `ID_DAP_Invalid`. See [Dual image](usb-device.md#dual-image). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
 An unknown command replies `ID_DAP_Invalid` (`0xFF`).
+The status of a command is `DAP_OK` (`0x00`) or `DAP_ERROR` (`0xFF`), as in the specification.
+Each "replies an error" in the table means the status `0xFF`.
+`DAP_Connect` is the exception: it replies port `0` for a failure.
 The UART commands come with their own work item.
 The capabilities in `DAP_Info` show SWD, JTAG and atomic commands.
 A processor without a JTAG port does not show JTAG, and `DAP_Connect` to JTAG then replies 0 (failed).

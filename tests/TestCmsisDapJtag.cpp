@@ -271,15 +271,15 @@ TEST_CASE("DAP JTAG: DAP_JTAG_Configure checks the chain") {
    CHECK(b.run({ 0x15, 0x08, 4, 4, 4, 4, 4, 4, 4, 32 }) == V{ 0x15, 0x00 });
    CHECK(b.run({ 0x15, 0x00 }) == V{ 0x15, 0x00 });
    // More than 8 devices, an IR length of 0 or more than 32
-   CHECK(b.run({ 0x15, 0x09, 4, 4, 4, 4, 4, 4, 4, 4, 4 }) == V{ 0x15, 0x01 });
-   CHECK(b.run({ 0x15, 0x02, 0x04, 0x00 }) == V{ 0x15, 0x01 });
-   CHECK(b.run({ 0x15, 0x01, 33 }) == V{ 0x15, 0x01 });
+   CHECK(b.run({ 0x15, 0x09, 4, 4, 4, 4, 4, 4, 4, 4, 4 }) == V{ 0x15, 0xFF });
+   CHECK(b.run({ 0x15, 0x02, 0x04, 0x00 }) == V{ 0x15, 0xFF });
+   CHECK(b.run({ 0x15, 0x01, 33 }) == V{ 0x15, 0xFF });
    // Too short
    CHECK(b.run({ 0x15, 0x02, 0x04 }) == V{ 0xFF });
 
    // A bad chain has no device.
    b.connect();
-   CHECK(b.run({ 0x16, 0x00 }) == V{ 0x16, 0x01 });
+   CHECK(b.run({ 0x16, 0x00 }) == V{ 0x16, 0xFF });
 }
 
 TEST_CASE("DAP JTAG: DAP_JTAG_Configure without a JTAG port replies an error") {
@@ -290,7 +290,7 @@ TEST_CASE("DAP JTAG: DAP_JTAG_Configure without a JTAG port replies an error") {
    dap.submit(V{ 0x15, 0x01, 0x04 });
    dap.run();
    const auto response = dap.response();
-   CHECK(Bytes(response.begin(), response.end()) == V{ 0x15, 0x01 });
+   CHECK(Bytes(response.begin(), response.end()) == V{ 0x15, 0xFF });
 }
 
 TEST_CASE("DAP JTAG: DAP_JTAG_IDCODE reads each device of the chain") {
@@ -305,16 +305,16 @@ TEST_CASE("DAP JTAG: DAP_JTAG_IDCODE reads each device of the chain") {
    CHECK(b.chain.ir(0) == 0x0F);
    CHECK(b.chain.state == State::Idle);
    // No device 2
-   CHECK(b.run({ 0x16, 0x02 }) == V{ 0x16, 0x01 });
+   CHECK(b.run({ 0x16, 0x02 }) == V{ 0x16, 0xFF });
    CHECK(b.run({ 0x16 }) == V{ 0xFF });
 }
 
 TEST_CASE("DAP JTAG: DAP_JTAG_IDCODE needs a JTAG connection") {
    Bench b;
    b.configure({ 4, 5 });
-   CHECK(b.run({ 0x16, 0x00 }) == V{ 0x16, 0x01 });
+   CHECK(b.run({ 0x16, 0x00 }) == V{ 0x16, 0xFF });
    CHECK(b.run({ 0x02, 0x01 }) == V{ 0x02, 0x01 });
-   CHECK(b.run({ 0x16, 0x00 }) == V{ 0x16, 0x01 });
+   CHECK(b.run({ 0x16, 0x00 }) == V{ 0x16, 0xFF });
    CHECK(b.pins.rising.empty());
 }
 
@@ -347,7 +347,7 @@ TEST_CASE("DAP JTAG: DAP_JTAG_Sequence moves the TAP and reads TDO") {
 
 TEST_CASE("DAP JTAG: DAP_JTAG_Sequence needs a JTAG connection") {
    Bench b;
-   CHECK(b.run({ 0x14, 0x01, 0x88, 0x00 }) == V{ 0x14, 0x01 });
+   CHECK(b.run({ 0x14, 0x01, 0x88, 0x00 }) == V{ 0x14, 0xFF });
    CHECK(b.pins.rising.empty());
 }
 
@@ -361,7 +361,7 @@ TEST_CASE("DAP JTAG: DAP_SWJ_Sequence drives TMS, and DAP_SWD_Sequence fails") {
    for(const auto &edge : b.pins.rising) {
       CHECK(edge.tdi);
    }
-   CHECK(b.run({ 0x1D, 0x01, 0x08, 0x00 }) == V{ 0x1D, 0x01 });
+   CHECK(b.run({ 0x1D, 0x01, 0x08, 0x00 }) == V{ 0x1D, 0xFF });
    CHECK(b.swd.sequences == 0);
 }
 
@@ -549,7 +549,7 @@ TEST_CASE("DAP JTAG: DAP_WriteABORT scans ABORT") {
    CHECK(b.chain.ir(0) == 0x08);
    CHECK(b.chain.accesses.empty());
    // No device 2
-   CHECK(b.run(cat({ { 0x08, 0x02 }, word(0x1E) })) == V{ 0x08, 0x01 });
+   CHECK(b.run(cat({ { 0x08, 0x02 }, word(0x1E) })) == V{ 0x08, 0xFF });
    CHECK(b.chain.aborts.size() == 1);
    // The next transfer writes the IR again.
    CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == cat({ { 0x05, 0x01, 0x01 }, word(b.chain.dpidr) }));

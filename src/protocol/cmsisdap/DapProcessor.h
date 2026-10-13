@@ -27,6 +27,8 @@
 // skip of the requests after an error.
 //
 // - A command that is unknown replies ID_DAP_Invalid (0xFF).
+// - An error status is DAP_ERROR (0xFF), as in the specification. Only
+//   DAP_Connect differs: it replies port 0 for a failure.
 // - Without a JTAG port, DAP_Connect to JTAG replies 0 (failed), and
 //   DAP_Info does not report JTAG. On JTAG, the transfer commands, and
 //   DAP_WriteABORT, use the device index of the request and the chain of
@@ -54,8 +56,8 @@
 // - ID_DAP_Vendor0 [0x80][personality u8] -> [0x80][status u8] switches
 //   the USB personality of a dual image (personality/PersonalitySwitch.h).
 //   The personality is the code of personality/Personality.h: 0 Versaloon,
-//   1 CMSIS-DAP. The status is DAP_OK (0) or 1 for a code that is not a
-//   personality. Without a personality switch (an image with one
+//   1 CMSIS-DAP. The status is DAP_OK (0) or DAP_ERROR (0xFF) for a code
+//   that is not a personality. Without a personality switch (an image with one
 //   personality), the command replies ID_DAP_Invalid.
 //
 // DAP_QueueCommands packets wait. The next packet with another command

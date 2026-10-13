@@ -45,7 +45,7 @@ class CheckReplyTest(unittest.TestCase):
 
     def test_cmsis_dap_refused(self):
         with self.assertRaisesRegex(vp.PersonalityError, "refused"):
-            vp.check_reply("cmsis-dap", [0x80, 0x01])
+            vp.check_reply("cmsis-dap", [0x80, 0xFF])
 
     def test_cmsis_dap_invalid(self):
         with self.assertRaisesRegex(vp.PersonalityError, "one personality"):

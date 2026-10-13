@@ -149,7 +149,7 @@ The page is a log of 16-bit records, so the firmware erases the page only one ti
 To change the personality, use one of these methods:
 
 - In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
-- In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)).
+- In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)). The status of a refused switch is `0xFF`.
 - Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the other personality.
 
 The personality code is `0` for Versaloon and `1` for CMSIS-DAP.

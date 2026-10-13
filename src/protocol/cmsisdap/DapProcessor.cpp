@@ -135,7 +135,7 @@ namespace {
 
 // The status of the commands
 constexpr uint8_t statusOk = 0;
-constexpr uint8_t statusError = 1;
+constexpr uint8_t statusError = 0xFF;
 
 // The ports of DAP_Connect
 constexpr uint8_t portDefault = 0;
