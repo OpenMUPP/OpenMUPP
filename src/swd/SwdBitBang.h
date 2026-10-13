@@ -66,6 +66,11 @@
 // clears it. Thus, before each retry, the host writes ABORT with
 // ORUNERRCLR, as the OpenOCD bitbang driver does.
 //
+// With a RetryStop (setRetryStop()), the engine asks it after each WAIT.
+// When it returns true, the transfer ends as after the last retry. The
+// engine asks it only after a WAIT: a transfer without WAIT has no extra
+// cost. CMSIS-DAP connects it to DAP_TransferAbort.
+//
 // CMSIS-DAP has other transfer rules. setRules() changes them, and
 // setClockHz() sets the clock in Hz (see TransferRules). setTurnaround()
 // and setRetries() change one value each. configure() sets the clock
@@ -162,6 +167,16 @@ struct TransferRules {
    bool releaseOnAckError{ false };
 };
 
+// Stops the WAIT retries of a transfer. The Versaloon personality has none.
+class RetryStop {
+   public:
+   // True: no more retries
+   virtual bool stopRetries() = 0;
+
+   protected:
+   ~RetryStop() = default;
+};
+
 // Core cycles of a half SWCLK period for a frequency, rounded up: SWCLK is
 // never faster than the frequency. 0 Hz gives the slowest clock (1 Hz).
 constexpr uint32_t halfPeriodCyclesOfHz(uint32_t coreHz, uint32_t hz) {
@@ -223,6 +238,12 @@ class BitBangPort final : public protocol::SwdPort {
    // not change.
    void setRetries(uint16_t retries) {
       retries_ = retries;
+   }
+
+   // CMSIS-DAP: asked after each WAIT, nullptr for none. It stays until
+   // the next call.
+   void setRetryStop(RetryStop *stop) {
+      stop_ = stop;
    }
 
    [[nodiscard]] const TransferRules &rules() const {
@@ -310,7 +331,7 @@ class BitBangPort final : public protocol::SwdPort {
          if(ack != ackWait) {
             return ack;
          }
-         if(attempt >= retries_) {
+         if(attempt >= retries_ || (stop_ != nullptr && stop_->stopRetries())) {
             return static_cast<uint8_t>(ack | retryOutFlag);
          }
          if(rules_.abortOnWait) {
@@ -440,6 +461,7 @@ class BitBangPort final : public protocol::SwdPort {
    uint8_t turnaround_{ defaultTurnaround };
    uint16_t retries_{ defaultRetries };
    TransferRules rules_;
+   RetryStop *stop_{ nullptr };
    uint32_t halfCycles_{ 0 };
    // halfCycles_ without the loop code
    uint32_t waitCycles_{ 0 };
