@@ -383,7 +383,7 @@ The layer refuses a misaligned address before it sends a frame (status `Misalign
 The CH32V003 gets an exception on a misaligned word access.
 
 The layer selects the memory access method from the wire. One wire (CH32V00x) uses the program buffer. Two wires (CH32V20x, CH32V30x) use the abstract memory access.
-The program buffer method has 32-bit accesses only.
+The program buffer method has 32-bit reads, and 32-bit and 16-bit writes.
 
 ### Program buffer programs
 
@@ -426,10 +426,21 @@ csrr a0, dscratch0;  csrr a1, dscratch1;  c.ebreak
 ```
 
 The layer uses the restore program, not an abstract register write of `a0` and `a1`. The restore program needs no extra reads before each access.
+
+The flash controller needs 16-bit writes for the option bytes. A 16-bit store does not fit in the layout with `dscratch0` and `dscratch1`: the program needs 34 bytes, and the program buffer has 32 bytes.
+Thus the layer uses a shorter program for a 16-bit write. It changes `a0` and `a1`:
+
+```
+e0000537 0f452583 0f852503 00b51023 00009002
+lui a0, 0xe0000;  lw a1, 0xf4(a0);  lw a0, 0xf8(a0);  sh a1, 0(a0);  c.ebreak
+```
+
+Before the program, the layer reads `a0` and `a1` with abstract register reads. After the program, it writes them back with abstract register writes, also after an exception.
+A 16-bit write thus costs 16 frames. Only the option bytes use it.
 A real CH32V003 must confirm that `dscratch0` and `dscratch1` keep their values after the exception.
 
-An assembler (`clang --target=riscv32 -march=rv32ec`) gave the same words for the three programs.
-The layer loads a program one time. It loads it again after a DM reset, after a DMI write of the host, after the restore program, or for the other program.
+An assembler (`clang --target=riscv32 -march=rv32ec`) gave the same words for the four programs.
+The layer loads a program one time. It loads it again after a DM reset, after a DMI write of the host, after the restore program, or for another program.
 
 ### Errors
 
@@ -439,7 +450,7 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 | `NoTarget` | Two wires: the response bits and the tail bits are `1111`. No target drives them. One wire: a read without a target gives `ffffffff`. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
 | `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout`: `abstractcs` reads `ffffffff` (`busy` 1). After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
-| `Unsupported` | A byte or half-word access with the program buffer method. |
+| `Unsupported` | A byte access, or a half-word read, with the program buffer method. |
 | `Misaligned` | The address is not a multiple of the access width. The layer sends no frame. |
 
 A real target is necessary to confirm the write program, the restore program, the halt and resume times, and the no-target detection.

@@ -14,7 +14,7 @@
 //   memory (8, 16, 32 bits). Both need a halted hart, else cmderr 4.
 // - The program buffer runs on a small RV32EC interpreter. It has the
 //   instructions of the programs of the module only: csrrw, csrrs, lui,
-//   lw, sw, c.lw, c.sw, c.ebreak. data0 and data1 are in memory at
+//   lw, sw, sh, c.lw, c.sw, c.ebreak. data0 and data1 are in memory at
 //   0xe00000f4 and 0xe00000f8, as on the CH32V003. Another instruction,
 //   or a program without ebreak, gives cmderr 3 (exception).
 // - A memory access at a misaligned address or at an address of
@@ -286,12 +286,12 @@ class MockDebugModule {
       gpr(rd) = load(address, 4);
       return true;
    }
-   bool storeOp(uint32_t address, uint32_t value) {
-      if(faults(address, 4)) {
+   bool storeOp(uint32_t address, uint32_t value, uint32_t bytes = 4) {
+      if(faults(address, bytes)) {
          exception();
          return false;
       }
-      store(address, value, 4);
+      store(address, value & (bytes == 4 ? 0xFFFF'FFFFu : 0xFFFFu), bytes);
       return true;
    }
 
@@ -387,9 +387,9 @@ class MockDebugModule {
       if(opcode == 0x03 && funct3 == 0b010) {
          return loadOp(rd, gprs[rs1] + immI);
       }
-      if(opcode == 0x23 && funct3 == 0b010) {
+      if(opcode == 0x23 && (funct3 == 0b010 || funct3 == 0b001)) {
          const auto immS = static_cast<uint32_t>(static_cast<int32_t>(insn & 0xFE00'0000u) >> 20) | (insn >> 7 & 0x1F);
-         return storeOp(gprs[rs1] + immS, gprs[rs2]);
+         return storeOp(gprs[rs1] + immS, gprs[rs2], funct3 == 0b010 ? 4 : 2);
       }
       if(opcode == 0x73 && (funct3 == 0b001 || funct3 == 0b010)) {
          const auto csr = static_cast<uint16_t>(insn >> 20);

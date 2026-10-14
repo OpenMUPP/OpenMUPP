@@ -35,6 +35,11 @@
 //     A load or store that faults (cmderr 3) stops the program before it
 //     restores a0 and a1. Then the module runs restoreProgram, which
 //     copies dscratch0 and dscratch1 back to a0 and a1.
+//     A half-word write uses writeHalfProgram. Its store does not fit in
+//     the layout with dscratch0 and dscratch1, so the module reads a0 and
+//     a1 with abstract register reads before it, and writes them back
+//     after it, also after a fault. The flash controller needs half-word
+//     writes for the option bytes.
 //
 // The module refuses a misaligned word or half word address with
 // Status::Misaligned before any frame: the CH32V003 faults on it.
@@ -115,6 +120,8 @@ inline constexpr uint32_t aamsizeShift = 20;
 // Register numbers of the abstract register access
 inline constexpr uint16_t dpc = 0x07b1;
 inline constexpr uint16_t gpr0 = 0x1000;
+inline constexpr uint16_t a0 = gpr0 + 10;
+inline constexpr uint16_t a1 = gpr0 + 11;
 } // namespace dm
 
 // The program buffer has 8 words on the CH32V00x.
@@ -136,6 +143,14 @@ inline constexpr Program readWordProgram{
 //   csrr a0, dscratch0;  csrr a1, dscratch1;  c.ebreak
 inline constexpr Program writeWordProgram{
    0x7b251073, 0x7b359073, 0xe0000537, 0x0f452583, 0x0f852503, 0x2573c10c, 0x25f37b20, 0x90027b30,
+};
+
+// Writes the half word in data0 to the address in data1. Not captured.
+// It changes a0 and a1 (see above):
+//   lui a0, 0xe0000;  lw a1, 0xf4(a0);  lw a0, 0xf8(a0);  sh a1, 0(a0)
+//   c.ebreak
+inline constexpr std::array<uint32_t, 5> writeHalfProgram{
+   0xe0000537, 0x0f452583, 0x0f852503, 0x00b51023, 0x00009002,
 };
 
 // Restores a0 and a1 after a fault in the read or the write program. Not
@@ -320,8 +335,8 @@ class DebugModule {
    }
 
    // Memory access with the method of memoryAccess(). ProgramBuffer has
-   // words only. A read of a byte or a half word gives the value in the
-   // low bits.
+   // word reads, and word and half-word writes. A read of a byte or a half
+   // word gives the value in the low bits.
    Status readMemory(uint32_t address, uint32_t &value, Width width = Width::Word) {
       Status status = prepare(address, width, LoadedProgram::Read);
       if(status != Status::Ok) {
@@ -346,6 +361,9 @@ class DebugModule {
       if(status != Status::Ok) {
          return status;
       }
+      if(memoryAccess_ == MemoryAccess::ProgramBuffer && width == Width::Half) {
+         return writeHalf(address, value);
+      }
       status = write(dm::data1, address);
       if(status == Status::Ok) {
          status = write(dm::data0, value & widthMask(width));
@@ -358,6 +376,7 @@ class DebugModule {
       None,
       Read,
       Write,
+      WriteHalf,
    };
 
    static constexpr uint32_t widthMask(Width width) {
@@ -372,7 +391,37 @@ class DebugModule {
       if(memoryAccess_ == MemoryAccess::Abstract) {
          return Status::Ok;
       }
-      return width == Width::Word ? load(program) : Status::Unsupported;
+      if(width == Width::Word) {
+         return load(program);
+      }
+      return width == Width::Half && program == LoadedProgram::Write ? load(LoadedProgram::WriteHalf) : Status::Unsupported;
+   }
+
+   // writeHalfProgram is loaded. a0 and a1 are kept by abstract register
+   // accesses.
+   Status writeHalf(uint32_t address, uint32_t value) {
+      uint32_t saved0 = 0;
+      uint32_t saved1 = 0;
+      Status status = readRegister(dm::a0, saved0);
+      if(status == Status::Ok) {
+         status = readRegister(dm::a1, saved1);
+      }
+      if(status != Status::Ok) {
+         return status;
+      }
+      status = write(dm::data1, address);
+      if(status == Status::Ok) {
+         status = write(dm::data0, value & widthMask(Width::Half));
+      }
+      if(status == Status::Ok) {
+         status = execute(dm::execute);
+      }
+      // After a fault too: the program changed a0 and a1.
+      Status restore = writeRegister(dm::a0, saved0);
+      if(restore == Status::Ok) {
+         restore = writeRegister(dm::a1, saved1);
+      }
+      return status != Status::Ok ? status : restore;
    }
 
    // The abstract memory command, or the loaded program. After a fault in
@@ -445,8 +494,11 @@ class DebugModule {
       }
       loaded_ = LoadedProgram::None;
       Status status = write(dm::abstractauto, 0);
-      const Program &words = program == LoadedProgram::Read ? readWordProgram : writeWordProgram;
-      for(std::size_t i = 0; i < words.size() && status == Status::Ok; ++i) {
+      const uint32_t *words = program == LoadedProgram::Read  ? readWordProgram.data() :
+                              program == LoadedProgram::Write ? writeWordProgram.data() :
+                                                                writeHalfProgram.data();
+      const std::size_t count = program == LoadedProgram::WriteHalf ? writeHalfProgram.size() : programWords;
+      for(std::size_t i = 0; i < count && status == Status::Ok; ++i) {
          status = write(static_cast<uint8_t>(dm::progbuf0 + i), words[i]);
       }
       if(status == Status::Ok) {
