@@ -23,6 +23,9 @@
 // has both: the stored personality (personality/PersonalityStore.h)
 // selects one at the start. A switch command, or a key that is down for 3 s
 // (then the key release), stores the next personality and resets (personality/PersonalitySwitch.h).
+// A wch-link image runs the WCH-Link processor (protocol/wchlink/WchLinkProcessor.h)
+// on the RISC-V debug wire engine (board/BoardRvSwd.h). It has no serial
+// port: no UART bridge and no debug log.
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -48,6 +51,10 @@
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
+#if defined(VSL_WITH_WCH_LINK)
+#include "board/BoardRvSwd.h"
+#include "protocol/wchlink/WchLinkProcessor.h"
+#endif
 #if defined(VSL_WITH_CMSIS_DAP)
 #include <peripherals/Uid.h>
 
@@ -72,6 +79,8 @@
 
 namespace {
 
+#if !defined(VSL_WITH_WCH_LINK)
+
 // The serial port during a long command. It runs only the serial port
 // events of the USB device (UsbStack::pollSerial()), so no command starts
 // and the host stays connected for the running command.
@@ -87,6 +96,8 @@ board::SwdPins swdPins;
 board::BoardSwd boardSwd{ swdPins, &serialService };
 board::JtagPins jtagPins;
 board::BoardJtag boardJtag{ jtagPins, &serialService };
+
+#endif
 
 #if defined(VSL_DUAL_PERSONALITY)
 
@@ -114,6 +125,25 @@ personality::KeyGesture keyGesture;
 // The Vref sense and the target switch. The target power LED reads the
 // sense in every personality.
 board::BoardPower boardPower;
+
+#if defined(VSL_WITH_WCH_LINK)
+
+// The processor runs in the main loop, outside the USB event delivery. The
+// target gets no Background: the personality has no serial port to service
+// during a long command.
+class WchPlatform final : public wchlink::Platform {
+   public:
+   void delayUs(uint32_t microseconds) override {
+      delayuS(microseconds);
+   }
+};
+
+WchPlatform wchPlatform;
+board::RvSwdPins rvSwdPins;
+wchlink::RvSwdTarget<board::RvSwdPins> wchTarget{ rvSwdPins };
+wchlink::Processor wchProcessor{ wchTarget, wchPlatform };
+
+#endif
 
 #if defined(VSL_WITH_CMSIS_DAP)
 
@@ -208,12 +238,15 @@ constexpr bool hasBootloaderEntry = false;
 
 #if defined(VSL_DUAL_PERSONALITY)
 usb::UsbStack usbStack{ activePersonality, hasBootloaderEntry ? &bootloaderEntry : nullptr, usbToAll, personalitySwitch, dapProcessor };
+#elif defined(VSL_WITH_WCH_LINK)
+usb::UsbStack usbStack{ wchProcessor };
 #elif defined(VSL_WITH_CMSIS_DAP)
 usb::UsbStack usbStack{ dapProcessor };
 #else
 usb::UsbStack usbStack{ hasBootloaderEntry ? &bootloaderEntry : nullptr, usbToAll };
 #endif
 
+#if !defined(VSL_WITH_WCH_LINK)
 // A command runs only after usbStack.start(), so the USB device and the
 // bridge run.
 void SerialService::service() {
@@ -221,6 +254,7 @@ void SerialService::service() {
    debug::pollLog(usbStack);
    uart::pollBridge();
 }
+#endif
 
 #if defined(VSL_WITH_CMSIS_DAP)
 
