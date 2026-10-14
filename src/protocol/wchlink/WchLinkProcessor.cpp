@@ -101,6 +101,9 @@ void Processor::execute(art::span<const uint8_t> request) {
    case command::chipInfo:
       chipInfoCommand();
       break;
+   case command::protection:
+      protectionCommand(in.u8());
+      break;
    case command::readMemory: {
       const uint32_t address = in.u32();
       setReadRange(address, in.u32());
@@ -157,7 +160,7 @@ void Processor::controlCommand(uint8_t sub) {
          replyError();
          return;
       }
-      std::array<uint8_t, 5> answer{ familyOf(wire_, chipId_) };
+      std::array<uint8_t, 5> answer{ familyOf(chipId_) };
       putU32(&answer[1], chipId_);
       reply(command::control, answer);
       return;
@@ -170,8 +173,14 @@ void Processor::controlCommand(uint8_t sub) {
       replyByte(command::control, controlUnknown4Reply);
       return;
    case controlUnknown3:
-   default:
       replyByte(command::control, sub);
+      return;
+   default:
+      // wlink and minichlink use the other values for actions: target
+      // power (09-0c), erase by the reset pin or the power (08, 0f), the
+      // reset pin (13-15), the RAM and flash split (05), SDI print (ee).
+      // An echo would report an action that did not happen.
+      replyUnknown();
       return;
    }
 }
@@ -179,37 +188,50 @@ void Processor::controlCommand(uint8_t sub) {
 bool Processor::connect() {
    dataRemaining_ = 0;
    detach();
+   // One wire first: its frames change SWDIO only while SWCLK is low, so a
+   // two-wire target sees no start or stop condition in them. The frames of
+   // two wires would be noise on the line of a one-wire target.
    const bool oneWireOnly = chipType_ == familyV00x;
-   for(const auto wire : { rvswd::Wire::Two, rvswd::Wire::One }) {
+   for(const auto wire : { rvswd::Wire::One, rvswd::Wire::Two }) {
       if(oneWireOnly && wire == rvswd::Wire::Two) {
          continue;
       }
       uint32_t chipId = 0;
       target_.attach(wire);
-      if(connectOn(chipId)) {
+      const Found found = connectOn(chipId);
+      if(found == Found::Known) {
          connected_ = true;
-         wire_ = wire;
          chipId_ = chipId;
          return true;
+      }
+      if(found == Found::Unknown) {
+         // A target with a chip ID without a family code: no other wire.
+         // The connect halted the hart, so the quit accesses let it run.
+         restore();
+         target_.detach();
+         return false;
       }
       target_.detach();
    }
    return false;
 }
 
-bool Processor::connectOn(uint32_t &chipId) {
+Processor::Found Processor::connectOn(uint32_t &chipId) {
    uint32_t status = 0;
    if(target_.dmiWrite(wchdm::unlock1, wchdm::unlockValue) != rvswd::Status::Ok ||
       target_.dmiWrite(wchdm::unlock2, wchdm::unlockValue) != rvswd::Status::Ok ||
       target_.readDmstatus(status) != rvswd::Status::Ok || target_.halt() != rvswd::Status::Ok ||
       target_.dmiRead(dm::chipId, chipId) != rvswd::Status::Ok) {
-      return false;
+      return Found::None;
    }
    // One wire: a frame without a target reads ffffffff.
    if(chipId == 0 || chipId == 0xffff'ffffu) {
-      return false;
+      return Found::None;
    }
-   return target_.writeRegister(wchdm::csr7c0, wchdm::csr7c0Value) == rvswd::Status::Ok;
+   if(familyOf(chipId) == 0) {
+      return Found::Unknown;
+   }
+   return target_.writeRegister(wchdm::csr7c0, wchdm::csr7c0Value) == rvswd::Status::Ok ? Found::Known : Found::None;
 }
 
 void Processor::quit() {
@@ -217,11 +239,15 @@ void Processor::quit() {
    if(!connected_) {
       return;
    }
+   restore();
+   detach();
+}
+
+void Processor::restore() {
    // The quit of the probe: resumereq, dmstatus, then dmactive 0. The
-   // pins are released also when the hart does not resume.
+   // pins are released after it also when the hart does not resume.
    static_cast<void>(target_.resume());
    static_cast<void>(target_.dmiWrite(dm::dmcontrol, dm::resumereq));
-   detach();
 }
 
 void Processor::detach() {
@@ -296,6 +322,22 @@ void Processor::chipInfoCommand() {
    responseLength_ = chipInfoSize;
 }
 
+void Processor::protectionCommand(uint8_t sub) {
+   if(sub != protectionQuery) {
+      // Unprotect, protect and 04 (W5)
+      replyUnknown();
+      return;
+   }
+   uint32_t obr = 0;
+   uint32_t wrpr = 0;
+   if(!connected_ || target_.readMemory(flashObr, obr) != rvswd::Status::Ok ||
+      target_.readMemory(flashWrpr, wrpr) != rvswd::Status::Ok) {
+      replyError();
+      return;
+   }
+   replyByte(command::protection, (obr & obrRdprt) != 0 ? protectionOn : protectionOff);
+}
+
 void Processor::setReadRange(uint32_t address, uint32_t length) {
    dataRemaining_ = 0;
    readAddress_ = address;
@@ -309,7 +351,7 @@ void Processor::programCommand(uint8_t sub) {
       replyUnknown();
       return;
    }
-   if(!connected_) {
+   if(!connected_ || dataInFlight_) {
       replyError();
       return;
    }
@@ -333,11 +375,13 @@ art::span<const uint8_t> Processor::dataPacket() {
       dataAddress_ += 4;
    }
    dataRemaining_ -= static_cast<uint32_t>(count);
+   dataInFlight_ = count != 0;
    return { data_.data(), count };
 }
 
 void Processor::hostGone() {
    dataRemaining_ = 0;
+   dataInFlight_ = false;
    hasRequest_ = false;
    responseLength_ = 0;
    detach();

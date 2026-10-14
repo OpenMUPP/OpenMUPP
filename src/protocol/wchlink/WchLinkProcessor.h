@@ -14,13 +14,18 @@
 //        The data then goes to the data IN endpoint (dataPacket()).
 //   0x08 DMI access: [addr][data u32 BE][op] -> [addr][data u32 BE][status]
 //        op 1: read, 2: write, 0: no access. Status 0: success, 2: failure.
+//   0x06 Read protection: only 01, the query -> [02] unprotected, [01]
+//        protected. Reads FLASH_OBR (0x4002201c, RDPRT is bit 1) and
+//        0x40022020 at the command, as the WCH-LinkE does.
 //   0x0b Reset: [01] -> [01]. ndmreset: the hart restarts and runs.
 //   0x0c Configure: [chip type][speed] -> [01].
 //   0x0d Control:
 //        01 Probe information -> [major][minor][type][00], the values of the
 //           captured WCH-LinkE (2.19, type 0x12).
 //        02 Connect -> [family][chip ID u32 BE]
-//        03 -> [03], 04 -> [00], ff (quit) -> [ff], other values -> echo.
+//        03 -> [03], 04 -> [00], ff (quit) -> [ff]. Other values get the
+//        unknown-command reply: the host tools use them for actions of the
+//        probe (target power, erase, reset pin), see controlCommand().
 //   0x0e Disable debug: [sub] -> [sub]. Not captured: as quit.
 //   0x11 Chip information: [sub] -> 20 raw bytes without a header: the words
 //        at 0x1ffff7e0, 0x1ffff7e8, 0x1ffff7ec and 0x1ffff7f0, and the chip
@@ -29,18 +34,25 @@
 // - A packet that is not a request ([0x81][cmd][len]), or a command that is
 //   not in the list, gets the reply of the WCH-LinkE to an unknown command:
 //   [0x82][0x81][01][ff]. The command does nothing. This refuses the flash
-//   commands (0x01, 0x02 other than 0x0c, 0x06) until W5 adds them, and
+//   commands (0x01, 0x02 other than 0x0c, 0x06 other than 01) until W5
+//   adds them, and
 //   the WCH firmware-update and mode-switch commands of the WCH-LinkE.
 // - The payload length is not checked, as on the WCH-LinkE. A missing
 //   payload byte reads 0.
 // - Connect: the wire comes from the chip type of the last configure
-//   command. 0x09 (CH32V00x) selects one wire. Other types try two wires
-//   first, then one wire. The connect does the accesses of the probe
+//   command. 0x09 (CH32V00x) selects one wire. Other types try one wire
+//   first, then two wires. The connect does the accesses of the probe
 //   ("Probe actions"): DM registers 0x7e and 0x7d, dmstatus, halt, the chip
 //   ID (0x7f), CSR 0x7c0. It fails with the error frame [0x81][0x55][01][01]
-//   and the pins are released.
+//   and the pins are released. A chip ID that is not in chipFamilies also
+//   fails: a wrong family code would make the host use wrong chip settings.
+//   The processor then resumes the hart, ends dmactive, and tries no other
+//   wire.
 // - Quit and disable debug resume the hart, write dmcontrol 40000000
-//   (dmactive 0), and release the pins.
+//   (dmactive 0), and release the pins. Disable debug before a connect
+//   only echoes.
+// - A suspend (release()) and a lost host (hostGone()) release the pins
+//   without target accesses: the hart stays halted until the next session.
 // - A command that needs a target (DMI, reset, chip information, memory
 //   read) before a connect, or a failed target access, gives the error
 //   frame. A DMI access gives status 2 instead.
@@ -48,7 +60,10 @@
 //   first, in packets of packetSize bytes, until the length of the range.
 //   After a failed word, the module stops reading and the rest of the data
 //   is 0xff. A new command 0x03, a connect or a quit ends a read that the
-//   host did not take completely.
+//   host did not take completely. The transport cannot take back a packet
+//   that is on its way to the host. Thus 02 0c gives the error frame while
+//   a packet of the read before waits for the host (dataSent() not called
+//   yet): its data would look like the start of the new read.
 //
 // The transport calls submit() for a request, when canSubmit() is true.
 // runNext() runs it, in the main loop. One request and one response at a
@@ -103,7 +118,15 @@ inline constexpr uint8_t dmiWrite = 0x02;
 // the connect response. Captured: 0x09 (CH32V003), 0x05 (CH32V208).
 inline constexpr uint8_t familyV00x = 0x09;
 inline constexpr uint8_t familyV20x = 0x05;
-inline constexpr uint8_t familyV30x = 0x06;
+
+// The sub-command of command 0x06 that queries the protection
+inline constexpr uint8_t protectionQuery = 0x01;
+inline constexpr uint8_t protectionOff = 0x02;
+inline constexpr uint8_t protectionOn = 0x01;
+// FLASH_OBR and the register after it, read by the query
+inline constexpr uint32_t flashObr = 0x4002'201c;
+inline constexpr uint32_t flashWrpr = 0x4002'2020;
+inline constexpr uint32_t obrRdprt = 1u << 1;
 
 // The probe information of the captured WCH-LinkE: firmware 2.19, probe
 // type 0x12 (wlink: WCH-LinkE-CH32V305)
@@ -124,13 +147,32 @@ inline constexpr uint32_t csr7c0Value = 0x0000'0300;
 inline constexpr std::array<uint32_t, 4> chipInfoAddresses{ 0x1fff'f7e0, 0x1fff'f7e8, 0x1fff'f7ec, 0x1fff'f7f0 };
 inline constexpr std::size_t chipInfoSize = 20;
 
-// The family code of the connect response, from the wire and the chip ID.
-// Only 0x09 and 0x05 are captured. 0x06 for the CH32V30x is not.
-constexpr uint8_t familyOf(rvswd::Wire wire, uint32_t chipId) {
-   if(wire == rvswd::Wire::One) {
-      return familyV00x;
+// A chip series: the top 12 bits of the chip ID, and the family code of the
+// connect response
+struct ChipFamily {
+   uint16_t idPrefix;
+   uint8_t family;
+};
+
+// The known chip series. Captured: CH32V003 (0x003, 0x09) and CH32V208
+// (0x208, 0x05). The CH32V203 and the CH32V207 are in the CH32V20x series of
+// the CH32V208. Their IDs are not captured.
+inline constexpr std::array<ChipFamily, 4> chipFamilies{ {
+{ 0x003, familyV00x },
+{ 0x203, familyV20x },
+{ 0x207, familyV20x },
+{ 0x208, familyV20x },
+} };
+
+// The family code of the connect response. 0 for a chip ID that is not in
+// chipFamilies.
+constexpr uint8_t familyOf(uint32_t chipId) {
+   for(const auto &entry : chipFamilies) {
+      if(chipId >> 20 == entry.idPrefix) {
+         return entry.family;
+      }
    }
-   return (chipId >> 24) == 0x30 ? familyV30x : familyV20x;
+   return 0;
 }
 
 // Time of the board
@@ -181,6 +223,11 @@ class Processor {
    // Reads the next packet of the memory read from the target. Valid until
    // the next call. Empty when no data waits.
    art::span<const uint8_t> dataPacket();
+   // The packet of dataPacket() went to the host, or the transport dropped
+   // it.
+   void dataSent() {
+      dataInFlight_ = false;
+   }
 
    // The host went away: like quit without the target accesses, and the
    // request, the response and the memory read are dropped.
@@ -203,12 +250,22 @@ class Processor {
 
    void controlCommand(uint8_t sub);
    [[nodiscard]] bool connect();
-   [[nodiscard]] bool connectOn(uint32_t &chipId);
+   // The result of a connect on one wire
+   enum class Found : uint8_t {
+      None,
+      Known,
+      // A target with a chip ID that is not in chipFamilies
+      Unknown,
+   };
+   [[nodiscard]] Found connectOn(uint32_t &chipId);
    void quit();
+   // Resumes the hart and ends dmactive, as the quit of the probe
+   void restore();
    void configure(uint8_t chipType, uint8_t speed);
    void dmiCommand(art::span<const uint8_t> payload);
    void resetCommand(uint8_t sub);
    void chipInfoCommand();
+   void protectionCommand(uint8_t sub);
    void setReadRange(uint32_t address, uint32_t length);
    void programCommand(uint8_t sub);
    void detach();
@@ -217,7 +274,6 @@ class Processor {
    Platform &platform_;
 
    bool connected_{ false };
-   rvswd::Wire wire_{ rvswd::Wire::Two };
    uint32_t chipId_{ 0 };
    // The chip type of the last configure command
    uint8_t chipType_{ 0 };
@@ -234,6 +290,8 @@ class Processor {
    uint32_t dataAddress_{ 0 };
    uint32_t dataRemaining_{ 0 };
    bool dataFailed_{ false };
+   // A packet of dataPacket() waits for dataSent().
+   bool dataInFlight_{ false };
    std::array<uint8_t, packetSize> data_{};
 };
 

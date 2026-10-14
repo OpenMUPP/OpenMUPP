@@ -81,6 +81,7 @@ void WchLinkFunction::inPacketSent(uint8_t endpointAddress) {
       armCommand();
    } else if(endpointAddress == wch::dataInEndpoint && data_.busy) {
       data_ = {};
+      processor_.dataSent();
    }
 }
 
@@ -121,6 +122,7 @@ void WchLinkFunction::sendData() {
    data_ = { processor_.dataPacket(), true };
    if(data_.data.empty() || !start(wch::dataInEndpoint, data_)) {
       data_ = {};
+      processor_.dataSent();
    }
 }
 

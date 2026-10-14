@@ -475,25 +475,36 @@ The personality is not in a firmware image yet. Work item #70 adds the build opt
 | `0d 02` | Connects (see below) |
 | `0d 03`, `0d 04` | Reply `03` and `00`. No target access. |
 | `0d ff` | Quit: `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
-| Other `0d` values | Echo the sub-command. No target access. |
+| Other `0d` values | The unknown-command reply (see below) |
 | `0c` | Keeps the chip type for the next connect, and sets the speed. Replies `01`. |
 | `08` | DMI access. `op` `00` does no access. A failure, or an access before a connect, gives the status `02`. |
 | `03`, then `02 01 0c` | Memory read on endpoint `0x82` |
 | `11` | Reads the four words at the command, and adds the chip ID of the connect |
+| `06 01` | Protection query. Reads `0x4002201c` (`FLASH_OBR`) and `0x40022020` at the command. Replies `01` when `RDPRT` (bit 1 of `FLASH_OBR`) is 1, else `02`. |
 | `0b 01` | Writes `dmcontrol` `00000003` (`ndmreset`), waits 1 ms, writes `00000001`, then `10000001` (`ackhavereset`). The hart runs after the reset. |
-| `0e` | Not captured. The processor does the quit and echoes the sub-command. |
+| `0e` | Not captured. The processor does the quit and echoes the sub-command. Before a connect, it only echoes. |
 
 All other commands get the reply of the WCH-LinkE to an unknown command: `82 81 01 ff`.
-The processor does nothing for them. This includes the flash commands (`01`, `06` and the other `02` sub-commands) until work item #69.
+The processor does nothing for them. This includes the flash commands (`01`, `06 02`, `06 03`, `06 04` and the other `02` sub-commands) until work item #69.
 It also includes the firmware-update and the mode-switch commands of the WCH-LinkE. The captures do not show these commands.
+
+The `0d` sub-commands other than `01`, `02`, `03`, `04` and `ff` also get this reply.
+wlink and minichlink use them for actions of the probe: target power (`09` to `0c`), erase by the reset pin or by the power (`08`, `0f`), the reset pin (`13` to `15`), the split of RAM and flash (`05`), and SDI print (`ee`).
+An echo tells the host that the action occurred. The processor does not do these actions, so it refuses them.
+The WCH-LinkE echoes `0d 05` (see [Command `0x0d`](#command-0x0d-info-connect-quit)). The processor does not.
 A packet without the header `81` gets the same reply.
 
 A command that needs a target before a connect, or a failed target access, gives the error frame `81 55 01 01`.
 
+A suspend of the USB bus, and a bus reset or a deconfigure, release the pins without target accesses.
+Thus the hart stays halted after the connect, until the next session.
+
 ### Connect
 
 The chip type of the last `0c` command selects the wire. The type `09` (CH32V00x) selects one wire.
-For the other types, the processor tries two wires first, then one wire. wlink sends the type `01` also for the CH32V003.
+For the other types, the processor tries one wire first, then two wires. wlink sends the type `01` also for the CH32V003.
+One wire comes first, because its frames change SWDIO only while SWCLK is low. A two-wire target sees no start condition and no stop condition in them.
+The frames of two wires are noise on the line of a one-wire target.
 On each wire, the processor does these probe actions:
 
 1. Write `0x7e` and `0x7d` with `5aa50400`.
@@ -502,7 +513,16 @@ On each wire, the processor does these probe actions:
 4. Read the chip ID at `0x7f`. The values `00000000` and `ffffffff` tell that no target is present.
 5. Write CSR `0x7c0` with `0x00000300`.
 
-The family code of the response is `09` on one wire. On two wires, it is `06` for a chip ID that starts with `0x30` (CH32V30x, not captured), else `05`.
+The family code of the response comes from a table of chip ID prefixes (the top 12 bits). wlink selects the chip settings from this code.
+
+| Prefix | Chip series | Family code | Source |
+|---|---|---|---|
+| `003` | CH32V003 | `09` | Captured |
+| `208` | CH32V208 | `05` | Captured |
+| `203`, `207` | CH32V203, CH32V207 | `05` | Same series as the CH32V208. Not captured. |
+
+A chip ID that is not in the table gives the error frame. A wrong family code would make the host use wrong chip settings without a warning.
+The processor then resumes the hart and ends `dmactive`, as the quit does. It tries no other wire.
 
 The processor does not do these probe actions:
 
@@ -518,6 +538,11 @@ The processor reads one word for each 4 bytes of the range, and sends each word 
 It reads the next packet only when the host took the packet before. After a failed word, the processor stops the target accesses, and the rest of the data is `0xff`.
 A new `03` command, a connect or a quit stops a read that the host did not take completely.
 
+The USB function cannot take back a packet that is on its way on endpoint `0x82`.
+The data has no header, so the host cannot tell an old packet from a new packet.
+Thus `02 01 0c` gives the error frame while a packet of the read before waits for the host.
+The host must read that packet, or reset the bus, before a new memory read.
+
 ### Speed
 
 On two wires, the speed `01` (high) sets SWCLK to 907 kHz. The speeds `02` and `03` set 478 kHz.
@@ -528,7 +553,7 @@ On one wire, the speed has no effect.
 
 A real target must confirm these items (work item #71):
 
-- The connect on both wires, and the try of two wires on a CH32V003.
+- The connect on both wires, and the try of one wire on a CH32V20x.
 - The reset sequence. The WCH-LinkE reset is not captured on the wire.
 - The DMI reads at 907 kHz on two wires.
 - wlink and minichlink with the WCH ID build.

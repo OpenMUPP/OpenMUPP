@@ -90,6 +90,9 @@ void connect(WchLinkBench &bench, uint8_t chipType = 0x01) {
    REQUIRE(reply.size() == 8);
    REQUIRE(reply[0] == 0x82);
    bench.pins.accesses.clear();
+   // On two wires, the try of one wire came first.
+   bench.pins.inits = 0;
+   bench.pins.finis = 0;
 }
 
 } // namespace
@@ -167,7 +170,9 @@ TEST_CASE("WCH-Link: unknown and refused commands get the unknown-command reply"
    CHECK(bench.transact(request(0x7f, { 0x00 })) == unknownReply);
    // The flash commands (W5): set area, read protection, program sub-commands
    CHECK(bench.transact(request(0x01, { 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00 })) == unknownReply);
-   CHECK(bench.transact(request(0x06, { 0x01 })) == unknownReply);
+   for(const uint8_t sub : { 0x02, 0x03, 0x04 }) {
+      CHECK(bench.transact(request(0x06, { sub })) == unknownReply);
+   }
    for(const uint8_t sub : { 0x01, 0x02, 0x05, 0x07, 0x08 }) {
       CHECK(bench.transact(request(0x02, { sub })) == unknownReply);
    }
@@ -191,7 +196,11 @@ TEST_CASE("WCH-Link: control sub-commands without a target") {
    // minichlink sends 0d 03 first.
    CHECK(bench.transact(request(0x0d, { 0x03 })) == Bytes{ 0x82, 0x0d, 0x01, 0x03 });
    CHECK(bench.transact(request(0x0d, { 0x04 })) == Bytes{ 0x82, 0x0d, 0x01, 0x00 });
-   CHECK(bench.transact(request(0x0d, { 0x05 })) == Bytes{ 0x82, 0x0d, 0x01, 0x05 });
+   // The actions of the WCH-LinkE are refused: RAM and flash split, erase,
+   // target power, reset pin, SDI print. 0d 05 echoes on the WCH-LinkE.
+   for(const uint8_t sub : { 0x05, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0f, 0x13, 0x14, 0x15, 0xee }) {
+      CHECK(bench.transact(request(0x0d, { sub, 0x00 })) == unknownReply);
+   }
    // Quit without a connect
    CHECK(bench.transact(request(0x0d, { 0xff })) == Bytes{ 0x82, 0x0d, 0x01, 0xff });
    CHECK(bench.pins.accesses.empty());
@@ -215,7 +224,8 @@ TEST_CASE("WCH-Link: connect on two wires does the probe actions (CH32V208)") {
    CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x05, v208ChipId));
    CHECK(bench.processor.connected());
    CHECK(bench.dm.halted);
-   CHECK(bench.pins.inits == 1);
+   // The try of one wire, then two wires
+   CHECK(bench.pins.inits == 2);
    CHECK(bench.pins.protocolErrors == 0);
    CHECK(bench.pins.contentions == 0);
 
@@ -255,17 +265,91 @@ TEST_CASE("WCH-Link: connect on one wire with chip type 0x09 (CH32V003)") {
    CHECK(bench.dm.halted);
 }
 
-TEST_CASE("WCH-Link: connect with the generic chip type finds a one-wire target") {
+TEST_CASE("WCH-Link: connect with the generic chip type finds the target on either wire") {
+   for(const auto wire : { Wire::One, Wire::Two }) {
+      const int wireIndex = static_cast<int>(wire);
+      CAPTURE(wireIndex);
+      WchLinkBench bench(wire);
+      if(wire == Wire::Two) {
+         bench.pins.registers[dm::chipId] = v208ChipId;
+      }
+      bench.enumerate();
+      // wlink sends 0c 01 01 before the connect also for the CH32V003.
+      CHECK(bench.transact(request(0x0c, { 0x01, 0x01 })) == Bytes{ 0x82, 0x0c, 0x01, 0x01 });
+      CHECK(bench.transact(request(0x0d, { 0x02 })) ==
+            (wire == Wire::One ? connectReply(0x09, v003ChipId) : connectReply(0x05, v208ChipId)));
+      // One wire first, then two wires
+      CHECK(bench.pins.inits == (wire == Wire::One ? 1 : 2));
+      CHECK(bench.pins.finis == (wire == Wire::One ? 0 : 1));
+      CHECK(bench.processor.connected());
+      CHECK(bench.dm.halted);
+      // The frames of the other wire are no access and no error for the
+      // target, and nobody fights over the line.
+      CHECK(bench.pins.contentions == 0);
+      CHECK(bench.pins.protocolErrors == 0);
+      CHECK(bench.pins.unlockedChanges == 0);
+      const auto accesses = take(bench);
+      REQUIRE_FALSE(accesses.empty());
+      CHECK(accesses.front() == W(0x7e, 0x5aa5'0400));
+      int unlocks = 0;
+      for(const auto &access : accesses) {
+         unlocks += access.address == 0x7e ? 1 : 0;
+      }
+      CHECK(unlocks == 1);
+   }
+}
+
+TEST_CASE("WCH-Link: the family code comes from a table of chip ID prefixes") {
+   // Captured
+   CHECK(wchlink::familyOf(v003ChipId) == 0x09);
+   CHECK(wchlink::familyOf(v208ChipId) == 0x05);
+   // The CH32V20x series, not captured
+   CHECK(wchlink::familyOf(0x2030'0500) == 0x05);
+   CHECK(wchlink::familyOf(0x2070'050c) == 0x05);
+   // Unknown chips: no family code
+   CHECK(wchlink::familyOf(0x3050'0508) == 0);
+   CHECK(wchlink::familyOf(0x2500'0410) == 0);
+   CHECK(wchlink::familyOf(0x0020'0600) == 0);
+}
+
+TEST_CASE("WCH-Link: connect to a chip without a family code fails and lets the hart run") {
+   // A one-wire chip that is not in the table
    WchLinkBench bench(Wire::One);
+   bench.pins.registers[dm::chipId] = 0x0020'0600;
    bench.enumerate();
-   // wlink sends 0c 01 01 before the connect also for the CH32V003.
    CHECK(bench.transact(request(0x0c, { 0x01, 0x01 })) == Bytes{ 0x82, 0x0c, 0x01, 0x01 });
-   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x09, v003ChipId));
-   // Two wires first, then one wire
-   CHECK(bench.pins.inits == 2);
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectError);
+   CHECK_FALSE(bench.processor.connected());
+   // No try on two wires
+   CHECK(bench.pins.inits == 1);
    CHECK(bench.pins.finis == 1);
-   CHECK(bench.processor.connected());
-   CHECK(bench.dm.halted);
+   CHECK_FALSE(bench.dm.halted);
+   CHECK_FALSE(bench.dm.active());
+   CHECK_FALSE(bench.pins.hostDrives());
+}
+
+TEST_CASE("WCH-Link: protection query reads FLASH_OBR at the command") {
+   for(const auto wire : { Wire::Two, Wire::One }) {
+      const int wireIndex = static_cast<int>(wire);
+      CAPTURE(wireIndex);
+      WchLinkBench bench(wire);
+      bench.enumerate();
+      // Before a connect
+      CHECK(bench.transact(request(0x06, { 0x01 })) == connectError);
+      connect(bench);
+      // Unprotected: the values of v208-wlink-status-timing.csv
+      putWord(bench.dm, 0x4002'201c, 0x0000'00fc);
+      putWord(bench.dm, 0x4002'2020, 0xffff'ffff);
+      bench.dm.commands.clear();
+      CHECK(bench.transact(request(0x06, { 0x01 })) == Bytes{ 0x82, 0x06, 0x01, 0x02 });
+      CHECK(bench.dm.commands.size() == 2);
+      // Protected: RDPRT (bit 1)
+      putWord(bench.dm, 0x4002'201c, 0x0000'00fe);
+      CHECK(bench.transact(request(0x06, { 0x01 })) == Bytes{ 0x82, 0x06, 0x01, 0x01 });
+      // A failed read
+      bench.dm.faultAddresses.insert(0x4002'2020);
+      CHECK(bench.transact(request(0x06, { 0x01 })) == connectError);
+   }
 }
 
 TEST_CASE("WCH-Link: connect without a target gives the error frame") {
@@ -384,6 +468,50 @@ TEST_CASE("WCH-Link: memory read sends the words on the data endpoint") {
    }
 }
 
+TEST_CASE("WCH-Link: a memory read length that is not a multiple of 4 cuts the last word") {
+   for(const uint32_t length : { 6u, 0x42u }) {
+      CAPTURE(length);
+      WchLinkBench bench(Wire::Two);
+      bench.enumerate();
+      connect(bench);
+      for(uint32_t i = 0; i < 17; ++i) {
+         putWord(bench.dm, 0x2000'0000 + 4 * i, 0x1122'3300 + i);
+      }
+      bench.transact(request(0x03, { 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, static_cast<uint8_t>(length) }));
+      bench.transact(request(0x02, { 0x0c }));
+      Bytes data;
+      while(auto packet = bench.readData()) {
+         data.insert(data.end(), packet->begin(), packet->end());
+      }
+      REQUIRE(data.size() == length);
+      // The last word: its most significant bytes only
+      const uint32_t last = 0x1122'3300 + (length - 1) / 4;
+      CHECK(data[length - 2] == static_cast<uint8_t>(last >> 24));
+      CHECK(data[length - 1] == static_cast<uint8_t>(last >> 16));
+   }
+}
+
+TEST_CASE("WCH-Link: a new memory read waits until the host took the old packet") {
+   WchLinkBench bench(Wire::Two);
+   bench.enumerate();
+   connect(bench);
+   putWord(bench.dm, 0x2000'0000, 0xaaaa'aaaa);
+   putWord(bench.dm, 0x2000'1000, 0x5555'5555);
+   bench.transact(request(0x03, { 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00 }));
+   bench.transact(request(0x02, { 0x0c }));
+   // The host gives up: a new range and a new start while the first packet
+   // of the old read waits on 0x82.
+   CHECK(bench.transact(request(0x03, { 0x20, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x04 })) == Bytes{ 0x82, 0x03, 0x01, 0x01 });
+   CHECK(bench.transact(request(0x02, { 0x0c })) == connectError);
+   // The host takes the old packet. Then the new read starts.
+   const auto old = bench.readData();
+   REQUIRE(old.has_value());
+   CHECK((*old)[0] == 0xaa);
+   CHECK_FALSE(bench.readData().has_value());
+   CHECK(bench.transact(request(0x02, { 0x0c })) == Bytes{ 0x82, 0x02, 0x01, 0x0c });
+   CHECK(bench.readData() == Bytes{ 0x55, 0x55, 0x55, 0x55 });
+}
+
 TEST_CASE("WCH-Link: a failed word ends the target reads, and the rest is 0xff") {
    WchLinkBench bench(Wire::Two);
    bench.enumerate();
@@ -468,6 +596,15 @@ TEST_CASE("WCH-Link: disable debug acts as quit (not captured)") {
    CHECK(bench.pins.finis == 1);
 }
 
+TEST_CASE("WCH-Link: disable debug before a connect only echoes") {
+   WchLinkBench bench(Wire::Two);
+   bench.enumerate();
+   CHECK(bench.transact(request(0x0e, { 0x01 })) == Bytes{ 0x82, 0x0e, 0x01, 0x01 });
+   CHECK(bench.pins.inits == 0);
+   CHECK(bench.pins.finis == 0);
+   CHECK(bench.pins.accesses.empty());
+}
+
 TEST_CASE("WCH-Link: one request at a time") {
    WchLinkBench bench;
    bench.enumerate();
@@ -533,4 +670,44 @@ TEST_CASE("WCH-Link: a cleared halt of the command IN endpoint sends the respons
    CHECK(bench.read() == Bytes{ 0x82, 0x0d, 0x04, 0x02, 0x13, 0x12, 0x00 });
    bench.mainLoop();
    CHECK(bench.transact(request(0x0d, { 0x03 })) == Bytes{ 0x82, 0x0d, 0x01, 0x03 });
+}
+
+TEST_CASE("WCH-Link: SET_INTERFACE sends the packets on their way again") {
+   WchLinkBench bench(Wire::Two);
+   bench.enumerate();
+   connect(bench);
+   putWord(bench.dm, 0x2000'0000, 0x0102'0304);
+   bench.transact(request(0x03, { 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04 }));
+   REQUIRE(bench.write(request(0x02, { 0x0c })));
+   // A response on 0x81 and a data packet on 0x82 wait for the host.
+   bool ok = false;
+   bench.controller().controlOut(art::usb::test::setupPacket(0x01, 11, 0, 0, 0), {}, &ok);
+   REQUIRE(ok);
+   bench.mainLoop();
+   CHECK(bench.read() == Bytes{ 0x82, 0x02, 0x01, 0x0c });
+   bench.mainLoop();
+   CHECK(bench.readData() == Bytes{ 0x01, 0x02, 0x03, 0x04 });
+   CHECK_FALSE(bench.readData().has_value());
+   // The command OUT endpoint is armed again.
+   CHECK(bench.transact(request(0x0d, { 0x03 })) == Bytes{ 0x82, 0x0d, 0x01, 0x03 });
+}
+
+TEST_CASE("WCH-Link: a cleared halt of the data IN endpoint sends the data packet again") {
+   WchLinkBench bench(Wire::Two);
+   bench.enumerate();
+   connect(bench);
+   putWord(bench.dm, 0x2000'0000, 0x0102'0304);
+   bench.transact(request(0x03, { 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04 }));
+   bench.transact(request(0x02, { 0x0c }));
+   auto &controller = bench.controller();
+   bool ok = false;
+   controller.controlOut(art::usb::test::setupPacket(0x02, 3, 0, 0x82, 0), {}, &ok);
+   REQUIRE(ok);
+   CHECK(controller.isStalled(0x82));
+   CHECK_FALSE(bench.readData().has_value());
+   controller.controlOut(art::usb::test::setupPacket(0x02, 1, 0, 0x82, 0), {}, &ok);
+   REQUIRE(ok);
+   bench.mainLoop();
+   CHECK(bench.readData() == Bytes{ 0x01, 0x02, 0x03, 0x04 });
+   CHECK_FALSE(bench.readData().has_value());
 }
