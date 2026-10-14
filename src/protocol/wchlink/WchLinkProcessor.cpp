@@ -342,7 +342,7 @@ void Processor::protectionCommand(uint8_t sub) {
    }
    if(sub == protectionClear || sub == protectionSet) {
       endProgram();
-      if(!connected_ || !flash_.setReadProtection(sub == protectionSet, optionBytes())) {
+      if(!connected_ || !flash_.setReadProtection(sub == protectionSet, series())) {
          replyError();
          return;
       }
@@ -433,8 +433,8 @@ const StubLayout &Processor::layout() const {
    return familyOf(chipId_) == familyV00x ? layoutV00x : layoutV20x;
 }
 
-std::size_t Processor::optionBytes() const {
-   return familyOf(chipId_) == familyV00x ? fpec::optionBytesV00x : fpec::optionBytesV20x;
+Series Processor::series() const {
+   return familyOf(chipId_) == familyV00x ? Series::V00x : Series::V20x;
 }
 
 bool Processor::endProgram() {

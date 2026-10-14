@@ -18,7 +18,7 @@
 //   0xe00000f4 and 0xe00000f8, as on the CH32V003. Another instruction,
 //   or a program without ebreak, gives cmderr 3 (exception).
 // - A memory access at a misaligned address or at an address of
-//   faultAddresses faults. In the program buffer, the program stops at
+//   faultAddresses faults, and a load at an address of faultLoadAddresses. In the program buffer, the program stops at
 //   the faulting instruction with cmderr 3, and the registers keep the
 //   values of the instructions before it, as on a real hart. The abstract
 //   memory command gives cmderr 5 (bus error).
@@ -72,6 +72,8 @@ class MockDebugModule {
    std::map<uint32_t, uint8_t> memory;
    // An access that touches one of these addresses faults.
    std::set<uint32_t> faultAddresses;
+   // A load that touches one of these addresses faults. Stores work.
+   std::set<uint32_t> faultLoadAddresses;
    // The commands that started
    std::vector<uint32_t> commands;
    int programRuns{ 0 };
@@ -289,7 +291,7 @@ class MockDebugModule {
       const uint32_t bytes = 1u << size;
       const uint32_t address = target_.registers[rvswd::dm::data1];
       uint32_t &data = target_.registers[rvswd::dm::data0];
-      if(faults(address, bytes)) {
+      if(faults(address, bytes, (value & 1u << 16) != 0)) {
          cmderr_ = 5;
          return;
       }
@@ -300,12 +302,12 @@ class MockDebugModule {
       }
    }
 
-   [[nodiscard]] bool faults(uint32_t address, uint32_t bytes) const {
+   [[nodiscard]] bool faults(uint32_t address, uint32_t bytes, bool isStore) const {
       if(address % bytes != 0) {
          return true;
       }
       for(uint32_t i = 0; i < bytes; ++i) {
-         if(faultAddresses.count(address + i) != 0) {
+         if(faultAddresses.count(address + i) != 0 || (!isStore && faultLoadAddresses.count(address + i) != 0)) {
             return true;
          }
       }
@@ -314,7 +316,7 @@ class MockDebugModule {
 
    // Returns false after an exception.
    bool loadOp(uint32_t rd, uint32_t address) {
-      if(faults(address, 4)) {
+      if(faults(address, 4, false)) {
          exception();
          return false;
       }
@@ -322,7 +324,7 @@ class MockDebugModule {
       return true;
    }
    bool storeOp(uint32_t address, uint32_t value, uint32_t bytes = 4) {
-      if(faults(address, bytes)) {
+      if(faults(address, bytes, true)) {
          exception();
          return false;
       }

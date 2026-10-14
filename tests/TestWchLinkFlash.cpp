@@ -207,6 +207,42 @@ TEST_CASE("WCH-Link flash: unprotect writes the option bytes and resets (wlink u
    }
 }
 
+TEST_CASE("WCH-Link flash: unprotect keeps USER and DATA when the chip hides the option bytes") {
+   for(const auto wire : { Wire::One, Wire::Two }) {
+      const int wireIndex = static_cast<int>(wire);
+      CAPTURE(wireIndex);
+      FlashBench fb(wire);
+      // USER with the reserved bits of the series at 1
+      const uint8_t user = wire == Wire::One ? 0xe7 : 0xdd;
+      fb.flash.setOption(0, 0x3c);
+      fb.flash.setOption(1, user);
+      fb.flash.setOption(2, 0x12);
+      fb.flash.setOption(3, 0x34);
+      fb.flash.setOption(4, 0xfe);
+      fb.bench.dm.halted = false;
+      REQUIRE(fb.bench.transact(request(0x0b, { 0x01 })) == reply(0x0b, 0x01));
+      REQUIRE(fb.flash.readProtected);
+      fb.bench.dm.halted = true;
+      SUBCASE("The reads fault") {
+         for(uint32_t i = 0; i < 16; ++i) {
+            fb.bench.dm.faultLoadAddresses.insert(wchlink::fpec::optionBytes + i);
+         }
+      }
+      SUBCASE("The reads give a fixed word") {
+         fb.flash.hiddenOptionWord = 0x0000'0300;
+      }
+      CHECK(fb.bench.transact(request(0x06, { 0x02 })) == reply(0x06, 0x02));
+      CHECK(fb.flash.option(0) == 0xa5);
+      // From FLASH_OBR. The CH32V20x OBR has no DATA bytes.
+      CHECK(fb.flash.option(1) == user);
+      CHECK(fb.flash.option(2) == (wire == Wire::One ? 0x12 : 0xff));
+      CHECK(fb.flash.option(3) == (wire == Wire::One ? 0x34 : 0xff));
+      CHECK(fb.flash.option(4) == 0xff);
+      CHECK(fb.bench.transact(request(0x06, { 0x01 })) == reply(0x06, 0x02));
+      fb.checkClean();
+   }
+}
+
 TEST_CASE("WCH-Link flash: protect takes effect at the next reset (wlink protect)") {
    for(const auto wire : { Wire::One, Wire::Two }) {
       const int wireIndex = static_cast<int>(wire);

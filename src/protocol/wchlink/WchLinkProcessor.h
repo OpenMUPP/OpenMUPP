@@ -319,7 +319,7 @@ class Processor {
    void programCommand(uint8_t sub);
    void flashCommand(uint8_t sub);
    [[nodiscard]] const StubLayout &layout() const;
-   [[nodiscard]] std::size_t optionBytes() const;
+   [[nodiscard]] Series series() const;
    // Ends the program sequence (as 02 08). Returns false when it was not
    // complete, or a target access failed.
    bool endProgram();

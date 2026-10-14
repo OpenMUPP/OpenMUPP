@@ -36,6 +36,21 @@ bool ok(rvswd::Status status) {
 
 } // namespace
 
+void optionsFromRegisters(Series series, uint32_t obr, uint32_t wpr, uint8_t (&values)[fpec::optionBytesV20x]) {
+   if(series == Series::V00x) {
+      values[1] = static_cast<uint8_t>(obr >> 2);
+      values[2] = static_cast<uint8_t>(obr >> 10);
+      values[3] = static_cast<uint8_t>(obr >> 18);
+   } else {
+      values[1] = static_cast<uint8_t>((obr >> 2 & 0x07) | 0x18 | (obr >> 8 & 0x07) << 5);
+      values[2] = 0xff;
+      values[3] = 0xff;
+   }
+   for(std::size_t i = 0; i < 4; ++i) {
+      values[fpec::optionWrpr0 + i] = static_cast<uint8_t>(wpr >> (8 * i));
+   }
+}
+
 Flash::Flash(Target &target, Platform &platform)
    : target_(target)
    , platform_(platform) {
@@ -99,23 +114,27 @@ bool Flash::massErase() {
    return write(fpec::ctlr, 0) && lockController() && erased;
 }
 
-bool Flash::setReadProtection(bool protect, std::size_t optionBytes) {
-   if(!resetHalt()) {
+bool Flash::setReadProtection(bool protect, Series series) {
+   const std::size_t optionBytes = optionBytesOf(series);
+   uint32_t obr = 0;
+   uint32_t wpr = 0;
+   if(!resetHalt() || !read(fpec::obr, obr) || !read(fpec::wpr, wpr)) {
       return false;
    }
-   // The old values. A byte with a wrong inverse reads as erased.
+   // The loaded values, then the bytes of the area that have their inverse
    uint8_t values[fpec::optionBytesV20x]{};
-   if(optionBytes > fpec::optionBytesV20x) {
-      return false;
-   }
+   optionsFromRegisters(series, obr, wpr, values);
    for(std::size_t i = 0; i < optionBytes; i += 2) {
       uint32_t word = 0;
       if(!read(fpec::optionBytes + 2 * i, word)) {
-         return false;
+         // Hidden on a protected chip
+         break;
       }
       for(std::size_t j = 0; j < 2; ++j) {
          const uint32_t half = word >> (16 * j);
-         values[i + j] = ((half ^ half >> 8) & 0xff) == 0xff ? static_cast<uint8_t>(half) : 0xff;
+         if(((half ^ half >> 8) & 0xff) == 0xff) {
+            values[i + j] = static_cast<uint8_t>(half);
+         }
       }
    }
    values[fpec::optionRdpr] = protect ? fpec::rdprProtected : fpec::rdprUnprotected;

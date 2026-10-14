@@ -16,7 +16,9 @@
 //   and its inverse. The half word must be erased. Any other write gives an
 //   error. RDPR 0xa5 on a protected chip erases the main flash.
 // - A system reset (ndmreset) locks the controller and loads OBR and WPR
-//   from the option bytes.
+//   from the option bytes. On a protected chip, the option byte area can
+//   read a fixed word (hiddenOptionWord), or fault (faultAddresses of the
+//   mock DM).
 // - The stub: when the hart resumes at the stub address, the model checks
 //   the stub bytes in RAM and the call registers, does the operations of
 //   a0 (the calling convention of the captured stubs), puts the result in
@@ -105,6 +107,12 @@ class MockWchFlash {
    uint32_t mode{ 0 };
    uint32_t status{ 0 };
    bool readProtected{ false };
+   // FLASH_OBR without RDPRT, loaded at a system reset from USER and DATA
+   uint32_t obrLoaded{ 0 };
+   // While the chip is protected, the option byte area reads this word
+   // (v003-wlink-dump-protected.pcapng gives 0x00000300 for the flash). No
+   // value: the area reads as it is.
+   std::optional<uint32_t> hiddenOptionWord;
    uint32_t wpr{ 0xffff'ffff };
    // The STATR reads with BSY after each operation
    uint32_t busyReads{ 1 };
@@ -168,6 +176,13 @@ class MockWchFlash {
       mode = 0;
       keySteps_ = {};
       readProtected = option(wchlink::fpec::optionRdpr) != wchlink::fpec::rdprUnprotected;
+      const uint32_t user = option(1);
+      if(chip_.optionBytes == wchlink::fpec::optionBytesV00x) {
+         obrLoaded = user << 2 | static_cast<uint32_t>(option(2)) << 10 | static_cast<uint32_t>(option(3)) << 18;
+      } else {
+         // CH32V20x: IWDG_SW, STOP_RST, STANDBY_RST, then SRAM_CODE_MODE
+         obrLoaded = (user & 0x07) << 2 | (user >> 5 & 0x07) << 8;
+      }
       wpr = 0;
       for(std::size_t i = 0; i < 4; ++i) {
          const std::size_t index = wchlink::fpec::optionWrpr0 + i;
@@ -184,6 +199,9 @@ class MockWchFlash {
             value = value << 8 | flash[address - flashBase + i - 1];
          }
          return value;
+      }
+      if(inOptions(address) && readProtected && hiddenOptionWord) {
+         return *hiddenOptionWord;
       }
       if(inOptions(address)) {
          const std::size_t index = (address - fpec::optionBytes) / 2;
@@ -203,7 +221,7 @@ class MockWchFlash {
          }
          return status;
       case fpec::obr:
-         return 0x0000'00fcu | (readProtected ? 2u : 0u);
+         return obrLoaded | (readProtected ? 2u : 0u);
       case fpec::wpr:
          return wpr;
       default:

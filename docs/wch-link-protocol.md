@@ -629,10 +629,16 @@ The commands without a stub use the flash controller registers directly, with DM
 - **Unlock.** Read `FLASH_CTLR`. Write `KEY1` and `KEY2` to `FLASH_KEYR` only if `LOCK` is 1: a key write to an unlocked controller locks it until the next reset.
 - **Wait.** Read `FLASH_STATR` until `BSY` is 0, one read each 1 ms, for 3 s at most. Then write 1 to `EOP` and `WRPRTERR`. A `WRPRTERR` is a failure.
 - **Mass erase (`02 01`).** Reset, unlock, `FLASH_CTLR` `MER`, then `MER` and `STRT`, wait, `FLASH_CTLR` 0, lock (`LOCK` and `FLOCK`).
-- **Protect (`06 03`) and unprotect (`06 02`).** Reset. Read the option bytes at `0x1ffff800`. Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`). Program each option byte with `OBPG` and a 16-bit write, and wait after each byte. Then `FLASH_CTLR` 0 and lock.
+- **Protect (`06 03`) and unprotect (`06 02`).** Reset. Read the old option bytes (see below). Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`). Program each option byte with `OBPG` and a 16-bit write, and wait after each byte. Then `FLASH_CTLR` 0 and lock.
   Each `FLASH_CTLR` write keeps `OBWRE` 1: a 0 locks the option bytes again.
   - `RDPR` gets `0xa5` (unprotect) or `0x00` (protect). The value `0xcc` is not used, because it is a permanent protection on other chips.
-  - `USER`, `DATA0` and `DATA1` keep their values. The CH32V20x `USER` byte holds the split of RAM and flash. A byte with a wrong inverse is written as `0xff`.
+  - `USER`, `DATA0` and `DATA1` keep their values. The CH32V20x `USER` byte holds the split of RAM and flash.
+  - The old values come from `FLASH_OBR` and `FLASH_WPR` first. These registers hold the loaded option bytes, also on a protected chip.
+    No capture shows that a debugger can read the option byte area of a protected chip: a protected flash read gives a fixed word (`v003-wlink-dump-protected.pcapng`).
+    - CH32V00x: `USER` is `FLASH_OBR` bits 9 to 2, `DATA0` bits 17 to 10, `DATA1` bits 25 to 18 (reference manual 16.3.7).
+    - CH32V20x: `USER` bits 2 to 0 are `FLASH_OBR` bits 4 to 2, and `USER` bits 7 to 5 (`SRAM_CODE_MODE`) are `FLASH_OBR` bits 10 to 8. `USER` bits 4 and 3 are reserved (1). The manual gives two different places for `SRAM_CODE_MODE` (32.4.6 and 32.6). `FLASH_OBR` has no `DATA` bytes, so they get `0xff`.
+    - `WRPR0` to `WRPR3` are the bytes of `FLASH_WPR`.
+  - Then the module reads the option byte area. A byte that has its correct inverse replaces the value from the registers. A failed read is no error.
   - Unprotect writes `0xff` to the write protection bytes (`WRPR`). Protect keeps them.
   - When `RDPR` becomes `0xa5` on a protected chip, the chip erases the main flash itself.
   - After an unprotect, the module resets the target again. The WCH-LinkE answers a query after an unprotect with `02` (`v003-wlink-flash-protected.pcapng`), so it also reloads `FLASH_OBR`.
@@ -685,6 +691,7 @@ A real target must confirm these items (work item #71):
   - The verify of `0xff` words on the CH32V208, where erased flash reads `0xe339e339`.
   - The reset with `haltreq` before each flash command, on one wire and on two wires.
   - The reload of `FLASH_OBR` by the reset after an unprotect, and the read of the option bytes on a protected chip.
+  - The place of `SRAM_CODE_MODE` in the CH32V20x `FLASH_OBR`, and the `USER` byte after an unprotect.
   - The 16-bit write of the option bytes on one wire.
   - The time of a program of the full flash, against the WCH-LinkE (3.5 s and 15.2 s).
 

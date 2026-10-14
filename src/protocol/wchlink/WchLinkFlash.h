@@ -81,6 +81,29 @@ inline constexpr std::size_t optionBytesV00x = 6;
 inline constexpr std::size_t optionBytesV20x = 8;
 } // namespace fpec
 
+// The chip series of the flash operations
+enum class Series : uint8_t {
+   V00x,
+   V20x,
+};
+
+constexpr std::size_t optionBytesOf(Series series) {
+   return series == Series::V00x ? fpec::optionBytesV00x : fpec::optionBytesV20x;
+}
+
+// The option bytes (RDPR first) from FLASH_OBR and FLASH_WPR. They hold
+// the loaded values also on a protected chip, where the option byte area
+// may not be readable.
+// - CH32V00x: USER is OBR bits 9-2, DATA0 bits 17-10, DATA1 bits 25-18
+//   (reference manual 16.3.7).
+// - CH32V20x: USER bits 2-0 are OBR bits 4-2, USER bits 7-5
+//   (SRAM_CODE_MODE) are OBR bits 10-8, USER bits 4-3 are reserved (1).
+//   The manual does not agree with itself on the place of SRAM_CODE_MODE
+//   (32.4.6 and 32.6). OBR has no DATA bytes: they get 0xff.
+// - WRPR0-WRPR3 are the bytes of WPR, low byte first.
+// RDPR is not set.
+void optionsFromRegisters(Series series, uint32_t obr, uint32_t wpr, uint8_t (&values)[fpec::optionBytesV20x]);
+
 // The operation bits of the stub (register a0)
 inline constexpr uint32_t stubUnlock = 1u << 0;
 inline constexpr uint32_t stubMassErase = 1u << 1;
@@ -133,12 +156,14 @@ class Flash {
    // Erases the main flash (MER) with the own algorithm.
    [[nodiscard]] bool massErase();
    // Writes the option bytes with the RDPR value: unprotected (0xa5) or
-   // protected. USER and DATA keep their values. Unprotect also clears the
-   // write protection (WRPR 0xff), and the chip erases the main flash.
+   // protected. USER and DATA keep their values: from the option byte
+   // area where a byte has its inverse, else from FLASH_OBR and FLASH_WPR
+   // (optionsFromRegisters()). A failed read of the area is no error: a
+   // protected chip can hide it. Unprotect also clears the write
+   // protection (WRPR 0xff), and the chip erases the main flash.
    // Unprotect ends with a reset, so that FLASH_OBR has the new state, as
    // on the WCH-LinkE. Protect takes effect at the next reset.
-   // optionBytes: the option bytes of the chip family (half words).
-   [[nodiscard]] bool setReadProtection(bool protect, std::size_t optionBytes);
+   [[nodiscard]] bool setReadProtection(bool protect, Series series);
 
    // The program sequence with the host stub. beginStub() resets the
    // target and keeps the hart state. stubData() writes the next bytes of
