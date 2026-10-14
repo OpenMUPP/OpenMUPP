@@ -241,6 +241,39 @@ The sequence is the same. The differences:
 - A program of 160 KB takes 15.2 s (about 10.8 KB/s).
 - Erased flash reads as `0xe339e339`, not `0xff`. A `wlink dump` after `wlink erase` showed this. That dump is not in the capture set.
 
+### The stub
+
+A disassembly of the captured stubs shows their interface.
+The three stubs (wlink CH32V003, wlink CH32V208, minichlink CH32V208) use the same interface. `llvm-objdump` disassembles them as RV32 code with the C extension.
+No stub code is copied into this repository.
+
+- The stub is position-independent code, and it is a function without a return: it ends with `ebreak`. The probe thus sets `dcsr.ebreakm`, so that the `ebreak` halts the hart.
+- `a0` holds operation bits. The stub does the operations in this order:
+
+  | Bit | Operation |
+  |---|---|
+  | `0x01` | Unlock: `KEY1` and `KEY2` to `FLASH_KEYR` and to `FLASH_MODEKEYR` |
+  | `0x02` | Mass erase: `MER` and `STRT` in `FLASH_CTLR` |
+  | `0x04` | Fast page erase (`FTER`) of the pages from `a1`, for `a2` bytes |
+  | `0x08` | Fast page program (`FTPG`) of the pages from `a1`, for `a2` bytes, from a RAM buffer. Then a check of `WRPRTERR`. |
+  | `0x10` | Verify: compares the flash words with the buffer, and the sum of the flash words with a checksum word in RAM |
+
+- `a1` is the flash address, `a2` the length in bytes. The page size is in the stub code: 64 bytes (CH32V003) and 256 bytes (CH32V208).
+- The result is in `a0`: `0` for success, `0x08` for a write protection error, `0x10` for a verify error.
+- The stub writes `0xaaaa` to `0x40003000` (`IWDG_CTLR`) in each wait loop: it feeds the watchdog.
+- The stub uses the stack (`sp`): the probe must set it.
+- The addresses of the buffer and the checksum word are fixed in the stub code:
+
+  | Stub | Buffer | Block size | Checksum word |
+  |---|---|---|---|
+  | CH32V003 | `0x20000200` | 1024 bytes | `0x20000610` |
+  | CH32V208 | `0x20001000` | 4096 bytes | `0x20002010` |
+
+  The buffer of the CH32V003 starts directly after the 512 bytes of the stub. Thus the stub is in RAM at `0x20000000`.
+  The checksum word is 16 bytes after the end of the buffer.
+
+The captures do not show which operation bits the probe uses for each command. The wire timing of a flash program is not captured.
+
 ## Erase (`wlink erase`)
 
 `06 01 01`, `06 01 04`, then `02 01 01` (response `02 01 01` after 7.6 ms on the CH32V003 and 138 ms on the CH32V208), then a new connect (`0d 01 02`, 90 ms and 59 ms), then quit.
