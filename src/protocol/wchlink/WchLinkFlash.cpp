@@ -11,7 +11,24 @@ namespace dm = rvswd::dm;
 // dmcontrol: acknowledge havereset
 inline constexpr uint32_t ackhavereset = 1u << 28;
 
+// CSRs and GPRs of the stub call
+inline constexpr uint16_t csrMstatus = 0x0300;
+inline constexpr uint16_t csrDcsr = 0x07b0;
+inline constexpr uint16_t gprSp = dm::gpr0 + 2;
+inline constexpr uint16_t gprA2 = dm::gpr0 + 12;
+// mstatus: machine interrupt enable
+inline constexpr uint32_t mstatusMie = 1u << 3;
+// dcsr: ebreak in machine mode enters debug mode
+inline constexpr uint32_t dcsrEbreakm = 1u << 15;
+
 inline constexpr uint32_t pollCount = Flash::operationTimeoutUs / Flash::pollIntervalUs;
+
+// The padding of a block: erased flash
+inline constexpr uint32_t erasedWord = 0xffff'ffffu;
+
+constexpr uint32_t roundUp(uint32_t value, uint32_t multiple) {
+   return (value + multiple - 1) / multiple * multiple;
+}
 
 bool ok(rvswd::Status status) {
    return status == rvswd::Status::Ok;
@@ -126,6 +143,143 @@ bool Flash::setReadProtection(bool protect, std::size_t optionBytes) {
    done = write(fpec::ctlr, 0) && lockController() && done;
    // Unprotect: the reset loads FLASH_OBR from the new option bytes.
    return done && (protect || resetHalt());
+}
+
+bool Flash::beginStub(const StubLayout &layout) {
+   active_ = false;
+   unlocked_ = false;
+   layout_ = &layout;
+   stubReceived_ = 0;
+   dataLength_ = 0;
+   dataOffset_ = 0;
+   if(!resetHalt() || !ok(target_.readRegister(dm::dpc, savedDpc_)) || !ok(target_.readRegister(csrDcsr, savedDcsr_)) ||
+      !ok(target_.readRegister(csrMstatus, savedMstatus_))) {
+      return false;
+   }
+   // The ebreak at the end of the stub halts the hart. No interrupt runs
+   // code of the target during the stub.
+   active_ = ok(target_.writeRegister(csrDcsr, savedDcsr_ | dcsrEbreakm)) &&
+             ok(target_.writeRegister(csrMstatus, savedMstatus_ & ~mstatusMie));
+   return active_;
+}
+
+bool Flash::stubData(art::span<const uint8_t> data) {
+   for(std::size_t i = 0; i + 4 <= data.size() && stubReceived_ < stubSize; i += 4) {
+      const uint32_t word = data[i] | data[i + 1] << 8 | data[i + 2] << 16 | static_cast<uint32_t>(data[i + 3]) << 24;
+      if(!write(layout_->stubAddress + stubReceived_, word)) {
+         return false;
+      }
+      stubReceived_ += 4;
+   }
+   return true;
+}
+
+bool Flash::runStub(uint32_t operation, uint32_t address, uint32_t length, uint32_t &result) {
+   if(!active_ || !stubComplete() || !ok(target_.writeRegister(dm::a0, operation)) || !ok(target_.writeRegister(dm::a1, address)) ||
+      !ok(target_.writeRegister(gprA2, length)) || !ok(target_.writeRegister(gprSp, layout_->stackTop)) ||
+      !ok(target_.writeRegister(dm::dpc, layout_->stubAddress)) || !ok(target_.resume())) {
+      return false;
+   }
+   bool halted = false;
+   for(uint32_t i = 0; !halted; ++i) {
+      if(i >= pollCount || !ok(target_.halted(halted))) {
+         // The stub hangs: stop it.
+         static_cast<void>(target_.halt());
+         return false;
+      }
+      if(!halted) {
+         platform_.delayUs(pollIntervalUs);
+      }
+   }
+   return ok(target_.readRegister(dm::a0, result));
+}
+
+bool Flash::unlock() {
+   // A second unlock would lock the controller until the next reset.
+   uint32_t result = 0;
+   unlocked_ = unlocked_ || (runStub(stubUnlock, 0, 0, result) && result == 0);
+   return unlocked_;
+}
+
+bool Flash::beginData(uint32_t address, uint32_t length) {
+   dataAddress_ = address;
+   dataLength_ = length;
+   dataOffset_ = 0;
+   blockBytes_ = 0;
+   checksum_ = 0;
+   partWord_ = 0;
+   partBytes_ = 0;
+   blockDone_ = false;
+   return active_ && unlocked_ && length != 0 && address % layout_->pageSize == 0;
+}
+
+bool Flash::bufferWord(uint32_t word) {
+   checksum_ += word;
+   const bool written = write(layout_->bufferAddress + blockBytes_, word);
+   blockBytes_ += 4;
+   return written;
+}
+
+bool Flash::data(art::span<const uint8_t> bytes) {
+   blockDone_ = false;
+   for(const uint8_t byte : bytes) {
+      if(dataOffset_ >= dataLength_) {
+         break;
+      }
+      partWord_ |= static_cast<uint32_t>(byte) << (8 * partBytes_);
+      ++partBytes_;
+      ++dataOffset_;
+      if(partBytes_ == 4 && !bufferWord(partWord_)) {
+         return false;
+      }
+      if(partBytes_ == 4) {
+         partWord_ = 0;
+         partBytes_ = 0;
+      }
+      if(blockBytes_ == layout_->blockSize || dataOffset_ == dataLength_) {
+         if(!flushBlock()) {
+            return false;
+         }
+         blockDone_ = true;
+      }
+   }
+   return true;
+}
+
+bool Flash::flushBlock() {
+   // The rest of the last word, then the rest of the page, as erased flash:
+   // the stub programs whole pages.
+   if(partBytes_ != 0) {
+      const uint32_t word = partWord_ | erasedWord << (8 * partBytes_);
+      partWord_ = 0;
+      partBytes_ = 0;
+      if(!bufferWord(word)) {
+         return false;
+      }
+   }
+   const uint32_t length = roundUp(blockBytes_, layout_->pageSize);
+   while(blockBytes_ < length) {
+      if(!bufferWord(erasedWord)) {
+         return false;
+      }
+   }
+   // The block holds the last byte taken.
+   const uint32_t address = dataAddress_ + (dataOffset_ - 1) / layout_->blockSize * layout_->blockSize;
+   uint32_t result = 0;
+   const bool done = write(layout_->checksumAddress(), checksum_) &&
+                     runStub(stubErasePages | stubProgram | stubVerify, address, length, result) && result == 0;
+   blockBytes_ = 0;
+   checksum_ = 0;
+   return done;
+}
+
+bool Flash::end() {
+   if(!active_) {
+      return true;
+   }
+   active_ = false;
+   return lockController() && ok(target_.writeRegister(dm::dpc, savedDpc_)) &&
+          ok(target_.writeRegister(csrDcsr, savedDcsr_)) && ok(target_.writeRegister(csrMstatus, savedMstatus_));
 }
 
 } // namespace wchlink

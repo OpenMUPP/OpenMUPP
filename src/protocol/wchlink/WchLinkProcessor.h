@@ -9,11 +9,23 @@
 // A request is one packet [0x81][cmd][len][payload]. The response is one
 // packet [0x82][cmd][len][payload] on the command IN endpoint. Commands:
 //
+//   0x01 Set area: [addr u32 BE][length u32 BE] -> [01]. The flash area
+//        of the program sequence.
 //   0x03 Memory read: [addr u32 BE][length u32 BE] -> [01]. Sets the range.
 //   0x02 Program control: [sub] -> [sub]
 //        0c The start of the memory read. The data then goes to the data
 //           IN endpoint (dataPacket()).
 //        01 Mass erase, with the own algorithm (WchLinkFlash.h)
+//        05 Start of the program sequence: a reset that halts the hart.
+//           Then the host sends the stub (512 bytes) on the data OUT
+//           endpoint (submitData()).
+//        07 Runs the stub to unlock the flash controller.
+//        02 Start of the data phase: the image of the area on the data OUT
+//           endpoint. After each block, the acknowledge [41 01 01 04] goes
+//           to the data IN endpoint. A failed block gives [41 01 01 ff]
+//           (not captured), and the module takes no more data.
+//        08 End: locks the flash controller and restores the hart state.
+//        Out of order, or after a failure: the error frame.
 //   0x08 DMI access: [addr][data u32 BE][op] -> [addr][data u32 BE][status]
 //        op 1: read, 2: write, 0: no access. Status 0: success, 2: failure.
 //   0x06 Read protection:
@@ -40,9 +52,8 @@
 // - A packet that is not a request ([0x81][cmd][len]), or a command that is
 //   not in the list, gets the reply of the WCH-LinkE to an unknown command:
 //   [0x82][0x81][01][ff]. The command does nothing. This refuses the
-//   program sequence (0x01, and 0x02 05, 07, 02, 08) for now,
-//   the other sub-commands of 0x02 and 0x06, and the WCH firmware-update
-//   and mode-switch commands of the WCH-LinkE.
+//   other sub-commands of 0x02 and 0x06, and the WCH firmware-update and
+//   mode-switch commands of the WCH-LinkE.
 // - The payload length is not checked, as on the WCH-LinkE. A missing
 //   payload byte reads 0.
 // - Connect: the wire comes from the chip type of the last configure
@@ -69,7 +80,12 @@
 //   host did not take completely. The transport cannot take back a packet
 //   that is on its way to the host. Thus 02 0c gives the error frame while
 //   a packet of the read before waits for the host (dataSent() not called
-//   yet): its data would look like the start of the new read.
+//   yet): its data would look like the start of the new read. A block
+//   acknowledge also waits on the data IN endpoint.
+// - Program sequence: a data packet runs before the next request
+//   (runData()), so that a quit after the data finds the last block
+//   programmed (minichlink sends no 02 08). A quit, a connect or an erase
+//   ends the sequence as 02 08 does. A lost host drops it.
 //
 // The transport calls submit() for a request, when canSubmit() is true.
 // runNext() runs it, in the main loop. One request and one response at a
@@ -107,7 +123,17 @@ inline constexpr uint8_t quit = 0xff;
 
 // The sub-commands of command 0x02
 inline constexpr uint8_t programErase = 0x01;
+inline constexpr uint8_t programData = 0x02;
+inline constexpr uint8_t programStub = 0x05;
+inline constexpr uint8_t programUnlock = 0x07;
+inline constexpr uint8_t programEnd = 0x08;
 inline constexpr uint8_t programReadMemory = 0x0c;
+
+// The block acknowledge on the data IN endpoint: 41 01 01 04. The failure
+// value is not captured.
+inline constexpr uint8_t ackHeader = 0x41;
+inline constexpr uint8_t ackDone = 0x04;
+inline constexpr uint8_t ackFailed = 0xff;
 
 inline constexpr uint8_t requestHeader = 0x81;
 inline constexpr uint8_t responseHeader = 0x82;
@@ -228,13 +254,24 @@ class Processor {
       responseLength_ = 0;
    }
 
-   // Memory read data waits for the data IN endpoint.
+   // Memory read data or a block acknowledge waits for the data IN
+   // endpoint.
    [[nodiscard]] bool hasData() const {
-      return dataRemaining_ != 0;
+      return dataRemaining_ != 0 || ackPending_;
    }
-   // Reads the next packet of the memory read from the target. Valid until
-   // the next call. Empty when no data waits.
+   // The block acknowledge, or the next packet of the memory read from the
+   // target. Valid until the next call. Empty when no data waits.
    art::span<const uint8_t> dataPacket();
+
+   // The program sequence takes a packet of the data OUT endpoint, and none
+   // waits.
+   [[nodiscard]] bool wantsData() const;
+   // Stores a packet of the data OUT endpoint for runData(). Needs
+   // wantsData(). A packet of more than packetSize bytes is cut.
+   void submitData(art::span<const uint8_t> packet);
+   // Writes the stored data packet to the target. Returns false when none
+   // is stored. Call it in the main loop, before runNext().
+   bool runData();
    // The packet of dataPacket() went to the host, or the transport dropped
    // it.
    void dataSent() {
@@ -280,7 +317,13 @@ class Processor {
    void protectionCommand(uint8_t sub);
    void setReadRange(uint32_t address, uint32_t length);
    void programCommand(uint8_t sub);
+   void flashCommand(uint8_t sub);
+   [[nodiscard]] const StubLayout &layout() const;
    [[nodiscard]] std::size_t optionBytes() const;
+   // Ends the program sequence (as 02 08). Returns false when it was not
+   // complete, or a target access failed.
+   bool endProgram();
+   void queueAck(bool done);
    void detach();
 
    Target &target_;
@@ -307,7 +350,27 @@ class Processor {
    bool dataInFlight_{ false };
    std::array<uint8_t, packetSize> data_{};
 
+   // The program sequence
+   enum class Program : uint8_t {
+      Idle,
+      // 02 05: the stub arrives.
+      Stub,
+      // 02 07: the flash controller is unlocked.
+      Unlocked,
+      // 02 02: the image arrives.
+      Data,
+      // A step failed. 02 08 gives the error frame.
+      Failed,
+   };
    Flash flash_;
+   Program program_{ Program::Idle };
+   uint32_t areaAddress_{ 0 };
+   uint32_t areaLength_{ 0 };
+   std::array<uint8_t, packetSize> dataOut_{};
+   std::size_t dataOutLength_{ 0 };
+   bool hasDataOut_{ false };
+   bool ackPending_{ false };
+   uint8_t ackValue_{ ackDone };
 };
 
 } // namespace wchlink

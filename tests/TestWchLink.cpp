@@ -150,7 +150,7 @@ TEST_CASE("WCH-Link: the host reads the descriptors and opens the endpoints") {
       CHECK(controller.isOpen(endpoint));
    }
    CHECK(controller.isArmed(0x01));
-   // The flash data endpoint is not used yet.
+   // The flash data endpoint is armed in the program sequence only.
    CHECK_FALSE(controller.isArmed(0x02));
 }
 
@@ -168,11 +168,9 @@ TEST_CASE("WCH-Link: unknown and refused commands get the unknown-command reply"
    bench.enumerate();
    // v003-raw-errors.pcapng
    CHECK(bench.transact(request(0x7f, { 0x00 })) == unknownReply);
-   // The program sequence: set area and the program sub-commands. Sub-commands
-   // of 0x02 and 0x06 that are not captured.
-   CHECK(bench.transact(request(0x01, { 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00 })) == unknownReply);
+   // Sub-commands of 0x02 and 0x06 that are not captured
    CHECK(bench.transact(request(0x06, { 0x05 })) == unknownReply);
-   for(const uint8_t sub : { 0x02, 0x03, 0x05, 0x06, 0x07, 0x08, 0x0d }) {
+   for(const uint8_t sub : { 0x03, 0x06, 0x0d }) {
       CHECK(bench.transact(request(0x02, { sub })) == unknownReply);
    }
    // Other command numbers, for example firmware update or mode switch

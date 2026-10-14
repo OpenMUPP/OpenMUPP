@@ -11,15 +11,18 @@
 //   the response is sent: one request at a time. An empty packet (a ZLP) is
 //   ignored.
 // - Command IN 0x81: each response is one IN packet, without a ZLP.
-// - Data IN 0x82: the data of a memory read, in packets of 64 bytes. The
-//   last packet can be shorter. No ZLP: the host reads the length that it
-//   asked for.
-// - Data OUT 0x02: the flash data (W5). The function does not arm it, so a
-//   host that sends data gets a NAK until its timeout.
+// - Data IN 0x82: the data of a memory read, in packets of 64 bytes, and
+//   the block acknowledge of the program sequence. The last packet can be
+//   shorter. No ZLP: the host reads the length that it asked for.
+// - Data OUT 0x02: the stub and the image of the program sequence. The
+//   function arms it only while the processor takes data
+//   (wchlink::Processor::wantsData()), and again after each packet is
+//   written. Else a host that sends data gets a NAK until its timeout.
 //
-// poll() runs the request in the main loop (wchlink::Processor::runNext()),
-// outside the delivery of the OUT packet, and reads the next data packet
-// from the target when the data IN endpoint is free.
+// poll() runs a data packet (wchlink::Processor::runData()) or the request
+// (wchlink::Processor::runNext()) in the main loop, outside the delivery of
+// the OUT packet. The data packet comes first. poll() reads the next data
+// packet from the target when the data IN endpoint is free.
 //
 // When the host closes the interface (bus reset or deconfigure), the
 // function calls Processor::hostGone(). A suspend only releases the target
@@ -73,6 +76,7 @@ class WchLinkFunction final : public art::usb::Function {
    };
 
    void armCommand();
+   void armData();
    void sendResponse();
    void sendData();
    // Starts the packet on the endpoint. Returns false when the controller
@@ -84,6 +88,7 @@ class WchLinkFunction final : public art::usb::Function {
    bool configured_{ false };
    bool suspended_{ false };
    bool commandArmed_{ false };
+   bool dataArmed_{ false };
    InPacket response_;
    InPacket data_;
    uint32_t commandCount_{ 0 };

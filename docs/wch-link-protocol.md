@@ -509,7 +509,9 @@ The personality is not in a firmware image yet. Work item #70 adds the build opt
 - The default USB ID is `1209:0001`, the test ID of pid.codes. It stays until the project has its own product ID.
   The build define `VSL_WCH_LINK_WCH_USB_ID` selects `1a86:8010`. Use this ID only for personal use, because the vendor ID belongs to WCH.
 - The function takes one request at a time. The command OUT endpoint gets a NAK until the host reads the response.
-- The function does not arm the data OUT endpoint `0x02`. The flash commands come with work item #69.
+- The function arms the data OUT endpoint `0x02` only while the processor takes data: in the stub phase and in the data phase of a program sequence (see [Flash](#flash)).
+  A packet is written to the target before the next request runs. Thus a quit directly after the data (minichlink) finds the last block programmed.
+  The endpoint cannot be disarmed. When a sequence ends while it is armed, the function drops the next packet.
 
 ### Commands
 
@@ -526,13 +528,15 @@ The personality is not in a firmware image yet. Work item #70 adds the build opt
 | `11` | Reads the four words at the command, and adds the chip ID of the connect |
 | `06 01` | Protection query. Reads `0x4002201c` (`FLASH_OBR`) and `0x40022020` at the command. Replies `01` when `RDPRT` (bit 1 of `FLASH_OBR`) is 1, else `02`. |
 | `0b 01` | Writes `dmcontrol` `00000003` (`ndmreset`), waits 1 ms, writes `00000001`, then `10000001` (`ackhavereset`). The hart runs after the reset. |
+| `01` | Keeps the flash area (address and length) for the program sequence. Replies `01`. |
 | `02 01` | Mass erase with the own algorithm (see [Flash](#flash)) |
+| `02 05`, `02 07`, `02 02`, `02 08` | The program sequence with the host stub (see [Flash](#flash)) |
 | `06 02`, `06 03` | Unprotect and protect with the own algorithm (see [Flash](#flash)). Reply `02` and `03`. |
 | `06 04` | Replies `00`. No target access. |
 | `0e` | Not captured. The processor does the quit and echoes the sub-command. Before a connect, it only echoes. |
 
 All other commands get the reply of the WCH-LinkE to an unknown command: `82 81 01 ff`.
-The processor does nothing for them. This includes the program sequence (`01`, and `02` with `05`, `07`, `02`, `08`) for now, and the other sub-commands of `02` and `06`.
+The processor does nothing for them. This includes the other sub-commands of `02` and `06`, for example a verify sub-command.
 It also includes the firmware-update and the mode-switch commands of the WCH-LinkE. The captures do not show these commands.
 
 The `0d` sub-commands other than `01`, `02`, `03`, `04` and `ff` also get this reply.
@@ -607,6 +611,17 @@ The WCH-LinkE sets a clock of its own at the connect of a CH32V208 (see [Probe a
 The CH32V20x manual asks for a system clock of 120 MHz or less for flash operations. A target program can set 144 MHz.
 minichlink also resets with `haltreq` before its program sequence.
 
+The processor selects the RAM layout from the family code of the connect: `09` gives the CH32V00x layout, `05` the CH32V20x layout.
+
+| Item | CH32V00x | CH32V20x |
+|---|---|---|
+| Stub address | `0x20000000` | `0x20000000` |
+| Buffer, block size | `0x20000200`, 1024 bytes | `0x20001000`, 4096 bytes |
+| Checksum word | `0x20000610` | `0x20002010` |
+| Page size | 64 bytes | 256 bytes |
+| Stack pointer | `0x20000800` (end of 2 KB RAM) | `0x20002800` (end of 10 KB RAM, the smallest CH32V20x) |
+| Option bytes (half words) | 6 | 8 |
+
 #### Own algorithm
 
 The commands without a stub use the flash controller registers directly, with DMI memory accesses:
@@ -624,7 +639,32 @@ The commands without a stub use the flash controller registers directly, with DM
     After a protect, a query still gives `02` until the next reset (`v208-wlink-protect.pcapng`). The module does not reset.
 
 On one wire, a 16-bit write uses the program of [Program buffer programs](#program-buffer-programs).
-The CH32V00x has 6 option bytes (half words), the CH32V20x has 8. The family code of the connect selects the number.
+
+#### Program sequence
+
+The host sends the stub of its chip (see [The stub](#the-stub)). The processor runs it:
+
+| Request | Action |
+|---|---|
+| `01 addr len` | Keeps the area. |
+| `02 05` | Reset. Reads `dpc`, `dcsr` and `mstatus`. Sets `dcsr.ebreakm` and clears `mstatus.MIE`. Arms the data OUT endpoint for the stub. |
+| Stub, 512 bytes | Written to RAM at the stub address, one word for each 4 bytes, in file order (little-endian). |
+| `02 07` | Calls the stub with `a0` = `01` (unlock). Only one time in each sequence: a second unlock would lock the controller. |
+| `02 02` | Starts the data phase. The area address must be a multiple of the page size. |
+| Image | Written to the buffer. When a block is full, or at the end of the area, the processor writes the checksum word and calls the stub with `a0` = `1c` (page erase, program, verify), `a1` = the block address, `a2` = the block length. Then it sends `41 01 01 04` on the data IN endpoint. |
+| `02 08` | Locks the controller (`LOCK` and `FLOCK` in `FLASH_CTLR`). Writes `dpc`, `dcsr` and `mstatus` back. Replies `08` if the image was complete. |
+
+A stub call writes `a0`, `a1`, `a2`, `sp` and `dpc` with abstract register writes and resumes the hart.
+The processor then reads `dmstatus` each 1 ms until the hart halts, for 3 s at most. Then it reads the result in `a0`.
+If the hart does not halt, the processor halts it, and the call fails.
+
+- A short last block is filled with `0xff` to the end of its page, because the stub programs whole pages. The stub call gets the length to the end of the page.
+  A length that is not a multiple of 4 fills the last word with `0xff` too.
+- The image goes to the stub in the bytes of the area only. Bytes after the end of the area are ignored.
+- A failed block gives `41 01 01 ff`. The failure value is not captured. The processor then takes no more data, and `02 08` gives the error frame.
+- A request out of order gives the error frame. Before a connect, all flash commands give the error frame.
+- A quit, a connect, an erase or a protection command ends a sequence as `02 08` does. A quit then resumes the hart at the reset vector, because `dpc` is the value after the reset.
+- minichlink does not read the block acknowledge. The acknowledge waits on the data IN endpoint until the host reads it, as the packets of a memory read do.
 
 ### Speed
 
@@ -640,10 +680,13 @@ A real target must confirm these items (work item #71):
 - The reset sequence. The WCH-LinkE reset is not captured on the wire.
 - The DMI reads at 907 kHz on two wires.
 - wlink and minichlink with the WCH ID build.
-- The flash commands on a CH32V003 and a CH32V208: `wlink erase`, `wlink protect` and `wlink unprotect`.
+- The flash commands on a CH32V003 and a CH32V208: `wlink erase`, `wlink flash`, `wlink protect` and `wlink unprotect`, and the minichlink write.
+  - The stub interface: the stub address `0x20000000`, the stack pointers, the operation bits `1c` for each block, and the checksum word.
+  - The verify of `0xff` words on the CH32V208, where erased flash reads `0xe339e339`.
   - The reset with `haltreq` before each flash command, on one wire and on two wires.
   - The reload of `FLASH_OBR` by the reset after an unprotect, and the read of the option bytes on a protected chip.
   - The 16-bit write of the option bytes on one wire.
+  - The time of a program of the full flash, against the WCH-LinkE (3.5 s and 15.2 s).
 
 ## Byte order
 
@@ -887,7 +930,8 @@ The table lists the questions of epic #63 and their state.
 |---|---|
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). minichlink does not send `08`. |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
-| Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. Erase, protect and unprotect use no stub: the probe holds that algorithm. |
+| Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. The interface of the stub comes from a disassembly (see [The stub](#the-stub)). Erase, protect and unprotect use no stub: the probe holds that algorithm. |
+| Operation bits of the probe for each stub call | **Open.** The personality uses its own sequence (see [Flash](#flash)). |
 | Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: the response and parity bits on the one-wire line, and the timing of a flash program. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |

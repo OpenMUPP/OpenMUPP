@@ -22,9 +22,13 @@ using Bytes = std::vector<uint8_t>;
 namespace dm = rvswd::dm;
 
 constexpr uint32_t v208ChipId = 0x2080'053c;
+constexpr uint8_t dataOut = 0x02;
+constexpr uint8_t dataIn = 0x82;
 
 const Bytes errorFrame{ 0x81, 0x55, 0x01, 0x01 };
 const Bytes unknownReply{ 0x82, 0x81, 0x01, 0xff };
+const Bytes blockAck{ 0x41, 0x01, 0x01, 0x04 };
+const Bytes blockFailed{ 0x41, 0x01, 0x01, 0xff };
 
 Bytes request(uint8_t cmd, const Bytes &payload) {
    Bytes packet{ 0x81, cmd, static_cast<uint8_t>(payload.size()) };
@@ -34,6 +38,13 @@ Bytes request(uint8_t cmd, const Bytes &payload) {
 
 Bytes reply(uint8_t cmd, uint8_t value) {
    return { 0x82, cmd, 0x01, value };
+}
+
+Bytes u32(uint32_t address, uint32_t length) {
+   return { static_cast<uint8_t>(address >> 24), static_cast<uint8_t>(address >> 16),
+            static_cast<uint8_t>(address >> 8),  static_cast<uint8_t>(address),
+            static_cast<uint8_t>(length >> 24),  static_cast<uint8_t>(length >> 16),
+            static_cast<uint8_t>(length >> 8),   static_cast<uint8_t>(length) };
 }
 
 // A pattern that is not erased flash
@@ -62,6 +73,49 @@ struct FlashBench {
       bench.dm.csrs[dm::dpc] = 0x0800'0123;
       bench.dm.csrs[0x300] = 0x0000'1888;
       bench.pins.accesses.clear();
+   }
+
+   [[nodiscard]] const wchlink::StubLayout &layout() const {
+      return wire == Wire::One ? wchlink::layoutV00x : wchlink::layoutV20x;
+   }
+
+   // The host sends bytes on the data OUT endpoint in packets of 64 bytes.
+   // Returns false when a packet got a NAK.
+   bool send(const Bytes &bytes) {
+      for(std::size_t offset = 0; offset < bytes.size(); offset += 64) {
+         const std::size_t size = std::min<std::size_t>(64, bytes.size() - offset);
+         if(!bench.controller().sendOut(dataOut, art::span<const uint8_t>(bytes.data() + offset, size))) {
+            return false;
+         }
+         bench.mainLoop();
+      }
+      return true;
+   }
+
+   std::optional<Bytes> ack() {
+      return bench.readData();
+   }
+
+   // 01, 02 05, the stub, 02 07, 02 02 (v003-wlink-flash.pcapng)
+   void start(uint32_t address, uint32_t length) {
+      flash.stub = pattern(wchlink::stubSize, 0x13);
+      REQUIRE(bench.transact(request(0x01, u32(address, length))) == reply(0x01, 0x01));
+      REQUIRE(bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+      REQUIRE(send(flash.stub));
+      REQUIRE(bench.transact(request(0x02, { 0x07 })) == reply(0x02, 0x07));
+      REQUIRE(bench.transact(request(0x02, { 0x02 })) == reply(0x02, 0x02));
+   }
+
+   // The image in blocks, with the acknowledge after each block, as wlink.
+   void program(const Bytes &image) {
+      const std::size_t block = layout().blockSize;
+      for(std::size_t offset = 0; offset < image.size(); offset += block) {
+         const std::size_t size = std::min(block, image.size() - offset);
+         CAPTURE(offset);
+         REQUIRE(send(Bytes(image.begin() + static_cast<std::ptrdiff_t>(offset),
+                            image.begin() + static_cast<std::ptrdiff_t>(offset + size))));
+         CHECK(ack() == blockAck);
+      }
    }
 
    void checkClean() {
@@ -196,4 +250,223 @@ TEST_CASE("WCH-Link flash: other sub-commands get the unknown-command reply") {
       CHECK(fb.bench.transact(request(0x06, { sub })) == unknownReply);
    }
    CHECK(fb.bench.pins.accesses.empty());
+}
+
+TEST_CASE("WCH-Link flash: program sequence of wlink with the host stub") {
+   for(const auto wire : { Wire::One, Wire::Two }) {
+      const int wireIndex = static_cast<int>(wire);
+      CAPTURE(wireIndex);
+      FlashBench fb(wire);
+      auto &controller = fb.bench.controller();
+      const auto &layout = fb.layout();
+      // Three blocks, the flash had other data.
+      const Bytes image = pattern(3 * layout.blockSize, 0x42);
+      fb.flash.fill(MockWchFlash::flashBase, pattern(layout.blockSize, 0x99));
+      CHECK_FALSE(controller.isArmed(dataOut));
+
+      // v003-wlink-flash.pcapng
+      fb.flash.stub = pattern(wchlink::stubSize, 0x13);
+      CHECK(fb.bench.transact(request(0x01, u32(0x0800'0000, static_cast<uint32_t>(image.size())))) == reply(0x01, 0x01));
+      CHECK(fb.bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+      CHECK(fb.bench.dm.systemResets == 1);
+      CHECK(controller.isArmed(dataOut));
+      REQUIRE(fb.send(fb.flash.stub));
+      // The stub is complete: no more data until 02 02.
+      CHECK_FALSE(controller.isArmed(dataOut));
+      CHECK(fb.bench.transact(request(0x02, { 0x07 })) == reply(0x02, 0x07));
+      CHECK_FALSE(fb.flash.locked);
+      CHECK_FALSE(fb.flash.flocked);
+      CHECK(fb.bench.transact(request(0x02, { 0x02 })) == reply(0x02, 0x02));
+      CHECK(controller.isArmed(dataOut));
+      fb.program(image);
+      CHECK_FALSE(controller.isArmed(dataOut));
+      CHECK(fb.bench.transact(request(0x02, { 0x08 })) == reply(0x02, 0x08));
+
+      for(std::size_t i = 0; i < image.size(); i += 4) {
+         CAPTURE(i);
+         const uint32_t expected = image[i] | image[i + 1] << 8 | image[i + 2] << 16 | static_cast<uint32_t>(image[i + 3]) << 24;
+         REQUIRE(fb.flash.word(MockWchFlash::flashBase + static_cast<uint32_t>(i)) == expected);
+      }
+      // One unlock, then one call for each block: erase, program, verify
+      REQUIRE(fb.flash.calls.size() == 4);
+      CHECK(fb.flash.calls[0].operation == wchlink::stubUnlock);
+      for(uint32_t block = 0; block < 3; ++block) {
+         const auto &call = fb.flash.calls[block + 1];
+         CHECK(call.operation == (wchlink::stubErasePages | wchlink::stubProgram | wchlink::stubVerify));
+         CHECK(call.address == 0x0800'0000 + block * layout.blockSize);
+         CHECK(call.length == layout.blockSize);
+      }
+      // Locked, and the hart state of the reset is back.
+      CHECK(fb.flash.locked);
+      CHECK(fb.flash.flocked);
+      CHECK(fb.bench.dm.csrs[dm::dpc] == 0x0800'0123);
+      CHECK(fb.bench.dm.csrs[0x300] == 0x0000'1888);
+      CHECK(fb.bench.dm.halted);
+      // wlink then resets and quits.
+      CHECK(fb.bench.transact(request(0x0b, { 0x01 })) == reply(0x0b, 0x01));
+      CHECK(fb.bench.transact(request(0x0d, { 0xff })) == reply(0x0d, 0xff));
+      fb.checkClean();
+   }
+}
+
+TEST_CASE("WCH-Link flash: the last block can be short, with an odd length") {
+   for(const auto wire : { Wire::One, Wire::Two }) {
+      const int wireIndex = static_cast<int>(wire);
+      CAPTURE(wireIndex);
+      FlashBench fb(wire);
+      const auto &layout = fb.layout();
+      const uint32_t base = 0x0800'0000 + 2 * layout.pageSize;
+      const Bytes image = pattern(layout.blockSize + layout.pageSize + 5, 0x21);
+      // The rest of the last page had other data.
+      fb.flash.fill(base, pattern(2 * layout.blockSize, 0x77));
+      fb.start(base, static_cast<uint32_t>(image.size()));
+      // The bytes after the area are ignored.
+      Bytes sent = image;
+      sent.resize(image.size() + 3, 0x00);
+      fb.program(sent);
+      CHECK(fb.bench.transact(request(0x02, { 0x08 })) == reply(0x02, 0x08));
+
+      REQUIRE(fb.flash.calls.size() == 3);
+      CHECK(fb.flash.calls[2].address == base + layout.blockSize);
+      // Two pages
+      CHECK(fb.flash.calls[2].length == 2 * layout.pageSize);
+      for(std::size_t i = 0; i < image.size(); ++i) {
+         CAPTURE(i);
+         REQUIRE(fb.flash.flash[base - MockWchFlash::flashBase + i] == image[i]);
+      }
+      // The rest of the last page is erased flash.
+      for(std::size_t i = image.size(); i < layout.blockSize + 2 * layout.pageSize; ++i) {
+         CAPTURE(i);
+         REQUIRE(fb.flash.flash[base - MockWchFlash::flashBase + i] == 0xff);
+      }
+      fb.checkClean();
+   }
+}
+
+TEST_CASE("WCH-Link flash: minichlink sends 256-byte transfers, reads no acknowledge, and quits") {
+   // v208-mc-write.pcapng: one block of 4 KB, no 02 08
+   FlashBench fb(Wire::Two);
+   const Bytes image = pattern(4096, 0x5a);
+   // minichlink resets with haltreq before the transfer.
+   REQUIRE(fb.bench.transact(request(0x08, { 0x10, 0x80, 0x00, 0x00, 0x03, 0x02 })).back() == 0x00);
+   REQUIRE(fb.bench.transact(request(0x08, { 0x10, 0x80, 0x00, 0x00, 0x01, 0x02 })).back() == 0x00);
+   fb.start(0x0800'0000, 4096);
+   REQUIRE(fb.send(image));
+   // The host sends the quit at once. The block is written first.
+   CHECK(fb.bench.transact(request(0x0d, { 0xff })) == reply(0x0d, 0xff));
+   CHECK(fb.flash.word(0x0800'0000) == static_cast<uint32_t>(image[0] | image[1] << 8 | image[2] << 16 | image[3] << 24));
+   CHECK(fb.flash.calls.size() == 2);
+   // The quit ended the sequence: locked, and the hart runs from the reset
+   // state.
+   CHECK(fb.flash.locked);
+   CHECK(fb.bench.dm.csrs[dm::dpc] == 0x0800'0123);
+   CHECK_FALSE(fb.bench.dm.halted);
+   CHECK_FALSE(fb.bench.processor.connected());
+   fb.checkClean();
+}
+
+TEST_CASE("WCH-Link flash: the program sequence in the wrong order gives the error frame") {
+   FlashBench fb(Wire::Two);
+   fb.flash.stub = pattern(wchlink::stubSize, 0x13);
+   CHECK(fb.bench.transact(request(0x01, u32(0x0800'0000, 0x1000))) == reply(0x01, 0x01));
+   // No sequence
+   CHECK(fb.bench.transact(request(0x02, { 0x07 })) == errorFrame);
+   CHECK(fb.bench.transact(request(0x02, { 0x02 })) == errorFrame);
+   CHECK(fb.bench.transact(request(0x02, { 0x08 })) == errorFrame);
+   CHECK_FALSE(fb.bench.controller().isArmed(dataOut));
+   CHECK(fb.bench.pins.accesses.empty());
+
+   SUBCASE("Unlock before the stub is complete") {
+      CHECK(fb.bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+      REQUIRE(fb.send(Bytes(fb.flash.stub.begin(), fb.flash.stub.begin() + 256)));
+      CHECK(fb.bench.transact(request(0x02, { 0x07 })) == errorFrame);
+      CHECK(fb.flash.calls.empty());
+      CHECK(fb.bench.transact(request(0x02, { 0x08 })) == errorFrame);
+   }
+   SUBCASE("Data before the unlock") {
+      CHECK(fb.bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+      REQUIRE(fb.send(fb.flash.stub));
+      CHECK(fb.bench.transact(request(0x02, { 0x02 })) == errorFrame);
+   }
+   SUBCASE("A second unlock") {
+      CHECK(fb.bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+      REQUIRE(fb.send(fb.flash.stub));
+      CHECK(fb.bench.transact(request(0x02, { 0x07 })) == reply(0x02, 0x07));
+      CHECK(fb.bench.transact(request(0x02, { 0x07 })) == errorFrame);
+   }
+   SUBCASE("End before all data") {
+      fb.start(0x0800'0000, 0x1000);
+      REQUIRE(fb.send(pattern(64, 1)));
+      CHECK(fb.bench.transact(request(0x02, { 0x08 })) == errorFrame);
+      CHECK(fb.flash.locked);
+   }
+   SUBCASE("An area that does not start at a page") {
+      CHECK(fb.bench.transact(request(0x01, u32(0x0800'0080, 0x1000))) == reply(0x01, 0x01));
+      CHECK(fb.bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+      REQUIRE(fb.send(fb.flash.stub));
+      CHECK(fb.bench.transact(request(0x02, { 0x07 })) == reply(0x02, 0x07));
+      CHECK(fb.bench.transact(request(0x02, { 0x02 })) == errorFrame);
+   }
+   CHECK_FALSE(fb.bench.processor.wantsData());
+   // An armed endpoint stays armed. Its next packet is dropped.
+   if(fb.bench.controller().isArmed(dataOut)) {
+      CHECK(fb.send(pattern(64, 0)));
+   }
+   CHECK_FALSE(fb.bench.controller().isArmed(dataOut));
+   fb.checkClean();
+}
+
+TEST_CASE("WCH-Link flash: the program sequence needs a connect") {
+   WchLinkBench bench(Wire::Two);
+   bench.enumerate();
+   for(const uint8_t sub : { 0x05, 0x07, 0x02, 0x08 }) {
+      CHECK(bench.transact(request(0x02, { sub })) == errorFrame);
+   }
+   CHECK_FALSE(bench.controller().isArmed(dataOut));
+   CHECK(bench.pins.accesses.empty());
+}
+
+TEST_CASE("WCH-Link flash: a failed block gives a failed acknowledge and ends the data") {
+   FlashBench fb(Wire::Two);
+   fb.start(0x0800'0000, 3 * 4096);
+   SUBCASE("Verify error") {
+      fb.flash.corruptNextProgram = true;
+   }
+   SUBCASE("The stub does not reach its ebreak") {
+      fb.flash.stubHangs = true;
+   }
+   REQUIRE(fb.send(pattern(4096, 3)));
+   CHECK(fb.ack() == blockFailed);
+   CHECK_FALSE(fb.bench.controller().isArmed(dataOut));
+   // A hung stub is halted again.
+   CHECK(fb.bench.dm.halted);
+   CHECK(fb.bench.transact(request(0x02, { 0x08 })) == errorFrame);
+   CHECK(fb.flash.locked);
+   // A new sequence works.
+   fb.flash.stubHangs = false;
+   fb.flash.calls.clear();
+   fb.start(0x0800'0000, 4096);
+   fb.program(pattern(4096, 4));
+   CHECK(fb.bench.transact(request(0x02, { 0x08 })) == reply(0x02, 0x08));
+}
+
+TEST_CASE("WCH-Link flash: a stub that differs from the host stub never halts") {
+   // The model checks the stub bytes in RAM: a wrong word order would fail.
+   FlashBench fb(Wire::One);
+   fb.flash.stub = pattern(wchlink::stubSize, 0x13);
+   CHECK(fb.bench.transact(request(0x01, u32(0x0800'0000, 1024))) == reply(0x01, 0x01));
+   CHECK(fb.bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+   Bytes other = fb.flash.stub;
+   other[100] ^= 0xff;
+   REQUIRE(fb.send(other));
+   CHECK(fb.bench.transact(request(0x02, { 0x07 })) == errorFrame);
+   CHECK(fb.flash.errors.size() == 1);
+}
+
+TEST_CASE("WCH-Link flash: a bus reset drops the program sequence") {
+   FlashBench fb(Wire::Two);
+   fb.start(0x0800'0000, 4096);
+   fb.bench.enumerate();
+   CHECK_FALSE(fb.bench.controller().isArmed(dataOut));
+   CHECK_FALSE(fb.bench.processor.wantsData());
 }
