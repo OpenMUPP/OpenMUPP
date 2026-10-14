@@ -57,7 +57,8 @@ inline constexpr uint32_t ackhavereset = 1u << 28;
 
 Processor::Processor(Target &target, Platform &platform)
    : target_(target)
-   , platform_(platform) {
+   , platform_(platform)
+   , flash_(target, platform) {
 }
 
 void Processor::submit(art::span<const uint8_t> request) {
@@ -109,6 +110,11 @@ void Processor::execute(art::span<const uint8_t> request) {
       setReadRange(address, in.u32());
       break;
    }
+   case command::setArea:
+      areaAddress_ = in.u32();
+      areaLength_ = in.u32();
+      replyByte(cmd, 1);
+      break;
    case command::program:
       programCommand(in.u8());
       break;
@@ -187,6 +193,9 @@ void Processor::controlCommand(uint8_t sub) {
 
 bool Processor::connect() {
    dataRemaining_ = 0;
+   if(connected_) {
+      endProgram();
+   }
    detach();
    // One wire first: its frames change SWDIO only while SWCLK is low, so a
    // two-wire target sees no start or stop condition in them. The frames of
@@ -239,6 +248,7 @@ void Processor::quit() {
    if(!connected_) {
       return;
    }
+   endProgram();
    restore();
    detach();
 }
@@ -251,6 +261,12 @@ void Processor::restore() {
 }
 
 void Processor::detach() {
+   program_ = Program::Idle;
+   flash_.drop();
+   hasDataOut_ = false;
+   // An acknowledge that the host did not read (minichlink) must not come
+   // before the data of a later memory read.
+   ackPending_ = false;
    if(connected_) {
       target_.detach();
       connected_ = false;
@@ -323,8 +339,20 @@ void Processor::chipInfoCommand() {
 }
 
 void Processor::protectionCommand(uint8_t sub) {
+   if(sub == protectionUnknown4) {
+      replyByte(command::protection, protectionUnknown4Reply);
+      return;
+   }
+   if(sub == protectionClear || sub == protectionSet) {
+      endProgram();
+      if(!connected_ || !flash_.setReadProtection(sub == protectionSet, series())) {
+         replyError();
+         return;
+      }
+      replyByte(command::protection, sub);
+      return;
+   }
    if(sub != protectionQuery) {
-      // Unprotect, protect and 04 (W5)
       replyUnknown();
       return;
    }
@@ -347,8 +375,7 @@ void Processor::setReadRange(uint32_t address, uint32_t length) {
 
 void Processor::programCommand(uint8_t sub) {
    if(sub != programReadMemory) {
-      // The flash sub-commands (W5)
-      replyUnknown();
+      flashCommand(sub);
       return;
    }
    if(!connected_ || dataInFlight_) {
@@ -361,7 +388,115 @@ void Processor::programCommand(uint8_t sub) {
    replyByte(command::program, sub);
 }
 
+void Processor::flashCommand(uint8_t sub) {
+   if(sub != programErase && sub != programStub && sub != programUnlock && sub != programData && sub != programEnd) {
+      replyUnknown();
+      return;
+   }
+   if(!connected_) {
+      replyError();
+      return;
+   }
+   bool done = false;
+   switch(sub) {
+   case programErase:
+      endProgram();
+      done = flash_.massErase();
+      break;
+   case programStub:
+      endProgram();
+      done = flash_.beginStub(layout());
+      program_ = done ? Program::Stub : Program::Idle;
+      break;
+   case programUnlock:
+      done = program_ == Program::Stub && flash_.stubComplete() && flash_.unlock();
+      if(program_ == Program::Stub) {
+         program_ = done ? Program::Unlocked : Program::Failed;
+      }
+      break;
+   case programData:
+      done = program_ == Program::Unlocked && flash_.beginData(areaAddress_, areaLength_);
+      if(program_ == Program::Unlocked) {
+         program_ = done ? Program::Data : Program::Failed;
+      }
+      break;
+   default:
+      // programEnd
+      done = flash_.active() && endProgram();
+      break;
+   }
+   if(done) {
+      replyByte(command::program, sub);
+   } else {
+      replyError();
+   }
+}
+
+const StubLayout &Processor::layout() const {
+   return familyOf(chipId_) == familyV00x ? layoutV00x : layoutV20x;
+}
+
+Series Processor::series() const {
+   return familyOf(chipId_) == familyV00x ? Series::V00x : Series::V20x;
+}
+
+bool Processor::endProgram() {
+   const bool complete = program_ == Program::Data && flash_.dataComplete();
+   program_ = Program::Idle;
+   hasDataOut_ = false;
+   return flash_.end() && complete;
+}
+
+bool Processor::wantsData() const {
+   if(hasDataOut_) {
+      return false;
+   }
+   // After the end of the area, the data phase takes packets and drops
+   // them: a host can send more bytes than the area (padding), and a NAK
+   // would make it wait for its timeout.
+   return (program_ == Program::Stub && !flash_.stubComplete()) || program_ == Program::Data;
+}
+
+void Processor::submitData(art::span<const uint8_t> packet) {
+   dataOutLength_ = std::min(packet.size(), dataOut_.size());
+   std::copy_n(packet.begin(), dataOutLength_, dataOut_.begin());
+   hasDataOut_ = true;
+}
+
+bool Processor::runData() {
+   if(!hasDataOut_) {
+      return false;
+   }
+   hasDataOut_ = false;
+   const art::span<const uint8_t> packet{ dataOut_.data(), dataOutLength_ };
+   if(program_ == Program::Stub && !flash_.stubData(packet)) {
+      program_ = Program::Failed;
+   } else if(program_ == Program::Data) {
+      if(!flash_.data(packet)) {
+         program_ = Program::Failed;
+         queueAck(false);
+      } else if(flash_.blockDone()) {
+         queueAck(true);
+      }
+   }
+   return true;
+}
+
+void Processor::queueAck(bool done) {
+   ackPending_ = true;
+   ackValue_ = done ? ackDone : ackFailed;
+}
+
 art::span<const uint8_t> Processor::dataPacket() {
+   if(ackPending_) {
+      ackPending_ = false;
+      data_[0] = ackHeader;
+      data_[1] = 0x01;
+      data_[2] = 0x01;
+      data_[3] = ackValue_;
+      dataInFlight_ = true;
+      return { data_.data(), 4 };
+   }
    const std::size_t count = std::min<std::size_t>(dataRemaining_, data_.size());
    for(std::size_t offset = 0; offset < count; offset += 4) {
       uint32_t value = 0xffff'ffffu;
@@ -382,6 +517,7 @@ art::span<const uint8_t> Processor::dataPacket() {
 void Processor::hostGone() {
    dataRemaining_ = 0;
    dataInFlight_ = false;
+   ackPending_ = false;
    hasRequest_ = false;
    responseLength_ = 0;
    detach();

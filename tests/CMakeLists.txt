@@ -60,11 +60,13 @@ add_executable(vsl-tests
         TestCmsisDap.cpp
         TestCmsisDapJtag.cpp
         TestWchLink.cpp
+        TestWchLinkFlash.cpp
         TestPowerBlock.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
         ../src/protocol/cmsisdap/DapProcessor.cpp
+        ../src/protocol/wchlink/WchLinkFlash.cpp
         ../src/protocol/wchlink/WchLinkProcessor.cpp
         ../src/protocol/GpioBlock.cpp
         ../src/protocol/JtagRawBlock.cpp

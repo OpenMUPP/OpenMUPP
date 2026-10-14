@@ -14,20 +14,25 @@
 //   memory (8, 16, 32 bits). Both need a halted hart, else cmderr 4.
 // - The program buffer runs on a small RV32EC interpreter. It has the
 //   instructions of the programs of the module only: csrrw, csrrs, lui,
-//   lw, sw, c.lw, c.sw, c.ebreak. data0 and data1 are in memory at
+//   lw, sw, sh, c.lw, c.sw, c.ebreak. data0 and data1 are in memory at
 //   0xe00000f4 and 0xe00000f8, as on the CH32V003. Another instruction,
 //   or a program without ebreak, gives cmderr 3 (exception).
 // - A memory access at a misaligned address or at an address of
-//   faultAddresses faults. In the program buffer, the program stops at
+//   faultAddresses faults, and a load at an address of faultLoadAddresses. In the program buffer, the program stops at
 //   the faulting instruction with cmderr 3, and the registers keep the
 //   values of the instructions before it, as on a real hart. The abstract
 //   memory command gives cmderr 5 (bus error).
 // - resumereq clears resumeack, and resumes a halted hart only (debug
-//   spec 0.13). A halted hart then sets resumeack.
+//   spec 0.13). A halted hart then sets resumeack, and onResume runs: it
+//   can model code that the hart runs, and halt the hart again.
+// - ndmreset 1 calls onSystemReset. With haltreq, the hart halts.
+// - onLoad and onStore model memory-mapped registers (see MockWchFlash.h).
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -67,9 +72,20 @@ class MockDebugModule {
    std::map<uint32_t, uint8_t> memory;
    // An access that touches one of these addresses faults.
    std::set<uint32_t> faultAddresses;
+   // A load that touches one of these addresses faults. Stores work.
+   std::set<uint32_t> faultLoadAddresses;
    // The commands that started
    std::vector<uint32_t> commands;
    int programRuns{ 0 };
+   int resumes{ 0 };
+   int systemResets{ 0 };
+
+   // A register value for a load, or no value for memory
+   std::function<std::optional<uint32_t>(uint32_t address, uint32_t bytes)> onLoad;
+   // Returns true when it took the store, false for memory.
+   std::function<bool(uint32_t address, uint32_t value, uint32_t bytes)> onStore;
+   std::function<void()> onResume;
+   std::function<void()> onSystemReset;
 
    uint32_t load(uint32_t address, uint32_t bytes) {
       if(address == data0Address && bytes == 4) {
@@ -77,6 +93,11 @@ class MockDebugModule {
       }
       if(address == data1Address && bytes == 4) {
          return target_.registers[rvswd::dm::data1];
+      }
+      if(onLoad) {
+         if(const auto value = onLoad(address, bytes)) {
+            return *value;
+         }
       }
       uint32_t value = 0;
       for(uint32_t i = bytes; i > 0; --i) {
@@ -93,6 +114,9 @@ class MockDebugModule {
       }
       if(address == data1Address && bytes == 4) {
          target_.registers[rvswd::dm::data1] = value;
+         return;
+      }
+      if(onStore && onStore(address, value, bytes)) {
          return;
       }
       for(uint32_t i = 0; i < bytes; ++i) {
@@ -168,14 +192,27 @@ class MockDebugModule {
          return;
       }
       active_ = true;
+      if((value & rvswd::dm::ndmreset) != 0) {
+         ++systemResets;
+         if(onSystemReset) {
+            onSystemReset();
+         }
+      }
       if((value & rvswd::dm::haltreq) != 0) {
          resumeAck = false;
          if(!neverHalts) {
             halted = true;
          }
       } else if((value & rvswd::dm::resumereq) != 0) {
+         const bool wasHalted = halted;
          resumeAck = halted;
          halted = false;
+         if(wasHalted) {
+            ++resumes;
+            if(onResume) {
+               onResume();
+            }
+         }
       }
       // resumereq reads 0.
       value &= ~rvswd::dm::resumereq;
@@ -254,7 +291,7 @@ class MockDebugModule {
       const uint32_t bytes = 1u << size;
       const uint32_t address = target_.registers[rvswd::dm::data1];
       uint32_t &data = target_.registers[rvswd::dm::data0];
-      if(faults(address, bytes)) {
+      if(faults(address, bytes, (value & 1u << 16) != 0)) {
          cmderr_ = 5;
          return;
       }
@@ -265,12 +302,12 @@ class MockDebugModule {
       }
    }
 
-   [[nodiscard]] bool faults(uint32_t address, uint32_t bytes) const {
+   [[nodiscard]] bool faults(uint32_t address, uint32_t bytes, bool isStore) const {
       if(address % bytes != 0) {
          return true;
       }
       for(uint32_t i = 0; i < bytes; ++i) {
-         if(faultAddresses.count(address + i) != 0) {
+         if(faultAddresses.count(address + i) != 0 || (!isStore && faultLoadAddresses.count(address + i) != 0)) {
             return true;
          }
       }
@@ -279,19 +316,19 @@ class MockDebugModule {
 
    // Returns false after an exception.
    bool loadOp(uint32_t rd, uint32_t address) {
-      if(faults(address, 4)) {
+      if(faults(address, 4, false)) {
          exception();
          return false;
       }
       gpr(rd) = load(address, 4);
       return true;
    }
-   bool storeOp(uint32_t address, uint32_t value) {
-      if(faults(address, 4)) {
+   bool storeOp(uint32_t address, uint32_t value, uint32_t bytes = 4) {
+      if(faults(address, bytes, true)) {
          exception();
          return false;
       }
-      store(address, value, 4);
+      store(address, value & (bytes == 4 ? 0xFFFF'FFFFu : 0xFFFFu), bytes);
       return true;
    }
 
@@ -387,9 +424,9 @@ class MockDebugModule {
       if(opcode == 0x03 && funct3 == 0b010) {
          return loadOp(rd, gprs[rs1] + immI);
       }
-      if(opcode == 0x23 && funct3 == 0b010) {
+      if(opcode == 0x23 && (funct3 == 0b010 || funct3 == 0b001)) {
          const auto immS = static_cast<uint32_t>(static_cast<int32_t>(insn & 0xFE00'0000u) >> 20) | (insn >> 7 & 0x1F);
-         return storeOp(gprs[rs1] + immS, gprs[rs2]);
+         return storeOp(gprs[rs1] + immS, gprs[rs2], funct3 == 0b010 ? 4 : 2);
       }
       if(opcode == 0x73 && (funct3 == 0b001 || funct3 == 0b010)) {
          const auto csr = static_cast<uint16_t>(insn >> 20);

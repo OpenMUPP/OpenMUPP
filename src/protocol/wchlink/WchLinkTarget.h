@@ -34,10 +34,13 @@ class Target {
    virtual rvswd::Status dmiRead(uint8_t address, uint32_t &data) = 0;
    virtual rvswd::Status dmiWrite(uint8_t address, uint32_t data) = 0;
    virtual rvswd::Status readDmstatus(uint32_t &value) = 0;
+   virtual rvswd::Status halted(bool &halted) = 0;
    virtual rvswd::Status halt() = 0;
    virtual rvswd::Status resume() = 0;
+   virtual rvswd::Status readRegister(uint16_t regno, uint32_t &value) = 0;
    virtual rvswd::Status writeRegister(uint16_t regno, uint32_t value) = 0;
    virtual rvswd::Status readMemory(uint32_t address, uint32_t &value) = 0;
+   virtual rvswd::Status writeMemory(uint32_t address, uint32_t value, rvswd::Width width) = 0;
 
    protected:
    ~Target() = default;
@@ -85,17 +88,26 @@ class RvSwdTarget final : public Target {
    rvswd::Status readDmstatus(uint32_t &value) override {
       return module_.readDmstatus(value);
    }
+   rvswd::Status halted(bool &halted) override {
+      return module_.halted(halted);
+   }
    rvswd::Status halt() override {
       return module_.halt();
    }
    rvswd::Status resume() override {
       return module_.resume();
    }
+   rvswd::Status readRegister(uint16_t regno, uint32_t &value) override {
+      return module_.readRegister(regno, value);
+   }
    rvswd::Status writeRegister(uint16_t regno, uint32_t value) override {
       return module_.writeRegister(regno, value);
    }
    rvswd::Status readMemory(uint32_t address, uint32_t &value) override {
       return module_.readMemory(address, value);
+   }
+   rvswd::Status writeMemory(uint32_t address, uint32_t value, rvswd::Width width) override {
+      return module_.writeMemory(address, value, width);
    }
 
    private:

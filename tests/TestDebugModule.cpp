@@ -391,13 +391,63 @@ TEST_CASE("Program buffer memory access (CH32V00x)") {
    bench.checkWire();
 }
 
-TEST_CASE("Program buffer: only words") {
+TEST_CASE("Program buffer: word reads, word and half-word writes only") {
    Bench bench(Wire::One);
    bench.connect();
    uint32_t value = 0;
    CHECK(bench.module.readMemory(0x2000'0000, value, Width::Byte) == Status::Unsupported);
-   CHECK(bench.module.writeMemory(0x2000'0000, 0, Width::Half) == Status::Unsupported);
+   CHECK(bench.module.readMemory(0x2000'0000, value, Width::Half) == Status::Unsupported);
+   CHECK(bench.module.writeMemory(0x2000'0000, 0, Width::Byte) == Status::Unsupported);
    CHECK(bench.take().empty());
+}
+
+TEST_CASE("Program buffer: a half-word write keeps a0 and a1 with register accesses") {
+   Bench bench(Wire::One);
+   bench.connect();
+   bench.target.gprs[10] = 0xaaaa'0010;
+   bench.target.gprs[11] = 0xaaaa'0011;
+   bench.target.store(0x1fff'f800, 0xffff'ffff, 4);
+
+   CHECK(bench.module.writeMemory(0x1fff'f802, 0x1234'00a5, Width::Half) == Status::Ok);
+   // Only the half word changes.
+   CHECK(bench.target.load(0x1fff'f800, 4) == 0x00a5'ffff);
+   CHECK(bench.target.gprs[10] == 0xaaaa'0010);
+   CHECK(bench.target.gprs[11] == 0xaaaa'0011);
+   CHECK(bench.take() ==
+         std::vector{ W(dm::abstractauto, 0), W(0x20, 0xe000'0537), W(0x21, 0x0f45'2583), W(0x22, 0x0f85'2503),
+                      W(0x23, 0x00b5'1023), W(0x24, 0x0000'9002),
+                      // Save a0 and a1
+                      W(dm::abstractcs, 0x700), W(dm::command, 0x0022'100a), R(dm::abstractcs, 0x0800'0002), R(dm::data0, 0xaaaa'0010),
+                      W(dm::command, 0x0022'100b), R(dm::abstractcs, 0x0800'0002), R(dm::data0, 0xaaaa'0011),
+                      // The store
+                      W(dm::data1, 0x1fff'f802), W(dm::data0, 0x0000'00a5), W(dm::command, 0x0004'0000), R(dm::abstractcs, 0x0800'0002),
+                      // Restore a0 and a1
+                      W(dm::data0, 0xaaaa'0010), W(dm::command, 0x0023'100a), R(dm::abstractcs, 0x0800'0002),
+                      W(dm::data0, 0xaaaa'0011), W(dm::command, 0x0023'100b), R(dm::abstractcs, 0x0800'0002) });
+
+   // The program stays loaded. A word write loads the word program.
+   CHECK(bench.module.writeMemory(0x1fff'f800, 0x5aa5, Width::Half) == Status::Ok);
+   CHECK(bench.take().size() == 6 + 4 + 6);
+   CHECK(bench.module.writeMemory(0x2000'0000, 0x0102'0304) == Status::Ok);
+   CHECK(bench.take().front() == W(dm::abstractauto, 0));
+   bench.checkWire();
+}
+
+TEST_CASE("Program buffer: a fault in a half-word write restores a0 and a1") {
+   Bench bench(Wire::One);
+   bench.connect();
+   bench.target.gprs[10] = 0xaaaa'0010;
+   bench.target.gprs[11] = 0xaaaa'0011;
+   bench.target.faultAddresses.insert(0x2000'0002);
+   CHECK(bench.module.writeMemory(0x2000'0002, 0x1234, Width::Half) == Status::Command);
+   CHECK(bench.module.cmderr() == rvswd::cmderrException);
+   CHECK(bench.target.gprs[10] == 0xaaaa'0010);
+   CHECK(bench.target.gprs[11] == 0xaaaa'0011);
+   CHECK(bench.target.memory.count(0x2000'0002) == 0);
+   // The hart must be halted for the register accesses.
+   REQUIRE(bench.module.resume() == Status::Ok);
+   CHECK(bench.module.writeMemory(0x2000'0000, 0x1234, Width::Half) == Status::Command);
+   CHECK(bench.module.cmderr() == 4);
 }
 
 TEST_CASE("Program buffer: the program is loaded again after a DM reset or a host write") {

@@ -13,9 +13,15 @@ bool WchLinkFunction::poll() {
    if(!configured_ || suspended_) {
       return false;
    }
+   // Data first: a request after the data (a quit) finds it written.
+   if(processor_.runData()) {
+      armData();
+      return true;
+   }
    if(processor_.runNext()) {
       // Send the response at once, before the next request.
       sendResponse();
+      armData();
       return true;
    }
    if(!data_.busy && processor_.hasData()) {
@@ -45,6 +51,7 @@ void WchLinkFunction::alternateSettingChanged(uint8_t interfaceNumber, uint8_t a
    if(interfaceNumber == wch::wchInterface) {
       endpointHaltCleared(wch::commandOutEndpoint);
       endpointHaltCleared(wch::commandInEndpoint);
+      endpointHaltCleared(wch::dataOutEndpoint);
       endpointHaltCleared(wch::dataInEndpoint);
    }
 }
@@ -61,7 +68,20 @@ void WchLinkFunction::resumed() {
 }
 
 void WchLinkFunction::outPacketReceived(uint8_t endpointAddress, art::span<const uint8_t> packet) {
-   if(endpointAddress != wch::commandOutEndpoint || !configured_) {
+   if(!configured_) {
+      return;
+   }
+   if(endpointAddress == wch::dataOutEndpoint) {
+      dataArmed_ = false;
+      if(!packet.empty() && processor_.wantsData()) {
+         // poll() writes it. The endpoint stays unarmed until then.
+         processor_.submitData(packet);
+      } else {
+         armData();
+      }
+      return;
+   }
+   if(endpointAddress != wch::commandOutEndpoint) {
       return;
    }
    commandArmed_ = false;
@@ -89,6 +109,9 @@ void WchLinkFunction::endpointHaltCleared(uint8_t endpointAddress) {
    if(endpointAddress == wch::commandOutEndpoint) {
       commandArmed_ = false;
       armCommand();
+   } else if(endpointAddress == wch::dataOutEndpoint) {
+      dataArmed_ = false;
+      armData();
    } else if(endpointAddress == wch::commandInEndpoint && response_.busy) {
       static_cast<void>(start(wch::commandInEndpoint, response_));
    } else if(endpointAddress == wch::dataInEndpoint && data_.busy) {
@@ -103,6 +126,15 @@ void WchLinkFunction::armCommand() {
    }
    usb->armOutTransfer(wch::commandOutEndpoint);
    commandArmed_ = true;
+}
+
+void WchLinkFunction::armData() {
+   art::usb::Device *usb = device();
+   if(!configured_ || dataArmed_ || !processor_.wantsData() || usb == nullptr || usb->isEndpointHalted(wch::dataOutEndpoint)) {
+      return;
+   }
+   usb->armOutTransfer(wch::dataOutEndpoint);
+   dataArmed_ = true;
 }
 
 void WchLinkFunction::sendResponse() {
@@ -137,6 +169,7 @@ bool WchLinkFunction::start(uint8_t endpoint, InPacket &in) {
 
 void WchLinkFunction::reset() {
    commandArmed_ = false;
+   dataArmed_ = false;
    response_ = {};
    data_ = {};
 }
