@@ -4,8 +4,9 @@
 // each USB interrupt. It runs the USB device, the UART bridge
 // (uart/SerialBridge.h) or, in a VSL_DEBUG_CDC build, the debug log
 // (debug/DebugLog.h), and drives the LEDs: the target power on the power
-// LED, the command activity on the state LED (the clock fault pattern
-// when the crystal fails) and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
+// LED, the command activity on the state LED (the probe error pattern
+// after a JTAG or SWD error, the clock fault pattern when the crystal
+// fails) and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
 // enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
 // commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h),
 // with the GPIO block (protocol/GpioBlock.h) on the debug connector pins
@@ -29,6 +30,7 @@
 #include <array>
 
 #include "ActivityLed.h"
+#include "ErrorLed.h"
 #include "Hardware.h"
 #include "Heartbeat.h"
 #include "TargetPowerLed.h"
@@ -324,7 +326,21 @@ void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
 
 constexpr Heartbeat clockFaultBlink{ Heartbeat::clockFault };
 ActivityLed activityLed;
+ErrorLed errorLed;
 TargetPowerLed targetPowerLed;
+
+// Number of JTAG and SWD errors of all personalities, for the error LED.
+// It wraps at 2^32: only the difference between two values counts.
+uint32_t probeErrorCount() {
+   uint32_t count = 0;
+#if defined(VSL_WITH_VERSALOON)
+   count += swdBlock.errorCount();
+#endif
+#if defined(VSL_WITH_CMSIS_DAP)
+   count += dapProcessor.errorCount();
+#endif
+   return count;
+}
 
 // Drives the LEDs (docs/boards.md, "LEDs"). Call it in each main loop
 // iteration, after the USB poll.
@@ -342,8 +358,11 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
       targetPowerLed.update(nowMs, boardPower.senseMillivolts());
    }
    activityLed.update(nowMs, usbStack.commandCount());
+   errorLed.update(nowMs, probeErrorCount());
    board::setLed(board::Led::Power, targetPowerLed.isOn());
-   board::setLed(board::Led::State, clockFromCrystal ? activityLed.isOn() : clockFaultBlink.isOn(nowMs));
+   // A probe error replaces the activity for some time (ErrorLed.h).
+   const bool stateOn = errorLed.isActive() ? errorLed.isOn() : activityLed.isOn();
+   board::setLed(board::Led::State, clockFromCrystal ? stateOn : clockFaultBlink.isOn(nowMs));
    board::setLed(board::Led::Usb, usbStack.isConfigured());
 }
 

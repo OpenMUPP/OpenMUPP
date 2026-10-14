@@ -242,7 +242,7 @@ The dongle then resets and shows as the other USB device.
 The dongle keeps the personality after a power cycle and after a firmware update with `stm32flash`.
 See [docs/usb-device.md](docs/usb-device.md#dual-image).
 
-The power LED shows the target power. The state LED flashes for each command of the host. The USB LED shows the USB state.
+The power LED shows the target power. The state LED flashes for each command of the host, and gives a double flash after a JTAG or SWD error. The USB LED shows the USB state.
 See [docs/boards.md](docs/boards.md#start-up-and-leds) for the meaning of the LEDs.
 
 ## Tools

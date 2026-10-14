@@ -130,7 +130,7 @@ class MockJtagChain final : public JtagTarget {
       if(state == State::ShiftIr || state == State::ShiftDr) {
          tdo_ = (taps_.front().shift & 1u) != 0;
       }
-      return tdo_;
+      return tdo_ || tdoStuckHigh;
    }
 
    [[nodiscard]] uint32_t ir(std::size_t device) const {
@@ -148,6 +148,8 @@ class MockJtagChain final : public JtagTarget {
    uint32_t apIdr{ 0x24770011 };
    std::map<uint32_t, uint32_t> memory;
    uint32_t apWaits{ 0 };
+   // TDO reads 1 all the time, as with no target on the connector
+   bool tdoStuckHigh{ false };
    std::vector<Access> accesses;
    std::vector<uint32_t> aborts;
    // The WAIT acknowledges that the DP gave

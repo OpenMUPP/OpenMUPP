@@ -53,7 +53,7 @@ Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Ve
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
 - No target power switch and no Vref sense in this personality.
-- The LEDs show the target power, the command activity and the USB state. `DAP_HostStatus` does not change them.
+- The LEDs show the target power, the command activity, the probe errors and the USB state. `DAP_HostStatus` does not change them. See [boards.md](boards.md#start-up-and-leds).
 - The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs on JTAG, Windows (also the driverless WinUSB binding), the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
 
 ## Use the probe

@@ -771,6 +771,44 @@ TEST_CASE("DAP_Transfer: parity error and protocol error") {
    b.checkIdle();
 }
 
+TEST_CASE("The error count counts the transfers with an error on the wire") {
+   Bench b;
+   b.connect();
+   CHECK(b.dap.errorCount() == 0);
+   b.pins.acks = { pswd::ackFault };
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == V{ 0x05, 0x00, 0x04 });
+   CHECK(b.dap.errorCount() == 1);
+   b.pins.badParity = true;
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == V{ 0x05, 0x00, 0x08 });
+   CHECK(b.dap.errorCount() == 2);
+   b.pins.badParity = false;
+   b.pins.acks = { 7 };
+   CHECK(b.run({ 0x06, 0x00, 0x02, 0x00, readDpidr }) == V{ 0x06, 0x00, 0x00, 0x07 });
+   CHECK(b.dap.errorCount() == 3);
+   // FAULT in a DAP_TransferBlock
+   b.pins.acks = { pswd::ackFault };
+   CHECK(b.run({ 0x06, 0x00, 0x02, 0x00, readDpidr }) == V{ 0x06, 0x00, 0x00, 0x04 });
+   CHECK(b.dap.errorCount() == 4);
+   // WAIT after all retries: one retry
+   CHECK(b.run({ 0x04, 0x00, 0x01, 0x00, 0x00, 0x00 }) == V{ 0x04, 0x00 });
+   b.pins.acks = { pswd::ackWait, pswd::ackWait };
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == V{ 0x05, 0x00, 0x02 });
+   CHECK(b.dap.errorCount() == 5);
+   b.pins.acks.clear();
+   b.checkIdle();
+}
+
+TEST_CASE("The error count ignores good transfers, WAIT retries and a value mismatch") {
+   Bench b;
+   b.connect();
+   b.run({ 0x04, 0x00, 0x02, 0x00, 0x00, 0x00 });
+   b.pins.acks = { pswd::ackWait, pswd::ackWait, pswd::ackOk };
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr })[1] == 0x01);
+   b.pins.readData = 0;
+   CHECK(b.run(cat({ { 0x05, 0x00, 0x01, static_cast<uint8_t>(readCtrlStat | matchValue) }, word(1) })) == V{ 0x05, 0x00, 0x11 });
+   CHECK(b.dap.errorCount() == 0);
+}
+
 TEST_CASE("DAP_Transfer: a protocol error on a write leaves SWDIO released") {
    Bench b;
    b.connect();
@@ -1199,6 +1237,8 @@ TEST_CASE("DAP_TransferAbort stops the WAIT retries of a transfer") {
    CHECK(b.pins.transfers.size() == transfersAtAbort + 1);
    CHECK(b.seen() == V(b.pins.transfers.size(), readDpidr));
    CHECK_FALSE(b.dap.hasResponse());
+   // The host stopped the retries: no error of the wire.
+   CHECK(b.dap.errorCount() == 0);
 
    // The next packet runs normally, with all its retries.
    b.pins.acks = { pswd::ackWait, pswd::ackWait };
