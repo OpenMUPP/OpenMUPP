@@ -10,13 +10,19 @@
 // packet [0x82][cmd][len][payload] on the command IN endpoint. Commands:
 //
 //   0x03 Memory read: [addr u32 BE][length u32 BE] -> [01]. Sets the range.
-//   0x02 Program control: only 0x0c, the start of the memory read -> [0c].
-//        The data then goes to the data IN endpoint (dataPacket()).
+//   0x02 Program control: [sub] -> [sub]
+//        0c The start of the memory read. The data then goes to the data
+//           IN endpoint (dataPacket()).
+//        01 Mass erase, with the own algorithm (WchLinkFlash.h)
 //   0x08 DMI access: [addr][data u32 BE][op] -> [addr][data u32 BE][status]
 //        op 1: read, 2: write, 0: no access. Status 0: success, 2: failure.
-//   0x06 Read protection: only 01, the query -> [02] unprotected, [01]
-//        protected. Reads FLASH_OBR (0x4002201c, RDPRT is bit 1) and
-//        0x40022020 at the command, as the WCH-LinkE does.
+//   0x06 Read protection:
+//        01 Query -> [02] unprotected, [01] protected. Reads FLASH_OBR
+//           (0x4002201c, RDPRT is bit 1) and 0x40022020 at the command, as
+//           the WCH-LinkE does.
+//        02 Unprotect -> [02], 03 Protect -> [03]: the option bytes, with
+//           the own algorithm (WchLinkFlash.h).
+//        04 -> [00], no target access.
 //   0x0b Reset: [01] -> [01]. ndmreset: the hart restarts and runs.
 //   0x0c Configure: [chip type][speed] -> [01].
 //   0x0d Control:
@@ -33,10 +39,10 @@
 //
 // - A packet that is not a request ([0x81][cmd][len]), or a command that is
 //   not in the list, gets the reply of the WCH-LinkE to an unknown command:
-//   [0x82][0x81][01][ff]. The command does nothing. This refuses the flash
-//   commands (0x01, 0x02 other than 0x0c, 0x06 other than 01) until W5
-//   adds them, and
-//   the WCH firmware-update and mode-switch commands of the WCH-LinkE.
+//   [0x82][0x81][01][ff]. The command does nothing. This refuses the
+//   program sequence (0x01, and 0x02 05, 07, 02, 08) for now,
+//   the other sub-commands of 0x02 and 0x06, and the WCH firmware-update
+//   and mode-switch commands of the WCH-LinkE.
 // - The payload length is not checked, as on the WCH-LinkE. A missing
 //   payload byte reads 0.
 // - Connect: the wire comes from the chip type of the last configure
@@ -74,6 +80,7 @@
 #include <cstdint>
 #include <utils/compat/span.h>
 
+#include "protocol/wchlink/WchLinkFlash.h"
 #include "protocol/wchlink/WchLinkTarget.h"
 
 namespace wchlink {
@@ -98,7 +105,8 @@ inline constexpr uint8_t connect = 0x02;
 inline constexpr uint8_t quit = 0xff;
 } // namespace control
 
-// The sub-command of command 0x02 that starts the memory read
+// The sub-commands of command 0x02
+inline constexpr uint8_t programErase = 0x01;
 inline constexpr uint8_t programReadMemory = 0x0c;
 
 inline constexpr uint8_t requestHeader = 0x81;
@@ -119,8 +127,12 @@ inline constexpr uint8_t dmiWrite = 0x02;
 inline constexpr uint8_t familyV00x = 0x09;
 inline constexpr uint8_t familyV20x = 0x05;
 
-// The sub-command of command 0x06 that queries the protection
+// The sub-commands of command 0x06
 inline constexpr uint8_t protectionQuery = 0x01;
+inline constexpr uint8_t protectionClear = 0x02;
+inline constexpr uint8_t protectionSet = 0x03;
+inline constexpr uint8_t protectionUnknown4 = 0x04;
+inline constexpr uint8_t protectionUnknown4Reply = 0x00;
 inline constexpr uint8_t protectionOff = 0x02;
 inline constexpr uint8_t protectionOn = 0x01;
 // FLASH_OBR and the register after it, read by the query
@@ -268,6 +280,7 @@ class Processor {
    void protectionCommand(uint8_t sub);
    void setReadRange(uint32_t address, uint32_t length);
    void programCommand(uint8_t sub);
+   [[nodiscard]] std::size_t optionBytes() const;
    void detach();
 
    Target &target_;
@@ -293,6 +306,8 @@ class Processor {
    // A packet of dataPacket() waits for dataSent().
    bool dataInFlight_{ false };
    std::array<uint8_t, packetSize> data_{};
+
+   Flash flash_;
 };
 
 } // namespace wchlink

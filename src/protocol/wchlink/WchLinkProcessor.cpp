@@ -57,7 +57,8 @@ inline constexpr uint32_t ackhavereset = 1u << 28;
 
 Processor::Processor(Target &target, Platform &platform)
    : target_(target)
-   , platform_(platform) {
+   , platform_(platform)
+   , flash_(target, platform) {
 }
 
 void Processor::submit(art::span<const uint8_t> request) {
@@ -323,8 +324,19 @@ void Processor::chipInfoCommand() {
 }
 
 void Processor::protectionCommand(uint8_t sub) {
+   if(sub == protectionUnknown4) {
+      replyByte(command::protection, protectionUnknown4Reply);
+      return;
+   }
+   if(sub == protectionClear || sub == protectionSet) {
+      if(!connected_ || !flash_.setReadProtection(sub == protectionSet, optionBytes())) {
+         replyError();
+         return;
+      }
+      replyByte(command::protection, sub);
+      return;
+   }
    if(sub != protectionQuery) {
-      // Unprotect, protect and 04 (W5)
       replyUnknown();
       return;
    }
@@ -346,8 +358,15 @@ void Processor::setReadRange(uint32_t address, uint32_t length) {
 }
 
 void Processor::programCommand(uint8_t sub) {
+   if(sub == programErase) {
+      if(!connected_ || !flash_.massErase()) {
+         replyError();
+         return;
+      }
+      replyByte(command::program, sub);
+      return;
+   }
    if(sub != programReadMemory) {
-      // The flash sub-commands (W5)
       replyUnknown();
       return;
    }
@@ -359,6 +378,10 @@ void Processor::programCommand(uint8_t sub) {
    dataRemaining_ = readLength_;
    dataFailed_ = false;
    replyByte(command::program, sub);
+}
+
+std::size_t Processor::optionBytes() const {
+   return familyOf(chipId_) == familyV00x ? fpec::optionBytesV00x : fpec::optionBytesV20x;
 }
 
 art::span<const uint8_t> Processor::dataPacket() {

@@ -493,10 +493,13 @@ The personality is not in a firmware image yet. Work item #70 adds the build opt
 | `11` | Reads the four words at the command, and adds the chip ID of the connect |
 | `06 01` | Protection query. Reads `0x4002201c` (`FLASH_OBR`) and `0x40022020` at the command. Replies `01` when `RDPRT` (bit 1 of `FLASH_OBR`) is 1, else `02`. |
 | `0b 01` | Writes `dmcontrol` `00000003` (`ndmreset`), waits 1 ms, writes `00000001`, then `10000001` (`ackhavereset`). The hart runs after the reset. |
+| `02 01` | Mass erase with the own algorithm (see [Flash](#flash)) |
+| `06 02`, `06 03` | Unprotect and protect with the own algorithm (see [Flash](#flash)). Reply `02` and `03`. |
+| `06 04` | Replies `00`. No target access. |
 | `0e` | Not captured. The processor does the quit and echoes the sub-command. Before a connect, it only echoes. |
 
 All other commands get the reply of the WCH-LinkE to an unknown command: `82 81 01 ff`.
-The processor does nothing for them. This includes the flash commands (`01`, `06 02`, `06 03`, `06 04` and the other `02` sub-commands) until work item #69.
+The processor does nothing for them. This includes the program sequence (`01`, and `02` with `05`, `07`, `02`, `08`) for now, and the other sub-commands of `02` and `06`.
 It also includes the firmware-update and the mode-switch commands of the WCH-LinkE. The captures do not show these commands.
 
 The `0d` sub-commands other than `01`, `02`, `03`, `04` and `ff` also get this reply.
@@ -541,7 +544,7 @@ The processor does not do these probe actions:
 - The read of `0x1ffff7c4` of the CH32V003 at connect.
 - The read of `0x1ffff802` for `0d 04`.
 
-Their meaning is not known. Work item #69 must check if the flash program needs the clock setup.
+Their meaning is not known. The flash operations do not need the clock setup: each flash operation starts with a reset (see [Flash](#flash)).
 
 ### Memory read
 
@@ -553,6 +556,42 @@ The USB function cannot take back a packet that is on its way on endpoint `0x82`
 The data has no header, so the host cannot tell an old packet from a new packet.
 Thus `02 01 0c` gives the error frame while a packet of the read before waits for the host.
 The host must read that packet, or reset the bus, before a new memory read.
+
+### Flash
+
+The flash module (`src/protocol/wchlink/WchLinkFlash.h`) does the flash commands.
+The CH32V00x and the CH32V20x have the same flash controller registers for these commands (reference manuals in the datasheet store, chapter "Flash Memory and User Option Bytes").
+
+Each flash command starts with a reset that halts the hart:
+
+1. Write `dmcontrol` `80000003` (`haltreq`, `ndmreset`). Wait 1 ms.
+2. Write `dmcontrol` `80000001`, then halt (`haltreq` two times, the `dmstatus` poll).
+3. Write `dmcontrol` `90000001` (`ackhavereset`).
+4. Write CSR `0x7c0` with `0x00000300`, as the connect does.
+
+After the reset, the flash controller is locked, the clock is the HSI, and no code of the target runs.
+The WCH-LinkE sets a clock of its own at the connect of a CH32V208 (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). The reset makes this clock setup unnecessary.
+The CH32V20x manual asks for a system clock of 120 MHz or less for flash operations. A target program can set 144 MHz.
+minichlink also resets with `haltreq` before its program sequence.
+
+#### Own algorithm
+
+The commands without a stub use the flash controller registers directly, with DMI memory accesses:
+
+- **Unlock.** Read `FLASH_CTLR`. Write `KEY1` and `KEY2` to `FLASH_KEYR` only if `LOCK` is 1: a key write to an unlocked controller locks it until the next reset.
+- **Wait.** Read `FLASH_STATR` until `BSY` is 0, one read each 1 ms, for 3 s at most. Then write 1 to `EOP` and `WRPRTERR`. A `WRPRTERR` is a failure.
+- **Mass erase (`02 01`).** Reset, unlock, `FLASH_CTLR` `MER`, then `MER` and `STRT`, wait, `FLASH_CTLR` 0, lock (`LOCK` and `FLOCK`).
+- **Protect (`06 03`) and unprotect (`06 02`).** Reset. Read the option bytes at `0x1ffff800`. Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`). Program each option byte with `OBPG` and a 16-bit write, and wait after each byte. Then `FLASH_CTLR` 0 and lock.
+  Each `FLASH_CTLR` write keeps `OBWRE` 1: a 0 locks the option bytes again.
+  - `RDPR` gets `0xa5` (unprotect) or `0x00` (protect). The value `0xcc` is not used, because it is a permanent protection on other chips.
+  - `USER`, `DATA0` and `DATA1` keep their values. The CH32V20x `USER` byte holds the split of RAM and flash. A byte with a wrong inverse is written as `0xff`.
+  - Unprotect writes `0xff` to the write protection bytes (`WRPR`). Protect keeps them.
+  - When `RDPR` becomes `0xa5` on a protected chip, the chip erases the main flash itself.
+  - After an unprotect, the module resets the target again. The WCH-LinkE answers a query after an unprotect with `02` (`v003-wlink-flash-protected.pcapng`), so it also reloads `FLASH_OBR`.
+    After a protect, a query still gives `02` until the next reset (`v208-wlink-protect.pcapng`). The module does not reset.
+
+On one wire, a 16-bit write uses the program of [Program buffer programs](#program-buffer-programs).
+The CH32V00x has 6 option bytes (half words), the CH32V20x has 8. The family code of the connect selects the number.
 
 ### Speed
 
@@ -568,6 +607,10 @@ A real target must confirm these items (work item #71):
 - The reset sequence. The WCH-LinkE reset is not captured on the wire.
 - The DMI reads at 907 kHz on two wires.
 - wlink and minichlink with the WCH ID build.
+- The flash commands on a CH32V003 and a CH32V208: `wlink erase`, `wlink protect` and `wlink unprotect`.
+  - The reset with `haltreq` before each flash command, on one wire and on two wires.
+  - The reload of `FLASH_OBR` by the reset after an unprotect, and the read of the option bytes on a protected chip.
+  - The 16-bit write of the option bytes on one wire.
 
 ## Byte order
 
@@ -811,7 +854,7 @@ The table lists the questions of epic #63 and their state.
 |---|---|
 | Payload of the program sub-commands | Answered for `02 01 05/07/02/08`. The meaning of `05` and `07` is a guess (see above). minichlink does not send `08`. |
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
-| Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. |
+| Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. Erase, protect and unprotect use no stub: the probe holds that algorithm. |
 | Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: the response and parity bits on the one-wire line, and the timing of a flash program. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
