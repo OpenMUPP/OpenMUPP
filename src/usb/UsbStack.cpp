@@ -14,6 +14,9 @@
 #if defined(VSL_WITH_CMSIS_DAP)
 #include "usb/CmsisDapDescriptors.h"
 #endif
+#if defined(VSL_WITH_WCH_LINK)
+#include "usb/WchLinkDescriptors.h"
+#endif
 
 namespace usb {
 
@@ -21,7 +24,9 @@ namespace {
 
 using personality::Personality;
 
+#if !defined(VSL_WITH_WCH_LINK)
 static_assert(art::usb::CdcAcmFunctionBase::kDataPacketSize == cdcDataPacketSize);
+#endif
 static_assert(hw::Uid::SizeBytes == uidBytes);
 #if defined(VSL_WITH_CMSIS_DAP)
 static_assert(dap::packetMemoryUsed <= hw::UsbDevice::PacketMemorySize);
@@ -40,12 +45,14 @@ static_assert(endpointCount * 8 + 2 * 64 + 2 * versaloonPacketSize + versaloonPa
 // How long D+ stays low before a reset, so the host sees a disconnect
 constexpr uint32_t disconnectMs = 20;
 
+#if !defined(VSL_WITH_WCH_LINK)
 constexpr art::usb::CdcAcmEndpoints serialPortEndpoints{
    .notification = cdcNotificationEndpoint,
    .notificationMaxPacketSize = cdcNotificationPacketSize,
    .dataOut = cdcDataOutEndpoint,
    .dataIn = cdcDataInEndpoint,
 };
+#endif
 
 SerialNumber serialNumber;
 
@@ -89,6 +96,23 @@ const art::usb::Descriptors dapDescriptors{
 art::usb::msos20::DescriptorSetHandler msOs20Handler(dap::msOs20VendorCode, desc::asSpan(dap::msOs20DescriptorSet));
 #endif
 
+#if defined(VSL_WITH_WCH_LINK)
+const std::array<art::span<const uint8_t>, wch::stringCount> wchStrings{
+   desc::asSpan(wch::languageDescriptor),
+   desc::asSpan(wch::manufacturerDescriptor),
+   desc::asSpan(wch::productDescriptor),
+   serialNumber.bytes(),
+};
+
+const art::usb::Descriptors wchDescriptors{
+   .device = desc::asSpan(wch::deviceDescriptor),
+   .configuration = desc::asSpan(wch::configurationDescriptor),
+   .strings = art::span<const art::span<const uint8_t>>(wchStrings.data(), wchStrings.size()),
+   // No BOS: the WCH-Link personality is a USB 2.00 device.
+   .bos = {},
+};
+#endif
+
 #if defined(VSL_WITH_VERSALOON) && defined(VSL_WITH_CMSIS_DAP)
 const art::usb::Descriptors &descriptorsOf(Personality personality) {
    return personality == Personality::CmsisDap ? dapDescriptors : versaloonDescriptors;
@@ -108,6 +132,12 @@ UsbStack::UsbStack(Personality active,
    , device_(controller_, descriptorsOf(active))
    , versaloon_(deviceInfo, bootloader, &usbToXxx, &personalitySwitch)
    , dap_(processor)
+#elif defined(VSL_WITH_WCH_LINK)
+UsbStack::UsbStack(wchlink::Processor &processor)
+   : controller_(hardware_, events_)
+   , active_(Personality::WchLink)
+   , device_(controller_, wchDescriptors)
+   , wch_(processor)
 #elif defined(VSL_WITH_CMSIS_DAP)
 UsbStack::UsbStack(cmsisdap::Processor &processor)
    : controller_(hardware_, events_)
@@ -121,8 +151,15 @@ UsbStack::UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler 
    , device_(controller_, versaloonDescriptors)
    , versaloon_(deviceInfo, bootloader, &usbToXxx)
 #endif
-   , serialPort_(cdcControlInterface, serialPortEndpoints) {
+#if !defined(VSL_WITH_WCH_LINK)
+   , serialPort_(cdcControlInterface, serialPortEndpoints)
+#endif
+{
+#if !defined(VSL_WITH_WCH_LINK)
+   // Both bulk pairs of the WCH-Link personality are single-buffered
+   // (usb/WchLinkDescriptors.h).
    controller_.setDoubleBufferedOut(versaloonOutEndpoint);
+#endif
    // Fails only for an interface range that does not fit the device: a
    // static configuration error, which the host tests catch.
 #if defined(VSL_WITH_CMSIS_DAP)
@@ -138,7 +175,11 @@ UsbStack::UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler 
       static_cast<void>(device_.addFunction(versaloon_));
    }
 #endif
+#if defined(VSL_WITH_WCH_LINK)
+   static_cast<void>(device_.addFunction(wch_));
+#else
    static_cast<void>(device_.addFunction(serialPort_));
+#endif
 }
 
 void UsbStack::start() {
@@ -174,11 +215,19 @@ void UsbStack::poll() {
       }
    }
 #endif
+#if defined(VSL_WITH_WCH_LINK)
+   // As the CMSIS-DAP personality: run requests and data packets, and
+   // deliver the events that came during them.
+   while(wch_.poll()) {
+      controller_.poll();
+   }
+#else
    // Without VSL_DEBUG_CDC the UART bridge reads the serial port
    // (uart/SerialBridge.h).
    if constexpr(debug::cdcLog) {
       discardSerialInput();
    }
+#endif
 }
 
 void UsbStack::disconnect() {
@@ -201,9 +250,11 @@ void UsbStack::pollSerial() {
    events_.setSerialOnly(true);
    controller_.poll();
    events_.setSerialOnly(false);
+#if !defined(VSL_WITH_WCH_LINK)
    if constexpr(debug::cdcLog) {
       discardSerialInput();
    }
+#endif
 }
 
 void UsbStack::setPullUp(void * /*context*/, bool enable) {
@@ -212,10 +263,12 @@ void UsbStack::setPullUp(void * /*context*/, bool enable) {
    }
 }
 
+#if !defined(VSL_WITH_WCH_LINK)
 void UsbStack::discardSerialInput() {
    std::array<uint8_t, cdcDataPacketSize> chunk{};
    while(serialPort_.read(art::span<uint8_t>(chunk.data(), chunk.size())) != 0) {
    }
 }
+#endif
 
 } // namespace usb
