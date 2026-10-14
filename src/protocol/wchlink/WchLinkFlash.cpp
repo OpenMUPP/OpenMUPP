@@ -160,7 +160,9 @@ bool Flash::setReadProtection(bool protect, Series series) {
       done = ok(target_.writeMemory(fpec::optionBytes + 2 * i, values[i], rvswd::Width::Half)) && waitIdle();
    }
    done = write(fpec::ctlr, 0) && lockController() && done;
-   // Unprotect: the reset loads FLASH_OBR from the new option bytes.
+   // Unprotect: the reset loads FLASH_OBR from the new option bytes. The
+   // manuals ask for a power-on reset in the unprotect procedure, but say
+   // that a system reset loads FLASH_OBR. Not checked on hardware.
    return done && (protect || resetHalt());
 }
 

@@ -641,7 +641,9 @@ The commands without a stub use the flash controller registers directly, with DM
   - Then the module reads the option byte area. A byte that has its correct inverse replaces the value from the registers. A failed read is no error.
   - Unprotect writes `0xff` to the write protection bytes (`WRPR`). Protect keeps them.
   - When `RDPR` becomes `0xa5` on a protected chip, the chip erases the main flash itself.
-  - After an unprotect, the module resets the target again. The WCH-LinkE answers a query after an unprotect with `02` (`v003-wlink-flash-protected.pcapng`), so it also reloads `FLASH_OBR`.
+  - After an unprotect, the module resets the target again with `ndmreset`. The WCH-LinkE answers a query after an unprotect with `02` (`v003-wlink-flash-protected.pcapng`), so it also reloads `FLASH_OBR` in some way.
+    The reference manuals do not agree with themselves here. The unprotect procedure asks for a power-on reset to load the new `RDPR` (CH32V003 16.5.4, CH32V20x 32.6.4, step 3). The notes of `FLASH_OBR` say that a system reset loads it.
+    If `ndmreset` does not load `RDPR`, the query after `06 02` still gives `01`, and `wlink flash` sends the unprotect again in a loop. The hardware test must check this.
     After a protect, a query still gives `02` until the next reset (`v208-wlink-protect.pcapng`). The module does not reset.
 
 On one wire, a 16-bit write uses the program of [Program buffer programs](#program-buffer-programs).
@@ -692,7 +694,7 @@ A real target must confirm these items (work item #71):
   - The stub interface: the stub address `0x20000000`, the stack pointers, the operation bits `1c` for each block, and the checksum word.
   - The verify of `0xff` words on the CH32V208, where erased flash reads `0xe339e339`.
   - The reset with `haltreq` before each flash command, on one wire and on two wires.
-  - The reload of `FLASH_OBR` by the reset after an unprotect, and the read of the option bytes on a protected chip.
+  - The reload of `FLASH_OBR` by the `ndmreset` after an unprotect (the manuals ask for a power-on reset), and the read of the option bytes on a protected chip.
   - The place of `SRAM_CODE_MODE` in the CH32V20x `FLASH_OBR`, and the `USER` byte after an unprotect.
   - The 16-bit write of the option bytes on one wire.
   - The time of a program of the full flash, against the WCH-LinkE (3.5 s and 15.2 s).
