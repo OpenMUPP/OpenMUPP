@@ -264,6 +264,9 @@ void Processor::detach() {
    program_ = Program::Idle;
    flash_.drop();
    hasDataOut_ = false;
+   // An acknowledge that the host did not read (minichlink) must not come
+   // before the data of a later memory read.
+   ackPending_ = false;
    if(connected_) {
       target_.detach();
       connected_ = false;

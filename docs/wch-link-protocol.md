@@ -672,6 +672,7 @@ If the hart does not halt, the processor halts it, and the call fails.
 - A request out of order gives the error frame. Before a connect, all flash commands give the error frame.
 - A quit, a connect, an erase or a protection command ends a sequence as `02 08` does. A quit then resumes the hart at the reset vector, because `dpc` is the value after the reset.
 - minichlink does not read the block acknowledge. The acknowledge waits on the data IN endpoint until the host reads it, as the packets of a memory read do.
+  A quit or a connect drops an acknowledge that is not on its way yet. The acknowledge on its way stays: a memory read (`02 0c`) of a later tool on the same USB session gives the error frame until the host reads that packet.
 
 ### Speed
 
@@ -695,6 +696,7 @@ A real target must confirm these items (work item #71):
   - The place of `SRAM_CODE_MODE` in the CH32V20x `FLASH_OBR`, and the `USER` byte after an unprotect.
   - The 16-bit write of the option bytes on one wire.
   - The time of a program of the full flash, against the WCH-LinkE (3.5 s and 15.2 s).
+  - A minichlink write, then `wlink dump` without a new USB enumeration: how the WCH-LinkE handles the acknowledge that minichlink did not read.
 
 ## Byte order
 
