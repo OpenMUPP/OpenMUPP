@@ -1,7 +1,7 @@
 // The UART bridge of the firmware. See uart/SerialBridge.h.
 #include "uart/SerialBridge.h"
 
-#if !defined(VSL_DEBUG_CDC)
+#if !defined(VSL_DEBUG_CDC) && !defined(VSL_WITH_WCH_LINK)
 
 #include <optional>
 
