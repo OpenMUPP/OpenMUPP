@@ -23,11 +23,16 @@
 //   values of the instructions before it, as on a real hart. The abstract
 //   memory command gives cmderr 5 (bus error).
 // - resumereq clears resumeack, and resumes a halted hart only (debug
-//   spec 0.13). A halted hart then sets resumeack.
+//   spec 0.13). A halted hart then sets resumeack, and onResume runs: it
+//   can model code that the hart runs, and halt the hart again.
+// - ndmreset 1 calls onSystemReset. With haltreq, the hart halts.
+// - onLoad and onStore model memory-mapped registers (see MockWchFlash.h).
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -70,6 +75,15 @@ class MockDebugModule {
    // The commands that started
    std::vector<uint32_t> commands;
    int programRuns{ 0 };
+   int resumes{ 0 };
+   int systemResets{ 0 };
+
+   // A register value for a load, or no value for memory
+   std::function<std::optional<uint32_t>(uint32_t address, uint32_t bytes)> onLoad;
+   // Returns true when it took the store, false for memory.
+   std::function<bool(uint32_t address, uint32_t value, uint32_t bytes)> onStore;
+   std::function<void()> onResume;
+   std::function<void()> onSystemReset;
 
    uint32_t load(uint32_t address, uint32_t bytes) {
       if(address == data0Address && bytes == 4) {
@@ -77,6 +91,11 @@ class MockDebugModule {
       }
       if(address == data1Address && bytes == 4) {
          return target_.registers[rvswd::dm::data1];
+      }
+      if(onLoad) {
+         if(const auto value = onLoad(address, bytes)) {
+            return *value;
+         }
       }
       uint32_t value = 0;
       for(uint32_t i = bytes; i > 0; --i) {
@@ -93,6 +112,9 @@ class MockDebugModule {
       }
       if(address == data1Address && bytes == 4) {
          target_.registers[rvswd::dm::data1] = value;
+         return;
+      }
+      if(onStore && onStore(address, value, bytes)) {
          return;
       }
       for(uint32_t i = 0; i < bytes; ++i) {
@@ -168,14 +190,27 @@ class MockDebugModule {
          return;
       }
       active_ = true;
+      if((value & rvswd::dm::ndmreset) != 0) {
+         ++systemResets;
+         if(onSystemReset) {
+            onSystemReset();
+         }
+      }
       if((value & rvswd::dm::haltreq) != 0) {
          resumeAck = false;
          if(!neverHalts) {
             halted = true;
          }
       } else if((value & rvswd::dm::resumereq) != 0) {
+         const bool wasHalted = halted;
          resumeAck = halted;
          halted = false;
+         if(wasHalted) {
+            ++resumes;
+            if(onResume) {
+               onResume();
+            }
+         }
       }
       // resumereq reads 0.
       value &= ~rvswd::dm::resumereq;
