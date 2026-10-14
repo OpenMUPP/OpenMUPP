@@ -85,6 +85,9 @@ Three fault and event patterns replace the normal function:
 
 A probe error is a transfer that ends with a FAULT acknowledge, no acknowledge, a parity error, or a WAIT acknowledge after all retries.
 In the CMSIS-DAP personality, these are the transfers of `DAP_Transfer` and `DAP_TransferBlock`, on SWD and on JTAG.
+A JTAG-DP has one acknowledge value for OK and FAULT.
+A fault on JTAG only sets the STICKYERR bit in CTRL/STAT, and the dongle does not read this bit.
+Thus on JTAG, only these errors count: a WAIT after all retries, an acknowledge that is not valid, and a failed scan.
 A WAIT that `DAP_TransferAbort` stops and a value mismatch are not probe errors.
 In the Versaloon personality, these are the failed `IN_OUT` transfers of the `SWD` block.
 The `JTAG_RAW` block has no acknowledge, so the Versaloon personality does not show JTAG errors.

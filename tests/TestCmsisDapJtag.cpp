@@ -462,6 +462,16 @@ TEST_CASE("DAP JTAG: WAIT retries, and the retry limit") {
    CHECK(b.dap.errorCount() == 1);
 }
 
+TEST_CASE("DAP JTAG: an invalid acknowledge is an error") {
+   Stm32Bench b;
+   b.chain.tdoStuckHigh = true;
+   // The acknowledge 0b111 is no acknowledge.
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == V{ 0x05, 0x00, 0x07 });
+   CHECK(b.dap.errorCount() == 1);
+   CHECK(b.run({ 0x06, 0x00, 0x02, 0x00, readDrw }) == V{ 0x06, 0x00, 0x00, 0x07 });
+   CHECK(b.dap.errorCount() == 2);
+}
+
 TEST_CASE("DAP JTAG: value match") {
    Stm32Bench b;
    CHECK(b.run(cat({ { 0x05, 0x00, 0x01, writeCtrlStat }, word(0x50000000) })) == V{ 0x05, 0x01, 0x01 });

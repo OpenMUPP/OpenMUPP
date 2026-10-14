@@ -64,8 +64,10 @@
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
-//   and a value mismatch are not errors of the wire. The error LED shows
-//   the count (ErrorLed.h).
+//   and a value mismatch are not errors of the wire. On JTAG, OK and FAULT
+//   are one acknowledge, and the processor does not read STICKYERR: only
+//   WAIT after all retries, an invalid acknowledge and a failed scan count.
+//   The error LED shows the count (ErrorLed.h).
 //
 // DAP_QueueCommands packets wait. The next packet with another command
 // runs the queued packets and then itself, back to back. The responses of
