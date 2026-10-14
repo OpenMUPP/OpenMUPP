@@ -444,6 +444,120 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 
 A real target is necessary to confirm the write program, the restore program, the halt and resume times, and the no-target detection.
 
+## Command processor of the personality
+
+The personality speaks the protocol with these parts:
+
+| Part | File | Task |
+|---|---|---|
+| Descriptors | `src/usb/WchLinkDescriptors.h` | USB ID, interface 0 with the endpoints `0x01`, `0x81`, `0x02` and `0x82` |
+| USB function | `src/usb/WchLinkFunction.h` | Moves the packets between the endpoints and the processor |
+| Processor | `src/protocol/wchlink/WchLinkProcessor.h` | Runs the commands |
+| Target | `src/protocol/wchlink/WchLinkTarget.h` | Connects the processor to the debug module layer and the wire engine |
+
+The host tests are in `tests/TestWchLink.cpp`. They send the packets through the USB function, with the wire engine on mock pins and a mock DM.
+The personality is not in a firmware image yet. Work item #70 adds the build option.
+
+### USB
+
+- The interface has the endpoint numbers of the WCH-LinkE, with 64 bytes each. The interface has no CDC interfaces.
+  The endpoints and EP0 use 408 bytes of the 512 bytes of packet memory.
+- The default USB ID is `1209:0001`, the test ID of pid.codes. It stays until the project has its own product ID.
+  The build define `VSL_WCH_LINK_WCH_USB_ID` selects `1a86:8010`. Use this ID only for personal use, because the vendor ID belongs to WCH.
+- The function takes one request at a time. The command OUT endpoint gets a NAK until the host reads the response.
+- The function does not arm the data OUT endpoint `0x02`. The flash commands come with work item #69.
+
+### Commands
+
+| Command | Behavior |
+|---|---|
+| `0d 01` | Replies `02 13 12 00`, the values of the captured WCH-LinkE |
+| `0d 02` | Connects (see below) |
+| `0d 03`, `0d 04` | Reply `03` and `00`. No target access. |
+| `0d ff` | Quit: `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
+| Other `0d` values | The unknown-command reply (see below) |
+| `0c` | Keeps the chip type for the next connect, and sets the speed. Replies `01`. |
+| `08` | DMI access. `op` `00` does no access. A failure, or an access before a connect, gives the status `02`. |
+| `03`, then `02 01 0c` | Memory read on endpoint `0x82` |
+| `11` | Reads the four words at the command, and adds the chip ID of the connect |
+| `06 01` | Protection query. Reads `0x4002201c` (`FLASH_OBR`) and `0x40022020` at the command. Replies `01` when `RDPRT` (bit 1 of `FLASH_OBR`) is 1, else `02`. |
+| `0b 01` | Writes `dmcontrol` `00000003` (`ndmreset`), waits 1 ms, writes `00000001`, then `10000001` (`ackhavereset`). The hart runs after the reset. |
+| `0e` | Not captured. The processor does the quit and echoes the sub-command. Before a connect, it only echoes. |
+
+All other commands get the reply of the WCH-LinkE to an unknown command: `82 81 01 ff`.
+The processor does nothing for them. This includes the flash commands (`01`, `06 02`, `06 03`, `06 04` and the other `02` sub-commands) until work item #69.
+It also includes the firmware-update and the mode-switch commands of the WCH-LinkE. The captures do not show these commands.
+
+The `0d` sub-commands other than `01`, `02`, `03`, `04` and `ff` also get this reply.
+wlink and minichlink use them for actions of the probe: target power (`09` to `0c`), erase by the reset pin or by the power (`08`, `0f`), the reset pin (`13` to `15`), the split of RAM and flash (`05`), and SDI print (`ee`).
+An echo tells the host that the action occurred. The processor does not do these actions, so it refuses them.
+The WCH-LinkE echoes `0d 05` (see [Command `0x0d`](#command-0x0d-info-connect-quit)). The processor does not.
+A packet without the header `81` gets the same reply.
+
+A command that needs a target before a connect, or a failed target access, gives the error frame `81 55 01 01`.
+
+A suspend of the USB bus, and a bus reset or a deconfigure, release the pins without target accesses.
+Thus the hart stays halted after the connect, until the next session.
+
+### Connect
+
+The chip type of the last `0c` command selects the wire. The type `09` (CH32V00x) selects one wire.
+For the other types, the processor tries one wire first, then two wires. wlink sends the type `01` also for the CH32V003.
+One wire comes first, because its frames change SWDIO only while SWCLK is low. A two-wire target sees no start condition and no stop condition in them.
+The frames of two wires are noise on the line of a one-wire target.
+On each wire, the processor does these probe actions:
+
+1. Write `0x7e` and `0x7d` with `5aa50400`.
+2. Read `dmstatus`. A wrong version field tells that no target is present.
+3. Halt the hart: `dmcontrol` `80000001` two times, then the `dmstatus` poll.
+4. Read the chip ID at `0x7f`. The values `00000000` and `ffffffff` tell that no target is present.
+5. Write CSR `0x7c0` with `0x00000300`.
+
+The family code of the response comes from a table of chip ID prefixes (the top 12 bits). wlink selects the chip settings from this code.
+
+| Prefix | Chip series | Family code | Source |
+|---|---|---|---|
+| `003` | CH32V003 | `09` | Captured |
+| `208` | CH32V208 | `05` | Captured |
+| `203`, `207` | CH32V203, CH32V207 | `05` | Same series as the CH32V208. Not captured. |
+
+A chip ID that is not in the table gives the error frame. A wrong family code would make the host use wrong chip settings without a warning.
+The processor then resumes the hart and ends `dmactive`, as the quit does. It tries no other wire.
+
+The processor does not do these probe actions:
+
+- The writes to the clock registers of the CH32V208 at connect.
+- The read of `0x1ffff7c4` of the CH32V003 at connect.
+- The read of `0x1ffff802` for `0d 04`.
+
+Their meaning is not known. Work item #69 must check if the flash program needs the clock setup.
+
+### Memory read
+
+The processor reads one word for each 4 bytes of the range, and sends each word with the most significant byte first.
+It reads the next packet only when the host took the packet before. After a failed word, the processor stops the target accesses, and the rest of the data is `0xff`.
+A new `03` command, a connect or a quit stops a read that the host did not take completely.
+
+The USB function cannot take back a packet that is on its way on endpoint `0x82`.
+The data has no header, so the host cannot tell an old packet from a new packet.
+Thus `02 01 0c` gives the error frame while a packet of the read before waits for the host.
+The host must read that packet, or reset the bus, before a new memory read.
+
+### Speed
+
+On two wires, the speed `01` (high) sets SWCLK to 907 kHz. The speeds `02` and `03` set 478 kHz.
+The WCH-LinkE uses faster clocks in some frames (see [Speed setting](#speed-setting)). The processor does not.
+On one wire, the speed has no effect.
+
+### Hardware test
+
+A real target must confirm these items (work item #71):
+
+- The connect on both wires, and the try of one wire on a CH32V20x.
+- The reset sequence. The WCH-LinkE reset is not captured on the wire.
+- The DMI reads at 907 kHz on two wires.
+- wlink and minichlink with the WCH ID build.
+
 ## Byte order
 
 Memory read data on endpoint `0x82` holds each 32-bit word with the most significant byte first.
@@ -695,4 +809,4 @@ The table lists the questions of epic #63 and their state.
 | Meaning of `0d 03`, `0d 04`, `0d 05`, `06 01 04`, `11 01 05/06`, `02 01 05/07` | **Open.** The observed behavior is in this document. |
 | Does the probe do target accesses of its own? | Answered: the connect command halts the core. The commands `0x11`, `06 01` and `0d 04` read the target. The quit command resumes the core (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). |
 | Meaning of the 85-clock frames, the response bits, the tail bits, and the failure of one-wire frames in the `dump` captures | **Open.** The operation field values are answered: a write bit and a parity bit (see [Wire frame format](#wire-frame-format)). |
-| `0x0e` (disable debug) | **Open.** No capture used it. |
+| `0x0e` (disable debug) | **Open.** No capture used it. The personality does the quit (see [Commands](#commands)). |
