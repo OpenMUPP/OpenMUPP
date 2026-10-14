@@ -827,10 +827,12 @@ bool Processor::selectDevice(uint8_t index) {
 }
 
 uint8_t Processor::dpTransfer(uint8_t request, uint32_t &data) {
-   if(port_ == Port::Jtag) {
-      return jtag_.transfer(request, data);
+   const uint8_t value = port_ == Port::Jtag ? jtag_.transfer(request, data) : swd_.transfer(request, data);
+   // The host stopped the WAIT retries: not an error of the wire.
+   if(value != dap::ackOk && !(value == dap::ackWait && aborted())) {
+      ++errorCount_;
    }
-   return swd_.transfer(request, data);
+   return value;
 }
 
 bool Processor::writeAbort(PacketReader &in, PacketWriter &out) {

@@ -61,6 +61,11 @@
 //   1 CMSIS-DAP. The status is DAP_OK (0) or DAP_ERROR (0xFF) for a code
 //   that is not a personality. Without a personality switch (an image with one
 //   personality), the command replies ID_DAP_Invalid.
+// - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
+//   that end with an error on the wire: FAULT, no acknowledge, a parity
+//   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
+//   and a value mismatch are not errors of the wire. The error LED shows
+//   the count (ErrorLed.h).
 //
 // DAP_QueueCommands packets wait. The next packet with another command
 // runs the queued packets and then itself, back to back. The responses of
@@ -243,6 +248,12 @@ class Processor final : private TransferAbort {
       return port_ != Port::None;
    }
 
+   // Number of transfers with an error on the wire. It wraps at 2^32: only
+   // the difference between two values counts.
+   [[nodiscard]] uint32_t errorCount() const {
+      return errorCount_;
+   }
+
    private:
    enum class Port : uint8_t { None, Swd, Jtag };
 
@@ -288,7 +299,8 @@ class Processor final : private TransferAbort {
    // Selects the device of a transfer command: true when the port can do
    // the transfers.
    [[nodiscard]] bool selectDevice(uint8_t index);
-   // One transfer on the connected port, as DapSwd::transfer()
+   // One transfer on the connected port, as DapSwd::transfer(). Counts
+   // the errors of the wire.
    [[nodiscard]] uint8_t dpTransfer(uint8_t request, uint32_t &data);
 
    DapSwd &swd_;
@@ -304,6 +316,7 @@ class Processor final : private TransferAbort {
    uint16_t matchRetries_{ 0 };
    uint32_t matchMask_{ 0 };
    uint32_t clockHz_{ defaultClockHz };
+   uint32_t errorCount_{ 0 };
 
    // The request packets in order: the packet that runs, the
    // DAP_QueueCommands packets that wait, and the packets that submit()

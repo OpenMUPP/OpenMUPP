@@ -454,10 +454,12 @@ TEST_CASE("DAP JTAG: WAIT retries, and the retry limit") {
          cat({ { 0x05, 0x03, 0x01 }, word(b.chain.dpidr) }));
    CHECK(b.chain.waits == 6);
    CHECK(b.chain.memory[0x20000000] == 0xCAFEF00D);
+   CHECK(b.dap.errorCount() == 0);
 
    // One retry: the AP read after the AP write gets WAIT.
    CHECK(b.run({ 0x04, 0x00, 0x01, 0x00, 0x00, 0x00 }) == V{ 0x04, 0x00 });
    CHECK(b.run(cat({ { 0x05, 0x00, 0x02, writeTar }, word(0x20000000), { readDrw } })) == V{ 0x05, 0x01, 0x02 });
+   CHECK(b.dap.errorCount() == 1);
 }
 
 TEST_CASE("DAP JTAG: value match") {
