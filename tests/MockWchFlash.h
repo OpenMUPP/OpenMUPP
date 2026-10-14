@@ -9,6 +9,8 @@
 //   is open locks the controller until the next reset, as the reference
 //   manuals say.
 // - CTLR with STRT: MER erases the main flash, OBER the option bytes.
+//   Erased flash and erased option bytes read as the erased word of the
+//   chip.
 //   OBWRE is cleared by a CTLR write with OBWRE 0.
 // - With OBPG: a half-word write to the option bytes programs the low byte
 //   and its inverse. The half word must be erased. Any other write gives an
@@ -54,7 +56,7 @@ class MockWchFlash {
       , dm_(dm)
       , chip_(chip) {
       eraseMain();
-      options.fill(0xffff);
+      options.fill(erasedOption());
       setOption(0, wchlink::fpec::rdprUnprotected);
       for(std::size_t i = 1; i < chip_.optionBytes; ++i) {
          setOption(i, 0xff);
@@ -132,6 +134,12 @@ class MockWchFlash {
    static constexpr uint16_t csrMstatus = 0x0300;
    // An ebreak of the stub
    static constexpr uint32_t stubEbreak = 0x15c;
+
+   // An erased option byte reads as the low half of the erased word
+   // (CH32V20x: 0xe339, reference manual 32.6.3).
+   [[nodiscard]] uint16_t erasedOption() const {
+      return static_cast<uint16_t>(chip_.erasedWord);
+   }
 
    void eraseMain() {
       for(uint32_t i = 0; i < chip_.size; i += 4) {
@@ -298,7 +306,7 @@ class MockWchFlash {
          eraseMain();
          ++massErases;
       } else if((mode & fpec::ober) != 0 && obwre) {
-         options.fill(0xffff);
+         options.fill(erasedOption());
          ++optionErases;
       } else {
          errors.push_back("STRT without an operation");
@@ -318,7 +326,7 @@ class MockWchFlash {
          errors.push_back("option byte that the chip does not have");
          return;
       }
-      if(options[index] != 0xffff) {
+      if(options[index] != erasedOption()) {
          errors.push_back("option byte write without erase");
       }
       const auto byte = static_cast<uint8_t>(value);
