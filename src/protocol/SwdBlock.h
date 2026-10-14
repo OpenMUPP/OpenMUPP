@@ -40,6 +40,10 @@
 // The status is OK only for an OK acknowledge without a parity error, else
 // FAILED. OpenOCD does not read the ack byte, so the status is how it sees
 // a failed transfer. (The original firmware replied OK in all cases.)
+//
+// errorCount() counts the IN_OUT transfers with the status FAILED, for the
+// error LED (ErrorLed.h). The raw JTAG block has no acknowledge, so the
+// Versaloon personality cannot see the errors of JTAG.
 
 #include <cstddef>
 #include <cstdint>
@@ -125,6 +129,12 @@ class SwdBlock final : public SubCommandBlock {
    public:
    explicit SwdBlock(SwdPort &port);
 
+   // Number of IN_OUT transfers that failed. It wraps at 2^32: only the
+   // difference between two values counts.
+   [[nodiscard]] uint32_t errorCount() const {
+      return errorCount_;
+   }
+
    protected:
    void runSubCommand(const SubCommand &command, Reply &reply) override;
 
@@ -133,6 +143,7 @@ class SwdBlock final : public SubCommandBlock {
    [[nodiscard]] Status sequenceOut(art::span<const uint8_t> payload);
 
    SwdPort &port_;
+   uint32_t errorCount_{ 0 };
 };
 
 } // namespace protocol
