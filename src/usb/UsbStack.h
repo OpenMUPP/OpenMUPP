@@ -13,8 +13,12 @@
 //   dual                 both. The constructor selects the active one, and
 //                        the stack has only its descriptors and its USB
 //                        function. The other function is not used.
+//   wch-link             the WCH-Link interface, VSL_WITH_WCH_LINK
+//                        (usb/WchLinkDescriptors.h, usb/WchLinkFunction.h)
 //
-// The serial port is the same in each personality.
+// The serial port is the same in each personality, except wch-link: its
+// two bulk pairs leave no packet memory for a serial port, so the
+// device has no serial port, and the UART bridge and the debug log are off.
 //
 // The USB interrupt only queues the events. poll() runs the USB protocol in
 // the main loop. The OUT endpoint of the protocol interface is double-buffered: the hardware
@@ -36,6 +40,9 @@
 #if defined(VSL_WITH_VERSALOON)
 #include "usb/VersaloonFunction.h"
 #endif
+#if defined(VSL_WITH_WCH_LINK)
+#include "usb/WchLinkFunction.h"
+#endif
 
 #if !defined(ART_STM32_HAS_USB_DEVICE_CONTROLLER)
 #error "libart-stm32 has no USB device controller for this device"
@@ -55,6 +62,10 @@ class UsbStack {
             protocol::UsbToXxxHandler &usbToXxx,
             personality::PersonalitySwitch &personalitySwitch,
             cmsisdap::Processor &processor);
+#elif defined(VSL_WITH_WCH_LINK)
+   // processor: runs the WCH-Link requests (see usb/WchLinkFunction.h). It
+   // must outlive the stack.
+   explicit UsbStack(wchlink::Processor &processor);
 #elif defined(VSL_WITH_CMSIS_DAP)
    // processor: runs the CMSIS-DAP commands (see usb/CmsisDapFunction.h).
    // It must outlive the stack.
@@ -84,7 +95,8 @@ class UsbStack {
    // Delivers the serial port events at the front of the queue, and no
    // other events. In the CMSIS-DAP personality, also the packet events of
    // the CMSIS-DAP endpoints (usb/SerialEventQueue.h). Call it during a
-   // command (see protocol/Background.h), not in the main loop.
+   // command (see protocol/Background.h), not in the main loop. The
+   // WCH-Link personality has no serial port: the call delivers no event.
    void pollSerial();
 
    // True when USB events wait for poll(). The main loop must not sleep
@@ -108,6 +120,9 @@ class UsbStack {
 #if defined(VSL_WITH_CMSIS_DAP)
       count += dap_.commandCount();
 #endif
+#if defined(VSL_WITH_WCH_LINK)
+      count += wch_.commandCount();
+#endif
       return count;
    }
 
@@ -116,24 +131,34 @@ class UsbStack {
       return active_;
    }
 
+#if !defined(VSL_WITH_WCH_LINK)
    // The CDC-ACM serial port: the UART bridge, or the debug log in a
-   // VSL_DEBUG_CDC build (see debug/DebugLog.h).
+   // VSL_DEBUG_CDC build (see debug/DebugLog.h). The WCH-Link personality
+   // has none.
    art::usb::CdcAcmFunctionBase &serialPort() {
       return serialPort_;
    }
+#endif
 
    private:
+#if defined(VSL_WITH_WCH_LINK)
+   static constexpr uint8_t usedEndpoints = wch::endpointCount;
+#else
+   static constexpr uint8_t usedEndpoints = endpointCount;
    // Queue sizes of the serial port
    static constexpr std::size_t serialRxSize = 256;
    static constexpr std::size_t serialTxSize = 256;
+#endif
 
    static void setPullUp(void *context, bool enable);
 
+#if !defined(VSL_WITH_WCH_LINK)
    // VSL_DEBUG_CDC: the CDC port carries the log, so received data is
    // dropped.
    void discardSerialInput();
+#endif
 
-   hw::UsbDevice hardware_{ endpointCount };
+   hw::UsbDevice hardware_{ usedEndpoints };
    SerialEventQueue<16> events_;
    Stm32UsbDeviceController controller_;
    personality::Personality active_;
@@ -144,7 +169,11 @@ class UsbStack {
 #if defined(VSL_WITH_CMSIS_DAP)
    CmsisDapFunction dap_;
 #endif
+#if defined(VSL_WITH_WCH_LINK)
+   WchLinkFunction wch_;
+#else
    art::usb::CdcAcmFunction<serialRxSize, serialTxSize> serialPort_;
+#endif
 };
 
 } // namespace usb

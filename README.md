@@ -5,6 +5,7 @@ The firmware is compatible with the original Versaloon USB protocol, so unmodifi
 It also has a USB-CDC (Communication Device Class) serial port, which is bridged to a UART.
 A build option selects a second USB personality, CMSIS-DAP v2, for OpenOCD, pyOCD and probe-rs (see [docs/cmsis-dap.md](docs/cmsis-dap.md)).
 A dual image has both personalities and selects one at run time.
+A third personality, WCH-Link, debugs WCH RISC-V chips (CH32V) with `wlink` and `minichlink` (see [docs/wch-link.md](docs/wch-link.md)).
 
 ## Status
 
@@ -31,6 +32,12 @@ The CMSIS-DAP personality is a CMSIS-DAP v2 probe:
 
 The dual image has both personalities.
 A switch command or the key selects the other personality, and a flash page stores it.
+
+The WCH-Link personality is a WCH-LinkE in RISC-V mode:
+
+- It reads and writes the memory of a CH32V003 (one wire) and a CH32V20x (two wires), and it erases, programs, protects and unprotects the flash.
+- It has no serial port, no UART bridge and no debug log, and it is not part of the dual image.
+- It has not passed a hardware test yet (work item #71).
 
 Hardware test status:
 
@@ -90,7 +97,7 @@ cmake --build --preset mini -j
 
 The build directory is `build/<preset>`, here `build/mini`.
 The presets `mini`, `otheruse` and `stlinkv2` build the Release images of one board.
-Add `-cmsis-dap` or `-dual` for the other personalities, for example `mini-cmsis-dap`.
+Add `-cmsis-dap`, `-dual` or `-wch-link` for the other personalities, for example `mini-cmsis-dap`.
 `mini-debug` is the Debug build of the Mini.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
@@ -140,7 +147,8 @@ The CMake options are:
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [Boards](#boards)). |
 | `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse. |
-| `VSL_PROTOCOL` | `versaloon` | USB personality of the image: `versaloon`, `cmsis-dap` or `dual`. A `cmsis-dap` image has the CMSIS-DAP v2 interface, `0403:9b3c`, instead of the Versaloon interface. A `dual` image has both personalities, and one is active after each start (see [docs/usb-device.md](docs/usb-device.md#dual-image)). The serial port and the UART bridge are in all images. See [docs/cmsis-dap.md](docs/cmsis-dap.md). |
+| `VSL_PROTOCOL` | `versaloon` | USB personality of the image: `versaloon`, `cmsis-dap`, `dual` or `wch-link`. A `cmsis-dap` image has the CMSIS-DAP v2 interface, `0403:9b3c`, instead of the Versaloon interface. A `dual` image has both personalities, and one is active after each start (see [docs/usb-device.md](docs/usb-device.md#dual-image)). A `wch-link` image has the WCH-Link interface, `1209:0001`, and no serial port (see [docs/wch-link.md](docs/wch-link.md)). The serial port and the UART bridge are in all other images. See [docs/cmsis-dap.md](docs/cmsis-dap.md). |
+| `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only for `VSL_PROTOCOL=wch-link`: use the USB ID `1a86:8010` of WCH, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [docs/wch-link.md](docs/wch-link.md#usb-id)). |
 | `VSL_DEFAULT_PROTOCOL` | `versaloon` | Only for `VSL_PROTOCOL=dual`: the personality when no personality is stored. `versaloon` or `cmsis-dap`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [docs/boards.md](docs/boards.md#board-definitions)). Not allowed in a `Release` build. |
@@ -233,6 +241,10 @@ A firmware image built with `-DVSL_PROTOCOL=cmsis-dap` shows as a USB device wit
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 The serial port works as in the default image.
 
+A firmware image built with `-DVSL_PROTOCOL=wch-link` shows as a USB device with the ID `1209:0001` and the product name `Versaloon WCH-Link`.
+The host tools `wlink` and `minichlink` find the probe if it has the ID `1a86:8010` (see [docs/wch-link.md](docs/wch-link.md#use-the-probe)).
+This image has no serial port.
+
 A firmware image built with `-DVSL_PROTOCOL=dual` has both personalities.
 To change the personality, send a switch command, or use the key.
 `tools/vsl_personality.py` sends the switch command (see [Tools](#tools)).
@@ -267,6 +279,7 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/debug-log.md](docs/debug-log.md): the debug log over the serial port in a `Debug` build.
 - [docs/cmsis-dap.md](docs/cmsis-dap.md): the CMSIS-DAP personality and its command processor for SWD and JTAG.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
+- [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule and size.
 - [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures (`docs/wch-link-captures/`).
 - [docs/development.md](docs/development.md): build outputs, unit tests, the flash speed benchmark, code format, version, CI and branches.
 - [docs/plan.md](docs/plan.md): the plan and the work items.

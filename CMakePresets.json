@@ -84,6 +84,28 @@
       }
     },
     {
+      "name": "protocol-wch-link",
+      "description": "WCH-Link personality",
+      "hidden": true,
+      "cacheVariables": {
+        "VSL_PROTOCOL": "wch-link"
+      }
+    },
+    {
+      "name": "protocol-wch-link-wch-id",
+      "description": "WCH-Link personality with the USB ID of WCH, for personal use only",
+      "hidden": true,
+      "inherits": [
+        "protocol-wch-link"
+      ],
+      "cacheVariables": {
+        "VSL_WCH_LINK_WCH_USB_ID": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
       "name": "debug",
       "description": "Debug build: debug log on the serial port, SWD on",
       "hidden": true,
@@ -131,6 +153,22 @@
       ]
     },
     {
+      "name": "mini-wch-link",
+      "displayName": "Versaloon Mini, WCH-Link",
+      "inherits": [
+        "board-mini",
+        "protocol-wch-link"
+      ]
+    },
+    {
+      "name": "mini-wch-link-wch-id",
+      "displayName": "Versaloon Mini, WCH-Link, USB ID of WCH",
+      "inherits": [
+        "board-mini",
+        "protocol-wch-link-wch-id"
+      ]
+    },
+    {
       "name": "otheruse",
       "displayName": "OtherUse",
       "inherits": [
@@ -154,6 +192,14 @@
       ]
     },
     {
+      "name": "otheruse-wch-link",
+      "displayName": "OtherUse, WCH-Link",
+      "inherits": [
+        "board-otheruse",
+        "protocol-wch-link"
+      ]
+    },
+    {
       "name": "stlinkv2",
       "displayName": "ST-Link/V2",
       "inherits": [
@@ -174,6 +220,14 @@
       "inherits": [
         "board-stlinkv2",
         "protocol-dual"
+      ]
+    },
+    {
+      "name": "stlinkv2-wch-link",
+      "displayName": "ST-Link/V2, WCH-Link",
+      "inherits": [
+        "board-stlinkv2",
+        "protocol-wch-link"
       ]
     },
     {
@@ -208,6 +262,14 @@
       "configurePreset": "mini-dual-cmsis-dap"
     },
     {
+      "name": "mini-wch-link",
+      "configurePreset": "mini-wch-link"
+    },
+    {
+      "name": "mini-wch-link-wch-id",
+      "configurePreset": "mini-wch-link-wch-id"
+    },
+    {
       "name": "otheruse",
       "configurePreset": "otheruse"
     },
@@ -220,6 +282,10 @@
       "configurePreset": "otheruse-dual"
     },
     {
+      "name": "otheruse-wch-link",
+      "configurePreset": "otheruse-wch-link"
+    },
+    {
       "name": "stlinkv2",
       "configurePreset": "stlinkv2"
     },
@@ -230,6 +296,10 @@
     {
       "name": "stlinkv2-dual",
       "configurePreset": "stlinkv2-dual"
+    },
+    {
+      "name": "stlinkv2-wch-link",
+      "configurePreset": "stlinkv2-wch-link"
     },
     {
       "name": "host-tests",

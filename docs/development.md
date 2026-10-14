@@ -13,6 +13,7 @@ The build writes these files into the build directory:
   An example is `versaloon-ng-mini-app-8k-Release-v0.1.0.hex`.
   An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-ng-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
   An image with `VSL_PROTOCOL=dual` has `-dual` after the board, or `-dual-cmsis-dap` with `VSL_DEFAULT_PROTOCOL=cmsis-dap`.
+  An image with `VSL_PROTOCOL=wch-link` has `-wch-link` after the board, or `-wch-link-wch-id` with `VSL_WCH_LINK_WCH_USB_ID=ON`.
 - `versaloon-ng-<image>.map`, the linker map of each image.
 - `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
 - `versaloon-ng-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
@@ -47,6 +48,8 @@ The default is `/usr`.
 | `mini-cmsis-dap`, `otheruse-cmsis-dap`, `stlinkv2-cmsis-dap` | Mini, OtherUse, ST-Link/V2 | `cmsis-dap` | Release |
 | `mini-dual`, `otheruse-dual`, `stlinkv2-dual` | Mini, OtherUse, ST-Link/V2 | `dual` | Release |
 | `mini-dual-cmsis-dap` | Mini | `dual`, with `VSL_DEFAULT_PROTOCOL=cmsis-dap` | Release |
+| `mini-wch-link`, `otheruse-wch-link`, `stlinkv2-wch-link` | Mini, OtherUse, ST-Link/V2 | `wch-link` | Release |
+| `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
 | `host-tests` | Host | - | Debug |
 
@@ -237,6 +240,8 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PROTOCOL=dual`, plus the size check.
   Each limit of the dual image is 1 KB smaller, because the last flash page holds the stored personality.
 - `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
+- `build-mini-wch-link`, `build-otheruse-wch-link`, `build-stlinkv2-wch-link`: the same release builds with `VSL_PROTOCOL=wch-link`, plus the size check.
+- `build-mini-wch-link-wch-id`: the `wch-link` build of the Mini with the USB ID of WCH, plus the size check. The job keeps no artifact, because the vendor ID belongs to WCH.
 
 Each build job configures and builds the preset with the name of the job, without `build-`.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.

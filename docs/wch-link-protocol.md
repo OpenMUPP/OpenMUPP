@@ -500,14 +500,14 @@ The personality speaks the protocol with these parts:
 | Target | `src/protocol/wchlink/WchLinkTarget.h` | Connects the processor to the debug module layer and the wire engine |
 
 The host tests are in `tests/TestWchLink.cpp`. They send the packets through the USB function, with the wire engine on mock pins and a mock DM.
-The personality is not in a firmware image yet. Work item #70 adds the build option.
+The build option `VSL_PROTOCOL=wch-link` puts the personality into a firmware image (see [WCH-Link personality](wch-link.md)).
 
 ### USB
 
 - The interface has the endpoint numbers of the WCH-LinkE, with 64 bytes each. The interface has no CDC interfaces.
   The endpoints and EP0 use 408 bytes of the 512 bytes of packet memory.
 - The default USB ID is `1209:0001`, the test ID of pid.codes. It stays until the project has its own product ID.
-  The build define `VSL_WCH_LINK_WCH_USB_ID` selects `1a86:8010`. Use this ID only for personal use, because the vendor ID belongs to WCH.
+  The CMake option `VSL_WCH_LINK_WCH_USB_ID` (a build define of the same name) selects `1a86:8010`. Use this ID only for personal use, because the vendor ID belongs to WCH.
 - The function takes one request at a time. The command OUT endpoint gets a NAK until the host reads the response.
 - The function arms the data OUT endpoint `0x02` only while the processor takes data: in the stub phase and in the data phase of a program sequence (see [Flash](#flash)).
   A packet is written to the target before the next request runs. Thus a quit directly after the data (minichlink) finds the last block programmed.
