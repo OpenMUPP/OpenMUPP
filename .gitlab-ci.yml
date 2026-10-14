@@ -161,3 +161,37 @@ build-mini-dual-cmsis-dap:
     PRESET: mini-dual-cmsis-dap
     BOARD: mini
     PROTOCOL_TAG: "-dual-cmsis-dap"
+
+# The WCH-Link personality (VSL_PROTOCOL=wch-link) on all boards
+.build-wch-link-template:
+  extends: .build-board-template
+  variables:
+    PROTOCOL_TAG: "-wch-link"
+
+build-mini-wch-link:
+  extends: .build-wch-link-template
+  variables:
+    PRESET: mini-wch-link
+    BOARD: mini
+
+build-otheruse-wch-link:
+  extends: .build-wch-link-template
+  variables:
+    PRESET: otheruse-wch-link
+    BOARD: otheruse
+
+build-stlinkv2-wch-link:
+  extends: .build-wch-link-template
+  variables:
+    PRESET: stlinkv2-wch-link
+    BOARD: stlinkv2
+
+# The wch-link image with the USB ID of WCH (VSL_WCH_LINK_WCH_USB_ID). The
+# job checks the build and the size only. It keeps no artifact, because the
+# vendor ID belongs to WCH (docs/wch-link.md).
+build-mini-wch-link-wch-id:
+  extends: .build-wch-link-template
+  variables:
+    PRESET: mini-wch-link-wch-id
+    BOARD: mini
+  artifacts: !reset null
