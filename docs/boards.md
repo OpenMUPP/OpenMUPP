@@ -62,12 +62,13 @@ This function does these steps:
 The JTAG, SWD, UART and Vref pins stay inputs until their drivers configure them.
 
 `main()` starts the USB device when the clock comes from the crystal (see [USB device](usb-device.md)).
-The main loop runs the USB device and the UART bridge. It also drives the LEDs:
+The main loop runs the USB device and the UART bridge. It also drives the LEDs.
+A `wch-link` image has no serial port and no UART bridge (see [WCH-Link personality](wch-link.md)).
 
 | LED | Meaning |
 |---|---|
 | Power | On when the Vref pin has a voltage above 1.8 V. Off when the voltage is below 1.5 V. The dongle measures the voltage each 100 ms. |
-| State | Off when the dongle is idle. One flash of 40 ms for each command of the host (Versaloon or CMSIS-DAP). |
+| State | Off when the dongle is idle. One flash of 40 ms for each command of the host (Versaloon, CMSIS-DAP or WCH-Link). |
 | USB | On when the host has configured the USB device. |
 
 The power LED shows the target voltage, from the target supply or from the dongle supply.
@@ -93,6 +94,7 @@ In the Versaloon personality, these are the failed `IN_OUT` transfers of the `SW
 The `JTAG_RAW` block has no acknowledge, so the Versaloon personality does not show JTAG errors.
 A host can cause probe errors in normal operation, for example when it scans for access ports that are not there.
 Thus a short double flash at the connection is not always a problem.
+The WCH-Link personality counts no probe errors, so it never shows the double flash.
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
