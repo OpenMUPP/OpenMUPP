@@ -18,6 +18,9 @@ namespace personality {
 enum class Personality : uint8_t {
    Versaloon = 0,
    CmsisDap = 1,
+   // Only in a wch-link image (VSL_PROTOCOL=wch-link). It is not in `all`:
+   // no dual image has it, so it is never stored or switched to.
+   WchLink = 2,
 };
 
 // The code of a personality in the switch commands and in the settings page
@@ -32,12 +35,14 @@ constexpr const char *name(Personality personality) {
       return "Versaloon";
    case Personality::CmsisDap:
       return "CMSIS-DAP";
+   case Personality::WchLink:
+      return "WCH-Link";
    }
    return "unknown";
 }
 
-// The personalities that this firmware knows, in the order of the cycle.
-// A new personality gets the next code and one entry here.
+// The personalities of a dual image, in the order of the cycle. A new
+// personality of a dual image gets the next code and one entry here.
 inline constexpr std::array<Personality, 2> all{ Personality::Versaloon, Personality::CmsisDap };
 
 // The largest number of personalities that the settings page can store
