@@ -17,6 +17,7 @@ To start the legacy bootloader, hold the key (PB9) down while you connect the bo
 A firmware image built with `VSL_PROTOCOL=cmsis-dap` has no Versaloon interface.
 It has no `VERSALOON_FW_UPDATE` command.
 Use the key to start the bootloader.
+A firmware image built with `VSL_PROTOCOL=wch-link` has no `VERSALOON_FW_UPDATE` command either. Use the key.
 A dual image in the CMSIS-DAP personality has no `VERSALOON_FW_UPDATE` command either.
 Change it to the Versaloon personality first, or use the key (see [Dual image](usb-device.md#dual-image)).
 

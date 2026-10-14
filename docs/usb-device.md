@@ -120,14 +120,16 @@ The CMake option `VSL_PROTOCOL` selects the personality of the image:
 |---|---|---|---|
 | `versaloon` (default) | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/`) |
 | `cmsis-dap` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
-| `dual` | One of the two, selected at each start | One of the two | All, and `personality/`, `board/SettingsFlashPage.cpp` |
+| `dual` | One of the two, selected at each start | One of the two | All except `wch-link`, and `personality/`, `board/SettingsFlashPage.cpp` |
+| `wch-link` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `VSL_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
 
-The option defines `VSL_WITH_VERSALOON` for the `versaloon` image and `VSL_WITH_CMSIS_DAP` for the `cmsis-dap` image.
+The option defines `VSL_WITH_VERSALOON` for the `versaloon` image, `VSL_WITH_CMSIS_DAP` for the `cmsis-dap` image and `VSL_WITH_WCH_LINK` for the `wch-link` image.
 The `dual` image gets both defines and `VSL_DUAL_PERSONALITY`.
 `usb::UsbStack` and `main.cpp` use the defines to select the USB function, the descriptors and the protocol objects.
 The CMake file also removes the source files of the other personality.
 Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
-All images share the CDC-ACM serial port, the UART bridge, the debug log and the LEDs.
+All images except `wch-link` share the CDC-ACM serial port, the UART bridge and the debug log. All images share the LEDs.
+The `wch-link` image has two bulk endpoint pairs and no room in the packet memory for the CDC-ACM endpoints, so it has no serial port.
 
 The CMSIS-DAP image differs from the Versaloon image in these points:
 
