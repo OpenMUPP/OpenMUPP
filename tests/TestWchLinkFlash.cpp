@@ -315,8 +315,10 @@ TEST_CASE("WCH-Link flash: program sequence of wlink with the host stub") {
       CHECK(fb.bench.transact(request(0x02, { 0x02 })) == reply(0x02, 0x02));
       CHECK(controller.isArmed(dataOut));
       fb.program(image);
-      CHECK_FALSE(controller.isArmed(dataOut));
+      // Armed until 02 08: a host can send more than the area.
+      CHECK(controller.isArmed(dataOut));
       CHECK(fb.bench.transact(request(0x02, { 0x08 })) == reply(0x02, 0x08));
+      CHECK_FALSE(fb.bench.processor.wantsData());
 
       for(std::size_t i = 0; i < image.size(); i += 4) {
          CAPTURE(i);
@@ -377,6 +379,21 @@ TEST_CASE("WCH-Link flash: the last block can be short, with an odd length") {
       }
       fb.checkClean();
    }
+}
+
+TEST_CASE("WCH-Link flash: packets after the end of the area are taken and dropped") {
+   FlashBench fb(Wire::One);
+   const Bytes image = pattern(1024 + 100, 0x31);
+   fb.start(0x0800'0000, static_cast<uint32_t>(image.size()));
+   fb.program(image);
+   // A host that pads the image to whole blocks: no NAK, no acknowledge
+   CHECK(fb.bench.controller().isArmed(dataOut));
+   REQUIRE(fb.send(Bytes(1024 - 100, 0xff)));
+   CHECK_FALSE(fb.ack().has_value());
+   CHECK(fb.flash.calls.size() == 3);
+   CHECK(fb.bench.transact(request(0x02, { 0x08 })) == reply(0x02, 0x08));
+   CHECK_FALSE(fb.bench.processor.wantsData());
+   fb.checkClean();
 }
 
 TEST_CASE("WCH-Link flash: minichlink sends 256-byte transfers, reads no acknowledge, and quits") {

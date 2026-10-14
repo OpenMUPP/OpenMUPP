@@ -448,7 +448,10 @@ bool Processor::wantsData() const {
    if(hasDataOut_) {
       return false;
    }
-   return (program_ == Program::Stub && !flash_.stubComplete()) || (program_ == Program::Data && !flash_.dataComplete());
+   // After the end of the area, the data phase takes packets and drops
+   // them: a host can send more bytes than the area (padding), and a NAK
+   // would make it wait for its timeout.
+   return (program_ == Program::Stub && !flash_.stubComplete()) || program_ == Program::Data;
 }
 
 void Processor::submitData(art::span<const uint8_t> packet) {

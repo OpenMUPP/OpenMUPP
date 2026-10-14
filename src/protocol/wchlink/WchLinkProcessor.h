@@ -264,7 +264,8 @@ class Processor {
    art::span<const uint8_t> dataPacket();
 
    // The program sequence takes a packet of the data OUT endpoint, and none
-   // waits.
+   // waits. The data phase takes packets until it ends, also after the end
+   // of the area.
    [[nodiscard]] bool wantsData() const;
    // Stores a packet of the data OUT endpoint for runData(). Needs
    // wantsData(). A packet of more than packetSize bytes is cut.

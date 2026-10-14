@@ -667,6 +667,7 @@ If the hart does not halt, the processor halts it, and the call fails.
 - A short last block is filled with `0xff` to the end of its page, because the stub programs whole pages. The stub call gets the length to the end of the page.
   A length that is not a multiple of 4 fills the last word with `0xff` too.
 - The image goes to the stub in the bytes of the area only. Bytes after the end of the area are ignored.
+  The data OUT endpoint stays armed after the end of the area, until `02 08`, a quit or a connect. Thus a host that sends more bytes than the area (for example padding to a block) gets no NAK. The captures use areas of whole blocks only.
 - A failed block gives `41 01 01 ff`. The failure value is not captured. The processor then takes no more data, and `02 08` gives the error frame.
 - A request out of order gives the error frame. Before a connect, all flash commands give the error frame.
 - A quit, a connect, an erase or a protection command ends a sequence as `02 08` does. A quit then resumes the hart at the reset vector, because `dpc` is the value after the reset.
