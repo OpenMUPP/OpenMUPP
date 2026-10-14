@@ -75,12 +75,21 @@ A board without a working Vref sense keeps the power LED on all the time. This i
 The dongle has no idle indication of the firmware. An idle dongle with no target and no USB host has all LEDs off. A hung main loop shows the same.
 A continuous command stream gives a steady flicker on the state LED, because the LED stays off for at least 40 ms after each flash.
 
-Two fault and event patterns replace the normal function:
+Three fault and event patterns replace the normal function:
 
 | LED | Pattern | Meaning |
 |---|---|---|
+| State | Double flash: two flashes of 60 ms, each 600 ms | A JTAG or SWD transfer failed. The pattern starts at the first error and stops 2 s after the last error. Each new error restarts the 2 s. During the pattern, the state LED does not show the command activity. |
 | State | Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. The power LED still shows the target voltage. |
 | All | Three flashes in 0.6 s, then on | The key has been down for 3 s: the dongle switches the personality of a dual image. After the flashes, all LEDs stay on until you release the key. The dongle then resets. |
+
+A probe error is a transfer that ends with a FAULT acknowledge, no acknowledge, a parity error, or a WAIT acknowledge after all retries.
+In the CMSIS-DAP personality, these are the transfers of `DAP_Transfer` and `DAP_TransferBlock`, on SWD and on JTAG.
+A WAIT that `DAP_TransferAbort` stops and a value mismatch are not probe errors.
+In the Versaloon personality, these are the failed `IN_OUT` transfers of the `SWD` block.
+The `JTAG_RAW` block has no acknowledge, so the Versaloon personality does not show JTAG errors.
+A host can cause probe errors in normal operation, for example when it scans for access ports that are not there.
+Thus a short double flash at the connection is not always a problem.
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
