@@ -73,12 +73,14 @@ For another chip, the connect fails.
 ## Use the probe
 
 On Linux, a udev rule gives a normal user access to the probe.
-Copy `etc/99-versaloon-wch-link.rules` to `/etc/udev/rules.d/`.
+Copy `etc/70-versaloon-wch-link.rules` to `/etc/udev/rules.d/`.
 Then reload the rules with `udevadm control --reload` and plug in the probe again.
 The file has a rule for the default ID and a rule for the ID of WCH.
+The file number must stay below 73, because systemd applies the `uaccess` tag in `73-seat-late.rules`.
+The rule for the default ID also checks the product string, because other devices use the test ID too.
 
 ```text
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="Versaloon WCH-Link", MODE="0660", TAG+="uaccess"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="8010", MODE="0660", TAG+="uaccess"
 ```
 
