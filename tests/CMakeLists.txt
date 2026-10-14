@@ -58,11 +58,13 @@ add_executable(vsl-tests
         TestDebugModule.cpp
         TestCmsisDap.cpp
         TestCmsisDapJtag.cpp
+        TestWchLink.cpp
         TestPowerBlock.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
         ../src/protocol/cmsisdap/DapProcessor.cpp
+        ../src/protocol/wchlink/WchLinkProcessor.cpp
         ../src/protocol/GpioBlock.cpp
         ../src/protocol/JtagRawBlock.cpp
         ../src/protocol/PowerBlock.cpp
@@ -71,6 +73,7 @@ add_executable(vsl-tests
         ../src/protocol/UsbToXxx.cpp
         ../src/usb/VersaloonFunction.cpp
         ../src/usb/CmsisDapFunction.cpp
+        ../src/usb/WchLinkFunction.cpp
         # Logger and printf of libArT, for the log sink test
         ../dependencies/libArT/src/logging/LogManager.cpp
         ../dependencies/libArT/src/streams/Writable.cpp
