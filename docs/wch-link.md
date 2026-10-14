@@ -119,16 +119,28 @@ The question was whether an image with all three personalities fits the Mini.
 The Mini has an STM32F103CB with 128 KB flash.
 The firmware and the linker script use only the first 64 KB, so the limits above apply.
 
-The dual image of the Mini (Versaloon and CMSIS-DAP) has 41,488 bytes.
-The code that only the WCH-Link personality uses has about 6.1 KB (the symbols of the processor, the flash module, the target adapter, the debug module layer and the USB function).
-A combined image would have about 48 KB.
-This is under the dual limits: 56,320 bytes for `app-8k` and 54,272 bytes for `app-10k`.
-The RAM also fits: the combined image adds about 0.5 KB to the 15.9 KB of data and BSS of the dual image, and the RAM has 19.75 KB.
+A build measured the size. The build is a test build only. It links the dual image of the Mini (Versaloon and CMSIS-DAP) and the objects of the WCH-Link personality.
+It has no third descriptor set and no switch code.
 
-This is an estimate. No image was built, because the dual code supports two personalities only:
-a third personality needs its own descriptors set, a switch code and a change of the key cycle.
-The WCH-Link personality has no serial port, but the other two have one. Thus a combined image needs a USB stack that changes its function list.
-Thus a combined image would fit in the first 64 KB, and it does not need the other 64 KB of flash.
+| Image (Mini) | Size | Limit |
+|---|---|---|
+| Dual image | 41,488 bytes | 64,512 bytes |
+| Dual image with the WCH-Link objects | 51,312 bytes | 64,512 bytes |
+| Same, `app-8k` | 51,304 bytes | 56,320 bytes |
+| Same, `app-10k` | 51,312 bytes | 54,272 bytes |
+
+The WCH-Link code adds 9.8 KB.
+The wire engine and the debug module layer are templates, and they are a large part of this size.
+The `app-10k` image has a margin of 2,960 bytes only.
+A third descriptor set and the switch code use some of this margin.
+The data and BSS grow from 15.9 KB to 16.4 KB. The RAM has 19.75 KB.
+
+Thus a combined image fits in the first 64 KB, but the margin for the legacy bootloader is small.
+It does not need the other 64 KB of flash.
+The firmware needs more work for a combined image.
+A third personality needs a descriptor set, a switch code and a change of the key cycle.
+The WCH-Link personality has no serial port, but the other two have one.
+Thus the USB stack must change its function list.
 The combined image is not part of the epic.
 
 ## Hardware test
