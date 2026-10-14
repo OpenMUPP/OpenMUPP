@@ -57,7 +57,8 @@ TEST_CASE("A new error restarts the hold time, but not the pattern") {
    CHECK(led.isActive());
    // The pattern continues from the first error: 1500 % 600 = 300 is off.
    CHECK_FALSE(led.isOn());
-   led.update(2 * ErrorLed::periodMs + 2, 2);
+   // 1802 % 600 = 2 is in the first flash of the fourth period.
+   led.update(3 * ErrorLed::periodMs + 2, 2);
    CHECK(led.isOn());
    led.update(second + ErrorLed::holdMs - 1, 2);
    CHECK(led.isActive());
