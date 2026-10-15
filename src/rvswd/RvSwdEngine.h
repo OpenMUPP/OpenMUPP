@@ -292,7 +292,7 @@ class RvSwdEngine {
       writeBits(request << 1 | (parity(request) ? 1u : 0u), 9);
       // Bit 10: the level of bit 9, then the target drives.
       holdAndRelease();
-      head_ = static_cast<uint8_t>(readBits(4));
+      head_ = handshake(false);
       uint8_t flags = 0;
       // Bits 15-48: the data phase, with a longer low phase before bit 15
       lowPhase();
@@ -308,7 +308,7 @@ class RvSwdEngine {
          }
          static_cast<void>(readBit());
       }
-      tail_ = static_cast<uint8_t>(readBits(4));
+      tail_ = handshake(true);
       // Bit 53 and the stop condition, with a longer low phase before bit 53
       lowPhase();
       pins_.swdioDrive(false);
@@ -356,6 +356,27 @@ class RvSwdEngine {
       pins_.swclk(true);
       waitHalfPeriod();
       return level;
+   }
+
+   // Bits 11-14 and 49-52, SWDIO released before. The target drives the
+   // first bit, the probe drives the third bit (13: low, 51: high), and
+   // SWDIO is released for the second and the fourth bit (analog capture
+   // of the WCH-LinkE). Returns the line levels, the first bit in bit 3.
+   uint8_t handshake(bool probeLevel) {
+      uint32_t value = readBits(2);
+      pins_.swclk(false);
+      pins_.swdioDrive(probeLevel);
+      waitHalfPeriod();
+      value = value << 1 | (pins_.swdio() ? 1u : 0u);
+      pins_.swclk(true);
+      waitHalfPeriod();
+      pins_.swclk(false);
+      pins_.swdioRelease();
+      waitHalfPeriod();
+      value = value << 1 | (pins_.swdio() ? 1u : 0u);
+      pins_.swclk(true);
+      waitHalfPeriod();
+      return static_cast<uint8_t>(value);
    }
 
    // A clock with SWDIO unchanged, then SWDIO released after the rising

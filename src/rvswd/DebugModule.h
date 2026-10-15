@@ -464,9 +464,11 @@ class DebugModule {
    }
 
    // Without a target, a two-wire read also has a parity error: the
-   // check of the response and tail bits comes first.
+   // check of the response and tail bits comes first. A target pulls the
+   // first bit of both low (bits 11 and 49); the probe drives bits 13 and 51.
    Status check(uint8_t flags) {
-      if(engine_.wire() == Wire::Two && engine_.head() == 0b1111 && engine_.tail() == 0b1111) {
+      constexpr uint8_t targetBit = 0b1000;
+      if(engine_.wire() == Wire::Two && (engine_.head() & targetBit) != 0 && (engine_.tail() & targetBit) != 0) {
          return Status::NoTarget;
       }
       return flags != 0 ? Status::Wire : Status::Ok;
