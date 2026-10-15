@@ -107,6 +107,34 @@ constexpr std::optional<uint8_t> adcChannelOf(Pin pin) {
    return std::nullopt;
 }
 
+// One wire (SDI) of the WCH-Link personality: a timer makes the bits on
+// the SWDIO output pin (board/BoardRvSwd.cpp). The output channel is on
+// the pin; the sample channel has no pin output. The DMA1 channels serve
+// the update event and the sample compare of the timer.
+struct OneWireTimer {
+   uint8_t timer;         // TIMn
+   uint8_t channel;       // output channel, 1-4
+   bool complementary;    // the pin is TIMn_CHxN
+   bool partialRemap;     // AFIO TIM3_REMAP partial remap
+   uint8_t sampleChannel; // 1-4
+   uint8_t updateDma;     // DMA1 channel of TIMn_UP
+   uint8_t sampleDma;     // DMA1 channel of the sample channel
+};
+
+// The timer of a SWDIO output pin on the STM32F103 (RM0008 9.3.7 and
+// table 78). Empty when the pin has no supported timer channel.
+constexpr std::optional<OneWireTimer> oneWireTimerOf(Pin tmsOut) {
+   // TIM3_CH1 (partial remap); TIM3_UP on DMA1 ch3, TIM3_CH3 on ch2
+   if(tmsOut == Pin{ Port::B, 4 }) {
+      return OneWireTimer{ 3, 1, false, true, 3, 3, 2 };
+   }
+   // TIM1_CH2N (no remap); TIM1_UP on DMA1 ch5, TIM1_CH1 on ch2
+   if(tmsOut == Pin{ Port::B, 14 }) {
+      return OneWireTimer{ 1, 2, true, false, 1, 5, 2 };
+   }
+   return std::nullopt;
+}
+
 // Target power switch. Drive the pin to the active level to switch on.
 // To switch off, the pin floats (input).
 struct PowerSwitch {
