@@ -396,12 +396,12 @@ TEST_CASE("RVSWD one wire: the pulses are the pulses of the capture") {
       const std::size_t first = firstFall(edges, start);
       CHECK(oneWireBits(edges, first) == frame.bits);
       REQUIRE(first + 81 < edges.size());
-      // A write: within 5 %. A read: the engine waits for the sample point
-      // (600 ns) also for a 1, so the read is slower than the WCH-LinkE
-      // (up to 15 %).
+      // A write: within 5 %. A read: each read bit has the fixed time
+      // oneWireReadBitNs (the timer cannot wait for the line), so the read
+      // is slower than the WCH-LinkE (up to 25 %).
       const double duration = nsOf(edges[first + 81].time - edges[first].time);
       CHECK(duration >= 0.97 * frame.durationNs);
-      CHECK(duration <= (frame.write ? 1.05 : 1.15) * frame.durationNs);
+      CHECK(duration <= (frame.write ? 1.05 : 1.25) * frame.durationNs);
       // The gap to the next frame
       CHECK(nsOf(bench.pins.time - edges[first + 81].time) >= rvswd::oneWireFrameGapNs);
    }
@@ -433,18 +433,84 @@ TEST_CASE("RVSWD one wire: pulse widths of a write and the turnaround of a read"
    bench.checkIdle();
 }
 
-TEST_CASE("RVSWD one wire: the loop code does not add to a frame") {
-   // Each phase ends at a time from the start of the phase before. With
-   // 8 cycles of code at each SWDIO write (82 writes), a write frame keeps
-   // the duration of the capture (39.67 us).
+TEST_CASE("RVSWD one wire: each frame runs on the timer, the loop code does not count") {
    Bench bench(Wire::One);
-   bench.pins.swdioWriteCycles = 8;
+   bench.pins.swdioWriteCycles = 20;
+   const int before = bench.pins.oneWireFrames;
    bench.pins.lineEdges.clear();
    CHECK(bench.engine.write(0x7E, 0x5AA5'0400) == 0);
-   const auto &edges = bench.pins.lineEdges;
-   REQUIRE(edges.size() >= 82);
-   CHECK(nsOf(edges[81].time - edges[0].time) == doctest::Approx(39'670).epsilon(0.02));
+   uint32_t data = 0;
+   CHECK(bench.engine.read(0x7C, data) == 0);
+   CHECK(bench.pins.oneWireFrames == before + 2);
+   CHECK(bench.pins.accesses.back().address == 0x7C);
    bench.checkIdle();
+}
+
+TEST_CASE("RVSWD one wire: the frame layout of the timer") {
+   // A read of dmstatus (0x11): start bit, address, write bit 0, then 32
+   // read bits. A write of 0x7E: start bit, address, write bit 1, data.
+   const rvswd::OneWireTicks t = rvswd::oneWireTicks(72'000'000);
+   CHECK(t.shortLow == 18);
+   CHECK(t.longLow == 62);
+   CHECK(t.high == 27);
+   const uint64_t read = (uint64_t{ 1u << 8 | 0x11u << 1 } << 32) | 0xFFFF'FFFFu;
+   const uint64_t write = (uint64_t{ 1u << 8 | 0x7Eu << 1 | 1u } << 32) | 0x5AA5'0400u;
+   const uint32_t n = rvswd::oneWireFrameBits;
+   const uint32_t head = rvswd::oneWireHeadBits;
+   for(const bool isRead : { true, false }) {
+      CAPTURE(isRead);
+      const uint64_t bits = isRead ? read : write;
+      const uint32_t readFrom = isRead ? head : n;
+      uint32_t start = t.lead;
+      uint32_t lastHeadEnd = 0;
+      for(uint32_t i = 0; i < n; ++i) {
+         CAPTURE(i);
+         const rvswd::OneWireBit bit = rvswd::oneWireBit(t, bits, n, readFrom, i);
+         if(i >= readFrom) {
+            CHECK(bit.low == t.shortLow);
+            CHECK(bit.period == t.readBit);
+         } else {
+            const bool one = (bits >> (n - 1 - i) & 1u) != 0;
+            CHECK(bit.low == (one ? t.shortLow : t.longLow));
+            // Only the bit before the read bits has the turnaround high,
+            // also not the last bit of a write.
+            CHECK(bit.period - bit.low == (i + 1 == readFrom && isRead ? t.turnaroundHigh : t.high));
+         }
+         if(i + 1 == readFrom) {
+            lastHeadEnd = start + bit.period;
+            const rvswd::OneWireTimes times = rvswd::oneWireTimes(t, bits, n, readFrom);
+            if(isRead) {
+               // In the high level after bit 8: after its rising edge, and
+               // before the next falling edge (push-pull would fight there).
+               CHECK(times.switchAt > start + bit.low);
+               CHECK(times.switchAt < lastHeadEnd);
+            }
+         }
+         start += bit.period;
+      }
+      const rvswd::OneWireTimes times = rvswd::oneWireTimes(t, bits, n, readFrom);
+      // After the last bit, before the sample compare of the end period
+      CHECK(times.endAt > start);
+      CHECK(times.endAt < start + t.sample);
+      if(!isRead) {
+         CHECK(times.switchAt == 0);
+         CHECK(lastHeadEnd == start);
+      }
+   }
+}
+
+TEST_CASE("RVSWD one wire: a frame that the timer does not end gives frameFlag") {
+   Bench bench(Wire::One);
+   bench.pins.failOneWireFrame = true;
+   CHECK(bench.engine.write(0x04, 0x1234'5678) == rvswd::frameFlag);
+   uint32_t data = 0xAAAA'AAAAu;
+   CHECK(bench.engine.read(0x04, data) == rvswd::frameFlag);
+   CHECK(data == 0xAAAA'AAAAu);
+   CHECK_FALSE(bench.pins.hostDrives());
+   // The next frame drives the line again: it is high.
+   bench.pins.failOneWireFrame = false;
+   CHECK(bench.engine.write(0x04, 0x1234'5678) == 0);
+   CHECK(bench.pins.registers[0x04] == 0x1234'5678u);
 }
 
 TEST_CASE("RVSWD one wire: the clock rate has no effect") {

@@ -135,6 +135,19 @@ TEST_CASE("adcChannelOf gives the STM32F103 ADC channel of a pin") {
    CHECK_FALSE(board::adcChannelOf({ Port::D, 0 }));
 }
 
+TEST_CASE("oneWireTimerOf gives a timer channel on the SWDIO output of each board") {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2 }) {
+      CAPTURE(def.name);
+      const auto timer = board::oneWireTimerOf(def.debug.tmsOut);
+      REQUIRE(timer);
+      CHECK(timer->channel != timer->sampleChannel);
+      CHECK(timer->updateDma != timer->sampleDma);
+   }
+   CHECK(board::oneWireTimerOf(board::mini.debug.tmsOut)->timer == 3);
+   CHECK(board::oneWireTimerOf(board::stLinkV2.debug.tmsOut)->complementary);
+   CHECK_FALSE(board::oneWireTimerOf({ Port::A, 0 }));
+}
+
 TEST_CASE("isValid checks the crystal and the Vref pin") {
    Definition def = board::mini;
 
