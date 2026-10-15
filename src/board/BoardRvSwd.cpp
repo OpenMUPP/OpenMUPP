@@ -68,6 +68,9 @@ std::array<uint16_t, (rvswd::oneWireFrameBits + 1) * burstWords> table{};
 // Both timers run at HCLK: TIM1 on APB2 (HCLK), TIM3 on APB1 (HCLK/2, the
 // timer clock is twice that, RM0008 7.2).
 rvswd::OneWireTicks ticks{};
+// False below rvswd::oneWireMinClockHz (for example on the HSI after a
+// crystal failure): the frames then fail, and send no bits.
+bool usable = false;
 
 // Words: the GPIO registers allow only word access (RM0008 9.2).
 std::array<uint32_t, sampleWords> sampleBuffer{};
@@ -134,6 +137,7 @@ void initOneWire() {
       hw::Afio::setRemap(AFIO_MAPR_TIM3_REMAP, AFIO_MAPR_TIM3_REMAP_PARTIALREMAP);
    }
    ticks = rvswd::oneWireTicks(SystemCoreClock);
+   usable = SystemCoreClock >= rvswd::oneWireMinClockHz;
 
    TIM_TypeDef &tim = timer();
    const hw::Timer t(&tim);
@@ -183,6 +187,11 @@ void RvSwdPins::init() {
 bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t &samples) {
    TIM_TypeDef &tim = timer();
    stop(tim);
+   if(!usable) {
+      OneWireOut::set();
+      OneWireOut::setConfig<releasedInput>();
+      return false;
+   }
    // The lead-in: CCR 0 keeps the line high while SWDIO becomes the timer
    // output, so the first edge comes from the timer.
    tim.ARR = ticks.lead - 1u;
