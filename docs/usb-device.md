@@ -124,7 +124,11 @@ The CMake option `VSL_PROTOCOL` selects the personality of the image:
 | `wch-link` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `VSL_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
 
 The option defines `VSL_WITH_VERSALOON` for the `versaloon` image, `VSL_WITH_CMSIS_DAP` for the `cmsis-dap` image and `VSL_WITH_WCH_LINK` for the `wch-link` image.
-The `dual` image gets both defines and `VSL_DUAL_PERSONALITY`.
+The `dual` image gets both defines, `VSL_MULTI_PERSONALITY` and `VSL_DEFAULT_PERSONALITY=<code>`.
+`VSL_MULTI_PERSONALITY` marks an image with more than one personality.
+`VSL_DEFAULT_PERSONALITY` is the code of the personality when no personality is stored.
+`personality::all` in `src/personality/Personality.h` is the list of the personalities in the image, in code order.
+The header makes the list from the `VSL_WITH_*` defines.
 `usb::UsbStack` and `main.cpp` use the defines to select the USB function, the descriptors and the protocol objects.
 The CMake file also removes the source files of the other personality.
 Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
@@ -159,8 +163,11 @@ To change the personality, use one of these methods:
 - In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)). The status of a refused switch is `0xFF`.
 - Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the next personality in the list. With two personalities, this is the other one.
 
-The personality code is `0` for Versaloon and `1` for CMSIS-DAP.
-The settings page has room for four personality codes (`0` to `3`). A new personality gets the next code and one entry in `personality::all`.
+The personality code is `0` for Versaloon, `1` for CMSIS-DAP and `2` for WCH-Link.
+The firmware refuses a switch to a code that is not in the image.
+The key cycle uses the code order and skips the personalities that are not in the image.
+The settings page has room for four personality codes (`0` to `3`).
+A new personality gets the next code, one entry in `personality::everyPersonality` and one `VSL_WITH_*` define in `personality::has()`.
 `tools/vsl_personality.py` sends the commands from the host.
 It needs the `pyusb` package:
 

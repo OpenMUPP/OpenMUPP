@@ -107,7 +107,7 @@ TEST_CASE("SWITCH_PERSONALITY refuses a code that is not a personality") {
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
    protocol::CommandProcessor processor(versaloonInfo, nullptr, nullptr, &personalitySwitch);
 
-   CHECK(runVersaloon(processor, { protocol::switchPersonality, 0x02 }) == Bytes{ protocol::switchRefused });
+   CHECK(runVersaloon(processor, { protocol::switchPersonality, 0x03 }) == Bytes{ protocol::switchRefused });
    CHECK(runVersaloon(processor, { protocol::switchPersonality }) == Bytes{ protocol::switchRefused });
    CHECK_FALSE(personalitySwitch.requested().has_value());
 }
