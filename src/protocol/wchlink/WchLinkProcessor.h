@@ -56,9 +56,8 @@
 //   mode-switch commands of the WCH-LinkE.
 // - The payload length is not checked, as on the WCH-LinkE. A missing
 //   payload byte reads 0.
-// - Connect: the wire comes from the chip type of the last configure
-//   command. 0x09 (CH32V00x) selects one wire. Other types try one wire
-//   first, then two wires. The connect does the accesses of the probe
+// - Connect: one wire first, then two wires, for all chip types
+//   (minichlink sends 0x09 also for a CH32V208). The connect does the accesses of the probe
 //   ("Probe actions"): DM registers 0x7e and 0x7d, dmstatus, halt, the chip
 //   ID (0x7f), CSR 0x7c0. It fails with the error frame [0x81][0x55][01][01]
 //   and the pins are released. A chip ID that is not in chipFamilies also

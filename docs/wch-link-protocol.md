@@ -522,7 +522,7 @@ The build option `VSL_PROTOCOL=wch-link` puts the personality into a firmware im
 | `0d 03`, `0d 04` | Reply `03` and `00`. No target access. |
 | `0d ff` | Quit: `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
 | Other `0d` values | The unknown-command reply (see below) |
-| `0c` | Keeps the chip type for the next connect, and sets the speed. Replies `01`. |
+| `0c` | Ignores the chip type, and sets the speed. Replies `01`. |
 | `08` | DMI access. `op` `00` does no access. A failure, or an access before a connect, gives the status `02`. |
 | `03`, then `02 01 0c` | Memory read on endpoint `0x82` |
 | `11` | Reads the four words at the command, and adds the chip ID of the connect |
