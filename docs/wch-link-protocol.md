@@ -479,7 +479,7 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 
 | Status | Cause |
 |---|---|
-| `Wire` | The engine returned a flag: a parity error (two wires), a line that stays low (one wire), or a frame that the timer did not end correctly (one wire, see [One-wire timer](#one-wire-timer)). |
+| `Wire` | The engine returned a flag: a parity error (two wires), a line that stays low (one wire), or a frame that the timer did not end correctly or did not start because the core clock is below 72 MHz (one wire, see [One-wire timer](#one-wire-timer)). |
 | `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini and the OtherUse, because the pull-up of the SWDIO input pin holds the line high. On the ST-Link/V2, nothing holds the line high in a read bit (see [One-wire timer](#one-wire-timer)), so a read without a target can give other values. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
 | `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini and the OtherUse: `abstractcs` reads `ffffffff` (`busy` 1). On the ST-Link/V2, it can end with another status. After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
@@ -991,8 +991,8 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp`). The engine (`src/
   The burst has 3 words on TIM3 (ARR, a reserved word, CCR1) and 4 words on TIM1 (ARR, RCR, CCR1, CCR2). The 4-word burst is not tested.
   A burst of 5 words on TIM3 did not end in time.
   A sample transfer in each write bit also delayed the burst after a row of 1 bits. Bit 8 of a chip ID read then kept the short low time.
-  A burst that ends late shifts the times of each later bit, and no check finds that. Thus the frames fail with `frameFlag` when the core clock is below 72 MHz (for example on the HSI after a crystal failure).
   Thus the sample request is on only for the read bits. The code switches it on in the turnaround and off after the last read bit. The cycle counter times both switches, and the code reads no timer or DMA register during the frame.
+  A burst that ends late shifts the times of each later bit, and no check finds that. Thus the frames fail with `frameFlag` when the core clock is below 72 MHz (for example on the HSI after a crystal failure). Such a frame sends no bits.
 - **Pending requests.** A timer DMA request stays pending until a channel serves it. A request at the end of a frame then made the next frame lose bit 0.
   Thus the last update event of a frame has its own table entry, and the end period (0.9 ms) is long enough to stop the counter.
 

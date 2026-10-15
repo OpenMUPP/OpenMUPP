@@ -83,7 +83,8 @@
 // samples gets the read bits, the first in the MSB. SWDIO is driven high
 // before the frame. After a frame without read bits, it is driven high.
 // After read bits, it is released. false: the timer did not end the
-// frame (frameFlag), SWDIO is released.
+// frame, or the core clock is below oneWireMinClockHz and no bit went out
+// (frameFlag). SWDIO is then released.
 //
 // While SWDIO is released (after read bits, or after a reset with the
 // line held low), the engine drives SWDIO again only when the line is
@@ -127,7 +128,8 @@ enum class Wire : uint8_t {
 inline constexpr uint8_t parityErrorFlag = 0x01;
 // One wire: the line stays low after a read bit.
 inline constexpr uint8_t lineLowFlag = 0x02;
-// One wire: the timer did not end the frame.
+// One wire: the timer did not end the frame, or the core clock is below
+// oneWireMinClockHz.
 inline constexpr uint8_t frameFlag = 0x04;
 
 // A DM register address has 7 bits.
