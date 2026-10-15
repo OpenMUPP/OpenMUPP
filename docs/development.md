@@ -265,6 +265,12 @@ The jobs of the Mini run in each pipeline.
 The jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
+
+The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
+`build-mini` and `run-unit-tests` update the cache, and the other jobs only read it.
+In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
+Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
+After you change the tag of a dependency, remove `build/_deps/<name>-src`.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
 The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
 The ST-Link/V2 has the `standalone` image only.

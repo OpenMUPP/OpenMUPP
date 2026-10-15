@@ -21,8 +21,21 @@ workflow:
       when: never
     - if: "$CI_COMMIT_BRANCH"
 
+# The FetchContent sources (build/_deps) are cached between pipelines. The
+# key is fixed: in CI, CMake checks each cached source against its declared
+# tag and fetches again when the tag changes. The -build directories depend
+# on the preset, so they are not cached. One job of each key pushes the
+# cache; the other jobs only pull it.
+.fetchcontent-cache: &fetchcontent-cache
+  key: fetchcontent-firmware
+  paths:
+    - build/_deps/*-src
+    - build/_deps/*-subbuild
+  policy: pull
+
 lint-code:
   stage: .pre
+  cache: *fetchcontent-cache
   script:
     - clang-format --version
     - cmake --version
@@ -39,6 +52,10 @@ lint-code:
 
 run-unit-tests:
   stage: .pre
+  cache:
+    <<: *fetchcontent-cache
+    key: fetchcontent-host-tests
+    policy: pull-push
   script:
     - cd "$CI_PROJECT_DIR"
     - cmake --preset host-tests -G "Unix Makefiles"
@@ -60,6 +77,7 @@ run-tool-tests:
 # builds versaloon-bootloader for the Mini and the OtherUse.
 .build-board-template:
   stage: build
+  cache: *fetchcontent-cache
   variables:
     BUILD_TYPE: Release
     # Empty for the default personality
@@ -91,6 +109,9 @@ run-tool-tests:
 
 build-mini:
   extends: .build-board-template
+  cache:
+    <<: *fetchcontent-cache
+    policy: pull-push
   variables:
     PRESET: mini
     BOARD: mini
