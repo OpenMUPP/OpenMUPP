@@ -55,7 +55,10 @@
 // with bit 11 and bit 49 high (the pull-up, no target drives) gives
 // Status::NoTarget. A frame with bit 49 high only (the target dropped the
 // frame) gives Status::Wire. One wire: a frame without a target
-// reads 0xffffffff. Thus each dmstatus read checks the version field
+// reads 0xffffffff when a pull-up holds the line high (the Mini and the
+// OtherUse: the SWDIO input pin; the ST-Link/V2 has no pull-up on the
+// line in a read bit, so a read can give other values). Thus each
+// dmstatus read checks the version field
 // (2: spec 0.13), else Status::NoTarget. Other accesses do not detect a
 // missing target on one wire: dmiRead() gives 0xffffffff with Status::Ok,
 // and an abstract command reads abstractcs ffffffff (busy) and ends with
@@ -168,7 +171,8 @@ inline constexpr uint8_t cmderrException = 3;
 
 enum class Status : uint8_t {
    Ok,
-   // The engine returned flags: parity error or line low.
+   // The engine returned flags: parity error, line low, or a frame that
+   // the timer did not end.
    Wire,
    // No target answers (see above).
    NoTarget,

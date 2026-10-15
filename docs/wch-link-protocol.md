@@ -480,8 +480,8 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 | Status | Cause |
 |---|---|
 | `Wire` | The engine returned a flag: a parity error (two wires), a line that stays low (one wire), or a frame that the timer did not end correctly (one wire, see [One-wire timer](#one-wire-timer)). |
-| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](#wire-frame-format)). One wire: a read without a target gives `ffffffff`. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
-| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout`: `abstractcs` reads `ffffffff` (`busy` 1). After a `Timeout`, read `dmstatus` to find a missing target. |
+| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini and the OtherUse, because the pull-up of the SWDIO input pin holds the line high. On the ST-Link/V2, nothing holds the line high in a read bit (see [One-wire timer](#one-wire-timer)), so a read without a target can give other values. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
+| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini and the OtherUse: `abstractcs` reads `ffffffff` (`busy` 1). On the ST-Link/V2, it can end with another status. After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
 | `Unsupported` | A byte access, or a half-word read, with the program buffer method. |
 | `Misaligned` | The address is not a multiple of the access width. The layer sends no frame. |
@@ -973,7 +973,7 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp`). The engine (`src/
 | Board | SWDIO output | Timer channel | Update DMA | Sample channel and DMA |
 |---|---|---|---|---|
 | Mini, OtherUse | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
-| ST-Link/V2 | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
+| ST-Link/V2 (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 
 `board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz).
 
@@ -981,13 +981,17 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp`). The engine (`src/
   On each update event, a DMA burst writes ARR and the CCRs of the next bit. No code runs between two bits.
 - **Times.** The bits have the WCH-LinkE times: a 1 is low for 250 ns, a 0 is low for 860 ns, and the high level is 370 ns.
   The high level after bit 8 of a read is 750 ns. A read bit lasts 1.3 µs.
-- **Read bits.** In the turnaround after bit 8, the code switches SWDIO to open drain.
+- **Read bits.** In the turnaround after bit 8, the code switches SWDIO to open drain. The STM32F1 has no internal pull-up on an output pin.
+  On the Mini and the OtherUse, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 (one SWDIO pin), nothing on the probe holds the line high in a read bit.
   The timer then drives the low pulse of 250 ns, and the target can hold the line low for a 0.
   The sample channel compares at 450 ns. Its DMA copies the input port (`IDR`) to RAM.
   The DMA reads 80 to 210 ns after the compare (measured), thus at 530 to 660 ns.
   That is between the longest 1 (374 ns) and the shortest 0 (824 ns) of the target.
-- **DMA budget.** One DMA transfer takes 80 to 210 ns. The update burst must end within the shortest bit (620 ns).
-  A burst of 5 words did not end in time. A sample transfer in each write bit also delayed the burst after a row of 1 bits: bit 8 of a chip ID read then kept the short low time.
+- **DMA budget.** One DMA transfer takes 80 to 210 ns (measured on TIM3). The update burst must end within the shortest bit (620 ns).
+  The burst has 3 words on TIM3 (ARR, a reserved word, CCR1) and 4 words on TIM1 (ARR, RCR, CCR1, CCR2). The 4-word burst is not tested.
+  A burst of 5 words on TIM3 did not end in time.
+  A sample transfer in each write bit also delayed the burst after a row of 1 bits. Bit 8 of a chip ID read then kept the short low time.
+  A burst that ends late shifts the times of each later bit, and no check finds that. Thus the frames fail with `frameFlag` when the core clock is below 72 MHz (for example on the HSI after a crystal failure).
   Thus the sample request is on only for the read bits. The code switches it on in the turnaround and off after the last read bit. The cycle counter times both switches, and the code reads no timer or DMA register during the frame.
 - **Pending requests.** A timer DMA request stays pending until a channel serves it. A request at the end of a frame then made the next frame lose bit 0.
   Thus the last update event of a frame has its own table entry, and the end period (0.9 ms) is long enough to stop the counter.
