@@ -19,6 +19,8 @@ bool WchLinkFunction::poll() {
       return true;
    }
    if(processor_.runNext()) {
+      // Before the response: the host must not get the stale packet after it.
+      dropStaleData();
       // Send the response at once, before the next request.
       sendResponse();
       armData();
@@ -153,6 +155,19 @@ void WchLinkFunction::sendResponse() {
 void WchLinkFunction::sendData() {
    data_ = { processor_.dataPacket(), true };
    if(data_.data.empty() || !start(wch::dataInEndpoint, data_)) {
+      data_ = {};
+      processor_.dataSent();
+   }
+}
+
+void WchLinkFunction::dropStaleData() {
+   if(!processor_.takeStaleData() || !data_.busy) {
+      return;
+   }
+   art::usb::Device *usb = device();
+   // false: the host read the packet in the meantime, and inPacketSent()
+   // ends it.
+   if(usb == nullptr || usb->cancelInTransfer(wch::dataInEndpoint)) {
       data_ = {};
       processor_.dataSent();
    }

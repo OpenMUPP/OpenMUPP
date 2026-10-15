@@ -19,6 +19,11 @@
 //   (wchlink::Processor::wantsData()), and again after each packet is
 //   written. Else a host that sends data gets a NAK until its timeout.
 //
+// A data packet that the host does not read (the block acknowledge of a
+// minichlink write) would stay on data IN 0x82 and reach the next host. When
+// the processor marks it stale, poll() takes it back before it sends the
+// response (art::usb::Device::cancelInTransfer()).
+//
 // poll() runs a data packet (wchlink::Processor::runData()) or the request
 // (wchlink::Processor::runNext()) in the main loop, outside the delivery of
 // the OUT packet. The data packet comes first. poll() reads the next data
@@ -79,6 +84,8 @@ class WchLinkFunction final : public art::usb::Function {
    void armData();
    void sendResponse();
    void sendData();
+   // Takes back a data packet that the processor marked as stale.
+   void dropStaleData();
    // Starts the packet on the endpoint. Returns false when the controller
    // refused it.
    bool start(uint8_t endpoint, InPacket &in);

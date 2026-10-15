@@ -426,11 +426,27 @@ TEST_CASE("WCH-Link flash: a quit drops the acknowledge that waits behind anothe
    REQUIRE(fb.send(image));
    CHECK(fb.bench.transact(request(0x0d, { 0xff })) == reply(0x0d, 0xff));
    CHECK(fb.flash.calls.size() == 3);
-   // The first acknowledge is on its way. The second one is dropped.
-   CHECK(fb.ack() == blockAck);
+   // The first acknowledge was on its way: the quit takes it back. The
+   // second one is dropped.
    CHECK_FALSE(fb.ack().has_value());
    CHECK_FALSE(fb.bench.processor.hasData());
    // A memory read of the next session gets its own data only.
+   REQUIRE(fb.bench.transact(request(0x0d, { 0x02 })).size() == 8);
+   REQUIRE(fb.bench.transact(request(0x03, u32(0x0800'0000, 4))) == reply(0x03, 0x01));
+   REQUIRE(fb.bench.transact(request(0x02, { 0x0c })) == reply(0x02, 0x0c));
+   CHECK(fb.bench.readData() == Bytes{ image[3], image[2], image[1], image[0] });
+   fb.checkClean();
+}
+
+TEST_CASE("WCH-Link flash: an unread acknowledge of minichlink does not block a later memory read") {
+   // Issue #77: minichlink -w, then wlink dump. The acknowledge of the last
+   // block stays on data IN 0x82 until the next session takes it back.
+   FlashBench fb(Wire::Two);
+   const Bytes image = pattern(4096, 0x5a);
+   fb.start(0x0800'0000, 4096);
+   REQUIRE(fb.send(image));
+   REQUIRE(fb.bench.transact(request(0x0d, { 0xff })) == reply(0x0d, 0xff));
+   // wlink dump: connect, read range, read
    REQUIRE(fb.bench.transact(request(0x0d, { 0x02 })).size() == 8);
    REQUIRE(fb.bench.transact(request(0x03, u32(0x0800'0000, 4))) == reply(0x03, 0x01));
    REQUIRE(fb.bench.transact(request(0x02, { 0x0c })) == reply(0x02, 0x0c));

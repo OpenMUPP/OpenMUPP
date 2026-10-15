@@ -502,7 +502,7 @@ TEST_CASE("WCH-Link: a memory read length that is not a multiple of 4 cuts the l
    }
 }
 
-TEST_CASE("WCH-Link: a new memory read waits until the host took the old packet") {
+TEST_CASE("WCH-Link: a new read range takes back the old packet that waits") {
    WchLinkBench bench(Wire::Two);
    bench.enumerate();
    connect(bench);
@@ -510,17 +510,14 @@ TEST_CASE("WCH-Link: a new memory read waits until the host took the old packet"
    putWord(bench.dm, 0x2000'1000, 0x5555'5555);
    bench.transact(request(0x03, { 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00 }));
    bench.transact(request(0x02, { 0x0c }));
-   // The host gives up: a new range and a new start while the first packet
-   // of the old read waits on 0x82.
+   // The host gives up: a new range while the first packet of the old read
+   // waits on 0x82. The range takes the old packet back (issue #77).
    CHECK(bench.transact(request(0x03, { 0x20, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x04 })) == Bytes{ 0x82, 0x03, 0x01, 0x01 });
-   CHECK(bench.transact(request(0x02, { 0x0c })) == connectError);
-   // The host takes the old packet. Then the new read starts.
-   const auto old = bench.readData();
-   REQUIRE(old.has_value());
-   CHECK((*old)[0] == 0xaa);
-   CHECK_FALSE(bench.readData().has_value());
+   CHECK_FALSE(bench.controller().hasInPacket(0x82));
    CHECK(bench.transact(request(0x02, { 0x0c })) == Bytes{ 0x82, 0x02, 0x01, 0x0c });
+   // The host reads only the data of the new read.
    CHECK(bench.readData() == Bytes{ 0x55, 0x55, 0x55, 0x55 });
+   CHECK_FALSE(bench.readData().has_value());
 }
 
 TEST_CASE("WCH-Link: a failed word ends the target reads, and the rest is 0xff") {
@@ -550,9 +547,34 @@ TEST_CASE("WCH-Link: a quit ends a memory read that the host did not take") {
    CHECK(bench.transact(request(0x0d, { 0x01 })).size() == 7);
    CHECK(bench.transact(request(0x0d, { 0xff })) == Bytes{ 0x82, 0x0d, 0x01, 0xff });
    CHECK_FALSE(bench.processor.hasData());
-   // The packet on its way is the last one.
-   CHECK(bench.readData().has_value());
+   // The quit took back the packet on its way.
    CHECK_FALSE(bench.readData().has_value());
+}
+
+TEST_CASE("WCH-Link: a stale packet that the host takes during the quit is not taken back") {
+   WchLinkBench bench(Wire::Two);
+   bench.enumerate();
+   connect(bench);
+   bench.controller().queueEvents(true);
+   putWord(bench.dm, 0x2000'0000, 0xaaaa'aaaa);
+   bench.transact(request(0x03, { 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04 }));
+   bench.transact(request(0x02, { 0x0c }));
+   REQUIRE(bench.controller().hasInPacket(0x82));
+   REQUIRE(bench.send(request(0x0d, { 0xff })));
+   bench.controller().deliverQueuedEvents();
+   // The host reads the packet before the main loop runs the quit. Its
+   // event waits in the queue, so the cancel returns false.
+   REQUIRE(bench.controller().takeIn(0x82).has_value());
+   CHECK(bench.function.poll());
+   CHECK(bench.read() == Bytes{ 0x82, 0x0d, 0x01, 0xff });
+   bench.mainLoop();
+   CHECK_FALSE(bench.readData().has_value());
+   // The event ended the packet: the next session reads its own data.
+   connect(bench);
+   putWord(bench.dm, 0x2000'1000, 0x5555'5555);
+   CHECK(bench.transact(request(0x03, { 0x20, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x04 })) == Bytes{ 0x82, 0x03, 0x01, 0x01 });
+   CHECK(bench.transact(request(0x02, { 0x0c })) == Bytes{ 0x82, 0x02, 0x01, 0x0c });
+   CHECK(bench.readData() == Bytes{ 0x55, 0x55, 0x55, 0x55 });
 }
 
 TEST_CASE("WCH-Link: reset pulses ndmreset and lets the hart run") {

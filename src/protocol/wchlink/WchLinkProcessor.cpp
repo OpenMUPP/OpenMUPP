@@ -265,6 +265,7 @@ void Processor::detach() {
    // An acknowledge that the host did not read (minichlink) must not come
    // before the data of a later memory read.
    ackPending_ = false;
+   staleData_ = staleData_ || dataInFlight_;
    if(connected_) {
       target_.detach();
       connected_ = false;
@@ -365,6 +366,7 @@ void Processor::protectionCommand(uint8_t sub) {
 
 void Processor::setReadRange(uint32_t address, uint32_t length) {
    dataRemaining_ = 0;
+   staleData_ = staleData_ || dataInFlight_;
    readAddress_ = address;
    readLength_ = length;
    replyByte(command::readMemory, 1);
@@ -518,6 +520,7 @@ void Processor::hostGone() {
    hasRequest_ = false;
    responseLength_ = 0;
    detach();
+   staleData_ = false;
 }
 
 void Processor::release() {
