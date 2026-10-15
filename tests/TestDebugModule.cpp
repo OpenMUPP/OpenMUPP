@@ -131,6 +131,18 @@ TEST_CASE("Two wires: a frame without a target gives NoTarget") {
    CHECK(bench.module.halt() == Status::NoTarget);
 }
 
+TEST_CASE("Two wires: a frame that the target drops gives Wire") {
+   // The target drives bit 11, then no more bits (the CH32V208 with a
+   // released bit 13). The write is lost, without a parity error.
+   Bench bench(Wire::Two);
+   bench.pins.dropFrames = true;
+   uint32_t value = 0;
+   CHECK(bench.module.dmiWrite(dm::data0, 1) == Status::Wire);
+   CHECK(bench.module.dmiRead(dm::dmstatus, value) == Status::Wire);
+   CHECK(bench.pins.droppedFrames == 2);
+   CHECK(bench.pins.registers[dm::data0] == 0);
+}
+
 TEST_CASE("One wire: dmstatus without a target gives NoTarget") {
    Bench bench(Wire::One);
    bench.pins.present = false;

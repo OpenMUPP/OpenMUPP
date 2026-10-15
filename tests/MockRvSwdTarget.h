@@ -9,7 +9,11 @@
 // when the host drives SWDIO while SWCLK is high. It samples SWDIO at the
 // rising edges of SWCLK. It drives its bits from the falling edge before
 // the bit and releases SWDIO after the rising edge of its last bit, as the
-// captures show. Each other change of SWDIO by the host while SWCLK is
+// captures show. In the handshake bits, the target drives bits 11 and 49
+// low, nobody drives bits 12, 14, 50 and 52, and the host must drive bit 13
+// low and bit 51 high. A wrong bit 13 makes the target drop the frame: it
+// drives no more bits and does not store the write, as the CH32V208 did.
+// A wrong bit 51 is a protocol error. Each other change of SWDIO by the host while SWCLK is
 // high, a wrong bit count, a wrong address parity, a wrong repeat bit and
 // a bit 53 that is not 0 count as a protocol error. 50 clocks with SWDIO
 // high from the host outside a frame are a line reset.
@@ -163,16 +167,12 @@ class MockRvSwdTarget {
 
    // The target
    std::array<uint32_t, 128> registers{};
-   // Two wires: the response and tail bits, first bit in bit 3. The
-   // values of the captures.
-   uint8_t readHead{ 0b0100 };
-   uint8_t readTail{ 0b0111 };
-   uint8_t writeHead{ 0b0000 };
-   uint8_t writeTail{ 0b0011 };
    // Two wires: a wrong parity bit for the next read
    bool badParity{ false };
    // False: the target does not drive SWDIO (no target).
    bool present{ true };
+   // Two wires: the target sees bit 13 as high and drops each frame.
+   bool dropFrames{ false };
    // One wire: the target holds the line low from the next read bit on.
    bool stuckLow{ false };
    // Called with the address before the target answers a read, and after
@@ -184,6 +184,8 @@ class MockRvSwdTarget {
    // Two wires: the bits that the target sampled in the last frame, bit 1
    // first (the numbering of the document)
    std::vector<bool> frameBits;
+   // Two wires: the host drives SWDIO at the rising edge, same numbering
+   std::vector<bool> frameHostBits;
    // Two wires: SWDIO at the rising edges outside a frame
    std::vector<bool> idleBits;
    std::vector<uint32_t> risingEdges;
@@ -194,6 +196,8 @@ class MockRvSwdTarget {
    int contentions{ 0 };
    int undrivenSamples{ 0 };
    int lineResets{ 0 };
+   // Two wires: frames that the target dropped (a wrong bit 13)
+   int droppedFrames{ 0 };
    // One wire: line changes in a frame with the interrupts on
    int unlockedChanges{ 0 };
    int inits{ 0 };
@@ -266,32 +270,31 @@ class MockRvSwdTarget {
 
    // The target drives the bit.
    [[nodiscard]] bool targetBit(uint32_t bit) const {
-      return present && targetOwns(bit);
+      return present && !dropped_ && targetOwns(bit);
    }
 
    // The bit belongs to the target, also without a target.
    [[nodiscard]] bool targetOwns(uint32_t bit) const {
-      if(bit >= 11 && bit <= 14) {
-         return true;
-      }
-      if(bit >= 49 && bit <= 52) {
+      if(bit == 11 || bit == 49) {
          return true;
       }
       return !write_ && bit >= 15 && bit <= 48;
    }
 
+   // Nobody drives the bit: SWDIO has the level of the pull-up.
+   [[nodiscard]] static bool releasedBit(uint32_t bit) {
+      return bit == 12 || bit == 14 || bit == 50 || bit == 52;
+   }
+
    // The level that the target drives in a bit
    [[nodiscard]] bool targetLevel(uint32_t bit) const {
-      if(bit <= 14) {
-         return ((write_ ? writeHead : readHead) >> (14 - bit) & 1u) != 0;
+      if(bit == 11 || bit == 49) {
+         return false;
       }
       if(bit <= 46) {
          return (registers[address_] >> (46 - bit) & 1u) != 0;
       }
-      if(bit <= 48) {
-         return parity(registers[address_]) != readBadParity_;
-      }
-      return ((write_ ? writeTail : readTail) >> (52 - bit) & 1u) != 0;
+      return parity(registers[address_]) != readBadParity_;
    }
 
    static bool parity(uint32_t value) {
@@ -304,10 +307,12 @@ class MockRvSwdTarget {
          ++starts;
          started_ = true;
          frameBits.clear();
+         frameHostBits.clear();
          address_ = 0;
          write_ = false;
          data_ = 0;
          readBadParity_ = false;
+         dropped_ = false;
          highClocks_ = 0;
       } else if(level && started_ && bit_ == frameBitCount) {
          ++stops;
@@ -356,8 +361,9 @@ class MockRvSwdTarget {
       }
       const uint32_t bit = ++bit_;
       frameBits.push_back(level);
+      frameHostBits.push_back(hostDrives_);
       const bool target = targetBit(bit);
-      if(!targetOwns(bit) && !hostDrives_) {
+      if(!targetOwns(bit) && !releasedBit(bit) && !hostDrives_) {
          ++undrivenSamples;
       }
       sampleTwo(bit, level);
@@ -386,6 +392,12 @@ class MockRvSwdTarget {
             notifyRead();
             accesses.push_back({ address_, false, registers[address_] });
          }
+      } else if(bit == 13 && (level || dropFrames)) {
+         ++protocolErrors;
+         ++droppedFrames;
+         dropped_ = true;
+      } else if(bit == 51 && !level) {
+         ++protocolErrors;
       } else if(bit == 10 || (bit == 48 && write_)) {
          if(level != repeat_) {
             ++protocolErrors;
@@ -396,7 +408,7 @@ class MockRvSwdTarget {
          repeat_ = level;
          if(level != parity(data_)) {
             ++protocolErrors;
-         } else {
+         } else if(!dropped_) {
             registers[address_] = data_;
             accesses.push_back({ address_, true, data_ });
             notifyWrite();
@@ -519,6 +531,7 @@ class MockRvSwdTarget {
    bool write_{ false };
    bool repeat_{ false };
    bool readBadParity_{ false };
+   bool dropped_{ false };
    uint32_t data_{ 0 };
    // One wire
    uint32_t oneBit_{ 0 };

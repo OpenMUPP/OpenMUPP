@@ -121,8 +121,8 @@ TEST_CASE("RVSWD two wires: a write reaches the target") {
    CHECK(bench.pins.starts == 1);
    CHECK(bench.pins.stops == 1);
    CHECK(bench.pins.frameBits.size() == 53);
-   CHECK(bench.engine.head() == 0b0000);
-   CHECK(bench.engine.tail() == 0b0011);
+   CHECK(bench.engine.head() == 0b0101);
+   CHECK(bench.engine.tail() == 0b0111);
    bench.checkIdle();
 }
 
@@ -134,7 +134,7 @@ TEST_CASE("RVSWD two wires: a read gives the register, the response and the tail
    CHECK(data == 0x0303'8083);
    REQUIRE(bench.pins.accesses.size() == 1);
    CHECK_FALSE(bench.pins.accesses[0].write);
-   CHECK(bench.engine.head() == 0b0100);
+   CHECK(bench.engine.head() == 0b0101);
    CHECK(bench.engine.tail() == 0b0111);
    CHECK(bench.pins.stops == 1);
    bench.checkIdle();
@@ -146,22 +146,18 @@ TEST_CASE("RVSWD two wires: the frame bits are the bits of the capture") {
       uint8_t address;
       bool write;
       uint32_t data;
-      uint8_t head;
-      uint8_t tail;
       const char *bits;
    };
    const Frame frames[] = {
-      { 0x7E, true, 0x5AA5'0400, 0b0000, 0b0011, "111111101110000010110101010010100000100000000001100110" },
-      { 0x10, true, 0x8000'0001, 0b0000, 0b0011, "100100001000000100000000000000000000000000000010000110" },
-      { 0x05, true, 0x1FFF'F704, 0b0000, 0b0011, "100001011110000000111111111111111110111000001001100110" },
-      { 0x11, false, 0x0000'0C82, 0b0000, 0b0111, "100100010000000000000000000000000001100100000100001110" },
-      { 0x7F, false, 0x2080'053C, 0b0100, 0b0111, "111111110110100001000001000000000000101001111000001110" },
+      { 0x7E, true, 0x5AA5'0400, "111111101110000010110101010010100000100000000001100110" },
+      { 0x10, true, 0x8000'0001, "100100001000000100000000000000000000000000000010000110" },
+      { 0x05, true, 0x1FFF'F704, "100001011110000000111111111111111110111000001001100110" },
+      { 0x11, false, 0x0000'0C82, "100100010000000000000000000000000001100100000100001110" },
+      { 0x7F, false, 0x2080'053C, "111111110110100001000001000000000000101001111000001110" },
    };
    for(const Frame &frame : frames) {
       CAPTURE(frame.bits);
       Bench bench(Wire::Two);
-      bench.pins.readHead = frame.head;
-      bench.pins.readTail = frame.tail;
       if(frame.write) {
          CHECK(bench.engine.write(frame.address, frame.data) == 0);
       } else {
@@ -170,7 +166,38 @@ TEST_CASE("RVSWD two wires: the frame bits are the bits of the capture") {
          CHECK(bench.engine.read(frame.address, data) == 0);
          CHECK(data == frame.data);
       }
-      CHECK(bench.pins.frameBits == bitsOf(frame.bits));
+      // Nobody drives bits 12, 14, 50 and 52. In the capture, SWDIO rises
+      // slowly there (analog), and the logic level is not defined. The
+      // mock has the level of the pull-up.
+      std::vector<bool> expected = bitsOf(frame.bits);
+      for(const std::size_t bit : { 12u, 14u, 50u, 52u }) {
+         expected[bit - 1] = true;
+      }
+      CHECK(bench.pins.frameBits == expected);
+      bench.checkIdle();
+   }
+}
+
+TEST_CASE("RVSWD two wires: the handshake bits of the probe") {
+   // The analog capture of the WCH-LinkE (CH32V208): the probe drives bit
+   // 13 low and bit 51 high, and releases SWDIO in bits 11, 12, 14, 49, 50
+   // and 52.
+   for(const bool write : { true, false }) {
+      CAPTURE(write);
+      Bench bench(Wire::Two);
+      uint32_t data = 0;
+      CHECK((write ? bench.engine.write(0x10, 1) : bench.engine.read(0x10, data)) == 0);
+      const std::vector<bool> &host = bench.pins.frameHostBits;
+      REQUIRE(host.size() == 53);
+      for(const std::size_t bit : { 11u, 12u, 14u, 49u, 50u, 52u }) {
+         CAPTURE(bit);
+         CHECK_FALSE(host[bit - 1]);
+      }
+      CHECK(host[13 - 1]);
+      CHECK_FALSE(bench.pins.frameBits[13 - 1]);
+      CHECK(host[51 - 1]);
+      CHECK(bench.pins.frameBits[51 - 1]);
+      CHECK(bench.pins.droppedFrames == 0);
       bench.checkIdle();
    }
 }
@@ -251,7 +278,8 @@ TEST_CASE("RVSWD two wires: without a target, a read gives a parity error") {
    // SWDIO reads 1 from the pull-up: 32 ones have an even parity.
    CHECK(bench.engine.read(0x11, data) == rvswd::parityErrorFlag);
    CHECK(data == 0x1234);
-   CHECK(bench.engine.head() == 0b1111);
+   // Bit 13 is the low level of the probe.
+   CHECK(bench.engine.head() == 0b1101);
    CHECK(bench.engine.tail() == 0b1111);
    bench.checkIdle();
 }

@@ -147,4 +147,34 @@ The combined image is not part of the epic.
 
 Work item #71 tests the personality on real hardware.
 The list of items is in [Hardware test](wch-link-protocol.md#hardware-test).
-No hardware test has run on this build yet.
+
+Setup:
+
+| Item | Value |
+|---|---|
+| Probe | OtherUse board, `wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` (USB ID `1a86:8010`) |
+| Target | CH32V208WBU6 board, external power. SWDIO on PA13, SWCLK on PA14. |
+| Host | Linux, wlink 0.1.2 |
+| Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 0, SWCLK on channel 1 |
+
+Results:
+
+| Item | Result |
+|---|---|
+| USB ID | wlink and minichlink find the probe only with the WCH USB ID. The default ID `1209:0001` hides it (issue #76). |
+| Connect on two wires (CH32V208), `wlink status` | Passed, 6 of 6 runs. The connect tries one wire first, then two wires. wlink shows the chip ID `0x2080053c`, 160 KB flash, `misa` `RV32ACIMUX` and `dmstatus` `0x382`. |
+| `wlink dump`, `wlink regs` | Passed. A dump of the full flash (160 KB) takes 11.4 s. Two dumps are the same. |
+| `wlink halt`, `resume`, `reset` | Passed. |
+| `wlink erase` | Passed, 0.16 s. The flash then reads `0xe339e339`. |
+| `wlink flash` | Passed. 147 KB take 23 s. A dump after the program is the same as the image. |
+| `wlink protect` | Passed. The protection starts at the next reset, as on the WCH-LinkE. A dump then reads `0xffffffff`. |
+| `wlink unprotect` | Passed. The protection ends at once, without a power cycle: the `ndmreset` loads `RDPR`. The chip erases the flash. The option bytes then read `RDPR` `0xa5`, `USER` `0x3f`, `DATA0` and `DATA1` `0x00`, `WRPR` `0xff`. |
+| minichlink | Failed first: minichlink sends the chip type `09` also for a CH32V208, and the processor tried only one wire for this type. The processor now tries both wires for all types. |
+| `minichlink -i`, `-r`, `-w` | Passed after the fix. A read of 160 KB takes 6.9 s, and it is the same as the wlink dump. A write of 147 KB takes 22 s. A wlink dump after the write is the same as the image. |
+| wlink after `minichlink -w` | Failed: each memory read gives the error frame `81 55 01 01` until a USB replug. minichlink does not read the block acknowledge of the last block, and the acknowledge stays on the data IN endpoint (issue #77). |
+
+The first connect failed: wlink got the error frame `81 55 01 01`.
+The cause was the handshake bits of the two-wire frame: the probe must drive bit 13 low and bit 51 high (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
+The engine released these bits, and the CH32V208 then dropped each frame after bit 11.
+
+The other items of the list are open.

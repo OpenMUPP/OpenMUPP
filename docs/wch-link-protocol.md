@@ -480,7 +480,7 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 | Status | Cause |
 |---|---|
 | `Wire` | The engine returned a flag: a parity error (two wires) or a line that stays low (one wire). |
-| `NoTarget` | Two wires: the response bits and the tail bits are `1111`. No target drives them. One wire: a read without a target gives `ffffffff`. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
+| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](#wire-frame-format)). One wire: a read without a target gives `ffffffff`. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
 | `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout`: `abstractcs` reads `ffffffff` (`busy` 1). After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
 | `Unsupported` | A byte access, or a half-word read, with the program buffer method. |
@@ -522,7 +522,7 @@ The build option `VSL_PROTOCOL=wch-link` puts the personality into a firmware im
 | `0d 03`, `0d 04` | Reply `03` and `00`. No target access. |
 | `0d ff` | Quit: `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
 | Other `0d` values | The unknown-command reply (see below) |
-| `0c` | Keeps the chip type for the next connect, and sets the speed. Replies `01`. |
+| `0c` | Ignores the chip type, and sets the speed. Replies `01`. |
 | `08` | DMI access. `op` `00` does no access. A failure, or an access before a connect, gives the status `02`. |
 | `03`, then `02 01 0c` | Memory read on endpoint `0x82` |
 | `11` | Reads the four words at the command, and adds the chip ID of the connect |
@@ -552,8 +552,8 @@ Thus the hart stays halted after the connect, until the next session.
 
 ### Connect
 
-The chip type of the last `0c` command selects the wire. The type `09` (CH32V00x) selects one wire.
-For the other types, the processor tries one wire first, then two wires. wlink sends the type `01` also for the CH32V003.
+The chip type of the `0c` command does not select the wire. The processor tries one wire first, then two wires, for all chip types.
+wlink sends the type `01` also for the CH32V003. minichlink sends the type `09` (CH32V00x) also for the CH32V208, and the WCH-LinkE then connects on two wires (`v208-mc-info.pcapng`).
 One wire comes first, because its frames change SWDIO only while SWCLK is low. A two-wire target sees no start condition and no stop condition in them.
 The frames of two wires are noise on the line of a one-wire target.
 On each wire, the processor does these probe actions:
@@ -577,6 +577,7 @@ The processor then resumes the hart and ends `dmactive`, as the quit does. It tr
 
 The processor does not do these probe actions:
 
+- The 85-clock connect frames (see [Connect frames](#connect-frames)). The CH32V208 connects without them.
 - The writes to the clock registers of the CH32V208 at connect.
 - The read of `0x1ffff7c4` of the CH32V003 at connect.
 - The read of `0x1ffff802` for `0d 04`.
@@ -684,7 +685,7 @@ On one wire, the speed has no effect.
 
 ### Hardware test
 
-A real target must confirm these items (work item #71):
+A real target must confirm these items (work item #71). The results are in [WCH-Link personality](wch-link.md#hardware-test).
 
 - The connect on both wires, and the try of one wire on a CH32V20x.
 - The reset sequence. The WCH-LinkE reset is not captured on the wire.
@@ -744,8 +745,7 @@ Observations about the frames:
 
 - During the first 46 ms of the connect command, the probe sends about 200 identical frames of 85 clocks. They repeat every 227 µs and end at 45.6 ms.
   Each frame has a first part of about 40 clocks at the slow period, and a longer part at the fast period.
-  The first part holds the pattern `0010001` followed by 33 zero bits. The rest of the frame is high.
-  The meaning of these frames is **not known**. They are not decoded.
+  The frames are decoded (see [Connect frames](#connect-frames)).
 - From 46 ms the probe sends frames of 54 clocks, about 120 µs apart. These frames are decoded (see [Wire frame format](#wire-frame-format)). They hold the probe actions, the target reads and the host accesses (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)).
   Some frames have a pause of about 7 µs after the start clock. A decoder must join the start clock with the rest of the frame.
 - The connect command ends at about 59 ms. On USB, the connect response comes 59.4 ms after the command (`v208-wlink-status.pcapng`).
@@ -813,7 +813,7 @@ The cause is not known. A flash program at the three speeds could show a differe
 
 Not measured on the CH32V003: the wire timing of a flash program, and the slow pattern from 46 to 77 ms.
 
-Not measured on the CH32V208: the wire timing of a flash program. The meaning of the 85-clock frames is open. The bits that the table below marks as open are open too.
+Not measured on the CH32V208: the wire timing of a flash program.
 
 ## Wire frame format
 
@@ -830,11 +830,11 @@ It skips bursts that are not a multiple of 54 clocks (the 85-clock frames and a 
 | 8 | Write bit: `1` for a write, `0` for a read | Probe |
 | 9 | Parity of bits 1 to 8: `1` if the number of ones is odd | Probe |
 | 10 | The level of bit 9. SWDIO changes direction after the rising edge. | Probe |
-| 11 to 14 | Four response bits: `0000` or `0100` | Target |
+| 11 to 14 | Handshake: bit 11 low, bit 12 released, bit 13 low, bit 14 released | Bit 11: target. Bit 13: probe. Bits 12 and 14: nobody. |
 | 15 to 46 | Data, MSB first | Probe (write), target (read) |
 | 47 | Parity of the 32 data bits: `1` if the number of ones is odd | Probe (write), target (read) |
 | 48 | The level of bit 47. SWDIO changes direction after the rising edge (write). | Probe (write), target (read) |
-| 49 to 52 | Four tail bits: `0011` or `0111` | Target |
+| 49 to 52 | Handshake: bit 49 low, bit 50 released, bit 51 high, bit 52 released | Bit 49: target. Bit 51: probe. Bits 50 and 52: nobody. |
 | 53 | Always `0`. After this edge, SWDIO rises while SWCLK is high: the stop condition. | Probe |
 
 The frame is a start condition, 53 clocks and a stop condition. The start and the stop condition are the same as on an I2C bus.
@@ -845,11 +845,14 @@ The rules for bits 9, 10, 47, 48 and 53 hold in all 440 frames of the three stat
 Observations:
 
 - **Operation field (bits 8 and 9).** Bit 8 tells a write from a read. Bit 9 is a parity bit over the address and bit 8. This explains the values `11`, `10`, `01` and `00` of the earlier decoder output.
-- **Response bits (11 to 14).** `0000` after all writes. `0100` after most reads, `0000` after the reads of `dmstatus` and `hartinfo`. Their meaning is open (acknowledge or status).
+- **Handshake bits (11 to 14 and 49 to 52).** The analog capture of the WCH-LinkE shows the driver of each bit (see [Who drives a bit](#who-drives-a-bit-analog-capture)).
+  The target pulls bit 11 and bit 49 low. The probe drives bit 13 low and bit 51 high. Nobody drives bits 12, 14, 50 and 52.
+  In the released bits, SWDIO rises slowly from the low level. Thus the logic analyzer shows `0` or `1` there, by chance.
+  This explains the values `0000`, `0100`, `0011` and `0111` of the decoder. A probe must drive bit 13 and bit 51.
+  When the probe released bit 13, the CH32V208 drove bit 11 only, and then no more bits of the frame. It did not do the write.
 - **Parity (bits 47 and 48).** Bit 47 is the parity. Bit 48 keeps the level of bit 47 for one more clock, as bit 10 keeps the level of bit 9.
-- **Tail bits (49 to 52).** `0011` follows all writes. After reads, `0111` or `0011` follows. The tail does not tell a read from a write. The meaning is open.
 - **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 4 to 14 ns after the falling edge.
-  Bits 1 to 9 and 53 follow the probe pattern. Bits 11 to 14 and 49 to 52 follow the target pattern. Bits 15 to 47 follow the probe pattern in a write and the target pattern in a read.
+  Bits 1 to 9, 13, 51 and 53 follow the probe pattern. Bits 11 and 49 follow the target pattern. Bits 15 to 47 follow the probe pattern in a write and the target pattern in a read.
   SWDIO changes while SWCLK is high in bits 10 and 14, and in bit 48 of a write: the line changes direction there.
 - **Longer low phases.** The low phase before bits 1, 15 and 53 is about two half periods: 2.1 to 2.2 µs at the 2.09 µs clock. SWDIO changes direction before bits 15 and 53.
 - **Idle.** Between frames, SWCLK is low and SWDIO is high. The probe keeps SWCLK high for about 1 to 5 µs after the stop condition.
@@ -857,7 +860,46 @@ Observations:
 - **Before the first frame.** After the 85-clock frames, the probe sends 9 clocks with SWDIO high, one clock with SWDIO low, and 90 clocks with SWDIO high. Then the first frame starts. This can be a line reset. This is **not confirmed**.
 - **Clock for each access.** At the default speed, a write uses 1.10 µs for each bit (about 907 kHz). A read uses 2.09 µs (about 478 kHz). At low speed, all accesses use 2.09 µs.
 - **Fast triples.** The long bursts at about 120 ns for each bit (default speed) hold frames in the order `data1` write, `command` write, `data0` read. These are the target reads for `0x11`, `06 01` and `0d 04`. The values of the first four reads match the `0x11` answer byte for byte.
-- **Connect frames.** The 85-clock frames of the connect phase do not follow this format. They are not decoded.
+
+### Who drives a bit (analog capture)
+
+Source: an analog capture of `wlink status` on the CH32V208 with the WCH-LinkE, at 12.5 MS/s.
+Two parts of it are in the repository, with the time in seconds and the voltages of SWDIO and SWCLK:
+
+- `wch-link-captures/v208-wlink-status-analog-connect.csv`: the first five connect frames (−0.2 to 1.2 ms).
+- `wch-link-captures/v208-wlink-status-analog-frames.csv`: the first frames of 54 clocks (46.0 to 47.1 ms).
+
+The voltage of SWDIO in the high phase of SWCLK tells the driver:
+
+| Level | Driver |
+|---|---|
+| 0.00 to 0.02 V | Probe, low |
+| 3.29 to 3.31 V | Probe, high |
+| -0.07 to -0.14 V | Target, low |
+| 1.5 to 1.9 V, rising | Nobody: the line rises from low through a pull-up |
+| 3.35 to 3.55 V | Nobody: the line stays high through a pull-up |
+
+Seven frames of 54 clocks (writes and reads) show the same handshake bits, as the frame table gives.
+
+### Connect frames
+
+The 85-clock frames of the connect phase are `dmstatus` reads (address `0x11`), with 32 more clocks:
+
+1. A start condition and bits 1 to 52 of a read of `dmstatus`. The handshake bits are not the same as in the frame format above (see below).
+2. 32 clocks with SWDIO released (high).
+3. SWDIO falls while SWCLK is high: a start condition.
+4. One clock with SWDIO low, then the stop condition.
+
+In the first frame, the target answers `0x00000c82` (version 2, authenticated, hart running). The parity is right.
+In this frame, the probe drives bits 12, 13 and 14 low, and nobody drives bit 51.
+
+In the next frames, the target does not answer with data (`v208-wlink-status-analog-connect.csv`):
+
+- The target pulls bit 10 and bit 48 low: one bit earlier than bits 11 and 49 of the frame format.
+- The probe drives bits 11 to 40 low and bit 41 high. Nobody drives bits 42 to 47.
+
+The cause of the shift by one bit is not known.
+The probe uses these frames to wait for a target. A probe without them connects too: the personality sends no connect frames (see [Hardware test](#hardware-test)).
 
 ### One-wire frame format (CH32V003)
 
@@ -883,7 +925,7 @@ The cause is open. The frame length may differ for some access types.
 | 8 | Operation: `1` is a write, `0` is a read |
 | 9 to 40 | Data, MSB first |
 
-The frame has no response bits, no parity and no tail. The two-wire frame has 13 more bits: the address parity, its repeat, 4 response bits, the data parity, its repeat, 4 tail bits and the stop bit.
+The frame has no handshake bits and no parity. The two-wire frame has 13 more bits: the address parity, its repeat, 4 handshake bits, the data parity, its repeat, 4 handshake bits and the stop bit.
 The one-wire line may carry them in another way, or the probe may not send them. This is open.
 
 The format was checked against the USB capture of the same type of run. The 15 accesses of the host match in order and in address.
@@ -951,5 +993,5 @@ The table lists the questions of epic #63 and their state.
 | Verify sub-command (`02 01 06`?) | **Open.** No capture used it. |
 | Meaning of `0d 03`, `0d 04`, `0d 05`, `06 01 04`, `11 01 05/06`, `02 01 05/07` | **Open.** The observed behavior is in this document. |
 | Does the probe do target accesses of its own? | Answered: the connect command halts the core. The commands `0x11`, `06 01` and `0d 04` read the target. The quit command resumes the core (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). |
-| Meaning of the 85-clock frames, the response bits, the tail bits, and the failure of one-wire frames in the `dump` captures | **Open.** The operation field values are answered: a write bit and a parity bit (see [Wire frame format](#wire-frame-format)). |
+| Meaning of the 85-clock frames, the response bits, the tail bits, and the failure of one-wire frames in the `dump` captures | **Partly answered.** The 85-clock frames are `dmstatus` reads (see [Connect frames](#connect-frames)). The response bits and the tail bits are a handshake (see [Wire frame format](#wire-frame-format)). The one-wire `dump` frames are open. The operation field values are answered: a write bit and a parity bit (see [Wire frame format](#wire-frame-format)). |
 | `0x0e` (disable debug) | **Open.** No capture used it. The personality does the quit (see [Commands](#commands)). |

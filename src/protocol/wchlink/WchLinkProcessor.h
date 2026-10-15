@@ -56,9 +56,8 @@
 //   mode-switch commands of the WCH-LinkE.
 // - The payload length is not checked, as on the WCH-LinkE. A missing
 //   payload byte reads 0.
-// - Connect: the wire comes from the chip type of the last configure
-//   command. 0x09 (CH32V00x) selects one wire. Other types try one wire
-//   first, then two wires. The connect does the accesses of the probe
+// - Connect: one wire first, then two wires, for all chip types
+//   (minichlink sends 0x09 also for a CH32V208). The connect does the accesses of the probe
 //   ("Probe actions"): DM registers 0x7e and 0x7d, dmstatus, halt, the chip
 //   ID (0x7f), CSR 0x7c0. It fails with the error frame [0x81][0x55][01][01]
 //   and the pins are released. A chip ID that is not in chipFamilies also
@@ -311,7 +310,7 @@ class Processor {
    void quit();
    // Resumes the hart and ends dmactive, as the quit of the probe
    void restore();
-   void configure(uint8_t chipType, uint8_t speed);
+   void configure(uint8_t speed);
    void dmiCommand(art::span<const uint8_t> payload);
    void resetCommand(uint8_t sub);
    void chipInfoCommand();
@@ -332,8 +331,6 @@ class Processor {
 
    bool connected_{ false };
    uint32_t chipId_{ 0 };
-   // The chip type of the last configure command
-   uint8_t chipType_{ 0 };
 
    std::array<uint8_t, packetSize> request_{};
    std::size_t requestLength_{ 0 };

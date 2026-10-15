@@ -255,11 +255,25 @@ TEST_CASE("WCH-Link: connect on one wire with chip type 0x09 (CH32V003)") {
    CHECK(bench.transact(request(0x0c, { 0x09, 0x01 })) == Bytes{ 0x82, 0x0c, 0x01, 0x01 });
    // v003-wlink-status.pcapng
    CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x09, v003ChipId));
-   // One wire only
+   // The target answers on one wire: no frames of two wires
    CHECK(bench.pins.inits == 1);
    CHECK(bench.pins.unlockedChanges == 0);
    CHECK(bench.pins.contentions == 0);
    CHECK(bench.dm.halted);
+}
+
+TEST_CASE("WCH-Link: connect with chip type 0x09 finds a CH32V208 on two wires (minichlink)") {
+   WchLinkBench bench(Wire::Two);
+   bench.pins.registers[dm::chipId] = v208ChipId;
+   bench.enumerate();
+   // v208-mc-info.pcapng: 0c 09 01, then the connect gives the family 05.
+   CHECK(bench.transact(request(0x0c, { 0x09, 0x01 })) == Bytes{ 0x82, 0x0c, 0x01, 0x01 });
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x05, v208ChipId));
+   CHECK(bench.pins.inits == 2);
+   CHECK(bench.processor.connected());
+   CHECK(bench.dm.halted);
+   CHECK(bench.pins.protocolErrors == 0);
+   CHECK(bench.pins.contentions == 0);
 }
 
 TEST_CASE("WCH-Link: connect with the generic chip type finds the target on either wire") {
