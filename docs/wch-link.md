@@ -103,9 +103,9 @@ The size of the `standalone` image (Release build):
 
 | Board | Size | Limit |
 |---|---|---|
-| Mini | 24,884 bytes | 65,536 bytes |
-| OtherUse | 24,872 bytes | 65,536 bytes |
-| ST-Link/V2 | 24,628 bytes | 65,536 bytes |
+| Mini | 27,124 bytes | 65,536 bytes |
+| OtherUse | 27,112 bytes | 65,536 bytes |
+| ST-Link/V2 | 26,672 bytes | 65,536 bytes |
 
 The `app-8k` image has the limit 57,344 bytes, and the `app-10k` image has the limit 55,296 bytes (see [Flash layout](firmware-update.md#flash-layout-and-size-limit)).
 Each image uses less than half of its limit.
@@ -120,6 +120,7 @@ The Mini has an STM32F103CB with 128 KB flash.
 The firmware and the linker script use only the first 64 KB, so the limits above apply.
 
 A build measured the size. The build is a test build only. It links the dual image of the Mini (Versaloon and CMSIS-DAP) and the objects of the WCH-Link personality.
+The measurement is from before the one-wire timer. The timer adds about 2.2 KB, so each margin below is about 2.2 KB smaller.
 It has no third descriptor set and no switch code.
 
 | Image (Mini) | Size | Limit |
@@ -177,4 +178,32 @@ The first connect failed: wlink got the error frame `81 55 01 01`.
 The cause was the handshake bits of the two-wire frame: the probe must drive bit 13 low and bit 51 high (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
 The engine released these bits, and the CH32V208 then dropped each frame after bit 11.
 
-The other items of the list are open.
+### CH32V003 (one wire)
+
+Setup: the same probe and host. The target is a CH32V003F4P6 board with its own supply, SWIO (PD1) on SWDIO. The logic analyzer has SWDIO on channel 1 and SWCLK on channel 3.
+
+The first connect failed. The probe sent the right bits, but with wrong low pulses: a 1 was 120 to 530 ns, a 0 was 460 to 1060 ns (WCH-LinkE: 250 and 860 ns).
+The engine timed each pulse with waits on the cycle counter. The time of the code between the waits changed the pulses, and the CH32V003 did not answer.
+The engine now makes the bits with a timer and DMA (see [One-wire timer](wch-link-protocol.md#one-wire-timer)).
+On the wire, the low pulses are now 250 to 260 ns and 860 to 870 ns, and the high level is 370 to 380 ns.
+
+Results with the timer:
+
+| Item | Result |
+|---|---|
+| `wlink status` | Passed, 6 of 6 runs. wlink shows the chip ID `0x00300500`, 16 KB flash, `misa` `RV32CEX`, `marchid` `WCH-V2A` and `dmstatus` `0x4c0382`. |
+| `wlink dump`, `wlink regs` | Passed. A dump of the full flash (16 KB) takes 1.7 s. Two dumps are the same. |
+| `wlink halt`, `resume`, `reset` | Passed. |
+| `wlink erase` | Passed. The flash then reads `0xff`. |
+| `wlink flash` | Passed. 16 KB take 4.4 s (the full wlink run). A dump after the program is the same as the image. The WCH-LinkE takes 3.5 s. A read bit of the personality has a fixed time of 1.3 µs, so the personality is slower. |
+| `wlink protect` | Passed. The protection starts at the next reset, as on the WCH-LinkE. |
+| `wlink unprotect` | Passed. The protection ends at once, and the chip erases the flash. The 16-bit write of the option bytes works: they then read `RDPR` `0xa5`, `USER` `0x17`, `DATA0` `0x00`, `DATA1` `0xff`, `WRPR0` and `WRPR1` `0xff`. |
+| `minichlink -i`, `-w` | Passed. A write of 16 KB takes 5.2 s. Three wlink dumps after the write are the same as the image (issue #77 does not occur). |
+| `minichlink -r` | Passed for a read of 16,380 bytes (0.9 s), and it is the same as the wlink dump. A read that ends at `0x08004000` (the end of the flash) fails with `cmderr` 3 (exception). The code before the timer gave the same result, so the probe is not the cause. minichlink seems to read one word after the end of the read. A check with a WCH-LinkE is open. |
+
+Open items:
+
+- A CH32V207 target. The tests used a CH32V208.
+- A check of the CH32V208 (two wires) with the timer image. The two-wire engine did not change, but the probe now sets up TIM3 and DMA at each connect.
+- The minichlink read of the full CH32V003 flash with a WCH-LinkE.
+- The WCH OpenOCD fork (if time allows).

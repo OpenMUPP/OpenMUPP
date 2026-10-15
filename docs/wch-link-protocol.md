@@ -479,7 +479,7 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 
 | Status | Cause |
 |---|---|
-| `Wire` | The engine returned a flag: a parity error (two wires) or a line that stays low (one wire). |
+| `Wire` | The engine returned a flag: a parity error (two wires), a line that stays low (one wire), or a frame that the timer did not end correctly (one wire, see [One-wire timer](#one-wire-timer)). |
 | `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](#wire-frame-format)). One wire: a read without a target gives `ffffffff`. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
 | `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout`: `abstractcs` reads `ffffffff` (`busy` 1). After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
@@ -961,20 +961,40 @@ The pins on the dongle:
 | ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
 
 The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
-This was not tested on a dongle. The line of a pulse must go high in about 370 ns.
-`board::SwdPins::swdioRelease()` releases the line to a pull-up input. A pull-up can be too slow for this time.
-Thus the engine (`src/rvswd/RvSwdEngine.h`, pins in `src/board/BoardRvSwd.h`) drives the line high in the high level of each bit and when the line is idle.
-In a read bit, the engine releases the line after its short low pulse. The target can then hold the line low for a 0.
-The engine samples the line 600 ns after the falling edge. When the line is high again, the engine drives it high.
-The engine does not drive the line high while the line is low. Thus it does not fight a target that holds the line low.
 
-Risk for a read bit: only the internal pull-up raises the line for a 1. The STM32F1 pull-up is 30 to 50 kΩ.
-With 20 to 50 pF of line and target pin, the time constant is 0.6 to 2.5 µs. At the sample point (600 ns), the line can still be below the input high level, and each 1 then reads as 0.
-The capture shows a fast rise after a 1 of the target (low for 246 to 374 ns). Thus the WCH-LinkE or the target drives the line high.
-A hardware test must measure the rise time on a dongle. If the rise is too slow, use one of these fixes:
+### One-wire timer
 
-- An external pull-up of about 1 kΩ on SWDIO.
-- A later sample point, from the measured rise time. The shortest 0 of the target is 824 ns, so the sample point must stay below that time.
+The width of a low pulse is the value of the bit. Thus code cannot make the bits.
+On the OtherUse dongle, waits on the cycle counter gave a 1 of 120 to 530 ns, and the CH32V003 did not answer.
+Constants for the time of the code worked, but only for one board, one clock and one build.
+
+A hardware timer makes each edge (`src/board/BoardRvSwd.cpp`). The engine (`src/rvswd/RvSwdEngine.h`) gives it the bits of a frame.
+
+| Board | SWDIO output | Timer channel | Update DMA | Sample channel and DMA |
+|---|---|---|---|---|
+| Mini, OtherUse | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
+| ST-Link/V2 | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
+
+`board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz).
+
+- **Edges.** The timer runs in PWM mode 1 with an inverted output: low for CCR ticks, then high until ARR.
+  On each update event, a DMA burst writes ARR and the CCRs of the next bit. No code runs between two bits.
+- **Times.** The bits have the WCH-LinkE times: a 1 is low for 250 ns, a 0 is low for 860 ns, and the high level is 370 ns.
+  The high level after bit 8 of a read is 750 ns. A read bit lasts 1.3 µs.
+- **Read bits.** In the turnaround after bit 8, the code switches SWDIO to open drain.
+  The timer then drives the low pulse of 250 ns, and the target can hold the line low for a 0.
+  The sample channel compares at 450 ns. Its DMA copies the input port (`IDR`) to RAM.
+  The DMA reads 80 to 210 ns after the compare (measured), thus at 530 to 660 ns.
+  That is between the longest 1 (374 ns) and the shortest 0 (824 ns) of the target.
+- **DMA budget.** One DMA transfer takes 80 to 210 ns. The update burst must end within the shortest bit (620 ns).
+  A burst of 5 words did not end in time. A sample transfer in each write bit also delayed the burst after a row of 1 bits: bit 8 of a chip ID read then kept the short low time.
+  Thus the sample request is on only for the read bits. The code switches it on in the turnaround and off after the last read bit. The cycle counter times both switches, and the code reads no timer or DMA register during the frame.
+- **Pending requests.** A timer DMA request stays pending until a channel serves it. A request at the end of a frame then made the next frame lose bit 0.
+  Thus the last update event of a frame has its own table entry, and the end period (0.9 ms) is long enough to stop the counter.
+
+The line after a release: a capture with analog input (target side) shows the rise after a 1 of the target. The line goes from 0.3 V to 3.07 V in about 120 ns (10 to 90 %).
+Thus the target, or a strong pull-up on the target side, drives the line high. The STM32F1 pull-up (30 to 50 kΩ) cannot give that rise.
+At the sample point, the line is at 3.06 V. While the probe drives the line low alone, the line is at 0.3 V. This shows a series resistance between the probe and the target.
 
 USB ID: the decision of the epic stays. The default is an own ID. The ID `1a86:8010` is a build option for personal use.
 wlink and minichlink find the probe by this ID. Without it, they need a flag or a patch.
@@ -989,7 +1009,7 @@ The table lists the questions of epic #63 and their state.
 | Order of the flash sequence | Answered (see [Flash program](#flash-program-wlink)). |
 | Does the probe or the host hold the flash algorithm? | Both. The host sends a 512-byte stub per chip family. The probe runs it. minichlink uses the stub on the CH32V208. On the CH32V003 it writes by DMI and uses no stub. The interface of the stub comes from a disassembly (see [The stub](#the-stub)). Erase, protect and unprotect use no stub: the probe holds that algorithm. |
 | Operation bits of the probe for each stub call | **Open.** The personality uses its own sequence (see [Flash](#flash)). |
-| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. Open: the response and parity bits on the one-wire line, and the timing of a flash program. |
+| Wire timing of the one-wire and the two-wire interface | **Mostly answered.** See [two-wire timing](#wire-timing-ch32v208-two-wires) and [one-wire timing](#wire-timing-ch32v003-one-wire), both at three speeds. The personality uses the one-wire times with a timer (see [One-wire timer](#one-wire-timer)). Open: the response and parity bits on the one-wire line, and the timing of a flash program. |
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
