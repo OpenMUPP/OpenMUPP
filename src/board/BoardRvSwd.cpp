@@ -47,10 +47,10 @@ constexpr OneWireTimer oneWire = *oneWireTimerOf(current.debug.tmsOut);
 using OneWireOut = FastPinOf<current.debug.tmsOut>;
 using OneWireIn = FastPinOf<current.debug.tmsIn>;
 
-constexpr uint8_t afPushPull = hw::gpio_f1::pinConfig(GpioPin::Mode::Alternate, GpioPin::OutputType::PushPull, GpioPin::Pull::None,
-                                                     GpioPin::Speed::VeryHigh);
-constexpr uint8_t afOpenDrain = hw::gpio_f1::pinConfig(GpioPin::Mode::Alternate, GpioPin::OutputType::OpenDrain, GpioPin::Pull::None,
-                                                      GpioPin::Speed::VeryHigh);
+constexpr uint8_t afPushPull =
+hw::gpio_f1::pinConfig(GpioPin::Mode::Alternate, GpioPin::OutputType::PushPull, GpioPin::Pull::None, GpioPin::Speed::VeryHigh);
+constexpr uint8_t afOpenDrain =
+hw::gpio_f1::pinConfig(GpioPin::Mode::Alternate, GpioPin::OutputType::OpenDrain, GpioPin::Pull::None, GpioPin::Speed::VeryHigh);
 // Input with pull: ODR high selects the pull-up.
 constexpr uint8_t releasedInput = hw::gpio_f1::pinConfig(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
 
@@ -102,9 +102,9 @@ void fillEntry(uint16_t *entry, uint32_t period, uint32_t low) {
    entry[0] = static_cast<uint16_t>(period - 1);
    entry[1] = 0;
    for(uint32_t channel = 1; channel <= oneWire.channel; ++channel) {
-      entry[1 + channel] = channel == oneWire.channel         ? static_cast<uint16_t>(low)
-                           : channel == oneWire.sampleChannel ? ticks.sample
-                                                              : 0;
+      entry[1 + channel] = channel == oneWire.channel       ? static_cast<uint16_t>(low) :
+                           channel == oneWire.sampleChannel ? ticks.sample :
+                                                              0;
    }
 }
 
@@ -150,8 +150,9 @@ void initOneWire() {
    if(oneWire.partialRemap) {
       hw::Afio::setRemap(AFIO_MAPR_TIM3_REMAP, AFIO_MAPR_TIM3_REMAP_PARTIALREMAP);
    }
-   ticks = { ticksOf(rvswd::oneWireShortLowNs),       ticksOf(rvswd::oneWireLongLowNs), ticksOf(rvswd::oneWireHighNs),
-             ticksOf(rvswd::oneWireTurnaroundHighNs), ticksOf(rvswd::oneWireReadBitNs), ticksOf(rvswd::oneWireSampleNs),
+   ticks = { ticksOf(rvswd::oneWireShortLowNs), ticksOf(rvswd::oneWireLongLowNs),
+             ticksOf(rvswd::oneWireHighNs),     ticksOf(rvswd::oneWireTurnaroundHighNs),
+             ticksOf(rvswd::oneWireReadBitNs),  ticksOf(rvswd::oneWireSampleNs),
              ticksOf(rvswd::oneWireLeadNs) };
 
    TIM_TypeDef &tim = timer();
@@ -176,8 +177,8 @@ void initOneWire() {
 
    const Dma::Channel update = updateDma();
    update.disable();
-   update.configure(const_cast<uint32_t *>(&tim.DMAR), table.data(), Dma::DataSize::Size16Bits, Dma::DataSize::Size16Bits,
-                    Dma::Direction::MemoryToPeripheral, true, false);
+   update.configure(const_cast<uint32_t *>(&tim.DMAR), table.data(), Dma::DataSize::Size16Bits,
+                    Dma::DataSize::Size16Bits, Dma::Direction::MemoryToPeripheral, true, false);
    update.setPriority(Dma::ChannelPriority::very_high);
    const Dma::Channel samples = sampleDma();
    samples.disable();
@@ -236,7 +237,8 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    for(uint32_t i = 0; i < count; ++i) {
       if(i + 1 == readFrom) {
          // After the rising edge of the bit before the read bits
-         switchAt = endAt + (i == 0 ? first[1 + oneWire.channel] : table[(i - 1) * burstWords + 1 + oneWire.channel]) + ticks.high / 2u;
+         switchAt =
+         endAt + (i == 0 ? first[1 + oneWire.channel] : table[(i - 1) * burstWords + 1 + oneWire.channel]) + ticks.high / 2u;
       }
       endAt += period(i);
    }
