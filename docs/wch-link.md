@@ -201,8 +201,25 @@ Results with the timer:
 | `minichlink -i`, `-w` | Passed. A write of 16 KB takes 5.2 s. Three wlink dumps after the write are the same as the image (issue #77 does not occur). |
 | `minichlink -r` | Passed for a read of 16,380 bytes (0.9 s), and it is the same as the wlink dump. A read that ends at `0x08004000` (the end of the flash) fails with `cmderr` 3 (exception). The code before the timer gave the same result, so the probe is not the cause. minichlink seems to read one word after the end of the read. A check with a WCH-LinkE is open. |
 
+### CH32V208 with the timer image
+
+The two-wire engine did not change, but the probe now sets up TIM3 and DMA at each connect, and the connect tries one wire first with the timer.
+A second OtherUse probe (legacy bootloader, `app-10k` image) ran the CH32V208 items again:
+
+| Item | Result |
+|---|---|
+| `wlink status` | Passed, 20 of 20 runs. |
+| `wlink dump` | Passed. Three dumps of the full flash take 11.4 s each, and they are the same as a dump with the image before the timer. |
+| `wlink halt`, `regs`, `resume`, `reset` | Passed. |
+| `wlink erase`, `wlink flash` | Passed. The erase takes 0.16 s. A program of 160 KB takes 25.5 s, and a dump after it is the same as the image. |
+| `wlink protect`, `wlink unprotect` | Passed. The option bytes after the unprotect are the same as in the first test. |
+| `minichlink -r`, `-w` | Passed. A read of 160 KB takes 6.9 s. A write of 160 KB takes 24.3 s. Three wlink dumps after the write are the same as the image. |
+
+First, the memory reads failed at random points with both images (with and without the timer).
+The cause was the wiring between the probe and the target: after a new wiring, all items passed.
+The first probe also gave more failures than the second probe. Its wiring is not checked.
+
 Open items:
 
-- A check of the CH32V208 (two wires) with the timer image. The two-wire engine did not change, but the probe now sets up TIM3 and DMA at each connect.
 - The minichlink read of the full CH32V003 flash with a WCH-LinkE.
 - The WCH OpenOCD fork (if time allows).
