@@ -203,7 +203,6 @@ Results with the timer:
 
 Open items:
 
-- A CH32V207 target. The tests used a CH32V208.
 - A check of the CH32V208 (two wires) with the timer image. The two-wire engine did not change, but the probe now sets up TIM3 and DMA at each connect.
 - The minichlink read of the full CH32V003 flash with a WCH-LinkE.
 - The WCH OpenOCD fork (if time allows).
