@@ -513,7 +513,7 @@ The build option `VSL_PROTOCOL=wch-link` puts the personality into a firmware im
   A packet is written to the target before the next request runs. Thus a quit directly after the data (minichlink) finds the last block programmed.
   The endpoint cannot be disarmed. When a sequence ends while it is armed, the function drops the next packet.
 - A host can leave a packet on the data IN endpoint `0x82` unread. minichlink does not read the block acknowledge of its last block.
-  A connect, a quit or a new read range (`03`) then marks that packet as stale. The function takes it back before it sends the response (`art::usb::Device::cancelInTransfer()` of libArT).
+  A connect, a quit, a suspend or a new read range (`03`) then marks that packet as stale. The function takes it back before it sends the response (`art::usb::Device::cancelInTransfer()` of libArT).
   Thus the next memory read gives its own data first. The WCH-LinkE gives the stale packet to the next read (see [Hardware test](wch-link.md#hardware-test)).
 
 ### Commands
@@ -593,10 +593,9 @@ The processor reads one word for each 4 bytes of the range, and sends each word 
 It reads the next packet only when the host took the packet before. After a failed word, the processor stops the target accesses, and the rest of the data is `0xff`.
 A new `03` command, a connect or a quit stops a read that the host did not take completely.
 
-The USB function cannot take back a packet that is on its way on endpoint `0x82`.
 The data has no header, so the host cannot tell an old packet from a new packet.
-Thus `02 01 0c` gives the error frame while a packet of the read before waits for the host.
-The host must read that packet, or reset the bus, before a new memory read.
+Thus a new `03` command, a connect, a quit or a suspend also takes back a packet that is on its way on endpoint `0x82`.
+`02 01 0c` gives the error frame only while the host reads that packet at the same time: then the packet is not taken back, and the read waits for its end.
 
 ### Flash
 
@@ -678,7 +677,7 @@ If the hart does not halt, the processor halts it, and the call fails.
 - A request out of order gives the error frame. Before a connect, all flash commands give the error frame.
 - A quit, a connect, an erase or a protection command ends a sequence as `02 08` does. A quit then resumes the hart at the reset vector, because `dpc` is the value after the reset.
 - minichlink does not read the block acknowledge. The acknowledge waits on the data IN endpoint until the host reads it, as the packets of a memory read do.
-  A quit or a connect drops an acknowledge that is not on its way yet. The acknowledge on its way stays: a memory read (`02 0c`) of a later tool on the same USB session gives the error frame until the host reads that packet.
+  A quit or a connect drops an acknowledge that is not on its way yet, and takes back the acknowledge on its way. Thus a memory read (`02 0c`) of a later tool gets its own data (issue #77).
 
 ### Speed
 

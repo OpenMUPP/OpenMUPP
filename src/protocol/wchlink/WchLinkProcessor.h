@@ -75,12 +75,12 @@
 // - Memory read: each 32-bit word goes out with the most significant byte
 //   first, in packets of packetSize bytes, until the length of the range.
 //   After a failed word, the module stops reading and the rest of the data
-//   is 0xff. A new command 0x03, a connect or a quit ends a read that the
-//   host did not take completely. The transport cannot take back a packet
-//   that is on its way to the host. Thus 02 0c gives the error frame while
-//   a packet of the read before waits for the host (dataSent() not called
-//   yet): its data would look like the start of the new read. A block
-//   acknowledge also waits on the data IN endpoint.
+//   is 0xff. A new command 0x03, a connect, a quit or a suspend ends a read
+//   that the host did not take completely, and the transport takes back a
+//   packet on its way (takeStaleData()). 02 0c gives the error frame while
+//   a packet of the read before still waits for dataSent(): its data would
+//   look like the start of the new read. A block acknowledge also waits on
+//   the data IN endpoint.
 // - Program sequence: a data packet runs before the next request
 //   (runData()), so that a quit after the data finds the last block
 //   programmed (minichlink sends no 02 08). A quit, a connect or an erase
@@ -272,7 +272,7 @@ class Processor {
    // Writes the stored data packet to the target. Returns false when none
    // is stored. Call it in the main loop, before runNext().
    bool runData();
-   // True once after a connect, a quit or a read range found a packet of
+   // True once after a connect, a quit, a suspend or a read range found a packet of
    // dataPacket() on its way: the host will not read it (minichlink reads
    // no block acknowledge). The transport takes it back, then calls
    // dataSent().
