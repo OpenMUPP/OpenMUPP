@@ -52,8 +52,9 @@
 // the host. The CH32V003 shows cmderr 6 after the connect of the probe.
 //
 // Errors: the flags of the engine give Status::Wire. Two wires: a frame
-// with the response and the tail bits 1111 (the pull-up, no target
-// drives) gives Status::NoTarget. One wire: a frame without a target
+// with bit 11 and bit 49 high (the pull-up, no target drives) gives
+// Status::NoTarget. A frame with bit 49 high only (the target dropped the
+// frame) gives Status::Wire. One wire: a frame without a target
 // reads 0xffffffff. Thus each dmstatus read checks the version field
 // (2: spec 0.13), else Status::NoTarget. Other accesses do not detect a
 // missing target on one wire: dmiRead() gives 0xffffffff with Status::Ok,
@@ -468,8 +469,9 @@ class DebugModule {
    // first bit of both low (bits 11 and 49); the probe drives bits 13 and 51.
    Status check(uint8_t flags) {
       constexpr uint8_t targetBit = 0b1000;
-      if(engine_.wire() == Wire::Two && (engine_.head() & targetBit) != 0 && (engine_.tail() & targetBit) != 0) {
-         return Status::NoTarget;
+      if(engine_.wire() == Wire::Two && (engine_.tail() & targetBit) != 0) {
+         // A write in a dropped frame has no parity error.
+         return (engine_.head() & targetBit) != 0 ? Status::NoTarget : Status::Wire;
       }
       return flags != 0 ? Status::Wire : Status::Ok;
    }

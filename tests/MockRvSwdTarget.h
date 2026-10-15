@@ -171,6 +171,8 @@ class MockRvSwdTarget {
    bool badParity{ false };
    // False: the target does not drive SWDIO (no target).
    bool present{ true };
+   // Two wires: the target sees bit 13 as high and drops each frame.
+   bool dropFrames{ false };
    // One wire: the target holds the line low from the next read bit on.
    bool stuckLow{ false };
    // Called with the address before the target answers a read, and after
@@ -390,7 +392,7 @@ class MockRvSwdTarget {
             notifyRead();
             accesses.push_back({ address_, false, registers[address_] });
          }
-      } else if(bit == 13 && level) {
+      } else if(bit == 13 && (level || dropFrames)) {
          ++protocolErrors;
          ++droppedFrames;
          dropped_ = true;

@@ -35,18 +35,20 @@
 //   8          1: write, 0: read                          host
 //   9          parity of bits 1-8 (1: odd number of 1s)   host
 //   10         the level of bit 9, then SWDIO released    host
-//   11-14      response bits                              target
+//   11-14      handshake: 11 low, 12 released,            11: target
+//              13 low, 14 released                        13: host
 //   15-46      data, MSB first                            host (write), target (read)
 //   47         parity of the data                         host (write), target (read)
 //   48         the level of bit 47, then released         host (write), target (read)
-//   49-52      tail bits                                  target
+//   49-52      handshake: 49 low, 50 released,            49: target
+//              51 high, 52 released                       51: host
 //   53         0                                          host
 //   stop       SWCLK high, then SWDIO rises
 //
 // The low phase before bits 1, 15 and 53 is two half periods, as on the
-// WCH-LinkE: SWDIO changes direction there. The meaning of the response
-// and the tail bits is open. head() and tail() give them, and W3 decides
-// what they mean.
+// WCH-LinkE: SWDIO changes direction there. A target that sees bit 13
+// high drops the frame: it drives no more bits (CH32V208). head() and
+// tail() give the line levels of the handshake bits.
 //
 // Each half period waits from its SWCLK edge, as in the SWD engine: an
 // interrupt makes a half period longer, never shorter. The interrupts stay
@@ -240,7 +242,7 @@ class RvSwdEngine {
 
    // DMI write. Returns the flags (0: no error). The flags do not check
    // the target: a two-wire write without a target also returns 0 (with
-   // the response and tail bits 1111). W3 must check head() and tail().
+   // bit 11 and bit 49 high). The caller must check head() and tail().
    uint8_t write(uint8_t address, uint32_t data) {
       return frame(address, true, data);
    }
@@ -255,8 +257,8 @@ class RvSwdEngine {
       return flags;
    }
 
-   // Two wires: the response bits (11-14) and the tail bits (49-52) of the
-   // last frame, the first bit in bit 3. One wire: 0.
+   // Two wires: the handshake bits 11-14 and 49-52 of the last frame,
+   // the first bit in bit 3. One wire: 0.
    [[nodiscard]] uint8_t head() const {
       return head_;
    }
