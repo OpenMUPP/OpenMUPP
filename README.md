@@ -1,19 +1,24 @@
 # versaloon-NG
 
-versaloon-NG is open firmware that turns a Versaloon Mini, an OtherUse or an ST-Link/V2 clone (STM32F103) into a USB debug probe with a serial port.
-One probe speaks these protocols:
+versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini and the OtherUse.
+A build for an ST-Link/V2 clone also exists, but it has no hardware test (see [Boards](#boards)).
+Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
 |---|---|---|---|
+| Versaloon (original protocol, the default) | `0483:a038` | Unmodified OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M, SWD and JTAG |
 | CMSIS-DAP v2 | `0403:9b3c` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M, SWD and JTAG (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
-| Versaloon (original protocol) | `0483:a038` | OpenOCD (`vsllink`) | Arm Cortex-M, SWD and JTAG |
-| WCH-Link | `1209:0001`, or `1a86:8010` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
+| WCH-Link | `1209:0001` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
 
-The CMSIS-DAP and Versaloon personalities also have a USB-CDC serial port, which the firmware bridges to a UART of the board.
+`wlink` and `minichlink` find only the WCH ID `1a86:8010`.
+Build the WCH-Link image with `VSL_WCH_LINK_WCH_USB_ID` for personal use only (see [docs/wch-link.md](docs/wch-link.md#usb-id)).
+
+The Versaloon and CMSIS-DAP personalities also have a USB-CDC serial port.
+The firmware bridges it to a UART of the board.
 The WCH-Link personality has no serial port.
-A dual image has the CMSIS-DAP and Versaloon personalities, and you select one at run time.
+A dual image has the Versaloon and CMSIS-DAP personalities, and you select one at run time.
 The firmware drives the LEDs for the target power, the command activity and the USB state.
-It starts the bootloader on request, so you can update it over USB.
+The key starts the bootloader, and the Versaloon personality also starts it on request (see [Flash the firmware](#flash-the-firmware)).
 
 The [status](docs/status.md) document lists what the firmware does and what the hardware tests cover.
 
@@ -66,7 +71,7 @@ cmake --build --preset mini -j
 
 The build directory is `build/<preset>`, here `build/mini`.
 The presets `mini`, `otheruse` and `stlinkv2` build the Release images of one board.
-The plain preset builds the Versaloon personality.
+A preset without a suffix builds the Versaloon personality.
 Add `-cmsis-dap`, `-dual` or `-wch-link` for the other personalities, for example `mini-cmsis-dap`.
 `mini-debug` is the Debug build of the Mini.
 `cmake --list-presets` shows all presets.
