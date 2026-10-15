@@ -852,7 +852,7 @@ Observations:
   When the probe released bit 13, the CH32V208 drove bit 11 only, and then no more bits of the frame. It did not do the write.
 - **Parity (bits 47 and 48).** Bit 47 is the parity. Bit 48 keeps the level of bit 47 for one more clock, as bit 10 keeps the level of bit 9.
 - **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 4 to 14 ns after the falling edge.
-  Bits 1 to 9 and 53 follow the probe pattern. Bits 11 and 49 follow the target pattern. Bits 15 to 47 follow the probe pattern in a write and the target pattern in a read.
+  Bits 1 to 9, 13, 51 and 53 follow the probe pattern. Bits 11 and 49 follow the target pattern. Bits 15 to 47 follow the probe pattern in a write and the target pattern in a read.
   SWDIO changes while SWCLK is high in bits 10 and 14, and in bit 48 of a write: the line changes direction there.
 - **Longer low phases.** The low phase before bits 1, 15 and 53 is about two half periods: 2.1 to 2.2 µs at the 2.09 µs clock. SWDIO changes direction before bits 15 and 53.
 - **Idle.** Between frames, SWCLK is low and SWDIO is high. The probe keeps SWCLK high for about 1 to 5 µs after the stop condition.
@@ -875,23 +875,30 @@ The voltage of SWDIO in the high phase of SWCLK tells the driver:
 |---|---|
 | 0.00 to 0.02 V | Probe, low |
 | 3.29 to 3.31 V | Probe, high |
-| -0.08 to -0.12 V | Target, low |
+| -0.07 to -0.14 V | Target, low |
 | 1.5 to 1.9 V, rising | Nobody: the line rises from low through a pull-up |
-| 3.4 to 3.45 V | Nobody: the line stays high through a pull-up |
+| 3.35 to 3.55 V | Nobody: the line stays high through a pull-up |
 
 Seven frames of 54 clocks (writes and reads) show the same handshake bits, as the frame table gives.
 
 ### Connect frames
 
-The 85-clock frames of the connect phase are `dmstatus` reads (address `0x11`) in the frame format above, with 32 more clocks:
+The 85-clock frames of the connect phase are `dmstatus` reads (address `0x11`), with 32 more clocks:
 
-1. A start condition and bits 1 to 52 of a read of `dmstatus`.
+1. A start condition and bits 1 to 52 of a read of `dmstatus`. The handshake bits are not the same as in the frame format above (see below).
 2. 32 clocks with SWDIO released (high).
 3. SWDIO falls while SWCLK is high: a start condition.
 4. One clock with SWDIO low, then the stop condition.
 
 In the first frame, the target answers `0x00000c82` (version 2, authenticated, hart running). The parity is right.
-In the next frames, the target does not drive SWDIO. The probe drives bits 15 to 40 low. Only the target bits of the handshake show the target.
+In this frame, the probe drives bits 12, 13 and 14 low, and nobody drives bit 51.
+
+In the next frames, the target does not answer with data (`v208-wlink-status-analog-connect.csv`):
+
+- The target pulls bit 10 and bit 48 low: one bit earlier than bits 11 and 49 of the frame format.
+- The probe drives bits 11 to 40 low and bit 41 high. Nobody drives bits 42 to 47.
+
+The cause of the shift by one bit is not known.
 The probe uses these frames to wait for a target. A probe without them connects too: the personality sends no connect frames (see [Hardware test](#hardware-test)).
 
 ### One-wire frame format (CH32V003)
