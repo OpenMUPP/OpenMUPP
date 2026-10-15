@@ -261,6 +261,10 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `build-mini-wch-link-wch-id`: the `wch-link` build of the Mini with the USB ID of WCH, plus the size check. The job keeps no artifact, because the vendor ID belongs to WCH.
 
 Each build job configures and builds the preset with the name of the job, without `build-`.
+The jobs of the Mini run in each pipeline.
+The jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
+A manual job can fail and not block the pipeline or the merge request (MR).
+On a tag, all build jobs run.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
 The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
 The ST-Link/V2 has the `standalone` image only.
