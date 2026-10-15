@@ -522,4 +522,13 @@ The unit tests of the script need no pyusb and no hardware:
 python3 -m unittest discover -s tools -p "test_*.py"
 ```
 
-Status: the host tests pass. The test on a Mini and an OtherUse is not done yet.
+Status: the host tests pass. The hardware test passed on 2026-10-15.
+Probe: OtherUse board with the 10k bootloader, `app-10k` image of the `otheruse-cmsis-dap` preset, build `v0.9.0-42-g52e32da`.
+The UART TX pin was connected to the UART RX pin (PA9 to PA10).
+The run used `--serial-port /dev/ttyACM0`.
+All 70 cases passed: the baud rates from 57600 to 2000000 baud, each with the seven frame formats.
+The serial port got no data while the DAP commands owned the UART.
+A 256 KiB flash with OpenOCD (SWD, 2000 kHz) and the serial loopback test on the COM port ran at the same time.
+Both passed.
+The SWD and JTAG checks with OpenOCD, pyOCD and probe-rs still passed on this firmware.
+The `DAP_UART_*` commands and a flash on the same DAP interface did not run at the same time.
