@@ -27,6 +27,17 @@
 // A wch-link image runs the WCH-Link processor (protocol/wchlink/WchLinkProcessor.h)
 // on the RISC-V debug wire engine (board/BoardRvSwd.h). It has no serial
 // port: no UART bridge and no debug log.
+//
+// Each personality has one group below, inside its VSL_WITH_<P> define:
+// its objects, its start, its work before and after the USB poll, and
+// its probe error count. Only the group of the active personality runs.
+// The constructors only keep references, so no group touches the hardware
+// before main(). The active USB function alone gets commands, so only the
+// active personality configures its pins, timers and DMA channels: the
+// SWD and JTAG pins and the JTAG fast path (DMA1 channels 3 to 5) for
+// Versaloon and CMSIS-DAP, the RISC-V debug wire with the one-wire timer
+// and two DMA1 channels (board::oneWireTimerOf()) for WCH-Link. A
+// personality switch resets the MCU, so nothing is set back.
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -80,7 +91,11 @@
 
 namespace {
 
-#if !defined(VSL_WITH_WCH_LINK)
+using personality::Personality;
+
+#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
+
+// The SWD and JTAG ports of the Versaloon and CMSIS-DAP personalities
 
 // The serial port during a long command. It runs only the serial port
 // events of the USB device (UsbStack::pollSerial()), so no command starts
@@ -102,8 +117,6 @@ board::BoardJtag boardJtag{ jtagPins, &serialService };
 
 #if defined(VSL_DUAL_PERSONALITY)
 
-using personality::Personality;
-
 // The personality when the settings page has none
 #if defined(VSL_DEFAULT_CMSIS_DAP)
 constexpr Personality defaultPersonality = Personality::CmsisDap;
@@ -121,7 +134,24 @@ const Personality activePersonality = loadPersonality();
 personality::PersonalitySwitch personalitySwitch{ activePersonality };
 personality::KeyGesture keyGesture;
 
+#else
+
+// The one personality of the image
+#if defined(VSL_WITH_WCH_LINK)
+constexpr Personality activePersonality = Personality::WchLink;
+#elif defined(VSL_WITH_CMSIS_DAP)
+constexpr Personality activePersonality = Personality::CmsisDap;
+#else
+constexpr Personality activePersonality = Personality::Versaloon;
 #endif
+
+#endif
+
+// True when the personality runs in this start. In an image with one
+// personality it is a constant, so the compiler drops the other groups.
+bool isActive(Personality personality) {
+   return activePersonality == personality;
+}
 
 // The Vref sense and the target switch. The target power LED reads the
 // sense in every personality.
@@ -129,9 +159,13 @@ board::BoardPower boardPower;
 
 #if defined(VSL_WITH_WCH_LINK)
 
+// --- WCH-Link ---------------------------------------------------------
 // The processor runs in the main loop, outside the USB event delivery. The
 // target gets no Background: the personality has no serial port to service
-// during a long command.
+// during a long command. rvSwdPins.init() sets up the one-wire timer and
+// its DMA channels when the host attaches the target (wchProcessor), so
+// only in a WCH-Link start. The personality has no start, no poll work and no error count.
+
 class WchPlatform final : public wchlink::Platform {
    public:
    void delayUs(uint32_t microseconds) override {
@@ -148,6 +182,7 @@ wchlink::Processor wchProcessor{ wchTarget, wchPlatform };
 
 #if defined(VSL_WITH_CMSIS_DAP)
 
+// --- CMSIS-DAP --------------------------------------------------------
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
 // processor keeps a pointer to the serial number text.
 constexpr const char *dapVendor = "Versaloon";
@@ -199,10 +234,29 @@ cmsisdap::Processor dapProcessor{ dapSwd,
 #endif
                                   uart::dapUart() };
 
+// The chip UID as the 24 hexadecimal digits of the USB serial number
+// string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one
+// serial number in the USB string and in DAP_Info.
+void setDapSerialNumber() {
+   std::array<uint8_t, hw::Uid::SizeBytes> uid{};
+   hw::Uid::read(uid);
+   constexpr char digits[] = "0123456789ABCDEF";
+   for(std::size_t i = 0; i < uid.size(); ++i) {
+      dapSerialNumber[2 * i] = digits[uid[i] >> 4];
+      dapSerialNumber[2 * i + 1] = digits[uid[i] & 0x0F];
+   }
+}
+
+// The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
+void startDap() {
+   setDapSerialNumber();
+}
+
 #endif
 
 #if defined(VSL_WITH_VERSALOON)
 
+// --- Versaloon --------------------------------------------------------
 // The DELAY block busy-waits: the main loop stops for the delay, up to
 // 32.767 s. The host waits for the reply in this time.
 class BusyWaitDelay final : public protocol::Delay {
@@ -235,24 +289,38 @@ constexpr bool hasBootloaderEntry = true;
 constexpr bool hasBootloaderEntry = false;
 #endif
 
-#endif
-
-#if defined(VSL_WITH_VERSALOON)
 const usb::UsbStack::VersaloonDeps versaloonDeps{
    .bootloader = hasBootloaderEntry ? &bootloaderEntry : nullptr,
    .usbToXxx = &usbToAll,
 };
-#endif
 
-#if !defined(VSL_DUAL_PERSONALITY)
-// The one personality of the image
-#if defined(VSL_WITH_WCH_LINK)
-constexpr personality::Personality activePersonality = personality::Personality::WchLink;
-#elif defined(VSL_WITH_CMSIS_DAP)
-constexpr personality::Personality activePersonality = personality::Personality::CmsisDap;
-#else
-constexpr personality::Personality activePersonality = personality::Personality::Versaloon;
-#endif
+// Adds the blocks of USB_TO_ALL before the first command
+void startVersaloon() {
+   if(!usbToAll.add(gpioBlock)) {
+      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the GPIO block");
+   }
+   if(!usbToAll.add(jtagRawBlock)) {
+      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the JTAG_RAW block");
+   }
+   if(!usbToAll.add(swdBlock)) {
+      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the SWD block");
+   }
+   if(!usbToAll.add(powerBlock)) {
+      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the POWER block");
+   }
+   usbToAll.setTargetVoltage(&powerBlock);
+}
+
+void beforeUsbPollVersaloon(uint64_t nowMs) {
+   if(bootloaderEntry.isDue(nowMs)) {
+      boot::enterBootloader();
+   }
+}
+
+void afterUsbPollVersaloon(uint64_t nowMs) {
+   powerBlock.poll(nowMs);
+}
+
 #endif
 
 usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
@@ -278,56 +346,22 @@ usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
 #endif
                                            } };
 
-#if !defined(VSL_WITH_WCH_LINK)
+#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
 // A command runs only after usbStack.start(), so the USB device and the
-// bridge run.
+// bridge run. Only the Versaloon and CMSIS-DAP engines call it. As in the
+// main loop, the log and the bridge run only with the serial port.
 void SerialService::service() {
    usbStack.pollSerial();
-   debug::pollLog(usbStack);
-   uart::pollBridge();
-}
-#endif
-
-#if defined(VSL_WITH_CMSIS_DAP)
-
-// The chip UID as the 24 hexadecimal digits of the USB serial number
-// string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one
-// serial number in the USB string and in DAP_Info.
-void setDapSerialNumber() {
-   std::array<uint8_t, hw::Uid::SizeBytes> uid{};
-   hw::Uid::read(uid);
-   constexpr char digits[] = "0123456789ABCDEF";
-   for(std::size_t i = 0; i < uid.size(); ++i) {
-      dapSerialNumber[2 * i] = digits[uid[i] >> 4];
-      dapSerialNumber[2 * i + 1] = digits[uid[i] & 0x0F];
+   if(usbStack.hasSerialPort()) {
+      debug::pollLog(usbStack);
+      uart::pollBridge();
    }
 }
-
-#endif
-
-#if defined(VSL_WITH_VERSALOON)
-
-// Adds the blocks of USB_TO_ALL before the first command
-void addUsbToAllBlocks() {
-   if(!usbToAll.add(gpioBlock)) {
-      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the GPIO block");
-   }
-   if(!usbToAll.add(jtagRawBlock)) {
-      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the JTAG_RAW block");
-   }
-   if(!usbToAll.add(swdBlock)) {
-      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the SWD block");
-   }
-   if(!usbToAll.add(powerBlock)) {
-      LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the POWER block");
-   }
-   usbToAll.setTargetVoltage(&powerBlock);
-}
-
 #endif
 
 #if defined(VSL_DUAL_PERSONALITY)
 
+// --- Personality switch -----------------------------------------------
 // Stores the personality and resets. The USB device then enumerates with
 // the descriptors of that personality. When the store fails, the reset
 // keeps the active personality.
@@ -361,22 +395,26 @@ void pollPersonality(uint64_t nowMs) {
 
 #endif
 
+// --- The active personality -------------------------------------------
 // Before the first command
 void startProtocol() {
    boardPower.init();
 #if defined(VSL_WITH_CMSIS_DAP)
-   setDapSerialNumber();
+   if(isActive(Personality::CmsisDap)) {
+      startDap();
+   }
 #endif
 #if defined(VSL_WITH_VERSALOON)
-   addUsbToAllBlocks();
+   if(isActive(Personality::Versaloon)) {
+      startVersaloon();
+   }
 #endif
 }
 
-// The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
 void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
 #if defined(VSL_WITH_VERSALOON)
-   if(bootloaderEntry.isDue(nowMs)) {
-      boot::enterBootloader();
+   if(isActive(Personality::Versaloon)) {
+      beforeUsbPollVersaloon(nowMs);
    }
 #endif
 #if defined(VSL_DUAL_PERSONALITY)
@@ -386,27 +424,32 @@ void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
 
 void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
 #if defined(VSL_WITH_VERSALOON)
-   powerBlock.poll(nowMs);
+   if(isActive(Personality::Versaloon)) {
+      afterUsbPollVersaloon(nowMs);
+   }
 #endif
+}
+
+// Number of JTAG and SWD errors of the active personality, for the error
+// LED. It wraps at 2^32: only the difference between two values counts.
+uint32_t probeErrorCount() {
+#if defined(VSL_WITH_VERSALOON)
+   if(isActive(Personality::Versaloon)) {
+      return swdBlock.errorCount();
+   }
+#endif
+#if defined(VSL_WITH_CMSIS_DAP)
+   if(isActive(Personality::CmsisDap)) {
+      return dapProcessor.errorCount();
+   }
+#endif
+   return 0;
 }
 
 constexpr Heartbeat clockFaultBlink{ Heartbeat::clockFault };
 ActivityLed activityLed;
 ErrorLed errorLed;
 TargetPowerLed targetPowerLed;
-
-// Number of JTAG and SWD errors of all personalities, for the error LED.
-// It wraps at 2^32: only the difference between two values counts.
-uint32_t probeErrorCount() {
-   uint32_t count = 0;
-#if defined(VSL_WITH_VERSALOON)
-   count += swdBlock.errorCount();
-#endif
-#if defined(VSL_WITH_CMSIS_DAP)
-   count += dapProcessor.errorCount();
-#endif
-   return count;
-}
 
 // Drives the LEDs (docs/boards.md, "LEDs"). Call it in each main loop
 // iteration, after the USB poll.
@@ -445,7 +488,9 @@ int main() {
    // USB needs the 48 MHz clock from the PLL. Without the crystal the
    // device stays disconnected, and the UART bridge is off.
    if(clockFromCrystal) {
-      uart::startBridge(usbStack);
+      if(usbStack.hasSerialPort()) {
+         uart::startBridge(usbStack);
+      }
       usbStack.start();
    }
 
@@ -455,8 +500,10 @@ int main() {
       beforeUsbPoll(nowMs);
       if(clockFromCrystal) {
          usbStack.poll();
-         debug::pollLog(usbStack);
-         uart::pollBridge();
+         if(usbStack.hasSerialPort()) {
+            debug::pollLog(usbStack);
+            uart::pollBridge();
+         }
       }
       afterUsbPoll(nowMs);
       updateLeds(nowMs, clockFromCrystal);

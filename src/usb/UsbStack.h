@@ -44,6 +44,7 @@
 
 #include "personality/Personality.h"
 #include "usb/SerialEventQueue.h"
+#include "usb/SerialPortConfig.h"
 #if defined(VSL_WITH_CMSIS_DAP)
 #include "usb/CmsisDapFunction.h"
 #endif
@@ -52,11 +53,6 @@
 #endif
 #if defined(VSL_WITH_WCH_LINK)
 #include "usb/WchLinkFunction.h"
-#endif
-
-#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
-// A personality of the image has a serial port
-#define VSL_USB_SERIAL_PORT 1
 #endif
 
 #if !defined(ART_STM32_HAS_USB_DEVICE_CONTROLLER)
