@@ -147,4 +147,25 @@ The combined image is not part of the epic.
 
 Work item #71 tests the personality on real hardware.
 The list of items is in [Hardware test](wch-link-protocol.md#hardware-test).
-No hardware test has run on this build yet.
+
+Setup:
+
+| Item | Value |
+|---|---|
+| Probe | OtherUse board, `wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` (USB ID `1a86:8010`) |
+| Target | CH32V208WBU6 board, external power. SWDIO on PA13, SWCLK on PA14. |
+| Host | Linux, wlink 0.1.2 |
+| Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 0, SWCLK on channel 1 |
+
+Results:
+
+| Item | Result |
+|---|---|
+| USB ID | wlink and minichlink find the probe only with the WCH USB ID. The default ID `1209:0001` hides it (issue #76). |
+| Connect on two wires (CH32V208), `wlink status` | Passed, 6 of 6 runs. The connect tries one wire first, then two wires. wlink shows the chip ID `0x2080053c`, 160 KB flash, `misa` `RV32ACIMUX` and `dmstatus` `0x382`. |
+
+The first connect failed: wlink got the error frame `81 55 01 01`.
+The cause was the handshake bits of the two-wire frame: the probe must drive bit 13 low and bit 51 high (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
+The engine released these bits, and the CH32V208 then dropped each frame after bit 11.
+
+The other items of the list are open.

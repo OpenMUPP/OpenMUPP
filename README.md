@@ -37,7 +37,7 @@ The WCH-Link personality is a WCH-LinkE in RISC-V mode:
 
 - It reads and writes the memory of a CH32V003 (one wire) and a CH32V20x (two wires), and it erases, programs, protects and unprotects the flash.
 - It has no serial port, no UART bridge and no debug log, and it is not part of the dual image.
-- It has not passed a hardware test yet (work item #71).
+- Its hardware test is in progress (work item #71). The connect to a CH32V208 with wlink works (see [docs/wch-link.md](docs/wch-link.md#hardware-test)).
 
 Hardware test status:
 
