@@ -1,22 +1,37 @@
 # Firmware update
 
-The firmware runs behind `versaloon-bootloader`.
-The bootloader is a USB CDC serial port with the ID `0483:5740`.
+The Mini and the OtherUse run the firmware behind a bootloader: `versaloon-bootloader` (8 KB) or the legacy Versaloon bootloader (10 KB).
+See [Install the bootloader](#install-the-bootloader).
+`versaloon-bootloader` is a USB CDC serial port with the ID `0483:5740`.
 It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
 
 ## Start the bootloader
 
-Use one of these methods:
+To start `versaloon-bootloader`, use one of these methods:
 
-- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`.
+- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the `app-8k` image has this command.
 - Hold the key (PB9) down and reset the board.
+
+To start the legacy bootloader, hold the key (PB9) down while you connect the board to USB.
+
+A firmware image built with `VSL_PROTOCOL=cmsis-dap` has no Versaloon interface.
+It has no `VERSALOON_FW_UPDATE` command.
+Use the key to start the bootloader.
+A firmware image built with `VSL_PROTOCOL=wch-link` has no `VERSALOON_FW_UPDATE` command either. Use the key.
+A dual image in the CMSIS-DAP personality has no `VERSALOON_FW_UPDATE` command either.
+Change it to the Versaloon personality first, or use the key (see [Dual image](usb-device.md#dual-image)).
+
+A dual image stores its personality in the flash page at `0x0800FC00`.
+`stm32flash -w` erases only the pages of the image, so an update keeps the stored personality.
+A mass erase of the flash also erases this page.
+The firmware then starts with its default personality.
 
 The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 
 | Status | Meaning |
 |---|---|
 | `0x00` | Accepted. The firmware starts the bootloader. |
-| `0x01` | Refused. The second byte is not the key `0xAA`, the firmware is linked without the bootloader (`VSL_BOOTLOADER=OFF`), or the board has no `versaloon-bootloader` (ST-Link/V2). The firmware continues to run. |
+| `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. The `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The ST-Link/V2 has only the `standalone` image. The firmware continues to run. |
 
 After the reply, the firmware does these steps:
 
@@ -31,36 +46,96 @@ The next reset starts the firmware again.
 
 ## Install the bootloader
 
-A new board needs the bootloader one time.
-The firmware build makes the bootloader image `versaloon-bootloader/versaloon-bootloader-<board>.hex` (see [Build the firmware](../README.md#build-the-firmware)).
-Write it at `0x08000000` with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
+The Mini and the OtherUse use one of two bootloaders:
+
+- The legacy Versaloon bootloader uses 10 KB. The existing boards have it. It runs the `app-10k` image.
+  Hold the key (PB9) down while you connect the board to USB to start it.
+  It does not know the boot request, so `VERSALOON_FW_UPDATE` does not start it.
+- `versaloon-bootloader` uses 8 KB. It runs the `app-8k` image.
+  The submodule `dependencies/versaloon-bootloader` has its source (https://gitlab.vandertogt.org/embedded-projects/versaloon-bootloader).
+
+A board with the legacy bootloader can continue to use it.
+To change a board to `versaloon-bootloader`, write the new bootloader one time with a debug probe.
+Then write the `app-8k` image, or write the combined image to do both in one step.
+
+The firmware build makes the combined image `versaloon-ng-with-bootloader.hex` (see [Build the firmware](../README.md#build-the-firmware)).
+It has the bootloader at `0x08000000` and the `app-8k` image at `0x08002000`.
+Write it with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-bootloader/versaloon-bootloader-mini.hex verify reset exit"
+        -c "program versaloon-ng-with-bootloader.hex verify reset exit"
 ```
 
-Then write the firmware through the bootloader (see below).
+The build also makes the bootloader image alone, `versaloon-bootloader/versaloon-bootloader-<board>.hex`.
+Write it in the same way when the board must keep its firmware.
+
+At its first start, `versaloon-bootloader` write-protects its 8 KB area.
+To write a new bootloader over it, remove the write protection first:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "init; reset halt; stm32f1x unlock 0; reset halt; exit"
+```
+
+`stm32f1x unlock 0` erases the option bytes and removes all write protection.
+The bootloader README has the full rules ("Flash protection").
+
+The legacy bootloader (tag `v1-legacy` of `versaloon-bootloader`) does not set write protection or readout protection.
+Thus the debug probe can write the combined image over it without `stm32f1x unlock 0`.
+If the write fails, the option bytes of the board were changed: run `stm32f1x unlock 0` first.
 
 ## Write the firmware
 
-1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` with the ID `0483:5740` shows.
-2. Write the `.bin` file of a build with `VSL_BOOTLOADER=ON` at `0x08002800`:
+1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` shows.
+   `versaloon-bootloader` has the ID `0483:5740`.
+2. Write the `.bin` file of the image for the bootloader:
 
    ```sh
-   stm32flash -w versaloon-next-gen.bin -v -S 0x08002800 /dev/ttyACM0
+   # versaloon-bootloader (8 KB)
+   stm32flash -w versaloon-ng-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
+   # legacy bootloader (10 KB)
+   stm32flash -w versaloon-ng-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Reset the board, or disconnect it and connect it again. The firmware starts.
+   With `versaloon-bootloader`, `stm32flash -g 0x08002000` also starts it.
 
-Do not write a build with `VSL_BOOTLOADER=OFF` through the bootloader.
-That build is linked at `0x08000000`, so it does not start at `0x08002800`.
+Do not write the `standalone` image through a bootloader.
+It is linked at `0x08000000`, so it does not start behind a bootloader.
+Do not write the `app-10k` image behind `versaloon-bootloader`, or the `app-8k` image behind the legacy bootloader.
+The start address of the image must be the end of the bootloader.
+
+## Application image header
+
+`versaloon-bootloader` starts only an application with a valid header.
+Thus it does not start a half-written or damaged image: it stays in bootloader mode.
+The header is in the reserved words of the vector table:
+
+| Offset | Content |
+|---|---|
+| `0x1C` | Magic `0x314C5356` (`"VSL1"` in memory) |
+| `0x20` | Image length in bytes |
+| `0x24` | CRC32 of the image (algorithm of the STM32F1 CRC unit) |
+| `0x28` | Reserved, `0` |
+
+The CRC covers the linked image, so a step after the link must add the header.
+The build calls `vsl_stamp_image()` from the bootloader submodule (`cmake/VslStampImage.cmake`) for the `app-8k` and `app-10k` images.
+It writes the header into the `.elf` file, and it writes the `.hex` and `.bin` files.
+The legacy bootloader ignores the header.
+The `standalone` image has no header.
+
+To check an image, use the stamp tool with the start address:
+
+```sh
+dependencies/versaloon-bootloader/tools/vsl-stamp-image.py --check versaloon-ng-app-8k.bin --base 0x08002000
+```
 
 ## Start-up behind the bootloader
 
 The bootloader starts the firmware after a system reset.
 Thus all peripherals are in their reset state when the firmware starts.
-The bootloader sets `VTOR` to the firmware vector table at `0x08002800`.
+The bootloader sets `VTOR` to the firmware vector table at the start of the application.
 The system-stm32 start-up code sets `VTOR` again from the linker script.
 The bootloader jumps to the firmware with all interrupts masked (`PRIMASK` set).
 `os_startup_initialize_hardware()` clears `PRIMASK` after the pin setup, before the static constructors run.
@@ -69,14 +144,21 @@ The firmware initializes its DATA and BSS sections. It does not use RAM content 
 
 ## Flash layout and size limit
 
-`versaloon-bootloader` uses the first 10 KB of flash (`0x08000000` to `0x080027FF`).
 The OtherUse has an STM32F103C8 with 64 KB flash.
-Thus the application must not be larger than 54 KB.
-This is a hard limit for all boards.
+The bootloader uses the start of the flash, and the application uses the rest:
 
-- `ldscripts/mem-f103-bootloader.ld` has a 54 KB FLASH region at `0x08002800`. The link fails when the application is too large.
-- `ldscripts/mem-f103.ld` has a 64 KB FLASH region at `0x08000000` (`VSL_BOOTLOADER=OFF`).
-- CI reports the image size with `ci/check-size.sh` and fails when the `.bin` file is larger than 54 KB.
+| Image | Bootloader | Application | Size limit | Size limit, dual image |
+|---|---|---|---|---|
+| `standalone` | none | `0x08000000` | 64 KB | 63 KB |
+| `app-8k` | `versaloon-bootloader`, 8 KB | `0x08002000` | 56 KB | 55 KB |
+| `app-10k` | legacy Versaloon bootloader, 10 KB | `0x08002800` | 54 KB | 53 KB |
+
+The limits are hard limits for all boards.
+The firmware must also fit behind the legacy bootloader, because the existing boards need the `app-10k` image.
+Thus CI also checks the `standalone` image of the ST-Link/V2 against the `app-10k` limit.
+
+- `ldscripts/mem-f103.ld` has the FLASH region from the start of the application to the end of the 64 KB. The link of an image fails when the application is too large.
+- CI reports the size of each image with `ci/check-size.sh` and fails when the `.bin` file is larger than its limit.
 
 The main stack is 2 KB (`ldscripts/sections.ld`), because the STM32F103 has only 20 KB RAM.
 The link fails when less than the full main stack is free.

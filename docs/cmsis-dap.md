@@ -1,0 +1,407 @@
+# CMSIS-DAP command processor
+
+This document describes the CMSIS-DAP v2.1 command processor for SWD and JTAG.
+The code is in `src/protocol/cmsisdap/`.
+`usb::CmsisDapFunction` (`src/usb/CmsisDapFunction.h`) moves the packets over USB.
+See the [CMSIS-DAP personality](usb-device.md#cmsis-dap-personality).
+The build option `VSL_PROTOCOL=cmsis-dap` puts the function and the processor into the firmware image (see [Build](#build)).
+
+## Build
+
+Use the preset of the board with the `-cmsis-dap` suffix, for example `mini-cmsis-dap`:
+
+```sh
+cmake --preset mini-cmsis-dap
+cmake --build --preset mini-cmsis-dap -j
+```
+
+Or set the CMake option `VSL_PROTOCOL` to `cmsis-dap`:
+
+```sh
+cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DVSL_PROTOCOL=cmsis-dap
+cmake --build build/mini-dap -j
+```
+
+The default value is `versaloon`.
+The default image does not change.
+The build then writes `versaloon-ng-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
+Write the image as in [Firmware update](firmware-update.md).
+All boards build with both values.
+
+The `cmsis-dap` image has these properties:
+
+- USB interface 0 is CMSIS-DAP v2, with `0403:9B3C`. The Versaloon interface is not in the image.
+- The CDC-ACM serial port, the UART bridge, the debug log and the LEDs are as in the Versaloon image.
+- The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
+- The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
+  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
+
+A `cmsis-dap` image has only this personality.
+A `dual` image (`VSL_PROTOCOL=dual`) has both personalities.
+Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, or with the key (see [Dual image](usb-device.md#dual-image)).
+
+## Limits
+
+- JTAG has no adaptive clocking (RTCK). TCK is in whole kHz, at least 1 kHz. See [JTAG](#jtag).
+- A JTAG chain has up to 8 devices. The IR length of a device is 1 to 32 bits.
+- On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
+  Else the next scan has an extra TCK edge or a missing TCK edge.
+  The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
+- pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
+- No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
+- On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
+- `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
+- 64-byte packets, and up to 4 packets in flight.
+- No target power switch and no Vref sense in this personality.
+- The LEDs show the target power, the command activity, the probe errors and the USB state. `DAP_HostStatus` does not change them. See [boards.md](boards.md#start-up-and-leds).
+- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs on JTAG, Windows (also the driverless WinUSB binding), the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
+
+## Use the probe
+
+The probe has the USB ID `0403:9B3C` and the product name `Versaloon CMSIS-DAP`.
+The host tools find the CMSIS-DAP v2 interface by the text `CMSIS-DAP` in its interface string.
+
+On Linux, a udev rule gives a normal user access to the probe.
+For example, put this line into `/etc/udev/rules.d/99-versaloon-cmsis-dap.rules`:
+
+```text
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="9b3c", MODE="0660", TAG+="uaccess"
+```
+
+Then reload the rules with `udevadm control --reload` and plug in the probe again.
+
+On Windows 10 or later, the probe needs no driver installation and no Zadig.
+The device has MS OS 2.0 descriptors (see [MS OS 2.0 descriptors](usb-device.md#ms-os-20-descriptors)).
+Windows binds WinUSB to the CMSIS-DAP interface and its own CDC driver (`usbser.sys`) to the serial port.
+Windows 8.1 binds WinUSB to the CMSIS-DAP interface too, but the serial port needs a driver setup file there.
+
+If you installed a driver for the probe before, for example with Zadig, Windows keeps that driver.
+Uninstall the device in the Device Manager, and also remove its driver.
+Windows 10 calls this option "Delete the driver software for this device".
+Windows 11 calls it "Attempt to remove the driver for this device".
+Then plug in the probe again.
+
+OpenOCD:
+
+```sh
+openocd -f interface/cmsis-dap.cfg -c "cmsis-dap vid_pid 0x0403 0x9b3c" -f target/stm32f1x.cfg
+```
+
+Older OpenOCD versions use the command `cmsis_dap_vid_pid`.
+
+pyOCD finds the probe by its interface string.
+Use `pyocd list` to see the probe and `pyocd gdbserver -t <target>` to start a GDB server.
+
+probe-rs finds the probe in the same way.
+Use `probe-rs list` and then `probe-rs info`.
+
+## Layers
+
+| File | Task |
+|---|---|
+| `DapProcessor.h`, `DapProcessor.cpp` | Parse the request packets, run the commands, write the response packets. |
+| `DapSwd.h` | The interface of the SWD engine, as the processor needs it. |
+| `BitBangDapSwd.h` | The adapter from `DapSwd` to the SWD bit-bang engine (`swd::BitBangPort`). |
+| `DapJtag.h`, `DapJtag.cpp` | The JTAG-DP: the device chain, the IR and DR scans, and the transfers on a JTAG port. |
+
+The processor has no CMSIS header and no hardware header.
+It uses these objects:
+
+- A `DapSwd` for the SWD transfers and sequences.
+- A `protocol::JtagPort` (`src/protocol/JtagPort.h`, on target `board::BoardJtag`) for JTAG. It is optional.
+- A `protocol::GpioPins` (on target `board::BoardGpio`) for `DAP_SWJ_Pins` and `DAP_ResetTarget`.
+- A `Platform` for the microsecond time, the delay and the LEDs.
+- A `DeviceInfo` with the strings and the capabilities of `DAP_Info`.
+
+## Transport
+
+The USB function calls `submit()` for each request packet.
+`submit()` only stores the packet.
+`UsbStack::poll()` then calls `CmsisDapFunction::poll()` in the main loop.
+Each call runs one stored packet with `runNext()` and sends its response immediately.
+Between two packets, `UsbStack::poll()` delivers the USB events again.
+Thus the InComplete event of the last response frees the IN endpoint, and the next response goes out while the next packet runs.
+This loop has no limit. It ends only when no packet is stored after an event delivery.
+A host that sends packets in a pipeline (pyOCD, OpenOCD) keeps a packet stored during a long memory read or a flash download.
+During that time, the rest of the main loop does not run: the LEDs do not change, the key gesture of the dual image waits, and the debug log waits.
+The serial service still runs during the commands, so the UART bridge loses no data.
+Before E6, the commands ran inside the event delivery, with the same effect.
+Thus the OUT endpoint stays armed while a command runs, if a slot is free.
+During a USB suspend, `CmsisDapFunction::poll()` runs no packet. The stored packets run after the resume.
+A packet that arrives during a command waits until that command ends.
+The USB function sends the response packets in order.
+The packet size is 64 bytes, and up to 4 packets are in flight.
+Call `canSubmit()` before `submit()`.
+Each packet without a response takes one of the 4 slots.
+
+## Commands
+
+| ID | Command | Note |
+|---|---|---|
+| `0x00` | `DAP_Info` | Vendor, product, serial number, protocol version `2.1.0`, firmware version, capabilities, packet size and count. Other information has length 0. |
+| `0x01` | `DAP_HostStatus` | Connect and running LED. |
+| `0x02` | `DAP_Connect` | Port 0 and 1 give SWD. Port 2 gives JTAG. |
+| `0x03` | `DAP_Disconnect` | Release the pins of the port. Release the pins that `DAP_SWJ_Pins` drove: nRESET and nTRST get the pull-up. |
+| `0x04` | `DAP_TransferConfigure` | Idle cycles, WAIT retries, match retries. |
+| `0x05` | `DAP_Transfer` | Read, write, posted AP read, value match, match mask. On JTAG, the device index selects the device. |
+| `0x06` | `DAP_TransferBlock` | Read or write block. On JTAG, the device index selects the device. |
+| `0x07` | `DAP_TransferAbort` | No response. It stops a running transfer command. See [Transfer abort](#transfer-abort). |
+| `0x08` | `DAP_WriteABORT` | Replies an error when no port is connected. On JTAG, an ABORT scan of the device of the index. A device index that is not in the chain replies an error. |
+| `0x09` | `DAP_Delay` | |
+| `0x0A` | `DAP_ResetTarget` | A 10 ms pulse on SRST. A board without SRST replies that it did no reset. |
+| `0x10` | `DAP_SWJ_Pins` | SWCLK, SWDIO, TDI, TDO, nTRST, nRESET. nTRST and nRESET are open-drain. The wait is at most 3 s. |
+| `0x11` | `DAP_SWJ_Clock` | In Hz, for SWCLK and TCK. See the SWD engine for the available SWCLK rates. TCK is in kHz, rounded down, and at least 1 kHz. |
+| `0x12` | `DAP_SWJ_Sequence` | 1 to 256 bits. On JTAG, the bits go to TMS, and TDI is high. |
+| `0x13` | `DAP_SWD_Configure` | Turnaround and data phase. |
+| `0x14` | `DAP_JTAG_Sequence` | TDI bits with one TMS level, and the TDO bits on request. Replies an error when JTAG is not connected. |
+| `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
+| `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
+| `0x1D` | `DAP_SWD_Sequence` | Replies an error when SWD is not connected. |
+| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a dual image: `[0x80][personality u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for another personality code. The firmware then stores the personality and resets. An image with one personality replies `ID_DAP_Invalid`. See [Dual image](usb-device.md#dual-image). |
+| `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
+| `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
+
+An unknown command replies `ID_DAP_Invalid` (`0xFF`).
+The status of a command is `DAP_OK` (`0x00`) or `DAP_ERROR` (`0xFF`), as in the specification.
+Each "replies an error" in the table means the status `0xFF`.
+`DAP_Connect` is the exception: it replies port `0` for a failure.
+The UART commands come with their own work item.
+The capabilities in `DAP_Info` show SWD, JTAG and atomic commands.
+A processor without a JTAG port does not show JTAG, and `DAP_Connect` to JTAG then replies 0 (failed).
+
+The transfer commands follow the reference implementation of Arm.
+After an error, the processor skips the rest of the request data.
+After a `DAP_Transfer` write, the processor reads RDBUFF to check the write.
+
+The processor checks a request before the first transfer.
+A request that is too short gives `ID_DAP_Invalid`.
+A response that does not fit in a packet gives `ID_DAP_Invalid` too.
+In both cases, the target sees no transfer from that command.
+In `DAP_ExecuteCommands`, this stops the list, and the command count is the number of commands that ran.
+
+### Transfer abort
+
+The host sends `DAP_TransferAbort` to stop a long `DAP_Transfer` or `DAP_TransferBlock`.
+The packet arrives on the same bulk OUT endpoint as the running command.
+During a command, the SWD engine calls the serial service between transfers (see [Serial port during long commands](usb-device.md#serial-port-during-long-commands)).
+The serial service also delivers the CMSIS-DAP OUT packets, so the abort reaches the processor during the command.
+
+The processor handles `DAP_TransferAbort` in `submit()`:
+
+- The abort takes no slot and has no response.
+- It applies to all packets that came before it: the packet that runs and the packets that wait.
+  A `DAP_QueueCommands` packet that waits is one of them.
+- A packet that comes after the abort runs normally.
+- When no packet runs or waits, the abort has no effect.
+  The CMSIS-DAP specification requires no response for it.
+
+`DAP_Transfer` and `DAP_TransferBlock` check the abort before each transfer.
+On SWD, the engine also checks the abort after each WAIT acknowledge (see [SWD engine rules](#swd-engine-rules)).
+The abort then stops the WAIT retries of the transfer, and the response value is WAIT.
+After an abort, the command stops and skips the rest of its request data.
+The response gives the number of transfers that the command did.
+A value match also stops, with the mismatch bit set.
+The command then ends as after the last transfer: it reads RDBUFF for a posted AP read, and to check the last write.
+The data of the posted AP read is in the response, and the count includes it.
+A transfer command of a packet that waits does no transfer and replies a count of 0.
+The other commands of the packet run, for example in `DAP_ExecuteCommands`.
+
+When the host goes away, the transport calls `hostGone()`.
+It disconnects, releases the pins, and drops the queued packets and the responses that the transport did not send.
+
+## SWD engine rules
+
+The adapter sets the CMSIS-DAP rules of the engine (see `TransferRules` in `src/swd/SwdBitBang.h`).
+It never calls `configure()`, which sets the clock from an OpenOCD delay value.
+Thus the order of `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure` does not matter.
+
+The adapter is also the `RetryStop` of the engine.
+After each WAIT acknowledge, the engine asks it for `DAP_TransferAbort`, and the adapter asks the processor.
+When an abort is set, the engine stops the WAIT retries and returns WAIT.
+The engine asks only after a WAIT, so a transfer without WAIT has no extra cost.
+The abort arrives through the serial service, which the engine calls before each retry, at most once per millisecond.
+Thus the engine does one more attempt after the abort arrives.
+In an image with CMSIS-DAP, the processor sets the `RetryStop` at start, also when the Versaloon personality is active.
+In the Versaloon personality, the processor gets no packets, so the stop always returns false, and the WAIT retries do not change.
+A Versaloon-only image has no `RetryStop`.
+`DAP_Connect` sets the configuration and the clock again, because the engine can run another personality in between.
+
+## JTAG
+
+`DAP_Connect` with port 2 releases the SWD pins and starts the JTAG engine.
+The JTAG engine is the one of the Versaloon image (`board::BoardJtag`).
+On the Mini and the OtherUse, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
+This starts at a TCK of 1125 kHz. The other bits, and the slower rates, use GPIO bit-bang.
+`DAP_SWJ_Clock` sets TCK in kHz, rounded down, and at least 1 kHz.
+
+`DAP_JTAG_Configure` gives the device chain: the IR length of each device.
+Device 0 is next to TDO.
+After a reset of the debug unit, the chain is empty.
+Thus the host must send `DAP_JTAG_Configure` before the first transfer.
+
+A transfer command, `DAP_WriteABORT` and `DAP_JTAG_IDCODE` select the device with their device index.
+A scan puts the other devices in BYPASS.
+Each scan starts and ends in Run-Test/Idle, as in the reference implementation.
+The host must put the TAP into Run-Test/Idle first, for example with `DAP_SWJ_Sequence`.
+
+The JTAG-DP (`JtagDp` in `DapJtag.h`) gives each transfer the result that it has on SWD.
+Thus the processor uses the same transfer rules for SWD and JTAG:
+
+- An AP read is posted. Its data comes with the next AP read or with a read of RDBUFF.
+- A DP read returns its own data. The JTAG-DP posts all reads, so `JtagDp` reads RDBUFF after a DP read.
+- After the last write of a command, the processor reads RDBUFF to check the write.
+
+The JTAG-DP acknowledge is OK/FAULT or WAIT.
+After WAIT, `JtagDp` does the scan again, up to the WAIT retries of `DAP_TransferConfigure`.
+A FAULT shows in the sticky bits of CTRL/STAT, as on each JTAG-DP.
+Each DR scan of a transfer ends with the idle cycles of `DAP_TransferConfigure`.
+
+`JtagDp` keeps the IR of the device from one transfer to the next, to skip IR scans.
+These commands make the next transfer write the IR again: `DAP_Connect`, `DAP_JTAG_Configure`, a sequence command and `DAP_SWJ_Pins`.
+A transfer to another device also writes the IR again.
+
+## Tests
+
+`tests/TestCmsisDap.cpp` runs the processor on the real SWD bit-bang engine, with the mock SWD target of `tests/MockSwdPins.h`.
+The tests cover each command, WAIT retries, FAULT, parity errors, protocol errors, value match and the timeout of value match, and posted reads.
+
+`tests/TestCmsisDapJtag.cpp` runs the processor on the JTAG bit-bang engine and on the JTAG fast path, with the mock JTAG pins of `tests/MockJtagPins.h`.
+The target is the JTAG chain of `tests/MockJtagDp.h`: a TAP state machine, and devices with IDCODE and BYPASS.
+One device of the chain is a JTAG-DP with a memory AP.
+The tests cover the JTAG commands, IDCODE, DPACC and APACC reads and writes, posted reads, WAIT, value match, block transfers, ABORT and chains with more than one device.
+Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.
+One test sends the abort during the WAIT retries of one SWD transfer, from the serial service of the engine.
+
+## Hardware test
+
+This section has the SWD tests. The JTAG tests follow in [JTAG hardware test](#jtag-hardware-test).
+
+Date: 2026-10-10.
+Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`). The build is `v0.2.0-63-g10d84fa-dirty`. The `-dirty` suffix is from the merge of `dev`, which was not committed at build time. The `src/` tree equals commit `75d93cd`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
+The same checks first ran on `v0.2.0-57-g59614cb` (before E6). All checks passed there too. Only the read speed differs (see below).
+Probe: OtherUse board.
+Target: STM32F103ZET6 (512 KiB flash) on SWD.
+Host: Linux 6.18.55.
+Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4.1), probe-rs 0.32.0.
+
+| Check | OpenOCD | pyOCD | probe-rs |
+|---|---|---|---|
+| Connect, DPIDR `0x1ba01477` | pass | pass | connect passes, DPIDR value not shown (see findings) |
+| Flash and verify (32 KiB) | pass | pass | pass |
+| Read back (`cmp`) | pass | pass | not run |
+| Halt, step, reset | pass | pass | pass (halt and step through GDB) |
+| Memory write and read | pass | not run | read only (`probe-rs read`), run before E6 only |
+| UART bridge during flash (256 KiB, image verified after) | pass | pass | pass |
+
+Enumeration: the product string is `Versaloon CMSIS-DAP`.
+Interface 0 is a vendor class interface with the string `Versaloon CMSIS-DAP v2`.
+The `cdc_acm` driver binds interfaces 1 and 2 and gives `/dev/ttyACM0`.
+The `ftdi_sio` driver does not bind to the device.
+OpenOCD opens the probe with VID:PID 0x0403:0x9b3c.
+
+Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with E6):
+
+| SWCLK request | Write | Verify | Read | Read before E6 |
+|---|---|---|---|---|
+| 250 kHz | 4.51 s | 0.16 s | 3.41 s | 3.40 s |
+| 1000 kHz | 2.59 s | 0.13 s | 1.15 s | 0.95 s |
+| 2000 kHz | 2.55 s | 0.13 s | 0.70 s | 0.56 s |
+| 4000 kHz | 2.55 s | 0.13 s | 0.73 s | 0.56 s |
+
+All runs passed (0 failures in 3 runs for each rate).
+Only the run before E6 includes 100 kHz and 500 kHz (write 9.75 s and 2.78 s, read 8.27 s and 1.77 s).
+
+The Versaloon personality (OtherUse board, same firmware version before E6, `vsllink` driver) gave these times:
+
+| Clock | Write | Read |
+|---|---|---|
+| 235 kHz (`vsllink` step) | 5.20 s | 4.26 s |
+| 1.85 MHz (untimed) | 2.54 s | 0.81 s |
+
+The `vsllink` driver has fixed SWD steps. Thus the comparison is not exact at 250 kHz, where the clocks are 250 kHz and 235 kHz.
+At 2000 kHz, both personalities run the untimed engine.
+The write time is the same (2.55 s and 2.54 s).
+The read time with E6 is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon personality (91 and 79 KiB/s).
+Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
+
+Maximum SWD clock: 1.85 MHz (the untimed engine, `maxClockHz` in `src/swd/SwdBitBang.h`).
+All runs passed up to this clock with the wiring of this test.
+A request above 1.85 MHz gives the same clock.
+
+Findings:
+
+- Write time does not improve above 1 MHz. The flash programming time is probably the limit. This test did not measure it.
+- The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine runs untimed from 1.85 MHz, so both requests give the same clock.
+- E6 made the read time about 20% to 25% longer at 1000 kHz and 2000 kHz (0.56 s to 0.70 s at 2000 kHz). The 4000 kHz run shows 30%, but it is noisy. Write time and the 250 kHz read time did not change. The cause is not measured. Issue #35 tracks it.
+- After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause is probably the wiring. No log proves this, and the exact wire is not known.
+- `probe-rs info` does not print the DPIDR value. Without `--verbose`, it prints "Connecting to the chip was unsuccessful", although `download`, `verify`, `gdb` and `reset` connect. With `--verbose` (run before E6), it shows the DPv1 MemoryAP and the ROM table, and stops with "does not support SWD multidrop". This is normal for an STM32F1 target.
+- `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is how probe-rs behaves. It is not a probe finding.
+- In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
+- The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a 256 KiB flash passes with all three tools (60 of 60 runs at 115200 baud, 8N1).
+
+## JTAG hardware test
+
+Date: 2026-10-11.
+Firmware: `dev` at `6fc6d8b` with E7 (JTAG). The build is `v0.2.0-101-g6fc6d8b`. The tree was clean. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality, `Release` build.
+Probe: OtherUse board. The image ran behind `versaloon-bootloader`.
+Target: STM32F103ZET6 (512 KiB flash) on JTAG. The wiring is the one of the SWD test, with TDI, TDO and TMS added.
+Host: Linux 6.18.55.
+Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1.
+
+The chain has two TAPs: the Cortex-M3 DAP (IR length 4, IDCODE `0x3ba00477`) and the boundary-scan TAP (IR length 5, IDCODE `0x06414041`).
+The DAP is next to TDO, so it is device 0.
+
+| Check | OpenOCD | pyOCD |
+|---|---|---|
+| Find the TAPs, read IDCODE | pass (scan chain finds both TAPs) | pass (IDCODE of device 0; the script sets the chain) |
+| Flash and verify at 1000, 4500 and 9000 kHz | pass (32 KiB random image) | pass (32 KiB image, see below) |
+| Read back at 1000, 4500 and 9000 kHz | pass (`cmp`) | pass (compared in Python) |
+| Reset and halt, `pc` and `sp` from the vector table | pass (2 KiB loop image) | pass |
+| Single step | pass (2 KiB loop image) | pass |
+| Hardware breakpoint, resume and halt | pass (2 KiB loop image) | pass |
+| RAM write and read (words, 8 KiB block) | pass (words only) | pass |
+
+The OpenOCD flash checks use a random 32 KiB image.
+The OpenOCD debug checks use a 2 KiB image that has a vector table and the loop `adds r1, #1` / `b`.
+The pyOCD script builds one 32 KiB image for all checks: the vector table, the same loop and random data.
+The pyOCD checks come from `tools/pyocd_jtag_test.py`.
+
+All runs passed (0 failures).
+OpenOCD uses `DAP_JTAG_Sequence` for all JTAG scans.
+pyOCD uses `DAP_Transfer` and `DAP_TransferBlock`.
+Thus the pyOCD run is the test of the JTAG-DP transfers of this firmware.
+
+The target runs at 8 MHz after a reset, and TCK must not be above F_CPU / 6.
+Thus each run above 1000 kHz sets the target clock to 64 MHz first (`tools/stm32f1_clock.tcl` for OpenOCD, the same register writes in the pyOCD script).
+The target clock goes back to 8 MHz at each reset.
+The two requests above 1125 kHz use the SPI and DMA fast path of the firmware.
+This test did not measure the real TCK.
+
+JTAG flash time of 32 KiB (target at 64 MHz, one run per rate):
+
+| TCK request | OpenOCD write | OpenOCD verify | OpenOCD read | pyOCD write | pyOCD read |
+|---|---|---|---|---|---|
+| 1000 kHz | 8.66 s | 0.23 s | 7.66 s | 2.36 s | 1.37 s |
+| 4500 kHz | 8.07 s | 0.22 s | 7.11 s | 1.03 s | 0.94 s |
+| 9000 kHz | 8.16 s | 0.21 s | 7.14 s | 0.98 s | 0.90 s |
+
+The OpenOCD verify time is much shorter than the read time. Thus OpenOCD probably checks a CRC on the target and does not read the flash data over the probe. This test did not confirm it.
+The pyOCD write time at 1000 kHz was 1.67 s in an earlier run of the same check. Thus the write times vary by about 40%.
+
+`DAP_JTAG_Configure` and `DAP_JTAG_IDCODE` checks (raw commands in `tools/pyocd_jtag_test.py`):
+
+| Check | Result |
+|---|---|
+| IR lengths 4 and 5, IDCODE of device 0 | `0x3ba00477` |
+| IDCODE of device 2 (not in the chain) | error reply |
+| 9 devices, IR length 0, IR length 33 | error reply |
+
+Findings:
+
+- OpenOCD in JTAG mode is slow. The write rate is about 4 KiB/s and the read rate about 4.5 KiB/s. The rate does not depend on TCK from 1000 kHz to 9000 kHz. pyOCD is 4 to 8 times faster with the same probe. SWD with OpenOCD (see [Hardware test](#hardware-test)) is faster too. The cause is not measured. OpenOCD sends one `DAP_JTAG_Sequence` per scan, so the USB round trips probably limit the rate. This test did not check whether the firmware or the host causes it.
+- pyOCD 0.45.1 does not work with the STM32F1 on JTAG without a change. It sends `DAP_JTAG_Configure` with one device of IR length 4, and the chain has two TAPs. The first transfer fails with ACK 0. With the chain set to the IR lengths 4 and 5, all transfers pass. The test script `tools/pyocd_jtag_test.py` sets the chain to the IR lengths 4 and 5 in a patch of the pyOCD protocol class.
+- The pyOCD target `stm32f103ze` (from the Keil DFP) fails on JTAG before the first transfer with `'bytes' object cannot be interpreted as an integer`. The error is in the debug sequence code of pyOCD (`hex()` of a `bytes` result in a trace call). It is not a probe problem. The test uses the built-in target `stm32f103rc`.
+- `DAP_JTAG_IDCODE` for device 1 (the boundary-scan TAP) returns 0. The firmware loads the IR value `0x0E`, as the reference implementation of Arm does. This is the IDCODE instruction of the Cortex-M3 DAP. The boundary-scan TAP of the STM32F1 probably does not decode it as IDCODE. OpenOCD reads `0x06414041` from this TAP with its own scan, so the TAP does answer. No debug host uses `DAP_JTAG_IDCODE` of this TAP.
+- The probe re-enumerated once on the USB bus, about 2 minutes after the firmware started (device number 7 to 8). The first OpenOCD tries failed with "No such device" in that time. It then stayed on device number 8 for the rest of the test. The cause is not known. A second run did not repeat it.
+- The probe-rs JTAG test is not done. The issue asks for OpenOCD and pyOCD only.
+

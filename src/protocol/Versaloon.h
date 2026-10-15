@@ -22,6 +22,7 @@ namespace protocol {
 inline constexpr uint8_t getInfo = 0x00;
 inline constexpr uint8_t getTvcc = 0x01;
 inline constexpr uint8_t getHardware = 0x02;
+inline constexpr uint8_t switchPersonality = 0x0E;
 inline constexpr uint8_t fwUpdate = 0x0F;
 
 // The key of FW_UPDATE: [0x0F][0xAA]
@@ -30,6 +31,10 @@ inline constexpr uint8_t fwUpdateKey = 0xAA;
 // Status byte of the FW_UPDATE reply
 inline constexpr uint8_t fwUpdateAccepted = 0x00;
 inline constexpr uint8_t fwUpdateRefused = 0x01;
+
+// Status byte of the SWITCH_PERSONALITY reply
+inline constexpr uint8_t switchAccepted = 0x00;
+inline constexpr uint8_t switchRefused = 0x01;
 
 // Command ranges
 inline constexpr uint8_t commonLast = 0x0F;

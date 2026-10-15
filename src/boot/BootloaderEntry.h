@@ -20,17 +20,12 @@
 namespace boot {
 
 // The value in BKP->DR1 that keeps the bootloader in bootloader mode.
-// The bootloader defines the same value (BOOT_REQUEST in src/bootutils.h).
+// The bootloader defines the same value (boot::bootRequest in
+// src/boot/BootDecision.h of versaloon-bootloader).
 inline constexpr uint16_t bootRequest = 0xB007;
 
-// CMake defines VSL_HAS_BOOTLOADER_ENTRY when the firmware is linked behind
-// the bootloader and the board has a bootloader. Otherwise, the firmware
-// refuses FW_UPDATE.
-#if defined(VSL_HAS_BOOTLOADER_ENTRY)
-inline constexpr bool hasBootloader = true;
-#else
-inline constexpr bool hasBootloader = false;
-#endif
+// Only the app-8k image enters the bootloader (hasBootloaderEntry in
+// src/main.cpp). The other images refuse FW_UPDATE.
 
 class BootloaderEntry {
    public:

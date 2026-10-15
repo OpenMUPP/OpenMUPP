@@ -1,0 +1,321 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "description": "Cross build with the Arm GNU Toolchain (GCC_TOOLCHAIN_PREFIX from the environment, default /usr)",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/gcc_arm.cmake",
+      "cacheVariables": {
+        "GCC_TOOLCHAIN_PREFIX": {
+          "type": "STRING",
+          "value": "$env{GCC_TOOLCHAIN_PREFIX}"
+        },
+        "CMAKE_EXPORT_COMPILE_COMMANDS": {
+          "type": "BOOL",
+          "value": "TRUE"
+        },
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "board-mini",
+      "description": "Board mini",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "cacheVariables": {
+        "BOARD": "mini"
+      }
+    },
+    {
+      "name": "board-otheruse",
+      "description": "Board otheruse",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "cacheVariables": {
+        "BOARD": "otheruse"
+      }
+    },
+    {
+      "name": "board-stlinkv2",
+      "description": "Board stlinkv2",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "cacheVariables": {
+        "BOARD": "stlinkv2"
+      }
+    },
+    {
+      "name": "protocol-cmsis-dap",
+      "description": "CMSIS-DAP personality",
+      "hidden": true,
+      "cacheVariables": {
+        "VSL_PROTOCOL": "cmsis-dap"
+      }
+    },
+    {
+      "name": "protocol-dual",
+      "description": "Dual image, Versaloon as default personality",
+      "hidden": true,
+      "cacheVariables": {
+        "VSL_PROTOCOL": "dual",
+        "VSL_DEFAULT_PROTOCOL": "versaloon"
+      }
+    },
+    {
+      "name": "protocol-dual-cmsis-dap",
+      "description": "Dual image, CMSIS-DAP as default personality",
+      "hidden": true,
+      "cacheVariables": {
+        "VSL_PROTOCOL": "dual",
+        "VSL_DEFAULT_PROTOCOL": "cmsis-dap"
+      }
+    },
+    {
+      "name": "protocol-wch-link",
+      "description": "WCH-Link personality",
+      "hidden": true,
+      "cacheVariables": {
+        "VSL_PROTOCOL": "wch-link"
+      }
+    },
+    {
+      "name": "protocol-wch-link-wch-id",
+      "description": "WCH-Link personality with the USB ID of WCH, for personal use only",
+      "hidden": true,
+      "inherits": [
+        "protocol-wch-link"
+      ],
+      "cacheVariables": {
+        "VSL_WCH_LINK_WCH_USB_ID": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
+      "name": "debug",
+      "description": "Debug build: debug log on the serial port, SWD on",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "mini",
+      "displayName": "Versaloon Mini",
+      "inherits": [
+        "board-mini"
+      ]
+    },
+    {
+      "name": "mini-cmsis-dap",
+      "displayName": "Versaloon Mini, CMSIS-DAP",
+      "inherits": [
+        "board-mini",
+        "protocol-cmsis-dap"
+      ]
+    },
+    {
+      "name": "mini-dual",
+      "displayName": "Versaloon Mini, dual image",
+      "inherits": [
+        "board-mini",
+        "protocol-dual"
+      ]
+    },
+    {
+      "name": "mini-debug",
+      "displayName": "Versaloon Mini, Debug",
+      "inherits": [
+        "debug",
+        "board-mini"
+      ]
+    },
+    {
+      "name": "mini-dual-cmsis-dap",
+      "displayName": "Versaloon Mini, dual image, CMSIS-DAP default",
+      "inherits": [
+        "board-mini",
+        "protocol-dual-cmsis-dap"
+      ]
+    },
+    {
+      "name": "mini-wch-link",
+      "displayName": "Versaloon Mini, WCH-Link",
+      "inherits": [
+        "board-mini",
+        "protocol-wch-link"
+      ]
+    },
+    {
+      "name": "mini-wch-link-wch-id",
+      "displayName": "Versaloon Mini, WCH-Link, USB ID of WCH",
+      "inherits": [
+        "board-mini",
+        "protocol-wch-link-wch-id"
+      ]
+    },
+    {
+      "name": "otheruse",
+      "displayName": "OtherUse",
+      "inherits": [
+        "board-otheruse"
+      ]
+    },
+    {
+      "name": "otheruse-cmsis-dap",
+      "displayName": "OtherUse, CMSIS-DAP",
+      "inherits": [
+        "board-otheruse",
+        "protocol-cmsis-dap"
+      ]
+    },
+    {
+      "name": "otheruse-dual",
+      "displayName": "OtherUse, dual image",
+      "inherits": [
+        "board-otheruse",
+        "protocol-dual"
+      ]
+    },
+    {
+      "name": "otheruse-wch-link",
+      "displayName": "OtherUse, WCH-Link",
+      "inherits": [
+        "board-otheruse",
+        "protocol-wch-link"
+      ]
+    },
+    {
+      "name": "stlinkv2",
+      "displayName": "ST-Link/V2",
+      "inherits": [
+        "board-stlinkv2"
+      ]
+    },
+    {
+      "name": "stlinkv2-cmsis-dap",
+      "displayName": "ST-Link/V2, CMSIS-DAP",
+      "inherits": [
+        "board-stlinkv2",
+        "protocol-cmsis-dap"
+      ]
+    },
+    {
+      "name": "stlinkv2-dual",
+      "displayName": "ST-Link/V2, dual image",
+      "inherits": [
+        "board-stlinkv2",
+        "protocol-dual"
+      ]
+    },
+    {
+      "name": "stlinkv2-wch-link",
+      "displayName": "ST-Link/V2, WCH-Link",
+      "inherits": [
+        "board-stlinkv2",
+        "protocol-wch-link"
+      ]
+    },
+    {
+      "name": "host-tests",
+      "displayName": "Host unit tests",
+      "description": "Native build of the unit tests (no toolchain file)",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "mini",
+      "configurePreset": "mini"
+    },
+    {
+      "name": "mini-cmsis-dap",
+      "configurePreset": "mini-cmsis-dap"
+    },
+    {
+      "name": "mini-dual",
+      "configurePreset": "mini-dual"
+    },
+    {
+      "name": "mini-debug",
+      "configurePreset": "mini-debug"
+    },
+    {
+      "name": "mini-dual-cmsis-dap",
+      "configurePreset": "mini-dual-cmsis-dap"
+    },
+    {
+      "name": "mini-wch-link",
+      "configurePreset": "mini-wch-link"
+    },
+    {
+      "name": "mini-wch-link-wch-id",
+      "configurePreset": "mini-wch-link-wch-id"
+    },
+    {
+      "name": "otheruse",
+      "configurePreset": "otheruse"
+    },
+    {
+      "name": "otheruse-cmsis-dap",
+      "configurePreset": "otheruse-cmsis-dap"
+    },
+    {
+      "name": "otheruse-dual",
+      "configurePreset": "otheruse-dual"
+    },
+    {
+      "name": "otheruse-wch-link",
+      "configurePreset": "otheruse-wch-link"
+    },
+    {
+      "name": "stlinkv2",
+      "configurePreset": "stlinkv2"
+    },
+    {
+      "name": "stlinkv2-cmsis-dap",
+      "configurePreset": "stlinkv2-cmsis-dap"
+    },
+    {
+      "name": "stlinkv2-dual",
+      "configurePreset": "stlinkv2-dual"
+    },
+    {
+      "name": "stlinkv2-wch-link",
+      "configurePreset": "stlinkv2-wch-link"
+    },
+    {
+      "name": "host-tests",
+      "configurePreset": "host-tests",
+      "targets": [
+        "vsl-tests"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "host-tests",
+      "configurePreset": "host-tests",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

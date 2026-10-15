@@ -1,11 +1,14 @@
 # versaloon-bootloader (dependencies/versaloon-bootloader) for the board of
-# the build. The firmware is linked behind this bootloader (VSL_BOOTLOADER).
+# the build. It uses the first 8 KB of the flash. The app-8k image is linked
+# behind it (CMakeLists.txt, VSL_APP_IMAGES).
 #
 # The bootloader has its own CMake build. It runs as an ExternalProject, so
 # the compile flags of the firmware (cmake/gcc_arm.cmake, CMAKE_BUILD_TYPE)
 # do not change the bootloader image. The bootloader uses its own toolchain
-# file with the compiler of this build. The install step copies
-# versaloon-bootloader-<board>.elf, .hex and .bin to VSL_BOOTLOADER_DIR.
+# file with the compiler of this build, and the system-stm32 submodule of
+# this project, so both images use the same library commit. The install
+# step copies versaloon-bootloader-<board>.elf, .hex and .bin to
+# VSL_BOOTLOADER_DIR.
 
 include(ExternalProject)
 
@@ -36,9 +39,13 @@ function(vsl_add_bootloader)
             BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/versaloon-bootloader-build"
             INSTALL_DIR "${VSL_BOOTLOADER_DIR}"
             CMAKE_ARGS
-                -DCMAKE_TOOLCHAIN_FILE=${_src_dir}/cmake/arm-none-eabi.cmake
-                -DARM_GNU_TOOLCHAIN=${_toolchain_root}
+                -DCMAKE_TOOLCHAIN_FILE=${_src_dir}/cmake/gcc_arm.cmake
+                -DGCC_TOOLCHAIN_PREFIX=${_toolchain_root}
                 -DVERSALOON_BOOTLOADER_BOARDS=${BOARD}
+                # The bootloader area ends where the app-8k image starts. One
+                # value sets both, so they cannot disagree.
+                -DVERSALOON_BOOTLOADER_AREA_SIZE=${VSL_APP_OFFSET_app-8k}
+                -DVSL_SYSTEM_STM32_DIR=${PROJECT_SOURCE_DIR}/dependencies/system-stm32
                 -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
             BUILD_ALWAYS ON
             BUILD_BYPRODUCTS "${_out}.elf" "${_out}.hex" "${_out}.bin"

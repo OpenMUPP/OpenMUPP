@@ -27,6 +27,11 @@ There is one serial port only.
 `src/usb/UsbStack.cpp` runs the libArT USB device stack on the STM32F1 USB peripheral.
 The USB interrupt only puts the events into a queue.
 The main loop runs the USB protocol.
+At the end of each iteration, the main loop sleeps (`WFI`) until the next interrupt.
+It does not sleep while USB events wait in the queue (`UsbStack::hasPendingEvents()`).
+An event that arrives after the USB poll has no pending interrupt to stop the sleep.
+For example, the double-buffered OUT endpoint reports a waiting packet from the main loop when the endpoint is armed again.
+Without this check, such an event waits for the next SysTick interrupt, up to 1 ms.
 The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
 A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
@@ -41,6 +46,153 @@ Interface 0 carries the Versaloon command protocol (see [Versaloon commands](#ve
 
 The serial port is the [UART bridge](uart-bridge.md).
 In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](debug-log.md)).
+
+## CMSIS-DAP personality
+
+The firmware has a second USB personality: CMSIS-DAP v2 instead of the Versaloon protocol.
+Only one personality is active at a time.
+The USB peripheral has 512 bytes of packet memory.
+The Versaloon interface and a CMSIS-DAP interface do not fit together.
+The build option `VSL_PROTOCOL` selects the personality (see [Select the personality](#select-the-personality)).
+A dual image has both personalities, and selects one at each start (see [Dual image](#dual-image)).
+The Versaloon personality is the default.
+
+`src/usb/CmsisDapDescriptors.h` has the descriptors.
+`src/usb/CmsisDapFunction.h` has the USB function.
+
+| Item | Value |
+|---|---|
+| VID:PID | `0x0403:0x9B3C` |
+| Product string | `Versaloon CMSIS-DAP` |
+| Interface 0 string | `Versaloon CMSIS-DAP v2` |
+| `bcdUSB` | `0x0201` (USB 2.0 with a BOS descriptor) |
+| Other items | As in the Versaloon personality |
+
+The host tools find a CMSIS-DAP v2 interface by the vendor class and the text `CMSIS-DAP` in the interface string.
+Interface 0 is vendor-specific (`0xFF`) with bulk OUT `0x03` and bulk IN `0x82`, 64 bytes each.
+The interfaces 1 and 2 are the CDC-ACM serial port, as in the Versaloon personality.
+The endpoint numbers and sizes are the same as in the Versaloon personality.
+Thus the packet memory use does not change from the Versaloon personality.
+The endpoints and EP0 use 464 bytes, with a 64-byte buffer descriptor table.
+The firmware uses a 40-byte table and a double-buffered OUT endpoint `0x03`: 504 bytes.
+
+`usb::CmsisDapFunction` sends each OUT packet to the [CMSIS-DAP command processor](cmsis-dap.md).
+It sends each response as one IN packet.
+A response of 64 bytes has no zero-length packet.
+The processor holds up to 4 packets.
+When all 4 slots are in use, the OUT endpoint NAKs until the host reads a response.
+`DAP_Info` reports the packet size 64 and the packet count 4.
+When a bus reset or `SET_CONFIGURATION 0` closes the interface, the function calls `Processor::hostGone()`.
+A suspend only releases the target pins, because the USB transfer state stays.
+When a `DAP_QueueCommands` packet takes the last free slot, the processor runs the queue at once.
+Thus queued packets alone do not hold the OUT endpoint, and each queued packet gets its response.
+
+### MS OS 2.0 descriptors
+
+Windows 8.1 and later bind WinUSB to interface 0 of the CMSIS-DAP personality with no driver installation.
+The serial port keeps the CDC driver of Windows (`usbser.sys`), which binds with no setup file from Windows 10.
+`src/usb/CmsisDapDescriptors.h` has these descriptors, built with `usb/MsOs20.h` of libArT:
+
+1. The device descriptor has `bcdUSB` `0x0201`. Thus Windows reads the BOS descriptor.
+2. The BOS descriptor has one device capability: the MS OS 2.0 platform capability.
+   It gives the vendor code `0x20` and the size of the descriptor set (170 bytes).
+3. Windows reads the descriptor set with a vendor request: `bmRequestType` `0xC0`, `bRequest` `0x20`, `wIndex` `7`.
+   `UsbStack` answers it with `msos20::DescriptorSetHandler`, in the Address and Configured states.
+4. The set has one function subset, for interface 0.
+   It has the compatible ID `WINUSB` and the device interface GUID `{CDB3B5AD-293B-4663-AA36-1AAE46463776}`.
+   This is the GUID of the Arm CMSIS-DAP and DAPLink firmware.
+   The device has one configuration, so the set has no configuration subset.
+
+The Versaloon personality has `bcdUSB` `0x0200` and no BOS. It still needs a WinUSB driver from Zadig.
+
+A driver that was installed before for the probe, for example with Zadig, has priority over the WinUSB compatible ID.
+Thus such a probe keeps its old driver.
+Uninstall the device and its driver in the Device Manager (see [Use the probe](cmsis-dap.md#use-the-probe)).
+Windows also keeps data about the descriptors of a device in the registry key `HKLM\SYSTEM\CurrentControlSet\Control\usbflags\04039B3Crrrr`.
+`rrrr` is the `bcdDevice` in hexadecimal.
+If the probe does not get WinUSB after that, delete this key and plug in the probe again.
+
+### Select the personality
+
+The CMake option `VSL_PROTOCOL` selects the personality of the image:
+
+| `VSL_PROTOCOL` | USB interface 0 | VID:PID | Sources |
+|---|---|---|---|
+| `versaloon` (default) | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/`) |
+| `cmsis-dap` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
+| `dual` | One of the two, selected at each start | One of the two | All except `wch-link`, and `personality/`, `board/SettingsFlashPage.cpp` |
+| `wch-link` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `VSL_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
+
+The option defines `VSL_WITH_VERSALOON` for the `versaloon` image, `VSL_WITH_CMSIS_DAP` for the `cmsis-dap` image and `VSL_WITH_WCH_LINK` for the `wch-link` image.
+The `dual` image gets both defines and `VSL_DUAL_PERSONALITY`.
+`usb::UsbStack` and `main.cpp` use the defines to select the USB function, the descriptors and the protocol objects.
+The CMake file also removes the source files of the other personality.
+Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
+All images except `wch-link` share the CDC-ACM serial port, the UART bridge and the debug log. All images share the LEDs.
+The `wch-link` image has two bulk endpoint pairs and no room in the packet memory for the CDC-ACM endpoints, so it has no serial port.
+
+The CMSIS-DAP image differs from the Versaloon image in these points:
+
+- It has no `VERSALOON_FW_UPDATE` command.
+  Start the bootloader with the key (see [Firmware update](firmware-update.md)).
+- It has no target power switch and no `GET_TVCC`.
+- JTAG uses the CMSIS-DAP JTAG commands instead of the `JTAG_RAW` block (see [JTAG](cmsis-dap.md#jtag)).
+
+The names of the image files have the text `-cmsis-dap` after the board name.
+
+### Dual image
+
+A dual image (`VSL_PROTOCOL=dual`) has both personalities.
+One personality is active after each start.
+The active personality has its descriptors, its USB function and its commands, as in the image with one personality.
+The firmware changes the personality only with a reset.
+
+The firmware stores the personality in the last 1 KB flash page of the application area, at `0x0800FC00`.
+The linker script keeps this page out of the image, so a dual image has 1 KB less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
+When the page holds no personality, the image uses `VSL_DEFAULT_PROTOCOL` (default `versaloon`).
+`src/personality/PersonalityStore.h` has the page format.
+The page is a log of 16-bit records, so the firmware erases the page only one time in 512 switches.
+
+To change the personality, use one of these methods:
+
+- In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
+- In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)). The status of a refused switch is `0xFF`.
+- Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the next personality in the list. With two personalities, this is the other one.
+
+The personality code is `0` for Versaloon and `1` for CMSIS-DAP.
+The settings page has room for four personality codes (`0` to `3`). A new personality gets the next code and one entry in `personality::all`.
+`tools/vsl_personality.py` sends the commands from the host.
+It needs the `pyusb` package:
+
+```sh
+python3 tools/vsl_personality.py show
+python3 tools/vsl_personality.py switch cmsis-dap
+python3 tools/vsl_personality.py switch versaloon
+```
+
+After a command, the firmware sends the reply, and then waits 10 ms.
+Then the firmware disconnects from USB, writes the flash page and resets.
+The host sees a disconnect, and then the device with the other VID:PID.
+A switch to the active personality does not reset.
+It also cancels a switch that the firmware did not do yet.
+If the flash write fails, the firmware starts again with the old personality.
+
+The key gesture has these rules:
+
+- The LEDs flash when the key has been down for 3 s.
+  A shorter press does nothing.
+  The switch itself starts when you release the key, after the flashes.
+  The firmware does not reset while the key is down, and waits 50 ms after the release, because a key that is down at reset starts the bootloader.
+- The firmware counts the key only after it saw the key released.
+  Thus a key that sticks does not change the personality at each start.
+- The key at reset starts the bootloader, as before (see [Firmware update](firmware-update.md)).
+- The ST-Link/V2 has no key. Use the commands.
+
+The Versaloon personality of a dual image has `VERSALOON_FW_UPDATE`, as the Versaloon image.
+The CMSIS-DAP personality has no command to start the bootloader: use the key at reset, or change to the Versaloon personality first.
+
+The dual image links the objects of both personalities.
+The Versaloon command and reply buffers (2 x 4096 bytes) are always in RAM.
 
 ## Versaloon commands
 
@@ -69,9 +221,16 @@ The common commands are:
 | `GET_INFO` | `[0x00]` | `[buffer size u16][version text][0x00]` |
 | `GET_TVCC` | `[0x01]` | `[target voltage in mV u16]`, from the Vref sense (see [POWER block](#power-block)). The value is 0 when the board has no sense or the measurement fails. |
 | `GET_HARDWARE` | `[0x02]` | `[hardware ID u8]`, from the board definition (see [Boards](boards.md)). |
+| `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
-The version text has the form `versaloon-next-gen <version>, board <board>`.
+The version text has the form `versaloon-ng <version>, board <board>`.
+
+`SWITCH_PERSONALITY` changes the USB personality of a dual image (see [Dual image](#dual-image)).
+The firmware sends the reply, stores the personality and resets.
+An image with one personality refuses the command.
+The firmware also refuses a personality code other than `0` and `1`.
+A switch to the active personality gets status `0`, and the firmware does not reset.
 Other common commands have no reply.
 The `USB_TO_XXX` commands go to the `USB_TO_ALL` dispatcher (see [USB_TO_ALL](#usb_to_all)).
 
@@ -232,6 +391,9 @@ The serial service does these steps:
    It stops at the first other event: a SETUP packet, a bus reset, a suspend, a resume, or a Versaloon endpoint event.
    That event waits until the command ends, so the order of the events does not change.
    Thus the service does not start a new command, and the host does not disconnect during the command.
+   In the CMSIS-DAP personality, the service also delivers the events of the CMSIS-DAP endpoints.
+   A CMSIS-DAP packet only waits in the processor, so this starts no command (see [CMSIS-DAP transport](cmsis-dap.md#transport)).
+   Thus `DAP_TransferAbort` can stop a running transfer command.
 2. It moves the UART data (`uart::pollBridge()`), or the debug log in a `VSL_DEBUG_CDC` build.
 
 Each call sends one IN packet of up to 64 bytes: 64 bytes per ms.
@@ -338,12 +500,15 @@ Enable 18 MHz only after a hardware test at 18 MHz passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
 
 - The SPI gives the fastest SPI speed that is not above the request.
-- Bit-bang gives the request, up to the fastest rate of the bit-bang loop (`jtag::bitBangMaxKHz`, 3000 kHz).
+- Bit-bang gives the request. For the choice, its speed counts as the request, up to `jtag::bitBangMaxKHz` (1000 kHz).
 - The SPI wins when its speed is equal to or higher than the bit-bang speed.
 - Adaptive clocking (0 kHz) always uses bit-bang.
 
-Examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 3 MHz bit-bang, 1000 kHz gives 1 MHz bit-bang.
-The value of `jtag::bitBangMaxKHz` is an estimate. Measure the bit-bang rate on hardware and correct it.
+Examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 2.25 MHz SPI, 2000 kHz gives 1.125 MHz SPI, 1000 kHz gives 1 MHz bit-bang.
+The value of `jtag::bitBangMaxKHz` is conservative: 1000 kHz is the rate that was checked with the flash benchmark.
+The fastest rate of the bit-bang loop is not measured.
+A higher value selects bit-bang for some requests above 1125 kHz, and the SPI is then slower than the request less often.
+To raise the value, set it to 18000 for a test, and measure TCK at a request of 4000 kHz with a logic analyzer.
 
 A long shift runs in SPI chunks of about 1 ms, and the [serial service](#serial-port-during-long-commands) runs between two chunks.
 The pins are GPIO between two transfers, so the bit-bang engine and the SWD engine can use them.
@@ -355,8 +520,8 @@ Limits:
   DMA channel 3 has the highest priority to prevent this.
 - At 9 MHz, the half period is 55.6 ns. The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
   Use a lower speed with a long cable.
-- The OpenOCD flash speed with the fast path is not measured yet.
-  `tools/flash_benchmark.py` measures it (see [docs/development.md](development.md#flash-speed-benchmark)).
+- The OpenOCD flash speed with the fast path is measured with `tools/flash_benchmark.py` (see [docs/development.md](development.md#flash-speed-benchmark)).
+  At 4500 and 9000 kHz, the total flash time is 1 to 2 % longer than with the original firmware.
 
 ### SWD block
 
@@ -448,6 +613,10 @@ The `ack` byte has the acknowledge in bits 0-2 (OK 1, WAIT 2, FAULT 4), and thes
 The reply data is the read data.
 For a write, and for a read that is not OK, the reply data is the request data.
 The status is `OK` only when the `ack` byte is 1 (OK without a parity error). Else the status is `FAILED`.
+A DP `TARGETSEL` write (multidrop SWD, DP address `0xC`) is the exception: its status is always `OK`.
+No target drives the acknowledge of `TARGETSEL`, so its `ack` byte is usually `0x27`.
+The OpenOCD `bitbang` driver also ignores this acknowledge (`swd_cmd_returns_ack()`).
+The `ack` byte keeps the value from SWDIO.
 OpenOCD does not read the `ack` byte, so it sees a failed transfer only through the status.
 The original firmware replied `OK` in all cases.
 
@@ -516,7 +685,7 @@ On Linux:
 2. Make sure that the kernel log (`dmesg`) shows a new `/dev/ttyACM*` port.
 3. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini). Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
 4. Run OpenOCD with `-f interface/vsllink.cfg`.
-   Make sure that OpenOCD shows the version text of `GET_INFO`, for example `versaloon-next-gen v0.1.0, board mini`.
+   Make sure that OpenOCD shows the version text of `GET_INFO`, for example `versaloon-ng v0.1.0, board mini`.
    Make sure that OpenOCD shows the capabilities, `USB_TO_XXX abilities: 0x00000008:0x000000C0:0xC0000002`.
    In JTAG mode, OpenOCD then scans the JTAG chain.
    In SWD mode, OpenOCD reads the DPIDR of the target.

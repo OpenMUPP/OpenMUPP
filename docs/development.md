@@ -1,35 +1,102 @@
 # Development
 
-This document is for developers of the firmware: build outputs, tests, the flash speed benchmark, code format, version, CI and branches.
+This document is for developers of the firmware: build outputs, CMake presets, tests, the flash speed benchmark, code format, version, CI and branches.
 
 ## Build outputs
 
 The README shows how to build the firmware.
 The build writes these files into the build directory:
 
-- `versaloon-next-gen.elf`, `versaloon-next-gen.hex` and `versaloon-next-gen.bin`.
-- Copies of the `.hex` and `.bin` files with the board, the link variant, the build type and the version in the name.
-  An example is `versaloon-next-gen-mini-bootloader-Release-v0.1.0.hex`.
-- `versaloon-next-gen.map`, the linker map.
+- `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
+  The README lists the images and their start addresses.
+- Copies of the `.hex` and `.bin` files with the board, the image, the build type and the version in the name.
+  An example is `versaloon-ng-mini-app-8k-Release-v0.1.0.hex`.
+  An image with `VSL_PROTOCOL=cmsis-dap` has `-cmsis-dap` after the board, for example `versaloon-ng-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
+  An image with `VSL_PROTOCOL=dual` has `-dual` after the board, or `-dual-cmsis-dap` with `VSL_DEFAULT_PROTOCOL=cmsis-dap`.
+  An image with `VSL_PROTOCOL=wch-link` has `-wch-link` after the board, or `-wch-link-wch-id` with `VSL_WCH_LINK_WCH_USB_ID=ON`.
+- `versaloon-ng-<image>.map`, the linker map of each image.
 - `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
+- `versaloon-ng-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
+  `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
+- `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
+
+All images use the same object files.
+Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
+One linker script, `ldscripts/mem-f103.ld`, links all images.
+CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
 
 For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
 The target is `versaloon-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
-There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BOOTLOADER` or `VSL_BUILD_BOOTLOADER` is `OFF`.
+There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
+
+## CMake presets
+
+`CMakePresets.json` has the configure, build and test presets.
+It needs CMake 3.21 or later.
+Run `cmake --preset <name>` to configure and `cmake --build --preset <name>` to build.
+Each preset has its own build directory, `build/<name>`.
+The presets for the firmware use the toolchain file `cmake/gcc_arm.cmake`.
+They read `GCC_TOOLCHAIN_PREFIX` from the environment.
+The default is `/usr`.
+
+| Preset | Board | Personality (`VSL_PROTOCOL`) | Build type |
+|---|---|---|---|
+| `mini`, `otheruse`, `stlinkv2` | Mini, OtherUse, ST-Link/V2 | `versaloon` | Release |
+| `mini-cmsis-dap`, `otheruse-cmsis-dap`, `stlinkv2-cmsis-dap` | Mini, OtherUse, ST-Link/V2 | `cmsis-dap` | Release |
+| `mini-dual`, `otheruse-dual`, `stlinkv2-dual` | Mini, OtherUse, ST-Link/V2 | `dual` | Release |
+| `mini-dual-cmsis-dap` | Mini | `dual`, with `VSL_DEFAULT_PROTOCOL=cmsis-dap` | Release |
+| `mini-wch-link`, `otheruse-wch-link`, `stlinkv2-wch-link` | Mini, OtherUse, ST-Link/V2 | `wch-link` | Release |
+| `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
+| `mini-debug` | Mini | `versaloon` | Debug |
+| `host-tests` | Host | - | Debug |
+
+The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
+The `host-tests` preset has no toolchain file.
+It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
+The names of the firmware presets are the names of the CI jobs, without `build-`.
+CI uses these presets (see [Continuous integration](#continuous-integration)).
+
+Add a preset for a local setup in `CMakeUserPresets.json`.
+Git ignores this file.
+This example inherits the `mini` preset and sets another toolchain:
+
+```json
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "mini-local",
+      "inherits": "mini",
+      "cacheVariables": { "GCC_TOOLCHAIN_PREFIX": "/opt/arm-gnu-toolchain" }
+    }
+  ]
+}
+```
 
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the heartbeat, the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry, the Versaloon command protocol, the `USB_TO_ALL` dispatcher, the `GPIO` block (with the release of SRST and TRST when the host goes away), the `JTAG_RAW` block, the JTAG bit-bang engine (on mock pins), the JTAG fast path (on a mock SPI, compared with the bit-bang engine), the `SWD` block, the SWD request and parity encoding, the SWD bit-bang engine (on mock pins with a mock target), the `POWER` block (on a fake power switch and a fake voltage sense), and the Vref scale.
+They check the board definitions, the LED patterns (activity, probe error, target power, clock fault and the flashes of the personality switch), the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry, the Versaloon command protocol, the `USB_TO_ALL` dispatcher, the `GPIO` block (with the release of SRST and TRST when the host goes away), the `JTAG_RAW` block, the JTAG bit-bang engine (on mock pins), the JTAG fast path (on a mock SPI, compared with the bit-bang engine), the `SWD` block, the SWD request and parity encoding, the SWD bit-bang engine (on mock pins with a mock target), the CMSIS-DAP command processor (on the SWD bit-bang engine, and on the JTAG engines with a mock JTAG-DP, see [cmsis-dap.md](cmsis-dap.md#tests)), the `POWER` block (on a fake power switch and a fake voltage sense), and the Vref scale.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
+The same tests run the descriptors and the function of the CMSIS-DAP personality, and check that its packet memory fits 512 bytes.
+They also check the BOS and the MS OS 2.0 descriptor set, and run the requests of Windows for them.
 The UART bridge tests run the bridge with the CDC-ACM function of libArT, the fake USB controller and a fake UART.
 Two of these tests run a long JTAG shift on mock pins, with and without the serial service of the engines.
 With the service, no UART data is lost.
 Other tests check the serial-only mode of the USB event queue, and the calls of the serial service in the JTAG and SWD engines.
-Configure without the toolchain file:
+Use the `host-tests` presets.
+They configure without the toolchain file, in the Debug build type:
+
+```sh
+cmake --preset host-tests
+cmake --build --preset host-tests -j
+ctest --preset host-tests
+```
+
+The alternative is the plain commands:
 
 ```sh
 cmake -B build/tests -DCMAKE_BUILD_TYPE=Debug
@@ -143,7 +210,7 @@ Write the results into a directory outside the source tree.
 `.clang-format` defines the code style. The `clangformat` target formats all sources and tests in place:
 
 ```sh
-cmake --build build/tests --target clangformat
+cmake --build --preset host-tests --target clangformat
 ```
 
 `etc/pre-commit.hook` formats the staged C and C++ files before each commit.
@@ -164,12 +231,23 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 `.gitlab-ci.yml` runs these jobs:
 
 - `lint-code`: fails when `clangformat` changes a file.
-- `run-unit-tests`: builds and runs the host unit tests.
+- `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
-- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build behind the bootloader, plus the size check.
-  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` for the board.
-- `build-mini-debug`: debug build of the Mini behind the bootloader (debug log on the serial port, SWD on), plus the size check.
-  The jobs keep the `.hex`, `.bin`, `.elf` and `.map` files and the bootloader images as artifacts.
+- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build of all images of the board, plus the size check of each image in `vsl-images.txt`.
+  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
+- `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
+- `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PROTOCOL=cmsis-dap`, plus the size check.
+- `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PROTOCOL=dual`, plus the size check.
+  Each limit of the dual image is 1 KB smaller, because the last flash page holds the stored personality.
+- `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
+- `build-mini-wch-link`, `build-otheruse-wch-link`, `build-stlinkv2-wch-link`: the same release builds with `VSL_PROTOCOL=wch-link`, plus the size check.
+- `build-mini-wch-link-wch-id`: the `wch-link` build of the Mini with the USB ID of WCH, plus the size check. The job keeps no artifact, because the vendor ID belongs to WCH.
+
+Each build job configures and builds the preset with the name of the job, without `build-`.
+The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
+The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
+The ST-Link/V2 has the `standalone` image only.
+The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
 
 ## Branches
 

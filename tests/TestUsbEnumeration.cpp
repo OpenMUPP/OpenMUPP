@@ -3,6 +3,7 @@
 
 #include "boot/BootloaderEntry.h"
 #include "protocol/Versaloon.h"
+#include "usb/CmsisDapDescriptors.h"
 #include "usb/UsbDescriptors.h"
 #include "usb/VersaloonFunction.h"
 
@@ -87,6 +88,19 @@ TEST_CASE("The host reads the descriptors of the composite device") {
    CHECK(serial[48] == '4');
 }
 
+TEST_CASE("The Versaloon personality has no BOS and no MS OS 2.0 vendor request") {
+   // In a dual image, the BOS and the MS OS 2.0 descriptor set exist only
+   // in the CMSIS-DAP personality (usb/UsbStack.cpp).
+   CHECK((usb::deviceDescriptor[2] | usb::deviceDescriptor[3] << 8) == 0x0200);
+
+   Bench bench;
+   auto &controller = bench.controller();
+   bench.enumerate();
+   const auto bosValue = static_cast<uint16_t>(static_cast<uint8_t>(DescriptorType::Bos) << 8);
+   CHECK(controller.controlIn(art::usb::test::setupPacket(0x80, 6, bosValue, 0, 5)).stalled);
+   CHECK(controller.controlIn(art::usb::test::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, 7, 170)).stalled);
+}
+
 TEST_CASE("SET_CONFIGURATION opens the endpoints of all three interfaces") {
    Bench bench;
    bench.enumerate();
@@ -123,7 +137,7 @@ TEST_CASE("GET_INFO over USB") {
    REQUIRE(reply->size() > 3);
    CHECK((*reply)[0] == 0x00);
    CHECK((*reply)[1] == 0x10);
-   CHECK(std::string(reply->begin() + 2, reply->end()) == std::string("versaloon-next-gen v1.2.3, board mini") + '\0');
+   CHECK(std::string(reply->begin() + 2, reply->end()) == std::string("versaloon-ng v1.2.3, board mini") + '\0');
    CHECK(controller.isArmed(versaloonOut));
 }
 

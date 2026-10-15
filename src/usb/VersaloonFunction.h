@@ -39,10 +39,17 @@ namespace usb {
 
 class VersaloonFunction final : public art::usb::VendorBulkFunction {
    public:
-   // See protocol::CommandProcessor for bootloader and usbToXxx.
+   // See protocol::CommandProcessor for bootloader, usbToXxx and
+   // personalitySwitch.
    explicit VersaloonFunction(const protocol::DeviceInfo &info,
                               boot::BootloaderEntry *bootloader = nullptr,
-                              protocol::UsbToXxxHandler *usbToXxx = nullptr);
+                              protocol::UsbToXxxHandler *usbToXxx = nullptr,
+                              personality::PersonalitySwitch *personalitySwitch = nullptr);
+
+   // Number of complete commands received. It wraps at 2^32.
+   [[nodiscard]] uint32_t commandCount() const {
+      return commandCount_;
+   }
 
    protected:
    bool dataReceived(art::span<const uint8_t> packet) override;
@@ -61,6 +68,7 @@ class VersaloonFunction final : public art::usb::VendorBulkFunction {
    std::array<uint8_t, protocol::bufferSize> reply_{};
    protocol::CommandAssembler assembler_;
    protocol::CommandProcessor processor_;
+   uint32_t commandCount_{ 0 };
 };
 
 } // namespace usb

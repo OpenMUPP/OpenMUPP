@@ -1,13 +1,13 @@
 #!/bin/sh
 # Reports the flash size of a firmware image and fails when it is larger than
-# the limit. The default limit is 54 KB: the 64 KB of an STM32F103C8 minus the
-# 10 KB of versaloon-bootloader.
+# the limit. The limit depends on the image: the build directory has the file
+# vsl-images.txt with the limit of each image (CMakeLists.txt).
 #
-# Usage: ci/check-size.sh <image.bin> [limit-in-bytes]
+# Usage: ci/check-size.sh <image.bin> <limit-in-bytes>
 set -eu
 
 image="$1"
-limit="${2:-55296}"
+limit="$2"
 
 size=$(wc -c < "$image")
 percent=$((size * 100 / limit))

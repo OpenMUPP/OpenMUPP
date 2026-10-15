@@ -2,11 +2,14 @@
 
 namespace usb {
 
-VersaloonFunction::VersaloonFunction(const protocol::DeviceInfo &info, boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler *usbToXxx)
+VersaloonFunction::VersaloonFunction(const protocol::DeviceInfo &info,
+                                     boot::BootloaderEntry *bootloader,
+                                     protocol::UsbToXxxHandler *usbToXxx,
+                                     personality::PersonalitySwitch *personalitySwitch)
    : VendorBulkFunction(versaloonInterface,
                         art::usb::VendorBulkEndpoints{ .out = versaloonOutEndpoint, .in = versaloonInEndpoint, .maxPacketSize = versaloonPacketSize })
    , assembler_(art::span<uint8_t>(command_.data(), command_.size()), versaloonPacketSize)
-   , processor_(info, bootloader, usbToXxx) {
+   , processor_(info, bootloader, usbToXxx, personalitySwitch) {
 }
 
 bool VersaloonFunction::dataReceived(art::span<const uint8_t> packet) {
@@ -20,6 +23,7 @@ bool VersaloonFunction::dataReceived(art::span<const uint8_t> packet) {
    case Result::Complete:
       break;
    }
+   ++commandCount_;
    const auto size = processor_.process(assembler_.command(), art::span<uint8_t>(reply_.data(), reply_.size()));
    if(!size) {
       return true;

@@ -29,13 +29,22 @@ add_executable(vsl-tests
         TestVersion.cpp
         TestBoards.cpp
         TestHeartbeat.cpp
+        TestActivityLed.cpp
+        TestErrorLed.cpp
+        TestTargetPowerLed.cpp
+        TestUptimeMicros.cpp
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
+        TestCmsisDapDescriptors.cpp
+        TestCmsisDapEnumeration.cpp
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
         TestSerialEventQueue.cpp
         TestBootloaderEntry.cpp
+        TestPersonalityStore.cpp
+        TestPersonalitySwitch.cpp
+        TestKeyGesture.cpp
         TestCommandAssembler.cpp
         TestCommandProcessor.cpp
         TestUsbToAll.cpp
@@ -46,9 +55,19 @@ add_executable(vsl-tests
         TestJtagFastPath.cpp
         TestSwdBlock.cpp
         TestSwdBitBang.cpp
+        TestRvSwdEngine.cpp
+        TestDebugModule.cpp
+        TestCmsisDap.cpp
+        TestCmsisDapJtag.cpp
+        TestWchLink.cpp
+        TestWchLinkFlash.cpp
         TestPowerBlock.cpp
         ../src/protocol/CommandAssembler.cpp
         ../src/protocol/CommandProcessor.cpp
+        ../src/protocol/cmsisdap/DapJtag.cpp
+        ../src/protocol/cmsisdap/DapProcessor.cpp
+        ../src/protocol/wchlink/WchLinkFlash.cpp
+        ../src/protocol/wchlink/WchLinkProcessor.cpp
         ../src/protocol/GpioBlock.cpp
         ../src/protocol/JtagRawBlock.cpp
         ../src/protocol/PowerBlock.cpp
@@ -56,6 +75,8 @@ add_executable(vsl-tests
         ../src/protocol/UsbToAll.cpp
         ../src/protocol/UsbToXxx.cpp
         ../src/usb/VersaloonFunction.cpp
+        ../src/usb/CmsisDapFunction.cpp
+        ../src/usb/WchLinkFunction.cpp
         # Logger and printf of libArT, for the log sink test
         ../dependencies/libArT/src/logging/LogManager.cpp
         ../dependencies/libArT/src/streams/Writable.cpp

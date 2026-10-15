@@ -29,7 +29,8 @@
 //
 // Speed: the engine with the faster TCK wins, and TCK is never faster than
 // the request. The SPI gives clockHz() / 2^n, n = 2-8. Bit-bang gives the
-// request, up to bitBangMaxKHz. kHz = 0 (adaptive clocking with RTCK) is
+// request. For the choice, its speed counts as the request, up to
+// bitBangMaxKHz. kHz = 0 (adaptive clocking with RTCK) is
 // always bit-bang.
 //
 // A long shift calls the Background between SPI chunks of about
@@ -40,7 +41,7 @@
 
 #include "jtag/JtagBitBang.h"
 #include "protocol/Background.h"
-#include "protocol/JtagRawBlock.h"
+#include "protocol/JtagPort.h"
 
 namespace jtag {
 
@@ -51,10 +52,16 @@ namespace jtag {
 inline constexpr uint8_t spiMinShift = 2;
 inline constexpr uint8_t spiMaxShift = 8;
 
-// The fastest TCK of the bit-bang loop at 72 MHz. An estimate: measure it
-// on hardware and correct it. Too high a value selects bit-bang at a speed
-// where the SPI is faster.
-inline constexpr uint32_t bitBangMaxKHz = 3000;
+// The bit-bang rate that the choice between bit-bang and SPI assumes. It is
+// not the fastest rate of the loop: that rate is not measured. 1000 kHz gave
+// the same OpenOCD flash times as the original firmware
+// (tools/flash_benchmark.py).
+// Too high a value selects bit-bang at a speed where the SPI is faster. Too
+// low a value selects the SPI, which can be up to 2 times slower than the
+// request (2000 kHz gives 1125 kHz). To raise the value, set it to 18000
+// for a test. Then measure TCK at a request of 4000 kHz, and use the
+// measured rate rounded down.
+inline constexpr uint32_t bitBangMaxKHz = 1000;
 
 // The SPI divider shift for a request of kHz, or 0 for bit-bang: the SPI
 // rate must not be above the request and must be at least the bit-bang

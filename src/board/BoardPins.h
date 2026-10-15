@@ -46,6 +46,11 @@ inline void write(Signal signal, bool asserted) {
    gpioPin(signal.pin).write(signal.levelFor(asserted));
 }
 
+// True when the input level of the pin is the asserted level of the signal.
+inline bool isAsserted(Signal signal) {
+   return gpioPin(signal.pin).read() == signal.levelFor(true);
+}
+
 constexpr hw::Afio::SwjConfig afioSwjConfig(SwjConfig config) {
    switch(config) {
    case SwjConfig::Full:

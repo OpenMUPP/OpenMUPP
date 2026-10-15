@@ -118,6 +118,10 @@ class Bench {
       return { reply_.begin(), reply_.begin() + static_cast<std::ptrdiff_t>(*size) };
    }
 
+   [[nodiscard]] uint32_t errorCount() const {
+      return block_.errorCount();
+   }
+
    FakeSwdPort port;
 
    private:
@@ -224,13 +228,42 @@ TEST_CASE("SWD: IN_OUT encodes the request and passes the write data") {
 
 TEST_CASE("SWD: IN_OUT that is not OK is FAILED with the ack byte") {
    Bench bench;
+   uint32_t errors = 0;
    for(const uint8_t ack :
        { static_cast<uint8_t>(swd::ackWait | swd::retryOutFlag), static_cast<uint8_t>(swd::ackFault | swd::faultFlag),
          static_cast<uint8_t>(0x07 | swd::ackErrorFlag), static_cast<uint8_t>(swd::ackOk | swd::parityErrorFlag) }) {
       CAPTURE(ack);
       bench.port.ack = ack;
       CHECK(bench.run({ transact(0x8D, 0x12345678) }) == std::vector<uint8_t>{ 1, ack, 0x78, 0x56, 0x34, 0x12 });
+      // Each failed transfer counts as an error.
+      CHECK(bench.errorCount() == ++errors);
    }
+   bench.port.ack = swd::ackOk;
+   bench.run({ transact(0x8D, 0x12345678) });
+   CHECK(bench.errorCount() == errors);
+}
+
+TEST_CASE("SWD: a DP TARGETSEL write is OK for each ack and keeps the ack byte") {
+   CHECK(swd::encodeRequest(0x18) == swd::targetSelRequest);
+   Bench bench;
+   for(const uint8_t ack : { static_cast<uint8_t>(0x07 | swd::ackErrorFlag), static_cast<uint8_t>(swd::ackFault | swd::faultFlag),
+                             static_cast<uint8_t>(swd::ackWait | swd::retryOutFlag), swd::ackOk }) {
+      CAPTURE(ack);
+      bench.port.ack = ack;
+      // OpenOCD sends the encoded request (swd_cmd()). Another host can
+      // send it without start, parity and park bits.
+      for(const uint8_t request : { swd::targetSelRequest, uint8_t{ 0x18 } }) {
+         CAPTURE(request);
+         CHECK(bench.run({ transact(request, 0x01002927) }) == std::vector<uint8_t>{ 0, ack, 0x27, 0x29, 0x00, 0x01 });
+      }
+   }
+   CHECK(bench.errorCount() == 0);
+   // A read of DP address 0xC (RDBUFF) is not TARGETSEL.
+   bench.port.ack = static_cast<uint8_t>(0x07 | swd::ackErrorFlag);
+   CHECK(bench.run({ transact(0x1C, 0) })[0] == 1);
+   // A write of AP address 0xC is not TARGETSEL.
+   CHECK(bench.run({ transact(0x1A, 0) })[0] == 1);
+   CHECK(bench.errorCount() == 2);
 }
 
 TEST_CASE("SWD: IN_OUT with the wrong payload size is INVALID_PARA with the data size") {

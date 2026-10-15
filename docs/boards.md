@@ -54,7 +54,7 @@ This function does these steps:
    With `VSL_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
    Then a debug probe can run and step the firmware.
 3. It puts the board pins into a safe state:
-   - All LEDs are off, but the power LED is on.
+   - All LEDs are off, but the power LED is on. The main loop then drives the LEDs (see below).
    - The USB pull-up is off, so the host does not see the device.
    - The target power is off (the switch pin floats).
    - The key pin has a pull resistor to the released level.
@@ -62,14 +62,41 @@ This function does these steps:
 The JTAG, SWD, UART and Vref pins stay inputs until their drivers configure them.
 
 `main()` starts the USB device when the clock comes from the crystal (see [USB device](usb-device.md)).
-The main loop runs the USB device and the UART bridge. It shows a heartbeat on the state LED:
+The main loop runs the USB device and the UART bridge. It also drives the LEDs.
+A `wch-link` image has no serial port and no UART bridge (see [WCH-Link personality](wch-link.md)).
 
-| State LED | Meaning |
+| LED | Meaning |
 |---|---|
-| Short flash, one time each second | The firmware runs. The clock comes from the crystal. |
-| Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. |
-| On or off all the time | The main loop does not run. |
+| Power | On when the Vref pin has a voltage above 1.8 V. Off when the voltage is below 1.5 V. The dongle measures the voltage each 100 ms. |
+| State | Off when the dongle is idle. One flash of 40 ms for each command of the host (Versaloon, CMSIS-DAP or WCH-Link). |
+| USB | On when the host has configured the USB device. |
 
-The USB LED is on when the host has configured the USB device.
+The power LED shows the target voltage, from the target supply or from the dongle supply.
+A board without a working Vref sense keeps the power LED on all the time. This includes a board where the ADC calibration failed.
+The dongle has no idle indication of the firmware. An idle dongle with no target and no USB host has all LEDs off. A hung main loop shows the same.
+A continuous command stream gives a steady flicker on the state LED, because the LED stays off for at least 40 ms after each flash.
+
+Three fault and event patterns replace the normal function:
+
+| LED | Pattern | Meaning |
+|---|---|---|
+| State | Double flash: two flashes of 60 ms, each 600 ms | A JTAG or SWD transfer failed. The pattern starts at the first error and stops 2 s after the last error. Each new error restarts the 2 s. During the pattern, the state LED does not show the command activity. |
+| State | Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. The power LED still shows the target voltage. |
+| All | Three flashes in 0.6 s, then on | The key has been down for 3 s: the dongle switches the personality of a dual image. After the flashes, all LEDs stay on until you release the key. The dongle then resets. |
+
+A probe error is a transfer that ends with a FAULT acknowledge, no acknowledge, a parity error, or a WAIT acknowledge after all retries.
+In the CMSIS-DAP personality, these are the transfers of `DAP_Transfer` and `DAP_TransferBlock`, on SWD and on JTAG.
+A JTAG-DP has one acknowledge value for OK and FAULT.
+A fault on JTAG only sets the STICKYERR bit in CTRL/STAT, and the dongle does not read this bit.
+Thus on JTAG, only these errors count: a WAIT after all retries, an acknowledge that is not valid, and a failed scan.
+A WAIT that `DAP_TransferAbort` stops and a value mismatch are not probe errors.
+In the Versaloon personality, these are the failed `IN_OUT` transfers of the `SWD` block.
+The `JTAG_RAW` block has no acknowledge, so the Versaloon personality does not show JTAG errors.
+A host can cause probe errors in normal operation, for example when it scans for access ports that are not there.
+Thus a short double flash at the connection is not always a problem.
+The WCH-Link personality counts no probe errors, so it never shows the double flash.
+
+The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
+The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
 

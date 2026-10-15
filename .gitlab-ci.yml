@@ -8,8 +8,6 @@ variables:
   GIT_SUBMODULE_FORCE_HTTPS: "true"
   GIT_DEPTH: 0
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
-  # 64 KB STM32F103C8 minus the 10 KB versaloon-bootloader
-  FLASH_LIMIT_BYTES: "55296"
 
 # Build on:
 # - Tags
@@ -43,10 +41,9 @@ run-unit-tests:
   stage: .pre
   script:
     - cd "$CI_PROJECT_DIR"
-    - BUILDDIR=build-tests
-    - cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" -S . -B "${BUILDDIR}"
-    - cmake --build ${BUILDDIR} --target vsl-tests -- -j`nproc`
-    - cd ${BUILDDIR} && ctest --output-on-failure
+    - cmake --preset host-tests -G "Unix Makefiles"
+    - cmake --build --preset host-tests -- -j`nproc`
+    - ctest --preset host-tests
 
 run-tool-tests:
   stage: .pre
@@ -54,52 +51,51 @@ run-tool-tests:
     - cd "$CI_PROJECT_DIR"
     - python3 -m unittest discover -s tools -p "test_*.py" -v
 
-# Build linked behind versaloon-bootloader (0x08002800, 54 KB). Release by
-# default; a Debug build has the debug log on the CDC port and SWD on.
-# The linker script fails the link when the image does not fit; the size
-# check reports the size and fails on the same limit. The default target
-# also builds versaloon-bootloader for the Mini and the OtherUse.
+# Builds the application images of the board (standalone, app-8k, app-10k;
+# README "Build the firmware") with the configure preset PRESET
+# (CMakePresets.json). Release by default; a Debug build has the debug log on
+# the CDC port and SWD on. The linker script fails the link
+# when an image does not fit; the size check reports the size of each image
+# in vsl-images.txt and fails on the same limit. The default target also
+# builds versaloon-bootloader for the Mini and the OtherUse.
 .build-board-template:
   stage: build
   variables:
     BUILD_TYPE: Release
+    # Empty for the default personality
+    PROTOCOL_TAG: ""
   script:
     - cd "$CI_PROJECT_DIR"
-    - BUILDDIR=${BOARD}-${BUILD_TYPE}-build
-    - cmake --no-warn-unused-cli
-      -D GCC_TOOLCHAIN_PREFIX:STRING=${GCC_TOOLCHAIN_PREFIX}
-      -D BOARD:STRING=${BOARD}
-      -D VSL_BOOTLOADER:BOOL=ON
-      -D CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
-      -D CMAKE_BUILD_TYPE:STRING=${BUILD_TYPE}
-      -D CMAKE_TOOLCHAIN_FILE=${CI_PROJECT_DIR}/cmake/gcc_arm.cmake
-      -G "Unix Makefiles"
-      -S .
-      -B "${BUILDDIR}"
-    - cmake --build ${BUILDDIR} -- -j`nproc`
-    - ci/check-size.sh ${BUILDDIR}/versaloon-next-gen.bin ${FLASH_LIMIT_BYTES}
+    - BUILDDIR=build/${PRESET}
+    - cmake --preset ${PRESET} -G "Unix Makefiles"
+    - cmake --build --preset ${PRESET} -- -j`nproc`
+    - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/vsl-images.txt"
+  # Only the .hex and .bin files that a user writes, with the board, the
+  # image, the build type and the version in the name (README "Build the
+  # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link/V2
+  # has the standalone image only. No .elf, .map or bootloader-only files.
   artifacts:
-    name: "versaloon-next-gen-${BOARD}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
+    name: "versaloon-ng-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
     paths:
-      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen-*.hex
-      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen-*.bin
-      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen.elf
-      - ${BOARD}-${BUILD_TYPE}-build/versaloon-next-gen.map
-      - ${BOARD}-${BUILD_TYPE}-build/versaloon-bootloader/versaloon-bootloader-*
+      - build/${PRESET}/versaloon-ng-${BOARD}*.hex
+      - build/${PRESET}/versaloon-ng-${BOARD}*.bin
 
 build-mini:
   extends: .build-board-template
   variables:
+    PRESET: mini
     BOARD: mini
 
 build-otheruse:
   extends: .build-board-template
   variables:
+    PRESET: otheruse
     BOARD: otheruse
 
 build-stlinkv2:
   extends: .build-board-template
   variables:
+    PRESET: stlinkv2
     BOARD: stlinkv2
 
 build-mini-debug:
@@ -107,3 +103,95 @@ build-mini-debug:
   variables:
     BOARD: mini
     BUILD_TYPE: Debug
+    PRESET: mini-debug
+
+# The CMSIS-DAP personality (VSL_PROTOCOL=cmsis-dap) on all boards
+.build-cmsis-dap-template:
+  extends: .build-board-template
+  variables:
+    PROTOCOL_TAG: "-cmsis-dap"
+
+build-mini-cmsis-dap:
+  extends: .build-cmsis-dap-template
+  variables:
+    PRESET: mini-cmsis-dap
+    BOARD: mini
+
+build-otheruse-cmsis-dap:
+  extends: .build-cmsis-dap-template
+  variables:
+    PRESET: otheruse-cmsis-dap
+    BOARD: otheruse
+
+build-stlinkv2-cmsis-dap:
+  extends: .build-cmsis-dap-template
+  variables:
+    PRESET: stlinkv2-cmsis-dap
+    BOARD: stlinkv2
+
+# The dual image (VSL_PROTOCOL=dual) on all boards. The last 1 KB flash
+# page holds the stored personality, so each image limit is 1 KB smaller.
+.build-dual-template:
+  extends: .build-board-template
+  variables:
+    PROTOCOL_TAG: "-dual"
+
+build-mini-dual:
+  extends: .build-dual-template
+  variables:
+    PRESET: mini-dual
+    BOARD: mini
+
+build-otheruse-dual:
+  extends: .build-dual-template
+  variables:
+    PRESET: otheruse-dual
+    BOARD: otheruse
+
+build-stlinkv2-dual:
+  extends: .build-dual-template
+  variables:
+    PRESET: stlinkv2-dual
+    BOARD: stlinkv2
+
+# The dual image with CMSIS-DAP as the default personality
+build-mini-dual-cmsis-dap:
+  extends: .build-dual-template
+  variables:
+    PRESET: mini-dual-cmsis-dap
+    BOARD: mini
+    PROTOCOL_TAG: "-dual-cmsis-dap"
+
+# The WCH-Link personality (VSL_PROTOCOL=wch-link) on all boards
+.build-wch-link-template:
+  extends: .build-board-template
+  variables:
+    PROTOCOL_TAG: "-wch-link"
+
+build-mini-wch-link:
+  extends: .build-wch-link-template
+  variables:
+    PRESET: mini-wch-link
+    BOARD: mini
+
+build-otheruse-wch-link:
+  extends: .build-wch-link-template
+  variables:
+    PRESET: otheruse-wch-link
+    BOARD: otheruse
+
+build-stlinkv2-wch-link:
+  extends: .build-wch-link-template
+  variables:
+    PRESET: stlinkv2-wch-link
+    BOARD: stlinkv2
+
+# The wch-link image with the USB ID of WCH (VSL_WCH_LINK_WCH_USB_ID). The
+# job checks the build and the size only. It keeps no artifact, because the
+# vendor ID belongs to WCH (docs/wch-link.md).
+build-mini-wch-link-wch-id:
+  extends: .build-wch-link-template
+  variables:
+    PRESET: mini-wch-link-wch-id
+    BOARD: mini
+  artifacts: !reset null

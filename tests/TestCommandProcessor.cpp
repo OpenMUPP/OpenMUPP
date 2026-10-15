@@ -75,7 +75,7 @@ TEST_CASE("GET_INFO replies the buffer size and the version text") {
    CHECK((*reply)[1] == (protocol::bufferSize >> 8));
    CHECK(reply->back() == 0);
    const std::string text(reply->begin() + 2, reply->end() - 1);
-   CHECK(text == "versaloon-next-gen v1.2.3, board mini");
+   CHECK(text == "versaloon-ng v1.2.3, board mini");
 }
 
 TEST_CASE("GET_INFO limits the version text") {
@@ -134,7 +134,7 @@ TEST_CASE("FW_UPDATE is refused without a bootloader") {
 
 TEST_CASE("Unknown commands have no reply") {
    Bench bench;
-   for(const uint8_t command : { 0x03, 0x0E, 0x10, 0x1F, 0x80, 0xFF }) {
+   for(const uint8_t command : { 0x03, 0x0D, 0x10, 0x1F, 0x80, 0xFF }) {
       CAPTURE(int(command));
       CHECK_FALSE(bench.run({ command }).has_value());
    }

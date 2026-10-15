@@ -21,6 +21,10 @@
 
 #include <logging/Logger.h>
 
+#if defined(VSL_DEBUG_CDC) && defined(VSL_WITH_WCH_LINK)
+#error "The WCH-Link personality has no CDC port for the debug log"
+#endif
+
 namespace usb {
 class UsbStack;
 }
