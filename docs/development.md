@@ -1,6 +1,6 @@
 # Development
 
-This document is for developers of the firmware: build outputs, CMake presets, tests, the flash speed benchmark, code format, version, CI and branches.
+This document is for developers of the firmware: build outputs, CMake options, CMake presets, tests, the flash speed benchmark, code format, version, CI and branches.
 
 ## Build outputs
 
@@ -32,6 +32,23 @@ Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
 There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
 
+## CMake options
+
+The README shows the presets for the common builds.
+These options select the board, the personality and the debug features:
+
+| Option | Default | Description |
+|---|---|---|
+| `BOARD` | `mini` | Board to build for (see [the README](../README.md#boards)). |
+| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse. |
+| `VSL_PROTOCOL` | `versaloon` | USB personality of the image: `versaloon`, `cmsis-dap`, `dual` or `wch-link`. A `cmsis-dap` image has the CMSIS-DAP v2 interface, `0403:9b3c`, instead of the Versaloon interface. A `dual` image has both personalities, and one is active after each start (see [usb-device.md](usb-device.md#dual-image)). A `wch-link` image has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The serial port and the UART bridge are in all other images. See [cmsis-dap.md](cmsis-dap.md). |
+| `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only for `VSL_PROTOCOL=wch-link`: use the USB ID `1a86:8010` of WCH, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
+| `VSL_DEFAULT_PROTOCOL` | `versaloon` | Only for `VSL_PROTOCOL=dual`: the personality when no personality is stored. `versaloon` or `cmsis-dap`. |
+| `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
+| `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
+| `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [debug-log.md](debug-log.md)). Not allowed in a `Release` build. |
+| `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
+
 ## CMake presets
 
 `CMakePresets.json` has the configure, build and test presets.
@@ -57,6 +74,7 @@ The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
 The names of the firmware presets are the names of the CI jobs, without `build-`.
+CI does not build the `mini-wch-link-wch-id` preset.
 CI uses these presets (see [Continuous integration](#continuous-integration)).
 
 Add a preset for a local setup in `CMakeUserPresets.json`.
@@ -241,9 +259,18 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   Each limit of the dual image is 1 KB smaller, because the last flash page holds the stored personality.
 - `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
 - `build-mini-wch-link`, `build-otheruse-wch-link`, `build-stlinkv2-wch-link`: the same release builds with `VSL_PROTOCOL=wch-link`, plus the size check.
-- `build-mini-wch-link-wch-id`: the `wch-link` build of the Mini with the USB ID of WCH, plus the size check. The job keeps no artifact, because the vendor ID belongs to WCH.
 
 Each build job configures and builds the preset with the name of the job, without `build-`.
+The jobs of the Mini run in each pipeline.
+The jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
+A manual job can fail and not block the pipeline or the merge request (MR).
+On a tag, all build jobs run.
+
+The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
+`build-mini` and `run-unit-tests` update the cache, and the other jobs only read it.
+In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
+Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
+After you change the tag of a dependency, remove `build/_deps/<name>-src`.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
 The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
 The ST-Link/V2 has the `standalone` image only.

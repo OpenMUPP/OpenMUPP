@@ -49,7 +49,7 @@ The vendor ID `1a86` belongs to WCH.
 Use this option only for personal use.
 Do not publish an image with this ID.
 The names of these image files have `-wch-link-wch-id` after the board.
-The CI job `build-mini-wch-link-wch-id` builds this image to check the build, and keeps no artifact.
+CI does not build this image.
 The option is only valid with `VSL_PROTOCOL=wch-link`.
 
 ## Connect a target
