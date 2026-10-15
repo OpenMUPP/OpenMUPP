@@ -595,7 +595,8 @@ A new `03` command, a connect or a quit stops a read that the host did not take 
 
 The data has no header, so the host cannot tell an old packet from a new packet.
 Thus a new `03` command, a connect, a quit or a suspend also takes back a packet that is on its way on endpoint `0x82`.
-`02 01 0c` gives the error frame only while the host reads that packet at the same time: then the packet is not taken back, and the read waits for its end.
+`02 01 0c` gives the error frame while a packet of the read before still waits for the host.
+This occurs when no `03`, connect or quit came before it, or when the host reads that packet at the same time.
 
 ### Flash
 
