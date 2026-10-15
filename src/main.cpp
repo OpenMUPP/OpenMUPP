@@ -163,8 +163,8 @@ board::BoardPower boardPower;
 // The processor runs in the main loop, outside the USB event delivery. The
 // target gets no Background: the personality has no serial port to service
 // during a long command. rvSwdPins.init() sets up the one-wire timer and
-// its DMA channels at the first WCH-Link request, so only in a WCH-Link
-// start. The personality has no start, no poll work and no error count.
+// its DMA channels when the host attaches the target (wchProcessor), so
+// only in a WCH-Link start. The personality has no start, no poll work and no error count.
 
 class WchPlatform final : public wchlink::Platform {
    public:
