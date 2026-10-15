@@ -236,15 +236,46 @@ constexpr bool hasBootloaderEntry = false;
 
 #endif
 
-#if defined(VSL_DUAL_PERSONALITY)
-usb::UsbStack usbStack{ activePersonality, hasBootloaderEntry ? &bootloaderEntry : nullptr, usbToAll, personalitySwitch, dapProcessor };
-#elif defined(VSL_WITH_WCH_LINK)
-usb::UsbStack usbStack{ wchProcessor };
-#elif defined(VSL_WITH_CMSIS_DAP)
-usb::UsbStack usbStack{ dapProcessor };
-#else
-usb::UsbStack usbStack{ hasBootloaderEntry ? &bootloaderEntry : nullptr, usbToAll };
+#if defined(VSL_WITH_VERSALOON)
+const usb::UsbStack::VersaloonDeps versaloonDeps{
+   .bootloader = hasBootloaderEntry ? &bootloaderEntry : nullptr,
+   .usbToXxx = &usbToAll,
+};
 #endif
+
+#if !defined(VSL_DUAL_PERSONALITY)
+// The one personality of the image
+#if defined(VSL_WITH_WCH_LINK)
+constexpr personality::Personality activePersonality = personality::Personality::WchLink;
+#elif defined(VSL_WITH_CMSIS_DAP)
+constexpr personality::Personality activePersonality = personality::Personality::CmsisDap;
+#else
+constexpr personality::Personality activePersonality = personality::Personality::Versaloon;
+#endif
+#endif
+
+usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
+#if defined(VSL_WITH_VERSALOON)
+                                           .versaloon = &versaloonDeps,
+#else
+                                           .versaloon = nullptr,
+#endif
+#if defined(VSL_WITH_CMSIS_DAP)
+                                           .dap = &dapProcessor,
+#else
+                                           .dap = nullptr,
+#endif
+#if defined(VSL_WITH_WCH_LINK)
+                                           .wch = &wchProcessor,
+#else
+                                           .wch = nullptr,
+#endif
+#if defined(VSL_DUAL_PERSONALITY)
+                                           .personalitySwitch = &personalitySwitch,
+#else
+                                           .personalitySwitch = nullptr,
+#endif
+                                           } };
 
 #if !defined(VSL_WITH_WCH_LINK)
 // A command runs only after usbStack.start(), so the USB device and the
