@@ -57,12 +57,47 @@ constexpr uint16_t record(Personality personality) {
 TEST_CASE("The personality codes") {
    CHECK(personality::toCode(Personality::Versaloon) == 0);
    CHECK(personality::toCode(Personality::CmsisDap) == 1);
+   CHECK(personality::toCode(Personality::WchLink) == 2);
    CHECK(personality::fromCode(0) == Personality::Versaloon);
    CHECK(personality::fromCode(1) == Personality::CmsisDap);
-   CHECK_FALSE(personality::fromCode(2).has_value());
+   CHECK(personality::fromCode(2) == Personality::WchLink);
+   CHECK_FALSE(personality::fromCode(3).has_value());
    CHECK_FALSE(personality::fromCode(0xFF).has_value());
+}
+
+TEST_CASE("The host build has all personalities in code order") {
+   // The test build defines each VSL_WITH_<P> (tests/CMakeLists.txt)
+   static_assert(personality::all.size() == 3);
+   CHECK(personality::all[0] == Personality::Versaloon);
+   CHECK(personality::all[1] == Personality::CmsisDap);
+   CHECK(personality::all[2] == Personality::WchLink);
+   CHECK(personality::has(Personality::Versaloon));
+   CHECK(personality::has(Personality::CmsisDap));
+   CHECK(personality::has(Personality::WchLink));
+   // No VSL_DEFAULT_PERSONALITY: the first one of the image
+   CHECK(personality::defaultPersonality == Personality::Versaloon);
+}
+
+TEST_CASE("The key cycle visits the three personalities in code order") {
    CHECK(personality::next(Personality::Versaloon) == Personality::CmsisDap);
-   CHECK(personality::next(Personality::CmsisDap) == Personality::Versaloon);
+   CHECK(personality::next(Personality::CmsisDap) == Personality::WchLink);
+   CHECK(personality::next(Personality::WchLink) == Personality::Versaloon);
+}
+
+TEST_CASE("A code that is not in the image is not a personality") {
+   // An image with CMSIS-DAP and WCH-Link only
+   constexpr std::array<Personality, 2> image{ Personality::CmsisDap, Personality::WchLink };
+   const art::span<const Personality> list(image.data(), image.size());
+
+   CHECK_FALSE(personality::fromCodeIn(list, 0).has_value());
+   CHECK(personality::fromCodeIn(list, 1) == Personality::CmsisDap);
+   CHECK(personality::fromCodeIn(list, 2) == Personality::WchLink);
+   CHECK_FALSE(personality::fromCodeIn(list, 3).has_value());
+   CHECK_FALSE(personality::contains(list, Personality::Versaloon));
+   CHECK(personality::contains(list, Personality::WchLink));
+   // The cycle skips Versaloon
+   CHECK(personality::nextIn(list, Personality::CmsisDap) == Personality::WchLink);
+   CHECK(personality::nextIn(list, Personality::WchLink) == Personality::CmsisDap);
 }
 
 TEST_CASE("The cycle visits three and four personalities in order") {
@@ -133,6 +168,22 @@ TEST_CASE("A stored personality is loaded") {
    CHECK(page.erases == 0);
 }
 
+TEST_CASE("The WCH-Link personality (code 2) is stored and loaded") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+
+   CHECK(store.store(Personality::WchLink));
+   CHECK(store.load() == Personality::WchLink);
+   CHECK(page.content[0] == record(Personality::WchLink));
+
+   CHECK(store.store(Personality::CmsisDap));
+   CHECK(store.load() == Personality::CmsisDap);
+   CHECK(store.store(Personality::WchLink));
+   CHECK(store.load() == Personality::WchLink);
+   CHECK(page.content[2] == record(Personality::WchLink));
+   CHECK(page.erases == 0);
+}
+
 TEST_CASE("Storing the stored personality writes nothing") {
    FakeFlashPage page;
    PersonalityStore store{ page };
@@ -148,12 +199,15 @@ TEST_CASE("A full page is erased before the next record") {
    PersonalityStore store{ page };
 
    auto personality = Personality::CmsisDap;
+   auto last = personality;
    for(std::size_t i = 0; i < FakeFlashPage::slotCount; ++i) {
       REQUIRE(store.store(personality));
+      last = personality;
       personality = personality::next(personality);
    }
    CHECK(page.erases == 0);
-   CHECK(store.load() == Personality::Versaloon);
+   CHECK(store.load() == last);
+   REQUIRE(last != Personality::CmsisDap);
 
    CHECK(store.store(Personality::CmsisDap));
    CHECK(page.erases == 1);

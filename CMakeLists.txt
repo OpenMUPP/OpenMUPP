@@ -196,13 +196,16 @@ if (CMAKE_CROSSCOMPILING)
     # The flash page of the stored personality: only in a dual image
     set(_vsl_settings_files "src/board/SettingsFlashPage\\.cpp")
     set(VSL_SETTINGS_PAGE_SIZE 0)
-    # VSL_WITH_VERSALOON and VSL_WITH_CMSIS_DAP: the personalities in the image
+    # VSL_WITH_<P>: the personalities in the image (personality/Personality.h).
+    # More than one: VSL_MULTI_PERSONALITY, and VSL_DEFAULT_PERSONALITY is
+    # the code of the personality when none is stored.
     if (VSL_PROTOCOL STREQUAL "dual")
-        list(APPEND PROJECT_DEFINES VSL_WITH_VERSALOON VSL_WITH_CMSIS_DAP VSL_DUAL_PERSONALITY)
+        list(APPEND PROJECT_DEFINES VSL_WITH_VERSALOON VSL_WITH_CMSIS_DAP VSL_MULTI_PERSONALITY)
         if (VSL_DEFAULT_PROTOCOL STREQUAL "cmsis-dap")
-            list(APPEND PROJECT_DEFINES VSL_DEFAULT_CMSIS_DAP)
+            list(APPEND PROJECT_DEFINES VSL_DEFAULT_PERSONALITY=1)
             set(VSL_IMAGE_TAG "-dual-cmsis-dap")
         else ()
+            list(APPEND PROJECT_DEFINES VSL_DEFAULT_PERSONALITY=0)
             set(VSL_IMAGE_TAG "-dual")
         endif ()
         set(_vsl_other_protocol_files ${_vsl_wch_link_files})

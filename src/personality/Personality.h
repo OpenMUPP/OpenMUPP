@@ -3,9 +3,11 @@
 // The USB personalities of the firmware (docs/usb-device.md).
 // Hardware-independent: the host unit tests check it.
 //
-// A dual image (VSL_PROTOCOL=dual) links both personalities, and one is
-// active after each start. The switch commands and the settings page
-// (personality/PersonalityStore.h) use the code of a personality.
+// The build puts one or more personalities into the image: one
+// VSL_WITH_<P> define for each. An image with more than one
+// (VSL_MULTI_PERSONALITY) has one active personality after each start.
+// The switch commands and the settings page (personality/PersonalityStore.h)
+// use the code of a personality. The host test build defines all of them.
 
 #include <array>
 #include <cstddef>
@@ -18,8 +20,6 @@ namespace personality {
 enum class Personality : uint8_t {
    Versaloon = 0,
    CmsisDap = 1,
-   // Only in a wch-link image (VSL_PROTOCOL=wch-link). It is not in `all`:
-   // no dual image has it, so it is never stored or switched to.
    WchLink = 2,
 };
 
@@ -41,9 +41,68 @@ constexpr const char *name(Personality personality) {
    return "unknown";
 }
 
-// The personalities of a dual image, in the order of the cycle. A new
-// personality of a dual image gets the next code and one entry here.
-inline constexpr std::array<Personality, 2> all{ Personality::Versaloon, Personality::CmsisDap };
+// True when the image has the personality. For `if constexpr` in code that
+// compiles without the personality.
+constexpr bool has(Personality personality) {
+   switch(personality) {
+   case Personality::Versaloon:
+#if defined(VSL_WITH_VERSALOON)
+      return true;
+#else
+      return false;
+#endif
+   case Personality::CmsisDap:
+#if defined(VSL_WITH_CMSIS_DAP)
+      return true;
+#else
+      return false;
+#endif
+   case Personality::WchLink:
+#if defined(VSL_WITH_WCH_LINK)
+      return true;
+#else
+      return false;
+#endif
+   }
+   return false;
+}
+
+// Each personality, in code order. A new personality gets the next code,
+// one entry here and one VSL_WITH_<P> define in has().
+inline constexpr std::array<Personality, 3> everyPersonality{ Personality::Versaloon, Personality::CmsisDap, Personality::WchLink };
+
+// The number of personalities in the image
+constexpr std::size_t compiledInCount() {
+   std::size_t count = 0;
+   for(const auto personality : everyPersonality) {
+      if(has(personality)) {
+         ++count;
+      }
+   }
+   return count;
+}
+
+// The personalities in the image, in code order
+constexpr std::array<Personality, compiledInCount()> compiledIn() {
+   std::array<Personality, compiledInCount()> list{};
+   std::size_t count = 0;
+   for(const auto personality : everyPersonality) {
+      if(has(personality)) {
+         list[count++] = personality;
+      }
+   }
+   return list;
+}
+
+// The personalities of the image, in the order of the cycle (code order).
+// The cycle, fromCode() and the settings page work on this list only.
+inline constexpr auto all = compiledIn();
+static_assert(!all.empty(), "the image needs at least one VSL_WITH_<P> define");
+#if defined(VSL_MULTI_PERSONALITY)
+static_assert(all.size() > 1, "VSL_MULTI_PERSONALITY needs more than one personality");
+#else
+static_assert(all.size() <= 1, "an image with more than one personality needs VSL_MULTI_PERSONALITY");
+#endif
 
 // The largest number of personalities that the settings page can store
 // (see recordOfCode() in personality/PersonalityStore.h).
@@ -63,18 +122,43 @@ constexpr bool hasValidCodes(art::span<const Personality> list) {
    }
    return true;
 }
-static_assert(hasValidCodes(art::span<const Personality>(all.data(), all.size())),
+static_assert(hasValidCodes(art::span<const Personality>(everyPersonality.data(), everyPersonality.size())),
               "personality codes must be unique and below maxPersonalities");
 
-// Empty for a code that is not a personality
-constexpr std::optional<Personality> fromCode(uint8_t code) {
-   for(const auto personality : all) {
+// Empty for a code that is not a personality of the list
+constexpr std::optional<Personality> fromCodeIn(art::span<const Personality> list, uint8_t code) {
+   for(const auto personality : list) {
       if(toCode(personality) == code) {
          return personality;
       }
    }
    return std::nullopt;
 }
+
+// Empty for a code that is not a personality of the image. A switch command
+// to such a code is refused.
+constexpr std::optional<Personality> fromCode(uint8_t code) {
+   return fromCodeIn(art::span<const Personality>(all.data(), all.size()), code);
+}
+
+// True when the list has the personality
+constexpr bool contains(art::span<const Personality> list, Personality personality) {
+   return fromCodeIn(list, toCode(personality)).has_value();
+}
+
+// The personality when the settings page has none: VSL_DEFAULT_PERSONALITY
+// (a code), else the first one of the image
+#if defined(VSL_DEFAULT_PERSONALITY)
+// Check the raw value: the cast to the enum would wrap a large one
+static_assert(VSL_DEFAULT_PERSONALITY >= 0 && VSL_DEFAULT_PERSONALITY < maxPersonalities,
+              "VSL_DEFAULT_PERSONALITY must be a personality code");
+inline constexpr Personality defaultPersonality = static_cast<Personality>(VSL_DEFAULT_PERSONALITY);
+#else
+// An image without a personality fails the static_assert on `all` above
+inline constexpr Personality defaultPersonality = all.empty() ? Personality::Versaloon : all[0];
+#endif
+static_assert(all.empty() || contains(art::span<const Personality>(all.data(), all.size()), defaultPersonality),
+              "VSL_DEFAULT_PERSONALITY must be a personality of the image");
 
 // The personality after the given one in the list, or the first one at the end
 constexpr Personality nextIn(art::span<const Personality> list, Personality personality) {

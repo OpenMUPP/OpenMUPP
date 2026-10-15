@@ -99,7 +99,9 @@ target_include_directories(vsl-tests PRIVATE
         ../dependencies/libArT/tests/usb      # FakeDeviceController.h
         ../dependencies/system-stm32/src      # peripherals/UsbDeviceTypes.h
 )
-target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING VSL_REPLAY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/replay")
+# All personalities, so the tests see the full personality list
+target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING VSL_WITH_VERSALOON VSL_WITH_CMSIS_DAP VSL_WITH_WCH_LINK
+        VSL_MULTI_PERSONALITY VSL_REPLAY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/replay")
 target_link_libraries(vsl-tests PRIVATE doctest::doctest etl::etl)
 
 # Discover all tests

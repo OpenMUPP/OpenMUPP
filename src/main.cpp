@@ -81,7 +81,7 @@
 #include "protocol/SwdBlock.h"
 #include "protocol/UsbToAll.h"
 #endif
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
 #include "board/BoardPins.h"
 #include "board/SettingsFlashPage.h"
 #include "personality/KeyGesture.h"
@@ -115,18 +115,11 @@ board::BoardJtag boardJtag{ jtagPins, &serialService };
 
 #endif
 
-#if defined(VSL_DUAL_PERSONALITY)
-
-// The personality when the settings page has none
-#if defined(VSL_DEFAULT_CMSIS_DAP)
-constexpr Personality defaultPersonality = Personality::CmsisDap;
-#else
-constexpr Personality defaultPersonality = Personality::Versaloon;
-#endif
+#if defined(VSL_MULTI_PERSONALITY)
 
 Personality loadPersonality() {
    board::SettingsFlashPage page;
-   return personality::PersonalityStore{ page }.load().value_or(defaultPersonality);
+   return personality::PersonalityStore{ page }.load().value_or(personality::defaultPersonality);
 }
 
 // The personality of this start. Before the USB stack, which takes it.
@@ -137,13 +130,7 @@ personality::KeyGesture keyGesture;
 #else
 
 // The one personality of the image
-#if defined(VSL_WITH_WCH_LINK)
-constexpr Personality activePersonality = Personality::WchLink;
-#elif defined(VSL_WITH_CMSIS_DAP)
-constexpr Personality activePersonality = Personality::CmsisDap;
-#else
-constexpr Personality activePersonality = Personality::Versaloon;
-#endif
+constexpr Personality activePersonality = personality::all[0];
 
 #endif
 
@@ -227,7 +214,7 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   .firmwareVersion = versionString,
                                   },
                                   &boardJtag,
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
                                   &personalitySwitch,
 #else
                                   nullptr,
@@ -339,7 +326,7 @@ usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
 #else
                                            .wch = nullptr,
 #endif
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
                                            .personalitySwitch = &personalitySwitch,
 #else
                                            .personalitySwitch = nullptr,
@@ -359,7 +346,7 @@ void SerialService::service() {
 }
 #endif
 
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
 
 // --- Personality switch -----------------------------------------------
 // Stores the personality and resets. The USB device then enumerates with
@@ -417,7 +404,7 @@ void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
       beforeUsbPollVersaloon(nowMs);
    }
 #endif
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
    pollPersonality(nowMs);
 #endif
 }
@@ -454,7 +441,7 @@ TargetPowerLed targetPowerLed;
 // Drives the LEDs (docs/boards.md, "LEDs"). Call it in each main loop
 // iteration, after the USB poll.
 void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
    // The key gesture flashes all LEDs before the switch.
    if(const auto flash = personalitySwitch.indication(nowMs)) {
       board::setLed(board::Led::Power, *flash);

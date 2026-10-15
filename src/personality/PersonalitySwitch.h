@@ -1,7 +1,8 @@
 #pragma once
 
-// The switch to the next personality of a dual image. Hardware-
-// independent: the host unit tests check it.
+// The switch to the next personality of an image with more than one
+// personality (VSL_MULTI_PERSONALITY). Hardware-independent: the host
+// unit tests check it.
 //
 // The switch commands call request(): SWITCH_PERSONALITY of the Versaloon
 // protocol (protocol/CommandProcessor.h) and ID_DAP_Vendor0 of CMSIS-DAP

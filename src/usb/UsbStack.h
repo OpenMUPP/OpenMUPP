@@ -166,24 +166,16 @@ class UsbStack {
    // with one personality, it is a constant, so the compiler drops the
    // branches of the other ones.
    [[nodiscard]] personality::Personality personality() const {
-#if defined(VSL_WITH_VERSALOON) + defined(VSL_WITH_CMSIS_DAP) + defined(VSL_WITH_WCH_LINK) > 1
-      return active_;
-#elif defined(VSL_WITH_VERSALOON)
-      return personality::Personality::Versaloon;
-#elif defined(VSL_WITH_CMSIS_DAP)
-      return personality::Personality::CmsisDap;
-#else
-      return personality::Personality::WchLink;
-#endif
+      if constexpr(personality::all.size() > 1) {
+         return active_;
+      } else {
+         return personality::all[0];
+      }
    }
 
    // True when the active personality has the CDC-ACM serial port
    [[nodiscard]] bool hasSerialPort() const {
-#if defined(VSL_WITH_WCH_LINK)
-      return personality() != personality::Personality::WchLink;
-#else
-      return true;
-#endif
+      return !personality::has(personality::Personality::WchLink) || personality() != personality::Personality::WchLink;
    }
 
 #if defined(VSL_USB_SERIAL_PORT)

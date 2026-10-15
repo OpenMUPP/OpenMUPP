@@ -1,7 +1,7 @@
 #pragma once
 
-// The flash page of the stored personality in a dual image
-// (personality/PersonalityStore.h). Target only.
+// The flash page of the stored personality in an image with more than one
+// personality (VSL_MULTI_PERSONALITY, personality/PersonalityStore.h). Target only.
 //
 // The page is the 1 KB at __vsl_settings_start: the linker script keeps it
 // out of the FLASH region of the image (ldscripts/mem-f103.ld).
