@@ -2,8 +2,8 @@
 
 // The CMSIS-DAP v2.1 command processor for SWD and JTAG. Hardware-
 // independent: it runs on a DapSwd object, a protocol::JtagPort object, a
-// protocol::GpioPins object and a Platform object, and the host unit tests
-// use mock ones. usb::CmsisDapFunction moves the packets.
+// protocol::GpioPins object, a DapUart object and a Platform object, and
+// the host unit tests use mock ones. usb::CmsisDapFunction moves the packets.
 //
 // The transport calls submit() for each request packet (at most
 // packetSize bytes). submit() only stores the packet. run() runs the
@@ -18,8 +18,11 @@
 //   0x05 DAP_Transfer           0x15 DAP_JTAG_Configure
 //   0x06 DAP_TransferBlock      0x16 DAP_JTAG_IDCODE
 //   0x08 DAP_WriteABORT         0x1D DAP_SWD_Sequence
-//   0x09 DAP_Delay
-//   0x0A DAP_ResetTarget        0x80 ID_DAP_Vendor0
+//   0x09 DAP_Delay              0x1F DAP_UART_Transport
+//   0x0A DAP_ResetTarget        0x20 DAP_UART_Configure
+//                               0x21 DAP_UART_Transfer
+//   0x80 ID_DAP_Vendor0         0x22 DAP_UART_Control
+//                               0x23 DAP_UART_Status
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
 // DAP.c): posted AP reads, RDBUFF at the end of a read sequence, a read of
@@ -68,6 +71,12 @@
 //   are one acknowledge, and the processor does not read STICKYERR: only
 //   WAIT after all retries, an invalid acknowledge and a failed scan count.
 //   The error LED shows the count (ErrorLed.h).
+// - The DAP_UART_* commands run on the DapUart object (DapUart.h). Without
+//   one, they reply ID_DAP_Invalid, and DAP_Info reports no UART. With one,
+//   DAP_Info reports the UART port, the USB COM port when the UART has it,
+//   and the buffer sizes. A DAP_UART_Transfer takes the received bytes
+//   that fit in the response, and replies the status after the transfer.
+//   A Tx Count that is more than the request has gives ID_DAP_Invalid.
 //
 // DAP_QueueCommands packets wait. The next packet with another command
 // runs the queued packets and then itself, back to back. The responses of
@@ -95,6 +104,7 @@
 #include "protocol/JtagPort.h"
 #include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
+#include "protocol/cmsisdap/DapUart.h"
 
 namespace personality {
 class PersonalitySwitch;
@@ -122,6 +132,11 @@ inline constexpr uint8_t jtagSequence = 0x14;
 inline constexpr uint8_t jtagConfigure = 0x15;
 inline constexpr uint8_t jtagIdcode = 0x16;
 inline constexpr uint8_t swdSequence = 0x1D;
+inline constexpr uint8_t uartTransport = 0x1F;
+inline constexpr uint8_t uartConfigure = 0x20;
+inline constexpr uint8_t uartTransfer = 0x21;
+inline constexpr uint8_t uartControl = 0x22;
+inline constexpr uint8_t uartStatus = 0x23;
 inline constexpr uint8_t vendor0 = 0x80;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
@@ -154,6 +169,7 @@ inline constexpr uint16_t swd = 0x01;
 inline constexpr uint16_t jtag = 0x02;
 inline constexpr uint16_t atomicCommands = 0x10;
 inline constexpr uint16_t uartPort = 0x80;
+inline constexpr uint16_t usbComPort = 0x100;
 } // namespace capability
 
 // The values of DAP_Info. A string that is nullptr, or too long for a
@@ -164,8 +180,8 @@ struct DeviceInfo {
    // The chip UID, as text
    const char *serialNumber{ nullptr };
    const char *firmwareVersion{ nullptr };
-   // The processor adds JTAG when it has a JTAG port. The UART port comes
-   // with its commands.
+   // The processor adds JTAG when it has a JTAG port, and the UART port
+   // and the USB COM port when it has a DapUart.
    uint16_t capabilities{ capability::swd | capability::atomicCommands };
 };
 
@@ -203,13 +219,16 @@ class Processor final : private TransferAbort {
    static constexpr uint32_t maxPinWaitUs = 3'000'000;
 
    // jtag: nullptr for a board without JTAG. personalitySwitch: nullptr
-   // for an image with one personality.
+   // for an image with one personality. uart: nullptr for no DAP_UART_*
+   // commands. The constructor only stores the uart pointer, so the object
+   // can be constructed later.
    Processor(DapSwd &swd,
              protocol::GpioPins &gpio,
              Platform &platform,
              const DeviceInfo &info,
              protocol::JtagPort *jtag = nullptr,
-             personality::PersonalitySwitch *personalitySwitch = nullptr);
+             personality::PersonalitySwitch *personalitySwitch = nullptr,
+             DapUart *uart = nullptr);
 
    [[nodiscard]] bool canSubmit() const {
       return requests_ + responses_ < packetCount;
@@ -237,7 +256,8 @@ class Processor final : private TransferAbort {
    [[nodiscard]] art::span<const uint8_t> response() const;
    void popResponse();
 
-   // The host went away: like DAP_Disconnect, and the queue is empty.
+   // The host went away: like DAP_Disconnect, and the queue is empty. The
+   // UART goes back to its default transport.
    void hostGone();
 
    // Like DAP_Disconnect: releases the pins. The queued packets and the
@@ -294,6 +314,8 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool jtagIdcode(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool executeCommands(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool switchPersonality(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool uartCommand(uint8_t id, PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
 
    [[nodiscard]] uint8_t pinsIn() const;
    void applySettings();
@@ -311,6 +333,7 @@ class Processor final : private TransferAbort {
    Platform &platform_;
    DeviceInfo info_;
    personality::PersonalitySwitch *personalitySwitch_;
+   DapUart *uart_;
 
    Port port_{ Port::None };
    // Also the idle cycles and the WAIT retries of JTAG

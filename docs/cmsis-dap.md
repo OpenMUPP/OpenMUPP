@@ -48,7 +48,9 @@ Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Ve
   Else the next scan has an extra TCK edge or a missing TCK edge.
   The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
-- No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
+- No SWO.
+- The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
+- A `VSL_DEBUG_CDC` build has no UART bridge and no `DAP_UART_*` commands.
 - On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
@@ -103,6 +105,8 @@ Use `probe-rs list` and then `probe-rs info`.
 | `DapSwd.h` | The interface of the SWD engine, as the processor needs it. |
 | `BitBangDapSwd.h` | The adapter from `DapSwd` to the SWD bit-bang engine (`swd::BitBangPort`). |
 | `DapJtag.h`, `DapJtag.cpp` | The JTAG-DP: the device chain, the IR and DR scans, and the transfers on a JTAG port. |
+| `DapUart.h` | The interface of the UART, as the `DAP_UART_*` commands need it. |
+| `src/uart/DapUartChannel.h` | The `DapUart` on the UART of the UART bridge, and the owner switch between the serial port and the DAP commands. |
 
 The processor has no CMSIS header and no hardware header.
 It uses these objects:
@@ -112,6 +116,7 @@ It uses these objects:
 - A `protocol::GpioPins` (on target `board::BoardGpio`) for `DAP_SWJ_Pins` and `DAP_ResetTarget`.
 - A `Platform` for the microsecond time, the delay and the LEDs.
 - A `DeviceInfo` with the strings and the capabilities of `DAP_Info`.
+- A `DapUart` (`DapUart.h`, on target `uart::DapUartChannel`) for the `DAP_UART_*` commands. It is optional.
 
 ## Transport
 
@@ -157,6 +162,11 @@ Each packet without a response takes one of the 4 slots.
 | `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
 | `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
 | `0x1D` | `DAP_SWD_Sequence` | Replies an error when SWD is not connected. |
+| `0x1F` | `DAP_UART_Transport` | `0` none, `1` USB COM port (the default), `2` DAP commands. See [UART commands](#uart-commands). |
+| `0x20` | `DAP_UART_Configure` | Data bits, parity, stop bits and baud rate. The response has the error bits and the real baud rate. |
+| `0x21` | `DAP_UART_Transfer` | Sends and receives UART data. Up to 59 bytes to send and 58 bytes to receive in one packet. |
+| `0x22` | `DAP_UART_Control` | Enables, disables and flushes the receiver and the transmitter. |
+| `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
 | `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a dual image: `[0x80][personality u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for another personality code. The firmware then stores the personality and resets. An image with one personality replies `ID_DAP_Invalid`. See [Dual image](usb-device.md#dual-image). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
@@ -165,8 +175,9 @@ An unknown command replies `ID_DAP_Invalid` (`0xFF`).
 The status of a command is `DAP_OK` (`0x00`) or `DAP_ERROR` (`0xFF`), as in the specification.
 Each "replies an error" in the table means the status `0xFF`.
 `DAP_Connect` is the exception: it replies port `0` for a failure.
-The UART commands come with their own work item.
-The capabilities in `DAP_Info` show SWD, JTAG and atomic commands.
+The capabilities in `DAP_Info` show SWD, JTAG, atomic commands, the UART port and the USB COM port.
+`DAP_Info` also gives the size of the UART receive buffer (`0xFB`) and transmit buffer (`0xFC`).
+A processor without a `DapUart` does not show the UART, and the `DAP_UART_*` commands then reply `ID_DAP_Invalid`.
 A processor without a JTAG port does not show JTAG, and `DAP_Connect` to JTAG then replies 0 (failed).
 
 The transfer commands follow the reference implementation of Arm.
@@ -208,6 +219,77 @@ The other commands of the packet run, for example in `DAP_ExecuteCommands`.
 
 When the host goes away, the transport calls `hostGone()`.
 It disconnects, releases the pins, and drops the queued packets and the responses that the transport did not send.
+
+## UART commands
+
+The `DAP_UART_*` commands of CMSIS-DAP v2.1 give access to the UART of the board.
+They use the same UART and the same two ring buffers of 1 KB as the [UART bridge](uart-bridge.md).
+`DAP_Info` thus reports 1023 bytes for each buffer.
+
+`DAP_UART_Transport` selects the owner of the UART:
+
+| Value | Owner | Note |
+|---|---|---|
+| `0` | None | The firmware discards the received data. |
+| `1` | USB COM port | The default. The UART bridge moves the data. |
+| `2` | DAP commands | `DAP_UART_Configure`, `_Control`, `_Status` and `_Transfer` move the data. |
+
+Only the owner gets data.
+While the DAP commands own the UART, the bridge discards the data from the serial port, and it sends no data to the serial port.
+While the serial port owns the UART, the DAP commands send and receive no data.
+A change of the owner stops the transmitter and empties both ring buffers.
+Thus no data of one side goes to the other side.
+The byte in the shift register of the UART still goes out.
+When the serial port gets the UART again, the UART gets the line coding of the serial port again.
+A line coding that the host sets on the serial port in the meantime is kept.
+
+When the DAP commands get the UART, it is not configured, and the receiver and the transmitter are disabled.
+Send these commands first:
+
+1. `DAP_UART_Transport` `2`.
+2. `DAP_UART_Configure` with the frame format and the baud rate.
+3. `DAP_UART_Control` `0x11` to enable the receiver and the transmitter.
+
+`DAP_UART_Configure` uses the control byte of the CMSIS-Driver USART interface:
+
+| Bits | Field | Values |
+|---|---|---|
+| 3..0 | Data bits | `0` or `8`: 8 data bits. `7`: 7 data bits. |
+| 5..4 | Parity | `0` none, `1` even, `2` odd. |
+| 7..6 | Stop bits | `0` 1 stop bit, `1` 2 stop bits, `2` 1.5 stop bits. |
+
+The formats are the formats of the UART bridge (see [UART bridge](uart-bridge.md)).
+7 data bits need a parity bit.
+Other values set the error bit of their field: bit 0 data bits, bit 1 parity, bit 2 stop bits.
+The baud rate has the same limits as in the UART bridge.
+A baud rate out of these limits gives no error bit, but the response baud rate is 0, as in the reference implementation of Arm.
+Else the response has the real baud rate of the UART, for example 230032 for 230400 baud.
+A configuration that fails disables the receiver and the transmitter.
+
+The UART gets a new format when the transmit buffer is empty and the last byte is sent.
+Until then, `DAP_UART_Transfer` takes no data to send and gives no received data, and the receive count of `DAP_UART_Status` is 0.
+At the change, the firmware discards the bytes that the UART received in the old format.
+The errors before the change are not reported.
+
+Other rules:
+
+- `DAP_UART_Control` enables the receiver or the transmitter only after a configuration. Else it replies an error.
+- A disable bit has priority over its enable bit.
+- An enable of the receiver empties the receive buffer.
+- A disable or a flush of the transmitter discards the bytes that are not sent yet.
+- While the receiver is disabled, the firmware discards the received data.
+- The status has these bits: bit 0 receiver enabled, bit 1 data lost, bit 2 framing error, bit 3 parity error, bit 4 transmitter enabled.
+- "Data lost" includes the bytes that the full receive buffer dropped and the overruns of the UART. "Framing error" includes the noise errors.
+- Each error bit shows the errors since the last read of the status, the last enable of the receiver or the last format change. `DAP_UART_Status` and `DAP_UART_Transfer` read the status.
+- The UART receives also while the receiver is disabled. The errors of that time are not reported.
+- `DAP_UART_Transfer` takes the bytes that fit in the transmit buffer, and gives the received bytes that fit in the response.
+  The response gives the status after the transfer.
+- A `DAP_UART_Transfer` with a Tx Count that is larger than its data gives `ID_DAP_Invalid`.
+- While the serial port owns the UART, `DAP_UART_Configure` replies all error bits and baud rate 0. `DAP_UART_Control` replies an error. The status and the counts are 0.
+- When the host goes away (USB reset or unconfigure), the serial port gets the UART again.
+  A host tool that ends without this event must send `DAP_UART_Transport` `1` itself.
+
+`tools/dap_uart_loopback_test.py` tests the commands with a loopback wire from TX to RX (see [UART hardware test](#uart-hardware-test)).
 
 ## SWD engine rules
 
@@ -271,6 +353,10 @@ One device of the chain is a JTAG-DP with a memory AP.
 The tests cover the JTAG commands, IDCODE, DPACC and APACC reads and writes, posted reads, WAIT, value match, block transfers, ABORT and chains with more than one device.
 Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.
 One test sends the abort during the WAIT retries of one SWD transfer, from the serial service of the engine.
+
+`tests/TestDapUart.cpp` runs `uart::DapUartChannel` with the real CDC-ACM function, the UART bridge and a fake UART.
+The tests cover the owner switch, the frame formats, the receiver and transmitter control, the status bits and the buffer limits.
+They also run the `DAP_UART_*` commands and `DAP_Info` through the processor.
 
 ## Hardware test
 
@@ -405,3 +491,44 @@ Findings:
 - The probe re-enumerated once on the USB bus, about 2 minutes after the firmware started (device number 7 to 8). The first OpenOCD tries failed with "No such device" in that time. It then stayed on device number 8 for the rest of the test. The cause is not known. A second run did not repeat it.
 - The probe-rs JTAG test is not done. The issue asks for OpenOCD and pyOCD only.
 
+## UART hardware test
+
+`tools/dap_uart_loopback_test.py` tests the `DAP_UART_*` commands on the dongle.
+pyOCD, OpenOCD and probe-rs do not use these commands, so the script sends them directly on interface 0.
+It needs the pyusb Python package and Python 3.
+
+1. Write a `cmsis-dap` or a `dual` image, and select the CMSIS-DAP personality.
+2. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini and the OtherUse).
+3. Run the script:
+
+```sh
+python3 tools/dap_uart_loopback_test.py
+python3 tools/dap_uart_loopback_test.py --serial-port /dev/ttyACM0
+```
+
+The script gets the UART with `DAP_UART_Transport` `2`.
+For each baud rate and frame format, it sends a byte pattern with `DAP_UART_Transfer` and compares the echo.
+A test fails when a byte is wrong or missing, or when the status shows lost data, a framing error or a parity error.
+At most half of a ring buffer is on the way, so the receive buffer does not overflow.
+At the end, the script gives the UART back to the serial port.
+With `--serial-port`, the script also checks that the serial port gets no data during the tests.
+
+The default run tests the baud rates from 9600 to 2000000 baud, and the formats 8N1, 8E1, 8O1, 7E1, 7O1, 8N2 and 8N1.5.
+Useful options: `--bauds`, `--formats`, `--size`, `--repeat` and `--serial`.
+
+The unit tests of the script need no pyusb and no hardware:
+
+```sh
+python3 -m unittest discover -s tools -p "test_*.py"
+```
+
+Status: the host tests pass. The hardware test passed on 2026-10-15.
+Probe: OtherUse board with the 10k bootloader, `app-10k` image of the `otheruse-cmsis-dap` preset, build `v0.9.0-42-g52e32da`.
+The UART TX pin was connected to the UART RX pin (PA9 to PA10).
+The run used `--serial-port /dev/ttyACM0`.
+All 70 cases passed: the baud rates from 57600 to 2000000 baud, each with the seven frame formats.
+The serial port got no data while the DAP commands owned the UART.
+A 256 KiB flash with OpenOCD (SWD, 2000 kHz) and the serial loopback test on the COM port ran at the same time.
+Both passed.
+The SWD and JTAG checks with OpenOCD, pyOCD and probe-rs still passed on this firmware.
+The `DAP_UART_*` commands and a flash on the same DAP interface did not run at the same time.

@@ -38,10 +38,18 @@
 // DTR and RTS: the bridge stores the control line state of the host
 // (controlLines()). It drives no pin (plan section 9).
 //
+// Owner: the bridge shares the UART and the rings with the DAP_UART_*
+// commands (uart/DapUartChannel.h). Only the owner moves data. While the
+// bridge is not the owner (setActive(false)), poll() discards the data of
+// the host and sends nothing to the host. The bridge still takes a line
+// coding, and setActive(true) applies the line coding to the UART again.
+// The owner switch empties the rings (UartBuffers::flushTx(), flushRx()).
+//
 // Threading: all functions of UartBridge run in the main loop, the context
 // of the CDC-ACM function. Only the interrupt-side functions of UartBuffers
 // run in the UART interrupt.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -73,6 +81,12 @@ struct UartBuffers {
    // Received bytes with a framing, noise or parity error. Only the
    // interrupt writes it.
    volatile uint32_t rxErrors = 0;
+   // rxErrors split in two: the bytes with a parity error, and the bytes
+   // with a framing or noise error only. Each status bit of the DAP_UART_*
+   // commands then compares one counter, so the main loop needs no
+   // consistent read of two counters. Only the interrupt writes them.
+   volatile uint32_t rxParityErrors = 0;
+   volatile uint32_t rxFramingErrors = 0;
 
    // Interrupt side: stores a received byte.
    void received(uint8_t byte) {
@@ -88,13 +102,44 @@ struct UartBuffers {
 
    // Interrupt side: the last received byte had a framing, noise or parity
    // error.
-   void receiveError() {
+   void receiveError(bool parity = false) {
       rxErrors = rxErrors + 1;
+      if(parity) {
+         rxParityErrors = rxParityErrors + 1;
+      } else {
+         rxFramingErrors = rxFramingErrors + 1;
+      }
    }
 
    // Interrupt side: the next byte to send. False when tx is empty.
    bool nextToSend(uint8_t &byte) {
       return tx.try_pop(byte);
+   }
+
+   // Main loop side: discards the bytes of tx. Only while the interrupt
+   // does not send (TX interrupt off, Uart::stopTx()): the main loop is
+   // then the only user of tx.
+   void flushTx() {
+      drain(tx);
+   }
+
+   // Main loop side: discards the bytes of rx. The main loop is the
+   // consumer of rx, so the interrupt can receive at the same time.
+   void flushRx() {
+      drain(rx);
+   }
+
+   private:
+   static void drain(RingBuffer<uint8_t, Size> &ring) {
+      // The data can wrap around the end of the ring: two rounds.
+      for(;;) {
+         std::size_t length = 0;
+         static_cast<void>(ring.read_ptr(length));
+         if(length == 0) {
+            return;
+         }
+         ring.commit_read(length);
+      }
    }
 };
 
@@ -130,11 +175,30 @@ class UartBridge final : public art::usb::CdcAcmEvents {
    // Moves the data in both directions and applies a new line coding. Call
    // it in each main loop iteration, after UsbStack::poll().
    void poll() {
+      if(!active_) {
+         discardFromHost();
+         return;
+      }
       applyPendingFormat();
-      if(!pending_) {
+      if(!pending_ && !reapply_) {
          fromHost();
       }
       toHost();
+   }
+
+   // Makes the bridge the owner of the UART, or not (see the top of this
+   // file). The caller empties the rings and stops the TX interrupt at the
+   // switch. When the bridge becomes the owner, it sets the UART to its
+   // format again once the TX path is empty.
+   void setActive(bool active) {
+      if(active && !active_) {
+         reapply_ = true;
+      }
+      active_ = active;
+   }
+
+   [[nodiscard]] bool isActive() const {
+      return active_;
    }
 
    // The format of the UART now.
@@ -187,12 +251,23 @@ class UartBridge final : public art::usb::CdcAcmEvents {
 
    private:
    void applyPendingFormat() {
-      if(!pending_ || !buffers_.tx.empty() || !uart_.isTxIdle()) {
+      if((!pending_ && !reapply_) || !buffers_.tx.empty() || !uart_.isTxIdle()) {
          return;
       }
-      format_ = *pending_;
-      pending_.reset();
+      if(pending_) {
+         format_ = *pending_;
+         pending_.reset();
+      }
+      reapply_ = false;
       uart_.setFormat(format_);
+   }
+
+   // The CDC RX queue while another side owns the UART: the data is lost,
+   // and the OUT endpoint does not hold the host.
+   void discardFromHost() {
+      std::array<uint8_t, 64> scrap{};
+      while(port_.read(art::span<uint8_t>(scrap.data(), scrap.size())) != 0) {
+      }
    }
 
    // CDC RX queue to the TX ring, as many bytes as the ring takes.
@@ -240,6 +315,9 @@ class UartBridge final : public art::usb::CdcAcmEvents {
    FrameFormat format_ = defaultFormat;
    std::optional<FrameFormat> pending_;
    uint16_t controlLines_ = 0;
+   bool active_ = true;
+   // The UART must get format_ again: another owner had it.
+   bool reapply_ = false;
 };
 
 } // namespace uart

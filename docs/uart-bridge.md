@@ -10,6 +10,21 @@ The UART has no flow control lines.
   Thus the serial port does not lose data when the main loop is busy for a long time.
   A ring buffer holds about 89 ms of data at 115200 baud.
 - `src/uart/SerialBridge.cpp` connects the two parts. The main loop runs the bridge after the USB device.
+- `src/uart/DapUartChannel.h` gives the UART to the `DAP_UART_*` commands of the CMSIS-DAP personality.
+
+## Owner of the UART
+
+In the CMSIS-DAP personality, the `DAP_UART_*` commands can take the UART from the serial port (`DAP_UART_Transport`).
+See [UART commands](cmsis-dap.md#uart-commands).
+Only one side has the UART at a time. The serial port has it after the start.
+While the DAP commands have the UART, the bridge discards the data from the host, and it sends no data to the host.
+The OUT endpoint does not hold the host in this time.
+The bridge still takes a line coding (SET_LINE_CODING).
+When the serial port gets the UART again, the bridge sets its line coding on the UART again.
+A change of the owner empties both ring buffers.
+A USB reset gives the UART back to the serial port.
+
+## Line coding
 
 The bridge uses the line coding that the host sets (SET_LINE_CODING).
 `src/uart/FrameFormat.h` maps it to the UART:
@@ -41,6 +56,7 @@ Flow control and data loss:
   To prevent overruns, the UART interrupt has a higher priority than the USB interrupt (`src/Hardware.h`).
   At 2 Mbaud, the interrupt must read each byte within 5 µs.
 - The bridge counts the received bytes with a framing, noise or parity error (`UartBridge::rxErrors()`).
+  The ring buffers also count the parity errors (`UartBuffers::rxParityErrors`) and the other errors (`UartBuffers::rxFramingErrors`) separately, for the status of the `DAP_UART_*` commands.
   These bytes still go to the host. Many errors usually show a wrong baud rate or parity setting.
 - When the host has not configured the device, the bridge drops the received UART data.
 

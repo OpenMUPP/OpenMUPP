@@ -7,16 +7,12 @@
 // (protocol/Background.h).
 
 #include "jtag/JtagBitBang.h"
-#include "uart/UartBridge.h"
-#include "usb/UsbDescriptors.h"
-#include "usb/VersaloonFunction.h"
 
 #include "MockBackground.h"
 #include "MockJtagPins.h"
+#include "UartBench.h"
 
-#include <FakeDeviceController.h>
 #include <doctest/doctest.h>
-#include <usb/Device.h>
 
 #include <array>
 #include <cstdint>
@@ -27,203 +23,15 @@ namespace {
 
 using art::usb::CdcAcmFunctionBase;
 using art::usb::LineCoding;
-using art::usb::test::FakeDeviceController;
-using art::usb::test::setupPacket;
 using uart::DataBits;
 using uart::FrameFormat;
 using uart::Parity;
 using uart::StopBits;
-
-constexpr uint8_t standardDeviceOut = 0x00;
-constexpr uint8_t classInterfaceOut = 0x21;
-constexpr uint8_t setAddress = 5;
-constexpr uint8_t setConfiguration = 9;
-
-// Rings of 63 bytes: small, so the tests fill them and wrap around.
-constexpr std::size_t ringSize = 64;
-constexpr std::size_t ringCapacity = ringSize - 1;
-constexpr std::size_t packetSize = CdcAcmFunctionBase::kDataPacketSize;
-
-// The UART: setFormat() and startTx() as UartPort does them. sendAll() is
-// the TX interrupt.
-struct FakeUart {
-   uint32_t clock = 72'000'000;
-   std::vector<FrameFormat> formats;
-   bool txInterruptOn = false;
-   // The last byte is still in the shift register.
-   bool shifting = false;
-   // The bytes on the TX pin, each with the format it went out in.
-   std::vector<std::pair<uint8_t, FrameFormat>> sent;
-
-   [[nodiscard]] uint32_t clockFrequency() const {
-      return clock;
-   }
-
-   void setFormat(const FrameFormat &format) {
-      CHECK(isTxIdle());
-      formats.push_back(format);
-   }
-
-   [[nodiscard]] bool isTxIdle() const {
-      return !txInterruptOn && !shifting;
-   }
-
-   void startTx() {
-      txInterruptOn = true;
-   }
-
-   // Runs the TX interrupt until the ring is empty. The last byte stays in
-   // the shift register.
-   void sendAll(uart::UartBuffers<ringSize> &buffers) {
-      while(txInterruptOn) {
-         uint8_t byte = 0;
-         if(buffers.nextToSend(byte)) {
-            sent.emplace_back(byte, formats.back());
-            shifting = true;
-         } else {
-            txInterruptOn = false;
-         }
-      }
-   }
-
-   [[nodiscard]] std::vector<uint8_t> sentBytes() const {
-      std::vector<uint8_t> bytes;
-      for(const auto &entry : sent) {
-         bytes.push_back(entry.first);
-      }
-      return bytes;
-   }
-};
-
-std::vector<uint8_t> pattern(std::size_t size, uint8_t first = 0) {
-   std::vector<uint8_t> data(size);
-   for(std::size_t i = 0; i < size; ++i) {
-      data[i] = static_cast<uint8_t>(first + i);
-   }
-   return data;
-}
-
-class Bench {
-   public:
-   Bench()
-      : device_(controller_, descriptors_)
-      , serialPort_(usb::cdcControlInterface, endpoints)
-      , bridge_(serialPort_, uart, buffers) {
-      REQUIRE(device_.addFunction(versaloon_));
-      REQUIRE(device_.addFunction(serialPort_));
-      bridge_.start();
-      device_.start();
-   }
-
-   // Bus reset, SET_ADDRESS 5 and SET_CONFIGURATION 1.
-   void enumerate() {
-      controller_.busReset();
-      request(standardDeviceOut, setAddress, 5, 0);
-      request(standardDeviceOut, setConfiguration, 1, 0);
-      REQUIRE(serialPort_.isConfigured());
-   }
-
-   // Sends one OUT packet to the serial port. False when the endpoint NAKs.
-   bool hostSends(const std::vector<uint8_t> &packet) {
-      return controller_.sendOut(usb::cdcDataOutEndpoint, art::span<const uint8_t>(packet.data(), packet.size()));
-   }
-
-   // Sends data in packets until the endpoint NAKs. Returns the bytes sent.
-   std::size_t hostSendsUntilNak(const std::vector<uint8_t> &data, std::size_t from) {
-      std::size_t at = from;
-      while(at < data.size()) {
-         const std::size_t length = std::min(packetSize, data.size() - at);
-         if(!hostSends(std::vector<uint8_t>(data.begin() + static_cast<std::ptrdiff_t>(at),
-                                            data.begin() + static_cast<std::ptrdiff_t>(at + length)))) {
-            break;
-         }
-         at += length;
-      }
-      return at - from;
-   }
-
-   // Reads all IN packets of the serial port.
-   std::vector<uint8_t> hostReceives() {
-      std::vector<uint8_t> data;
-      while(auto packet = controller_.takeIn(usb::cdcDataInEndpoint)) {
-         data.insert(data.end(), packet->begin(), packet->end());
-      }
-      return data;
-   }
-
-   // SET_LINE_CODING. Returns false when the device stalls it.
-   bool setLineCoding(uint32_t baud, uint8_t dataBits, uint8_t parity, uint8_t stopBits) {
-      const std::array<uint8_t, LineCoding::kSize> data{
-         static_cast<uint8_t>(baud),
-         static_cast<uint8_t>(baud >> 8),
-         static_cast<uint8_t>(baud >> 16),
-         static_cast<uint8_t>(baud >> 24),
-         stopBits,
-         parity,
-         dataBits,
-      };
-      bool ok = false;
-      const auto result = controller_.controlOut(setupPacket(classInterfaceOut, CdcAcmFunctionBase::kSetLineCoding, 0,
-                                                             usb::cdcControlInterface, LineCoding::kSize),
-                                                 art::span<const uint8_t>(data.data(), data.size()), &ok);
-      CHECK(ok);
-      return !result.stalled;
-   }
-
-   void setControlLineState(uint16_t state) {
-      request(classInterfaceOut, CdcAcmFunctionBase::kSetControlLineState, state, usb::cdcControlInterface);
-   }
-
-   FakeDeviceController &controller() {
-      return controller_;
-   }
-
-   CdcAcmFunctionBase &serialPort() {
-      return serialPort_;
-   }
-
-   uart::UartBridge<FakeUart, ringSize> &bridge() {
-      return bridge_;
-   }
-
-   FakeUart uart;
-   uart::UartBuffers<ringSize> buffers;
-
-   private:
-   static constexpr art::usb::CdcAcmEndpoints endpoints{
-      .notification = usb::cdcNotificationEndpoint,
-      .notificationMaxPacketSize = usb::cdcNotificationPacketSize,
-      .dataOut = usb::cdcDataOutEndpoint,
-      .dataIn = usb::cdcDataInEndpoint,
-   };
-
-   void request(uint8_t requestType, uint8_t request, uint16_t value, uint16_t index) {
-      bool ok = false;
-      const auto result = controller_.controlOut(setupPacket(requestType, request, value, index, 0), {}, &ok);
-      CHECK(ok);
-      CHECK_FALSE(result.stalled);
-   }
-
-   FakeDeviceController controller_;
-   usb::SerialNumber serial_;
-   const std::array<art::span<const uint8_t>, usb::stringCount> strings_{
-      usb::desc::asSpan(usb::languageDescriptor),   usb::desc::asSpan(usb::manufacturerDescriptor),
-      usb::desc::asSpan(usb::productDescriptor),    serial_.bytes(),
-      usb::desc::asSpan(usb::serialPortDescriptor),
-   };
-   const art::usb::Descriptors descriptors_{
-      .device = usb::desc::asSpan(usb::deviceDescriptor),
-      .configuration = usb::desc::asSpan(usb::configurationDescriptor),
-      .strings = art::span<const art::span<const uint8_t>>(strings_.data(), strings_.size()),
-      // No BOS: the Versaloon personality is a USB 2.00 device.
-      .bos = {},
-   };
-   art::usb::Device device_;
-   usb::VersaloonFunction versaloon_{ protocol::DeviceInfo{ .version = "v0.0.0", .board = "test", .hardwareId = 0 } };
-   // The queue sizes of the firmware (usb/UsbStack.h)
-   art::usb::CdcAcmFunction<256, 256> serialPort_;
-   uart::UartBridge<FakeUart, ringSize> bridge_;
-};
+using vsltest::cdcPacketSize;
+using vsltest::pattern;
+using vsltest::ringCapacity;
+using vsltest::ringSize;
+using Bench = vsltest::UartBench;
 
 constexpr FrameFormat format115200{ 115200, DataBits::Eight, Parity::None, StopBits::One };
 constexpr FrameFormat format9600{ 9600, DataBits::Seven, Parity::Even, StopBits::Two };
@@ -263,9 +71,9 @@ TEST_CASE("UartBridge holds the OUT endpoint while the TX ring is full and loses
    bench.bridge().poll();
    accepted += bench.hostSendsUntilNak(data, accepted);
    CHECK(bench.buffers.tx.size() == ringCapacity);
-   CHECK(bench.serialPort().readAvailable() > 256 - packetSize);
+   CHECK(bench.serialPort().readAvailable() > 256 - cdcPacketSize);
    CHECK(accepted == bench.buffers.tx.size() + bench.serialPort().readAvailable());
-   CHECK_FALSE(bench.hostSends(pattern(packetSize)));
+   CHECK_FALSE(bench.hostSends(pattern(cdcPacketSize)));
 
    // The UART sends; the host sends the rest as the endpoint accepts it.
    while(accepted < data.size()) {
@@ -482,6 +290,107 @@ TEST_CASE("UartBridge stores the DTR and RTS state of the host") {
    // A bus reset clears the state.
    bench.controller().busReset();
    CHECK(bench.bridge().controlLines() == 0);
+}
+
+TEST_CASE("UartBuffers count the parity errors and the other receive errors separately") {
+   uart::UartBuffers<ringSize> buffers;
+   buffers.receiveError();
+   buffers.receiveError(true);
+   buffers.receiveError(false);
+   CHECK(buffers.rxErrors == 3);
+   CHECK(buffers.rxParityErrors == 1);
+   CHECK(buffers.rxFramingErrors == 2);
+}
+
+TEST_CASE("UartBuffers flushTx and flushRx empty the rings, also when the data wraps") {
+   uart::UartBuffers<ringSize> buffers;
+   for(int round = 0; round < 3; ++round) {
+      for(std::size_t i = 0; i < ringCapacity; ++i) {
+         buffers.received(static_cast<uint8_t>(i));
+         CHECK(buffers.tx.try_push(static_cast<uint8_t>(i)));
+      }
+      buffers.flushRx();
+      buffers.flushTx();
+      CHECK(buffers.rx.empty());
+      CHECK(buffers.tx.empty());
+      // Move the start of the data, so the next round wraps.
+      buffers.received(0);
+      CHECK(buffers.tx.try_push(0));
+      buffers.flushRx();
+      buffers.flushTx();
+   }
+   CHECK(buffers.rxDropped == 0);
+}
+
+TEST_CASE("UartBridge moves no data while it is not the owner") {
+   Bench bench;
+   bench.enumerate();
+   bench.bridge().setActive(false);
+   CHECK_FALSE(bench.bridge().isActive());
+
+   // The data of the host is lost, and the OUT endpoint does not hold the
+   // host.
+   const auto data = pattern(3 * cdcPacketSize);
+   CHECK(bench.hostSendsUntilNak(data, 0) == data.size());
+   bench.bridge().poll();
+   CHECK(bench.hostSendsUntilNak(data, 0) == data.size());
+   bench.bridge().poll();
+   CHECK(bench.buffers.tx.empty());
+   CHECK_FALSE(bench.uart.txInterruptOn);
+   CHECK(bench.serialPort().readAvailable() == 0);
+
+   // The received bytes stay in the ring for the owner.
+   bench.buffers.received(0x41);
+   bench.bridge().poll();
+   CHECK(bench.hostReceives().empty());
+   CHECK(bench.buffers.rx.size() == 1);
+}
+
+TEST_CASE("UartBridge sets its format again when it gets the UART back") {
+   Bench bench;
+   bench.enumerate();
+   REQUIRE(bench.setLineCoding(9600, 7, 2, 2));
+   bench.bridge().poll();
+   REQUIRE(bench.uart.formats.back() == format9600);
+
+   bench.bridge().setActive(false);
+   // Another owner changes the format.
+   bench.uart.formats.push_back(format115200);
+   bench.uart.shifting = true;
+   bench.bridge().setActive(true);
+   CHECK(bench.bridge().isActive());
+
+   // No data before the format is back: the last byte of the other owner
+   // still goes out.
+   const auto data = pattern(10);
+   REQUIRE(bench.hostSends(data));
+   bench.bridge().poll();
+   CHECK(bench.uart.formats.back() == format115200);
+   CHECK(bench.buffers.tx.empty());
+
+   bench.uart.shifting = false;
+   bench.bridge().poll();
+   CHECK(bench.uart.formats.back() == format9600);
+   bench.bridge().poll();
+   bench.uart.sendAll(bench.buffers);
+   CHECK(bench.uart.sentBytes() == data);
+   CHECK(bench.uart.sent.back().second == format9600);
+}
+
+TEST_CASE("UartBridge takes a line coding while it is not the owner, and applies it when it gets the UART back") {
+   Bench bench;
+   bench.enumerate();
+   bench.bridge().setActive(false);
+   REQUIRE(bench.setLineCoding(9600, 7, 2, 2));
+   bench.bridge().poll();
+   CHECK(bench.uart.formats.back() == format115200);
+   CHECK(bench.bridge().hasPendingFormat());
+
+   bench.bridge().setActive(true);
+   bench.bridge().poll();
+   CHECK(bench.uart.formats.back() == format9600);
+   CHECK(bench.bridge().format() == format9600);
+   CHECK_FALSE(bench.bridge().hasPendingFormat());
 }
 
 namespace {
