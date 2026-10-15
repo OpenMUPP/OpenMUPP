@@ -156,8 +156,10 @@ inline constexpr uint32_t oneWireShortLowNs = 250;
 inline constexpr uint32_t oneWireLongLowNs = 860;
 inline constexpr uint32_t oneWireHighNs = 370;
 inline constexpr uint32_t oneWireTurnaroundHighNs = 750;
-// Between the longest 1 (374 ns) and the shortest 0 (824 ns) of the target
-inline constexpr uint32_t oneWireSampleNs = 600;
+// The sample compare. The DMA reads the line 80 to 210 ns later (measured,
+// board/BoardRvSwd.cpp): between the longest 1 (374 ns) and the shortest
+// 0 (824 ns) of the target.
+inline constexpr uint32_t oneWireSampleNs = 450;
 // The longest 0 of the target (868 ns) and a high level. The WCH-LinkE
 // waits for the line instead; the CH32V003 accepted highs up to 1.46 us.
 inline constexpr uint32_t oneWireReadBitNs = 1'300;

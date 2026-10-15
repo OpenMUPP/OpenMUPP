@@ -28,10 +28,18 @@ void configureOutput(Pin pin, bool level) {
 // RM0008 15.4.19); the preload registers then take them at the next
 // update event. No code runs between two bits.
 //
-// A read: after the bit before the read bits, the code switches SWDIO to
-// open drain (a window of about 1 us) and starts the sample DMA. At
-// oneWireSampleNs in each read bit, the sample channel copies the input
-// port (IDR) to RAM.
+// DMA budget: one transfer took 80 to 210 ns on a dongle. The burst must
+// end within the shortest bit (620 ns). A burst of 5 words did not, and a
+// sample transfer in the write bits delayed the burst past the update
+// event (a 1 bit then kept the low time of the bit before). Thus only the
+// read bits have sample transfers.
+//
+// A read: in the turnaround after bit readFrom-1, the code switches SWDIO
+// to open drain and enables the sample request (a window of about 1 us,
+// timed by the cycle counter: the timers run at the core clock). Then the
+// sample channel copies the input port (IDR) to RAM in each read bit, at
+// oneWireSampleNs plus the DMA time. The code reads no timer or DMA
+// register during the frame.
 
 static_assert(oneWireTimerOf(current.debug.tmsOut), "the SWDIO output pin has no one-wire timer");
 constexpr OneWireTimer oneWire = *oneWireTimerOf(current.debug.tmsOut);
@@ -50,10 +58,12 @@ constexpr uint8_t releasedInput = hw::gpio_f1::pinConfig(GpioPin::Mode::Input, G
 // the CCR of the output channel. Register index of ARR: 11.
 constexpr uint32_t arrIndex = 11;
 constexpr uint32_t burstWords = 2 + oneWire.channel;
+// The read bits, and spare words: the request goes off close to the
+// compare of the end period, which can still give a transfer.
+constexpr uint32_t sampleWords = 32 + 2;
 
-// Bits 1 to count-1 and the end entry. Bit 0 goes to the registers.
-std::array<uint16_t, rvswd::oneWireFrameBits * burstWords> table{};
-std::array<uint16_t, rvswd::oneWireFrameBits> sampleBuffer{};
+// Bits 1 to count-1 and two end entries. Bit 0 goes to the registers.
+std::array<uint16_t, (rvswd::oneWireFrameBits + 1) * burstWords> table{};
 
 struct Ticks {
    uint16_t shortLow;
@@ -66,6 +76,9 @@ struct Ticks {
 };
 Ticks ticks{};
 
+// Words: the GPIO registers allow only word access (RM0008 9.2).
+std::array<uint32_t, sampleWords> sampleBuffer{};
+
 TIM_TypeDef &timer() {
    return oneWire.timer == 1 ? *TIM1 : *TIM3;
 }
@@ -76,6 +89,9 @@ Dma::Channel updateDma() {
 Dma::Channel sampleDma() {
    return { DMA1, oneWire.sampleDma };
 }
+
+constexpr uint32_t sampleRequest = TIM_DIER_CC1DE << (oneWire.sampleChannel - 1);
+constexpr uint32_t sampleFlag = TIM_SR_CC1IF << (oneWire.sampleChannel - 1);
 
 volatile uint32_t &ccr(TIM_TypeDef &tim, uint32_t channel) {
    return (&tim.CCR1)[channel - 1];
@@ -101,11 +117,21 @@ void fillBit(uint16_t *entry, uint64_t bits, uint32_t count, uint32_t readFrom, 
    fillEntry(entry, low + (i + 1 == readFrom ? ticks.turnaroundHigh : ticks.high), low);
 }
 
+void resetTimer() {
+   if(oneWire.timer == 1) {
+      RCC->APB2RSTR |= RCC_APB2RSTR_TIM1RST;
+      RCC->APB2RSTR &= ~RCC_APB2RSTR_TIM1RST;
+   } else {
+      RCC->APB1RSTR |= RCC_APB1RSTR_TIM3RST;
+      RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM3RST;
+   }
+}
+
 void stop(TIM_TypeDef &tim) {
    tim.CR1 &= ~TIM_CR1_CEN;
+   tim.DIER &= ~sampleRequest;
    updateDma().disable();
    sampleDma().disable();
-   tim.DIER &= ~(TIM_DIER_CC1DE << (oneWire.sampleChannel - 1));
 }
 
 // Timer ticks of a time. Both timers run at HCLK: TIM1 on APB2 (HCLK),
@@ -155,8 +181,8 @@ void initOneWire() {
    update.setPriority(Dma::ChannelPriority::very_high);
    const Dma::Channel samples = sampleDma();
    samples.disable();
-   samples.configure(const_cast<uint32_t *>(&OneWireIn::port()->IDR), sampleBuffer.data(), Dma::DataSize::Size16Bits,
-                     Dma::DataSize::Size16Bits, Dma::Direction::PeripheralToMemory, true, false);
+   samples.configure(const_cast<uint32_t *>(&OneWireIn::port()->IDR), sampleBuffer.data(), Dma::DataSize::Size32Bits,
+                     Dma::DataSize::Size32Bits, Dma::Direction::PeripheralToMemory, true, false);
    samples.setPriority(Dma::ChannelPriority::high);
 }
 
@@ -193,19 +219,39 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    for(uint32_t i = 1; i < count; ++i) {
       fillBit(&table[entries++ * burstWords], bits, count, readFrom, i);
    }
-   // The end: the line high (or released) after the last bit
-   fillEntry(&table[entries++ * burstWords], ticks.high, 0);
+   // The end: the line high (or released) after the last bit. A DMA
+   // request without a transfer stays pending, and the next frame would
+   // take it as soon as it enables the channel (and lose bit 0). Thus the
+   // second end entry serves the update event at the end of the last bit,
+   // and the end period (0.9 ms) is long enough to stop the counter
+   // before the next update event.
+   fillEntry(&table[entries++ * burstWords], 0x1'0000, 0);
+   fillEntry(&table[entries++ * burstWords], 0x1'0000, 0);
+
+   // The times from the counter start, in ticks (= core cycles)
+   auto period = [&](uint32_t i) -> uint32_t { return 1u + (i == 0 ? first[0] : table[(i - 1) * burstWords]); };
+   const bool reads = readFrom < count;
+   uint32_t switchAt = ticks.lead;
+   uint32_t endAt = ticks.lead;
+   for(uint32_t i = 0; i < count; ++i) {
+      if(i + 1 == readFrom) {
+         // After the rising edge of the bit before the read bits
+         switchAt = endAt + (i == 0 ? first[1 + oneWire.channel] : table[(i - 1) * burstWords + 1 + oneWire.channel]) + ticks.high / 2u;
+      }
+      endAt += period(i);
+   }
+   // In the end period, before its sample compare
+   endAt += ticks.sample / 2u;
 
    const Dma::Channel update = updateDma();
    update.setMemoryAddress(reinterpret_cast<uint32_t>(table.data()));
    update.setTransferCount(static_cast<uint16_t>(entries * burstWords));
    update.clearGlobalInterruptFlag();
    update.enable();
-   const bool reads = readFrom < count;
    const Dma::Channel sample = sampleDma();
    if(reads) {
       sample.setMemoryAddress(reinterpret_cast<uint32_t>(sampleBuffer.data()));
-      sample.setTransferCount(static_cast<uint16_t>(count - readFrom));
+      sample.setTransferCount(sampleWords);
       sample.clearGlobalInterruptFlag();
       sample.enable();
    }
@@ -213,36 +259,28 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    OneWireOut::setConfig<afPushPull>();
    const uint32_t start = cycleCount();
    tim.CR1 |= TIM_CR1_CEN;
-
-   // A frame takes at most about 60 us.
-   const uint32_t timeout = rvswd::cyclesOfNs(SystemCoreClock, 200'000);
-   auto waitFor = [&](auto done) {
-      while(!done()) {
-         if(cycleCount() - start > timeout) {
-            return false;
-         }
-      }
-      return true;
-   };
-   const uint32_t outFlag = TIM_SR_CC1IF << (oneWire.channel - 1);
-   bool ok = true;
    if(reads) {
-      // The update DMA writes bit readFrom at the start of bit readFrom-1.
-      // In a read, that bit is the write bit 0: its long low (860 ns) ends
-      // after the burst, so the next compare flag is its rising edge.
-      const uint32_t left = (entries - readFrom) * burstWords;
-      ok = waitFor([&] { return update.getDataCount() <= left; });
-      tim.SR = ~outFlag;
-      ok = ok && waitFor([&] { return (tim.SR & outFlag) != 0; });
+      while(cycleCount() - start < switchAt) {
+      }
       OneWireOut::setConfig<afOpenDrain>();
-      // The sample of bit readFrom-1 (at 600 ns) is before this edge.
-      tim.DIER |= TIM_DIER_CC1DE << (oneWire.sampleChannel - 1);
+      // The compare of bit readFrom-1 is before this point.
+      tim.SR = ~sampleFlag;
+      tim.DIER |= sampleRequest;
    }
-   // The end entry goes to the preload registers at the start of the last
-   // bit; the next update event is the end of the last bit.
-   ok = ok && waitFor([&] { return update.isTransferCompleteInterruptFlagSet(); });
-   tim.SR = ~TIM_SR_UIF;
-   ok = ok && waitFor([&] { return (tim.SR & TIM_SR_UIF) != 0; });
+   while(cycleCount() - start < endAt) {
+   }
+   // No request is on before bit readFrom, so the first words are the read
+   // bits. A transfer after them (the end period) does not matter.
+   tim.DIER &= ~sampleRequest;
+   // The burst of the update event at the end of the last bit ends some
+   // DMA times later. No bit is left, so polling cannot delay one.
+   bool done = false;
+   const uint32_t end = cycleCount();
+   while(!(done = update.isTransferCompleteInterruptFlagSet()) && cycleCount() - end < ticks.readBit) {
+   }
+   tim.CR1 &= ~TIM_CR1_CEN;
+   const uint32_t taken = sampleWords - sample.getDataCount();
+   const bool ok = done && (!reads || taken >= count - readFrom);
    if(reads || !ok) {
       OneWireOut::set();
       OneWireOut::setConfig<releasedInput>();
@@ -252,6 +290,9 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    }
    stop(tim);
    if(!ok) {
+      // A DMA request can be pending in the timer: a reset clears it.
+      resetTimer();
+      initOneWire();
       return false;
    }
    samples = 0;
