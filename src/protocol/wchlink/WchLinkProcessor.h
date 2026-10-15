@@ -272,6 +272,15 @@ class Processor {
    // Writes the stored data packet to the target. Returns false when none
    // is stored. Call it in the main loop, before runNext().
    bool runData();
+   // True once after a connect, a quit or a read range found a packet of
+   // dataPacket() on its way: the host will not read it (minichlink reads
+   // no block acknowledge). The transport takes it back, then calls
+   // dataSent().
+   [[nodiscard]] bool takeStaleData() {
+      const bool stale = staleData_;
+      staleData_ = false;
+      return stale;
+   }
    // The packet of dataPacket() went to the host, or the transport dropped
    // it.
    void dataSent() {
@@ -346,6 +355,8 @@ class Processor {
    bool dataFailed_{ false };
    // A packet of dataPacket() waits for dataSent().
    bool dataInFlight_{ false };
+   // That packet is stale (takeStaleData()).
+   bool staleData_{ false };
    std::array<uint8_t, packetSize> data_{};
 
    // The program sequence
