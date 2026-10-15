@@ -9,8 +9,12 @@
 // With VSL_DEBUG_CDC the CDC port carries the debug log (plan section 9.2,
 // debug/DebugLog.h). Then the firmware has no bridge and no DAP_UART_*
 // commands: startBridge() and pollBridge() are empty, dapUart() is
-// nullptr, and the UART stays off. The same holds for the WCH-Link
-// personality (VSL_WITH_WCH_LINK): it has no serial port.
+// nullptr, and the UART stays off. The same holds for an image with only
+// the WCH-Link personality: it has no serial port (usb/SerialPortConfig.h).
+// In an image with more personalities, call startBridge() and pollBridge()
+// only when UsbStack::hasSerialPort() is true.
+
+#include "usb/SerialPortConfig.h"
 
 namespace usb {
 class UsbStack;
@@ -22,7 +26,7 @@ class DapUart;
 
 namespace uart {
 
-#if !defined(VSL_DEBUG_CDC) && !defined(VSL_WITH_WCH_LINK)
+#if !defined(VSL_DEBUG_CDC) && defined(VSL_USB_SERIAL_PORT)
 // Starts the UART at 115200 8N1 and connects the bridge to the serial port
 // of usbStack. Call it once, before UsbStack::start().
 void startBridge(usb::UsbStack &usbStack);
