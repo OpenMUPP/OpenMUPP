@@ -613,6 +613,10 @@ The `ack` byte has the acknowledge in bits 0-2 (OK 1, WAIT 2, FAULT 4), and thes
 The reply data is the read data.
 For a write, and for a read that is not OK, the reply data is the request data.
 The status is `OK` only when the `ack` byte is 1 (OK without a parity error). Else the status is `FAILED`.
+A DP `TARGETSEL` write (multidrop SWD, DP address `0xC`) is the exception: its status is always `OK`.
+No target drives the acknowledge of `TARGETSEL`, so its `ack` byte is usually `0x27`.
+The OpenOCD `bitbang` driver also ignores this acknowledge (`swd_cmd_returns_ack()`).
+The `ack` byte keeps the value from SWDIO.
 OpenOCD does not read the `ack` byte, so it sees a failed transfer only through the status.
 The original firmware replied `OK` in all cases.
 

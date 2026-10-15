@@ -41,6 +41,11 @@
 // FAILED. OpenOCD does not read the ack byte, so the status is how it sees
 // a failed transfer. (The original firmware replied OK in all cases.)
 //
+// A DP TARGETSEL write (multidrop SWD, DP address 0xC) is always OK. No
+// target drives its acknowledge, so the ack byte is usually 0x27. The
+// OpenOCD bitbang driver also ignores this acknowledge
+// (swd_cmd_returns_ack()). The ack byte stays as read on the wire.
+//
 // errorCount() counts the IN_OUT transfers with the status FAILED, for the
 // error LED (ErrorLed.h). The raw JTAG block has no acknowledge, so the
 // Versaloon personality cannot see the errors of JTAG.
@@ -92,9 +97,12 @@ constexpr uint8_t encodeRequest(uint8_t request) {
    return static_cast<uint8_t>(0x81 | fields | (parity(fields) ? 0x20 : 0));
 }
 
-// The status of a transfer with this ack byte
-constexpr Status statusOf(uint8_t ack) {
-   return ack == ackOk ? Status::Ok : Status::Failed;
+// The encoded DP TARGETSEL write: APnDP 0, RnW 0, A2 1, A3 1
+inline constexpr uint8_t targetSelRequest = 0x99;
+
+// The status of a transfer with this encoded request and ack byte
+constexpr Status statusOf(uint8_t request, uint8_t ack) {
+   return ack == ackOk || request == targetSelRequest ? Status::Ok : Status::Failed;
 }
 
 // The bytes of a sequence of bitCount bits

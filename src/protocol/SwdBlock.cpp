@@ -71,10 +71,11 @@ void SwdBlock::runSubCommand(const SubCommand &command, Reply &reply) {
          return;
       }
       uint32_t data = getU32(payload, 1);
-      const uint8_t ack = port_.transfer(swd::encodeRequest(payload[0]), data);
+      const uint8_t request = swd::encodeRequest(payload[0]);
+      const uint8_t ack = port_.transfer(request, data);
       slot->data()[0] = ack;
       putU32(slot->data(), 1, data);
-      const Status status = swd::statusOf(ack);
+      const Status status = swd::statusOf(request, ack);
       if(status != Status::Ok) {
          ++errorCount_;
       }
