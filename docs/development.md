@@ -1,6 +1,6 @@
 # Development
 
-This document is for developers of the firmware: build outputs, CMake presets, tests, the flash speed benchmark, code format, version, CI and branches.
+This document is for developers of the firmware: build outputs, CMake options, CMake presets, tests, the flash speed benchmark, code format, version, CI and branches.
 
 ## Build outputs
 
@@ -31,6 +31,23 @@ The target is `versaloon-bootloader`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
 There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
+
+## CMake options
+
+The README shows the presets for the common builds.
+These options select the board, the personality and the debug features:
+
+| Option | Default | Description |
+|---|---|---|
+| `BOARD` | `mini` | Board to build for (see [boards.md](boards.md)). |
+| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse. |
+| `VSL_PROTOCOL` | `versaloon` | USB personality of the image: `versaloon`, `cmsis-dap`, `dual` or `wch-link`. A `cmsis-dap` image has the CMSIS-DAP v2 interface, `0403:9b3c`, instead of the Versaloon interface. A `dual` image has both personalities, and one is active after each start (see [docs/usb-device.md](usb-device.md#dual-image)). A `wch-link` image has the WCH-Link interface, `1209:0001`, and no serial port (see [docs/wch-link.md](wch-link.md)). The serial port and the UART bridge are in all other images. See [docs/cmsis-dap.md](cmsis-dap.md). |
+| `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only for `VSL_PROTOCOL=wch-link`: use the USB ID `1a86:8010` of WCH, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [docs/wch-link.md](wch-link.md#usb-id)). |
+| `VSL_DEFAULT_PROTOCOL` | `versaloon` | Only for `VSL_PROTOCOL=dual`: the personality when no personality is stored. `versaloon` or `cmsis-dap`. |
+| `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
+| `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [docs/boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
+| `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [docs/debug-log.md](debug-log.md)). Not allowed in a `Release` build. |
+| `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
 ## CMake presets
 
