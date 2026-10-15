@@ -163,6 +163,13 @@ Results:
 |---|---|
 | USB ID | wlink and minichlink find the probe only with the WCH USB ID. The default ID `1209:0001` hides it (issue #76). |
 | Connect on two wires (CH32V208), `wlink status` | Passed, 6 of 6 runs. The connect tries one wire first, then two wires. wlink shows the chip ID `0x2080053c`, 160 KB flash, `misa` `RV32ACIMUX` and `dmstatus` `0x382`. |
+| `wlink dump`, `wlink regs` | Passed. A dump of the full flash (160 KB) takes 11.4 s. Two dumps are the same. |
+| `wlink halt`, `resume`, `reset` | Passed. |
+| `wlink erase` | Passed, 0.16 s. The flash then reads `0xe339e339`. |
+| `wlink flash` | Passed. 147 KB take 23 s. A dump after the program is the same as the image. |
+| `wlink protect` | Passed. The protection starts at the next reset, as on the WCH-LinkE. A dump then reads `0xffffffff`. |
+| `wlink unprotect` | Passed. The protection ends at once, without a power cycle: the `ndmreset` loads `RDPR`. The chip erases the flash. The option bytes then read `RDPR` `0xa5`, `USER` `0x3f`, `DATA0` and `DATA1` `0x00`, `WRPR` `0xff`. |
+| minichlink | Failed first: minichlink sends the chip type `09` also for a CH32V208, and the processor tried only one wire for this type. The processor now tries both wires for all types. |
 
 The first connect failed: wlink got the error frame `81 55 01 01`.
 The cause was the handshake bits of the two-wire frame: the probe must drive bit 13 low and bit 51 high (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
