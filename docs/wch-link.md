@@ -170,6 +170,8 @@ Results:
 | `wlink protect` | Passed. The protection starts at the next reset, as on the WCH-LinkE. A dump then reads `0xffffffff`. |
 | `wlink unprotect` | Passed. The protection ends at once, without a power cycle: the `ndmreset` loads `RDPR`. The chip erases the flash. The option bytes then read `RDPR` `0xa5`, `USER` `0x3f`, `DATA0` and `DATA1` `0x00`, `WRPR` `0xff`. |
 | minichlink | Failed first: minichlink sends the chip type `09` also for a CH32V208, and the processor tried only one wire for this type. The processor now tries both wires for all types. |
+| `minichlink -i`, `-r`, `-w` | Passed after the fix. A read of 160 KB takes 6.9 s, and it is the same as the wlink dump. A write of 147 KB takes 22 s. A wlink dump after the write is the same as the image. |
+| wlink after `minichlink -w` | Failed: each memory read gives the error frame `81 55 01 01` until a USB replug. minichlink does not read the block acknowledge of the last block, and the acknowledge stays on the data IN endpoint (issue #77). |
 
 The first connect failed: wlink got the error frame `81 55 01 01`.
 The cause was the handshake bits of the two-wire frame: the probe must drive bit 13 low and bit 51 high (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
