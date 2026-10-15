@@ -74,6 +74,7 @@ The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
 The names of the firmware presets are the names of the CI jobs, without `build-`.
+CI does not build the `mini-wch-link-wch-id` preset.
 CI uses these presets (see [Continuous integration](#continuous-integration)).
 
 Add a preset for a local setup in `CMakeUserPresets.json`.
@@ -258,9 +259,18 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   Each limit of the dual image is 1 KB smaller, because the last flash page holds the stored personality.
 - `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
 - `build-mini-wch-link`, `build-otheruse-wch-link`, `build-stlinkv2-wch-link`: the same release builds with `VSL_PROTOCOL=wch-link`, plus the size check.
-- `build-mini-wch-link-wch-id`: the `wch-link` build of the Mini with the USB ID of WCH, plus the size check. The job keeps no artifact, because the vendor ID belongs to WCH.
 
 Each build job configures and builds the preset with the name of the job, without `build-`.
+The jobs of the Mini run in each pipeline.
+The jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
+A manual job can fail and not block the pipeline or the merge request (MR).
+On a tag, all build jobs run.
+
+The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
+`build-mini` and `run-unit-tests` update the cache, and the other jobs only read it.
+In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
+Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
+After you change the tag of a dependency, remove `build/_deps/<name>-src`.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
 The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
 The ST-Link/V2 has the `standalone` image only.

@@ -10,14 +10,18 @@ file(LOCK "${_FC_SHARED_DIR}/.lock" GUARD PROCESS)
 set(FETCHCONTENT_BASE_DIR "${_FC_SHARED_DIR}" CACHE PATH "")
 
 # For sources already downloaded, set FETCHCONTENT_SOURCE_DIR_<NAME> so
-# FetchContent skips the subbuild entirely (avoids generator conflicts)
-file(GLOB _fc_src_dirs "${_FC_SHARED_DIR}/*-src")
-foreach(_src_dir ${_fc_src_dirs})
-    get_filename_component(_dir_name "${_src_dir}" NAME)
-    string(REGEX REPLACE "-src$" "" _dep_name "${_dir_name}")
-    string(TOUPPER "${_dep_name}" _dep_upper)
-    set(FETCHCONTENT_SOURCE_DIR_${_dep_upper} "${_src_dir}")
-endforeach()
+# FetchContent skips the subbuild entirely (avoids generator conflicts).
+# Not in CI: there build/_deps comes from the CI cache, and the subbuild
+# must check that each cached source is still at the declared tag.
+if(NOT DEFINED ENV{CI})
+    file(GLOB _fc_src_dirs "${_FC_SHARED_DIR}/*-src")
+    foreach(_src_dir ${_fc_src_dirs})
+        get_filename_component(_dir_name "${_src_dir}" NAME)
+        string(REGEX REPLACE "-src$" "" _dep_name "${_dir_name}")
+        string(TOUPPER "${_dep_name}" _dep_upper)
+        set(FETCHCONTENT_SOURCE_DIR_${_dep_upper} "${_src_dir}")
+    endforeach()
+endif()
 
 Include(FetchContent)
 
