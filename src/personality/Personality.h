@@ -101,7 +101,7 @@ static_assert(!all.empty(), "the image needs at least one VSL_WITH_<P> define");
 #if defined(VSL_MULTI_PERSONALITY)
 static_assert(all.size() > 1, "VSL_MULTI_PERSONALITY needs more than one personality");
 #else
-static_assert(all.size() == 1, "an image with more than one personality needs VSL_MULTI_PERSONALITY");
+static_assert(all.size() <= 1, "an image with more than one personality needs VSL_MULTI_PERSONALITY");
 #endif
 
 // The largest number of personalities that the settings page can store
@@ -149,11 +149,15 @@ constexpr bool contains(art::span<const Personality> list, Personality personali
 // The personality when the settings page has none: VSL_DEFAULT_PERSONALITY
 // (a code), else the first one of the image
 #if defined(VSL_DEFAULT_PERSONALITY)
+// Check the raw value: the cast to the enum would wrap a large one
+static_assert(VSL_DEFAULT_PERSONALITY >= 0 && VSL_DEFAULT_PERSONALITY < maxPersonalities,
+              "VSL_DEFAULT_PERSONALITY must be a personality code");
 inline constexpr Personality defaultPersonality = static_cast<Personality>(VSL_DEFAULT_PERSONALITY);
 #else
-inline constexpr Personality defaultPersonality = all[0];
+// An image without a personality fails the static_assert on `all` above
+inline constexpr Personality defaultPersonality = all.empty() ? Personality::Versaloon : all[0];
 #endif
-static_assert(contains(art::span<const Personality>(all.data(), all.size()), defaultPersonality),
+static_assert(all.empty() || contains(art::span<const Personality>(all.data(), all.size()), defaultPersonality),
               "VSL_DEFAULT_PERSONALITY must be a personality of the image");
 
 // The personality after the given one in the list, or the first one at the end
