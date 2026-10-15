@@ -512,6 +512,9 @@ The build option `VSL_PROTOCOL=wch-link` puts the personality into a firmware im
 - The function arms the data OUT endpoint `0x02` only while the processor takes data: in the stub phase and in the data phase of a program sequence (see [Flash](#flash)).
   A packet is written to the target before the next request runs. Thus a quit directly after the data (minichlink) finds the last block programmed.
   The endpoint cannot be disarmed. When a sequence ends while it is armed, the function drops the next packet.
+- A host can leave a packet on the data IN endpoint `0x82` unread. minichlink does not read the block acknowledge of its last block.
+  A connect, a quit or a new read range (`03`) then marks that packet as stale. The function takes it back before it sends the response (`art::usb::Device::cancelInTransfer()` of libArT).
+  Thus the next memory read gives its own data first. The WCH-LinkE gives the stale packet to the next read (see [Hardware test](wch-link.md#hardware-test)).
 
 ### Commands
 
