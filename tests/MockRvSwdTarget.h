@@ -119,7 +119,7 @@ class MockRvSwdTarget {
    }
    void swdioWrite(bool level) {
       REQUIRE(hostDrives_);
-      time += swdioWriteCycles;
+      time += swdioWriteCycles + (level ? 0 : swdioFallCycles);
       hostAction();
       const bool before = line();
       hostLevel_ = level;
@@ -208,6 +208,9 @@ class MockRvSwdTarget {
    // each SWDIO write
    uint32_t swclkEdgeCycles{ 0 };
    uint32_t swdioWriteCycles{ 0 };
+   // More time before a write of a low level: the bit loop runs before a
+   // falling edge, not before a rising edge.
+   uint32_t swdioFallCycles{ 0 };
    // Starts near the wrap of the counter.
    uint32_t time{ 0xFFFFF000u };
 

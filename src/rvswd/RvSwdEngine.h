@@ -76,11 +76,12 @@
 //
 // An interrupt in a one-wire bit makes the low pulse of a 1 long enough
 // for a 0. Thus the interrupts are off for each one-wire frame (about
-// 45 us). Each phase ends at a time from the start of the phase before,
-// not from its own pin write: the loop code does not add to the frame.
-// After the wait for a released line, the next phase starts from the
-// end of that wait. The constants are the WCH-LinkE values. They are not
-// measured on a dongle.
+// 45 us). Each phase waits from its own pin write: the loop code before
+// a falling edge then makes the high level longer, never the low pulse
+// shorter. A wait from the end of the phase before cut the low pulses by
+// 110 to 260 ns on a dongle (a 1 of 130 ns, a 0 of 460 ns). After the
+// wait for a released line, the high level starts from the end of that
+// wait. The constants are the WCH-LinkE values.
 //
 // Line reset: two wires, the clocks of the WCH-LinkE before its first
 // frame: lineResetHighClocks clocks with SWDIO high, one clock with
@@ -415,24 +416,22 @@ class RvSwdEngine {
          pins_.unlockIrq(irq);
          return lineLowFlag;
       }
-      // Each phase ends at a time from the start of the phase before.
-      uint32_t time = pins_.now();
-      sendBit(time, true, high_);
+      sendBit(true, high_);
       for(uint32_t i = 8; i > 1; --i) {
-         sendBit(time, ((request >> (i - 1)) & 1u) != 0, high_);
+         sendBit(((request >> (i - 1)) & 1u) != 0, high_);
       }
       uint8_t flags = 0;
       if(write) {
-         sendBit(time, true, high_);
+         sendBit(true, high_);
          for(uint32_t i = 32; i > 0; --i) {
-            sendBit(time, ((data >> (i - 1)) & 1u) != 0, high_);
+            sendBit(((data >> (i - 1)) & 1u) != 0, high_);
          }
       } else {
-         sendBit(time, false, turnaroundHigh_);
+         sendBit(false, turnaroundHigh_);
          uint32_t value = 0;
          for(uint32_t i = 0; i < 32 && flags == 0; ++i) {
             bool level = false;
-            flags = receiveBit(time, level);
+            flags = receiveBit(level);
             value = value << 1 | (level ? 1u : 0u);
          }
          data = value;
@@ -458,39 +457,28 @@ class RvSwdEngine {
       return true;
    }
 
-   // A low pulse and a high level, from `time` on. `time` becomes the end
-   // of the bit.
-   void sendBit(uint32_t &time, bool level, uint32_t high) {
+   // A low pulse and a high level
+   void sendBit(bool level, uint32_t high) {
       pins_.swdioWrite(false);
-      time += level ? shortLow_ : longLow_;
-      waitUntil(time);
+      waitFrom(pins_.now(), level ? shortLow_ : longLow_);
       pins_.swdioWrite(true);
-      time += high;
-      waitUntil(time);
+      waitFrom(pins_.now(), high);
    }
 
-   // Returns the flags. `time` becomes the end of the bit.
-   uint8_t receiveBit(uint32_t &time, bool &level) {
-      const uint32_t edge = time;
+   // Returns the flags.
+   uint8_t receiveBit(bool &level) {
       pins_.swdioWrite(false);
-      waitUntil(edge + shortLow_);
+      const uint32_t edge = pins_.now();
+      waitFrom(edge, shortLow_);
       pins_.swdioRelease();
       released_ = true;
-      waitUntil(edge + sample_);
+      waitFrom(edge, sample_);
       level = pins_.swdio();
       if(!driveIfHigh(edge)) {
          return lineLowFlag;
       }
-      time = pins_.now() + high_;
-      waitUntil(time);
+      waitFrom(pins_.now(), high_);
       return 0;
-   }
-
-   // Waits until a time of the cycle counter. Signed difference: correct
-   // across the wrap of the counter.
-   [[gnu::always_inline]] void waitUntil(uint32_t time) {
-      while(static_cast<int32_t>(pins_.now() - time) < 0) {
-      }
    }
 
    // Waits until `cycles` after `edge`.

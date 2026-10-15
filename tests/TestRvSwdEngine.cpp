@@ -433,17 +433,29 @@ TEST_CASE("RVSWD one wire: pulse widths of a write and the turnaround of a read"
    bench.checkIdle();
 }
 
-TEST_CASE("RVSWD one wire: the loop code does not add to a frame") {
-   // Each phase ends at a time from the start of the phase before. With
-   // 8 cycles of code at each SWDIO write (82 writes), a write frame keeps
-   // the duration of the capture (39.67 us).
+TEST_CASE("RVSWD one wire: the loop code does not shorten a low pulse") {
+   // Each phase waits from its own pin write. 12 cycles (167 ns) of code
+   // before each falling edge cut a 1 to 83 ns when a phase waited from
+   // the phase before. Now they make the high level longer.
    Bench bench(Wire::One);
-   bench.pins.swdioWriteCycles = 8;
-   bench.pins.lineEdges.clear();
-   CHECK(bench.engine.write(0x7E, 0x5AA5'0400) == 0);
-   const auto &edges = bench.pins.lineEdges;
-   REQUIRE(edges.size() >= 82);
-   CHECK(nsOf(edges[81].time - edges[0].time) == doctest::Approx(39'670).epsilon(0.02));
+   bench.pins.swdioFallCycles = 12;
+   for(const bool write : { true, false }) {
+      CAPTURE(write);
+      bench.pins.lineEdges.clear();
+      uint32_t data = 0;
+      CHECK((write ? bench.engine.write(0x7E, 0x5AA5'0400) : bench.engine.read(0x7C, data)) == 0);
+      const auto &edges = bench.pins.lineEdges;
+      // The host bits: all 41 of a write, the 9 request bits of a read
+      const std::size_t lows = write ? 41 : 9;
+      REQUIRE(edges.size() >= 2 * lows);
+      for(std::size_t i = 0; i < 2 * lows; i += 2) {
+         CAPTURE(i);
+         REQUIRE_FALSE(edges[i].level);
+         const double width = nsOf(edges[i + 1].time - edges[i].time);
+         const bool one = width < 500;
+         CHECK(width == doctest::Approx(one ? rvswd::oneWireShortLowNs : rvswd::oneWireLongLowNs).epsilon(0.1));
+      }
+   }
    bench.checkIdle();
 }
 
