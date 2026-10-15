@@ -89,8 +89,10 @@ void Processor::execute(art::span<const uint8_t> request) {
       controlCommand(in.u8());
       break;
    case command::configure: {
-      const uint8_t chipType = in.u8();
-      configure(chipType, in.u8());
+      // The chip type does not select the wire: minichlink sends 09
+      // (CH32V00x) also for a CH32V208 (v208-mc-info.pcapng).
+      static_cast<void>(in.u8());
+      configure(in.u8());
       break;
    }
    case command::dmi:
@@ -200,11 +202,7 @@ bool Processor::connect() {
    // One wire first: its frames change SWDIO only while SWCLK is low, so a
    // two-wire target sees no start or stop condition in them. The frames of
    // two wires would be noise on the line of a one-wire target.
-   const bool oneWireOnly = chipType_ == familyV00x;
    for(const auto wire : { rvswd::Wire::One, rvswd::Wire::Two }) {
-      if(oneWireOnly && wire == rvswd::Wire::Two) {
-         continue;
-      }
       uint32_t chipId = 0;
       target_.attach(wire);
       const Found found = connectOn(chipId);
@@ -273,8 +271,7 @@ void Processor::detach() {
    }
 }
 
-void Processor::configure(uint8_t chipType, uint8_t speed) {
-   chipType_ = chipType;
+void Processor::configure(uint8_t speed) {
    if(speed >= static_cast<uint8_t>(Speed::High) && speed <= static_cast<uint8_t>(Speed::Low)) {
       target_.setSpeed(static_cast<Speed>(speed));
    }

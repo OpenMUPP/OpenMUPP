@@ -311,7 +311,7 @@ class Processor {
    void quit();
    // Resumes the hart and ends dmactive, as the quit of the probe
    void restore();
-   void configure(uint8_t chipType, uint8_t speed);
+   void configure(uint8_t speed);
    void dmiCommand(art::span<const uint8_t> payload);
    void resetCommand(uint8_t sub);
    void chipInfoCommand();
@@ -332,8 +332,6 @@ class Processor {
 
    bool connected_{ false };
    uint32_t chipId_{ 0 };
-   // The chip type of the last configure command
-   uint8_t chipType_{ 0 };
 
    std::array<uint8_t, packetSize> request_{};
    std::size_t requestLength_{ 0 };

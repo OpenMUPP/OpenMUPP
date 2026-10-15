@@ -552,8 +552,8 @@ Thus the hart stays halted after the connect, until the next session.
 
 ### Connect
 
-The chip type of the last `0c` command selects the wire. The type `09` (CH32V00x) selects one wire.
-For the other types, the processor tries one wire first, then two wires. wlink sends the type `01` also for the CH32V003.
+The chip type of the `0c` command does not select the wire. The processor tries one wire first, then two wires, for all chip types.
+wlink sends the type `01` also for the CH32V003. minichlink sends the type `09` (CH32V00x) also for the CH32V208, and the WCH-LinkE then connects on two wires (`v208-mc-info.pcapng`).
 One wire comes first, because its frames change SWDIO only while SWCLK is low. A two-wire target sees no start condition and no stop condition in them.
 The frames of two wires are noise on the line of a one-wire target.
 On each wire, the processor does these probe actions:
