@@ -119,7 +119,7 @@ class MockRvSwdTarget {
    }
    void swdioWrite(bool level) {
       REQUIRE(hostDrives_);
-      time += swdioWriteCycles + (level ? 0 : swdioFallCycles);
+      time += swdioWriteCycles;
       hostAction();
       const bool before = line();
       hostLevel_ = level;
@@ -145,6 +145,38 @@ class MockRvSwdTarget {
    }
    void unlockIrq(uint32_t old) {
       irqLocked_ = old != 0;
+   }
+
+   // One wire: the frame with the times of the timer (see
+   // rvswd/RvSwdEngine.h), edge by edge
+   bool oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t &samples) {
+      ++oneWireFrames;
+      REQUIRE(hostDrives_);
+      REQUIRE(hostLevel_);
+      if(failOneWireFrame) {
+         swdioRelease();
+         return false;
+      }
+      advanceTo(time + cyclesOf(rvswd::oneWireLeadNs));
+      samples = 0;
+      for(uint32_t i = 0; i < count; ++i) {
+         const uint32_t start = time;
+         const bool one = (bits >> (count - 1 - i) & 1u) != 0;
+         swdioDrive(false);
+         if(i < readFrom) {
+            advanceTo(start + cyclesOf(one ? rvswd::oneWireShortLowNs : rvswd::oneWireLongLowNs));
+            swdioDrive(true);
+            advanceTo(time + cyclesOf(i + 1 == readFrom ? rvswd::oneWireTurnaroundHighNs : rvswd::oneWireHighNs));
+         } else {
+            // Open drain: the host releases the line after its pulse.
+            advanceTo(start + cyclesOf(rvswd::oneWireShortLowNs));
+            swdioRelease();
+            advanceTo(start + cyclesOf(rvswd::oneWireSampleNs));
+            samples = samples << 1 | (swdio() ? 1u : 0u);
+            advanceTo(start + cyclesOf(rvswd::oneWireReadBitNs));
+         }
+      }
+      return true;
    }
 
    // State for the tests
@@ -208,9 +240,10 @@ class MockRvSwdTarget {
    // each SWDIO write
    uint32_t swclkEdgeCycles{ 0 };
    uint32_t swdioWriteCycles{ 0 };
-   // More time before a write of a low level: the bit loop runs before a
-   // falling edge, not before a rising edge.
-   uint32_t swdioFallCycles{ 0 };
+   // One wire: frames run with oneWireFrame()
+   int oneWireFrames{ 0 };
+   // One wire: oneWireFrame() fails (the timer did not end the frame).
+   bool failOneWireFrame{ false };
    // Starts near the wrap of the counter.
    uint32_t time{ 0xFFFFF000u };
 
@@ -422,6 +455,18 @@ class MockRvSwdTarget {
    }
 
    // One wire
+
+   [[nodiscard]] uint32_t cyclesOf(uint32_t ns) const {
+      return rvswd::cyclesOfNs(coreHz(), ns);
+   }
+
+   // One cycle at a time, so the hold of the target ends at its time.
+   void advanceTo(uint32_t end) {
+      while(time != end) {
+         ++time;
+         updateHold();
+      }
+   }
 
    void updateHold() {
       if(holding_ && !stuckLow && time - holdStart_ >= zeroHoldCycles) {

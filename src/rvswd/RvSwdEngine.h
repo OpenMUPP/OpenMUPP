@@ -25,6 +25,9 @@
 //   uint32_t coreHz();         core clock frequency
 //   uint32_t lockIrq();        interrupts off, returns the old state
 //   void unlockIrq(uint32_t);  restores the state of lockIrq()
+//   bool oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom,
+//                     uint32_t &samples);
+//                              one wire: runs a frame (see below)
 //
 // Two wires: a frame is a start condition, 53 clocks and a stop condition,
 // as on an I2C bus. SWDIO is stable at the rising edge of SWCLK. Idle is
@@ -60,28 +63,35 @@
 // 0. Idle is SWDIO driven high: a pull-up is too slow for the high level
 // of 370 ns (docs/wch-link-protocol.md, "Pins and USB ID").
 //
-// - Write bits: the host drives the low pulse and the high level.
-// - Read bits: the host drives a short low pulse and releases SWDIO. The
-//   target holds the line low for a 0. The host samples SWDIO at
-//   oneWireSampleNs after the falling edge. When the line is high again,
-//   the host drives it high for the high level. A line that stays low for
-//   oneWireReleaseTimeoutNs ends the frame with lineLowFlag, and SWDIO
-//   stays released.
-// - After bit 8 of a read, the high level is oneWireTurnaroundHighNs.
-// - While SWDIO is released (after lineLowFlag, or after a reset with the
-//   line held low), the engine drives SWDIO again only when the line is
-//   high. Else the frame or the reset ends with SWDIO released, and a
-//   frame returns lineLowFlag. Thus the host never drives the line high
-//   against a target that holds it low.
+// The width of a low pulse is the bit value, so code timing cannot make
+// the bits: on a dongle, waits on the cycle counter gave low pulses of
+// 120 to 530 ns for a 1, and the CH32V003 did not answer. Thus the Pins
+// type runs each frame with a hardware timer (board/BoardRvSwd.cpp), and
+// the engine gives it only the bits. oneWireFrame() sends `count` bits,
+// the first in bit count-1 of `bits`:
 //
-// An interrupt in a one-wire bit makes the low pulse of a 1 long enough
-// for a 0. Thus the interrupts are off for each one-wire frame (about
-// 45 us). Each phase waits from its own pin write: the loop code before
-// a falling edge then makes the high level longer, never the low pulse
-// shorter. A wait from the end of the phase before cut the low pulses by
-// 110 to 260 ns on a dongle (a 1 of 130 ns, a 0 of 460 ns). After the
-// wait for a released line, the high level starts from the end of that
-// wait. The constants are the WCH-LinkE values.
+// - Write bits: a low pulse of oneWireShortLowNs for a 1 or
+//   oneWireLongLowNs for a 0, then oneWireHighNs high. The host drives
+//   both levels.
+// - The bit before readFrom has a high level of oneWireTurnaroundHighNs.
+// - Read bits (from readFrom on): the host drives a low pulse of
+//   oneWireShortLowNs and then releases SWDIO (open drain). The target
+//   holds the line low for a 0. The host samples SWDIO at oneWireSampleNs
+//   after the falling edge. A read bit lasts oneWireReadBitNs.
+// - Before the first bit, SWDIO is high for oneWireLeadNs.
+//
+// samples gets the read bits, the first in the MSB. SWDIO is driven high
+// before the frame. After a frame without read bits, it is driven high.
+// After read bits, it is released. false: the timer did not end the
+// frame (frameFlag), SWDIO is released.
+//
+// While SWDIO is released (after read bits, or after a reset with the
+// line held low), the engine drives SWDIO again only when the line is
+// high. A line that stays low for oneWireReleaseTimeoutNs gives
+// lineLowFlag, and SWDIO stays released. Thus the host never drives the
+// line high against a target that holds it low. The interrupts are off
+// for each frame (about 50 us): the switch to open drain after the bit
+// before readFrom is code, with a window of about 1 us.
 //
 // Line reset: two wires, the clocks of the WCH-LinkE before its first
 // frame: lineResetHighClocks clocks with SWDIO high, one clock with
@@ -117,6 +127,8 @@ enum class Wire : uint8_t {
 inline constexpr uint8_t parityErrorFlag = 0x01;
 // One wire: the line stays low after a read bit.
 inline constexpr uint8_t lineLowFlag = 0x02;
+// One wire: the timer did not end the frame.
+inline constexpr uint8_t frameFlag = 0x04;
 
 // A DM register address has 7 bits.
 inline constexpr uint8_t addressMask = 0x7F;
@@ -146,6 +158,13 @@ inline constexpr uint32_t oneWireHighNs = 370;
 inline constexpr uint32_t oneWireTurnaroundHighNs = 750;
 // Between the longest 1 (374 ns) and the shortest 0 (824 ns) of the target
 inline constexpr uint32_t oneWireSampleNs = 600;
+// The longest 0 of the target (868 ns) and a high level. The WCH-LinkE
+// waits for the line instead; the CH32V003 accepted highs up to 1.46 us.
+inline constexpr uint32_t oneWireReadBitNs = 1'300;
+inline constexpr uint32_t oneWireLeadNs = 1'000;
+// A frame: start bit, 7 address bits and the write bit, then 32 data bits
+inline constexpr uint32_t oneWireHeadBits = 9;
+inline constexpr uint32_t oneWireFrameBits = oneWireHeadBits + 32;
 inline constexpr uint32_t oneWireReleaseTimeoutNs = 5'000;
 // The shortest gap is 3.7 us.
 inline constexpr uint32_t oneWireFrameGapNs = 4'000;
@@ -183,11 +202,6 @@ class RvSwdEngine {
       pins_.init();
       setClockHz(clockHz_);
       const uint32_t coreHz = pins_.coreHz();
-      shortLow_ = cyclesOfNs(coreHz, oneWireShortLowNs);
-      longLow_ = cyclesOfNs(coreHz, oneWireLongLowNs);
-      high_ = cyclesOfNs(coreHz, oneWireHighNs);
-      turnaroundHigh_ = cyclesOfNs(coreHz, oneWireTurnaroundHighNs);
-      sample_ = cyclesOfNs(coreHz, oneWireSampleNs);
       releaseTimeout_ = cyclesOfNs(coreHz, oneWireReleaseTimeoutNs);
       frameGap_ = cyclesOfNs(coreHz, oneWireFrameGapNs);
    }
@@ -416,25 +430,21 @@ class RvSwdEngine {
          pins_.unlockIrq(irq);
          return lineLowFlag;
       }
-      sendBit(true, high_);
-      for(uint32_t i = 8; i > 1; --i) {
-         sendBit(((request >> (i - 1)) & 1u) != 0, high_);
-      }
+      // Start bit, address, write bit. A read sends 1s (short pulses) in
+      // the data bits and samples them.
+      const uint64_t head = 1u << 8 | request;
+      const uint64_t bits = head << 32 | (write ? data : 0xFFFF'FFFFu);
+      uint32_t samples = 0;
       uint8_t flags = 0;
-      if(write) {
-         sendBit(true, high_);
-         for(uint32_t i = 32; i > 0; --i) {
-            sendBit(((data >> (i - 1)) & 1u) != 0, high_);
+      if(!pins_.oneWireFrame(bits, oneWireFrameBits, write ? oneWireFrameBits : oneWireHeadBits, samples)) {
+         released_ = true;
+         flags = frameFlag;
+      } else if(!write) {
+         released_ = true;
+         data = samples;
+         if(!driveIfHigh(pins_.now())) {
+            flags = lineLowFlag;
          }
-      } else {
-         sendBit(false, turnaroundHigh_);
-         uint32_t value = 0;
-         for(uint32_t i = 0; i < 32 && flags == 0; ++i) {
-            bool level = false;
-            flags = receiveBit(level);
-            value = value << 1 | (level ? 1u : 0u);
-         }
-         data = value;
       }
       pins_.unlockIrq(irq);
       waitFrom(pins_.now(), frameGap_);
@@ -457,30 +467,6 @@ class RvSwdEngine {
       return true;
    }
 
-   // A low pulse and a high level
-   void sendBit(bool level, uint32_t high) {
-      pins_.swdioWrite(false);
-      waitFrom(pins_.now(), level ? shortLow_ : longLow_);
-      pins_.swdioWrite(true);
-      waitFrom(pins_.now(), high);
-   }
-
-   // Returns the flags.
-   uint8_t receiveBit(bool &level) {
-      pins_.swdioWrite(false);
-      const uint32_t edge = pins_.now();
-      waitFrom(edge, shortLow_);
-      pins_.swdioRelease();
-      released_ = true;
-      waitFrom(edge, sample_);
-      level = pins_.swdio();
-      if(!driveIfHigh(edge)) {
-         return lineLowFlag;
-      }
-      waitFrom(pins_.now(), high_);
-      return 0;
-   }
-
    // Waits until `cycles` after `edge`.
    [[gnu::always_inline]] void waitFrom(uint32_t edge, uint32_t cycles) {
       while(pins_.now() - edge < cycles) {
@@ -495,11 +481,6 @@ class RvSwdEngine {
    // halfCycles_ without the loop code
    uint32_t waitCycles_{ 0 };
    // One wire, in core cycles
-   uint32_t shortLow_{ 0 };
-   uint32_t longLow_{ 0 };
-   uint32_t high_{ 0 };
-   uint32_t turnaroundHigh_{ 0 };
-   uint32_t sample_{ 0 };
    uint32_t releaseTimeout_{ 0 };
    uint32_t frameGap_{ 0 };
    uint8_t head_{ 0 };

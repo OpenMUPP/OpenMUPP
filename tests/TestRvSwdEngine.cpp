@@ -396,12 +396,12 @@ TEST_CASE("RVSWD one wire: the pulses are the pulses of the capture") {
       const std::size_t first = firstFall(edges, start);
       CHECK(oneWireBits(edges, first) == frame.bits);
       REQUIRE(first + 81 < edges.size());
-      // A write: within 5 %. A read: the engine waits for the sample point
-      // (600 ns) also for a 1, so the read is slower than the WCH-LinkE
-      // (up to 15 %).
+      // A write: within 5 %. A read: each read bit has the fixed time
+      // oneWireReadBitNs (the timer cannot wait for the line), so the read
+      // is slower than the WCH-LinkE (up to 25 %).
       const double duration = nsOf(edges[first + 81].time - edges[first].time);
       CHECK(duration >= 0.97 * frame.durationNs);
-      CHECK(duration <= (frame.write ? 1.05 : 1.15) * frame.durationNs);
+      CHECK(duration <= (frame.write ? 1.05 : 1.25) * frame.durationNs);
       // The gap to the next frame
       CHECK(nsOf(bench.pins.time - edges[first + 81].time) >= rvswd::oneWireFrameGapNs);
    }
@@ -433,30 +433,31 @@ TEST_CASE("RVSWD one wire: pulse widths of a write and the turnaround of a read"
    bench.checkIdle();
 }
 
-TEST_CASE("RVSWD one wire: the loop code does not shorten a low pulse") {
-   // Each phase waits from its own pin write. 12 cycles (167 ns) of code
-   // before each falling edge cut a 1 to 83 ns when a phase waited from
-   // the phase before. Now they make the high level longer.
+TEST_CASE("RVSWD one wire: each frame runs on the timer, the loop code does not count") {
    Bench bench(Wire::One);
-   bench.pins.swdioFallCycles = 12;
-   for(const bool write : { true, false }) {
-      CAPTURE(write);
-      bench.pins.lineEdges.clear();
-      uint32_t data = 0;
-      CHECK((write ? bench.engine.write(0x7E, 0x5AA5'0400) : bench.engine.read(0x7C, data)) == 0);
-      const auto &edges = bench.pins.lineEdges;
-      // The host bits: all 41 of a write, the 9 request bits of a read
-      const std::size_t lows = write ? 41 : 9;
-      REQUIRE(edges.size() >= 2 * lows);
-      for(std::size_t i = 0; i < 2 * lows; i += 2) {
-         CAPTURE(i);
-         REQUIRE_FALSE(edges[i].level);
-         const double width = nsOf(edges[i + 1].time - edges[i].time);
-         const bool one = width < 500;
-         CHECK(width == doctest::Approx(one ? rvswd::oneWireShortLowNs : rvswd::oneWireLongLowNs).epsilon(0.1));
-      }
-   }
+   bench.pins.swdioWriteCycles = 20;
+   const int before = bench.pins.oneWireFrames;
+   bench.pins.lineEdges.clear();
+   CHECK(bench.engine.write(0x7E, 0x5AA5'0400) == 0);
+   uint32_t data = 0;
+   CHECK(bench.engine.read(0x7C, data) == 0);
+   CHECK(bench.pins.oneWireFrames == before + 2);
+   CHECK(bench.pins.accesses.back().address == 0x7C);
    bench.checkIdle();
+}
+
+TEST_CASE("RVSWD one wire: a frame that the timer does not end gives frameFlag") {
+   Bench bench(Wire::One);
+   bench.pins.failOneWireFrame = true;
+   CHECK(bench.engine.write(0x04, 0x1234'5678) == rvswd::frameFlag);
+   uint32_t data = 0xAAAA'AAAAu;
+   CHECK(bench.engine.read(0x04, data) == rvswd::frameFlag);
+   CHECK(data == 0xAAAA'AAAAu);
+   CHECK_FALSE(bench.pins.hostDrives());
+   // The next frame drives the line again: it is high.
+   bench.pins.failOneWireFrame = false;
+   CHECK(bench.engine.write(0x04, 0x1234'5678) == 0);
+   CHECK(bench.pins.registers[0x04] == 0x1234'5678u);
 }
 
 TEST_CASE("RVSWD one wire: the clock rate has no effect") {
