@@ -446,6 +446,59 @@ TEST_CASE("RVSWD one wire: each frame runs on the timer, the loop code does not 
    bench.checkIdle();
 }
 
+TEST_CASE("RVSWD one wire: the frame layout of the timer") {
+   // A read of dmstatus (0x11): start bit, address, write bit 0, then 32
+   // read bits. A write of 0x7E: start bit, address, write bit 1, data.
+   const rvswd::OneWireTicks t = rvswd::oneWireTicks(72'000'000);
+   CHECK(t.shortLow == 18);
+   CHECK(t.longLow == 62);
+   CHECK(t.high == 27);
+   const uint64_t read = (uint64_t{ 1u << 8 | 0x11u << 1 } << 32) | 0xFFFF'FFFFu;
+   const uint64_t write = (uint64_t{ 1u << 8 | 0x7Eu << 1 | 1u } << 32) | 0x5AA5'0400u;
+   const uint32_t n = rvswd::oneWireFrameBits;
+   const uint32_t head = rvswd::oneWireHeadBits;
+   for(const bool isRead : { true, false }) {
+      CAPTURE(isRead);
+      const uint64_t bits = isRead ? read : write;
+      const uint32_t readFrom = isRead ? head : n;
+      uint32_t start = t.lead;
+      uint32_t lastHeadEnd = 0;
+      for(uint32_t i = 0; i < n; ++i) {
+         CAPTURE(i);
+         const rvswd::OneWireBit bit = rvswd::oneWireBit(t, bits, n, readFrom, i);
+         if(i >= readFrom) {
+            CHECK(bit.low == t.shortLow);
+            CHECK(bit.period == t.readBit);
+         } else {
+            const bool one = (bits >> (n - 1 - i) & 1u) != 0;
+            CHECK(bit.low == (one ? t.shortLow : t.longLow));
+            // Only the bit before the read bits has the turnaround high,
+            // also not the last bit of a write.
+            CHECK(bit.period - bit.low == (i + 1 == readFrom && isRead ? t.turnaroundHigh : t.high));
+         }
+         if(i + 1 == readFrom) {
+            lastHeadEnd = start + bit.period;
+            const rvswd::OneWireTimes times = rvswd::oneWireTimes(t, bits, n, readFrom);
+            if(isRead) {
+               // In the high level after bit 8: after its rising edge, and
+               // before the next falling edge (push-pull would fight there).
+               CHECK(times.switchAt > start + bit.low);
+               CHECK(times.switchAt < lastHeadEnd);
+            }
+         }
+         start += bit.period;
+      }
+      const rvswd::OneWireTimes times = rvswd::oneWireTimes(t, bits, n, readFrom);
+      // After the last bit, before the sample compare of the end period
+      CHECK(times.endAt > start);
+      CHECK(times.endAt < start + t.sample);
+      if(!isRead) {
+         CHECK(times.switchAt == 0);
+         CHECK(lastHeadEnd == start);
+      }
+   }
+}
+
 TEST_CASE("RVSWD one wire: a frame that the timer does not end gives frameFlag") {
    Bench bench(Wire::One);
    bench.pins.failOneWireFrame = true;

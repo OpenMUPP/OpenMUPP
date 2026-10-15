@@ -157,24 +157,23 @@ class MockRvSwdTarget {
          swdioRelease();
          return false;
       }
-      advanceTo(time + cyclesOf(rvswd::oneWireLeadNs));
+      const rvswd::OneWireTicks ticks = rvswd::oneWireTicks(coreHz());
+      advanceTo(time + ticks.lead);
       samples = 0;
       for(uint32_t i = 0; i < count; ++i) {
          const uint32_t start = time;
-         const bool one = (bits >> (count - 1 - i) & 1u) != 0;
+         const rvswd::OneWireBit bit = rvswd::oneWireBit(ticks, bits, count, readFrom, i);
          swdioDrive(false);
+         advanceTo(start + bit.low);
          if(i < readFrom) {
-            advanceTo(start + cyclesOf(one ? rvswd::oneWireShortLowNs : rvswd::oneWireLongLowNs));
             swdioDrive(true);
-            advanceTo(time + cyclesOf(i + 1 == readFrom ? rvswd::oneWireTurnaroundHighNs : rvswd::oneWireHighNs));
          } else {
             // Open drain: the host releases the line after its pulse.
-            advanceTo(start + cyclesOf(rvswd::oneWireShortLowNs));
             swdioRelease();
-            advanceTo(start + cyclesOf(rvswd::oneWireSampleNs));
+            advanceTo(start + ticks.sample);
             samples = samples << 1 | (swdio() ? 1u : 0u);
-            advanceTo(start + cyclesOf(rvswd::oneWireReadBitNs));
          }
+         advanceTo(start + bit.period);
       }
       return true;
    }
@@ -455,10 +454,6 @@ class MockRvSwdTarget {
    }
 
    // One wire
-
-   [[nodiscard]] uint32_t cyclesOf(uint32_t ns) const {
-      return rvswd::cyclesOfNs(coreHz(), ns);
-   }
 
    // One cycle at a time, so the hold of the target ends at its time.
    void advanceTo(uint32_t end) {

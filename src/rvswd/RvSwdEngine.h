@@ -189,6 +189,62 @@ constexpr bool parity(uint32_t value) {
    return (std::popcount(value) & 1) != 0;
 }
 
+// One wire: the layout of a frame in timer ticks, for the board timer
+// (board/BoardRvSwd.cpp) and the mock target. The times are above.
+struct OneWireTicks {
+   uint32_t shortLow;
+   uint32_t longLow;
+   uint32_t high;
+   uint32_t turnaroundHigh;
+   uint32_t readBit;
+   uint32_t sample;
+   uint32_t lead;
+};
+
+constexpr OneWireTicks oneWireTicks(uint32_t hz) {
+   return { cyclesOfNs(hz, oneWireShortLowNs), cyclesOfNs(hz, oneWireLongLowNs),
+            cyclesOfNs(hz, oneWireHighNs),     cyclesOfNs(hz, oneWireTurnaroundHighNs),
+            cyclesOfNs(hz, oneWireReadBitNs),  cyclesOfNs(hz, oneWireSampleNs),
+            cyclesOfNs(hz, oneWireLeadNs) };
+}
+
+// The low pulse and the period of bit i
+struct OneWireBit {
+   uint32_t low;
+   uint32_t period;
+};
+
+constexpr OneWireBit oneWireBit(const OneWireTicks &t, uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t i) {
+   if(i >= readFrom) {
+      return { t.shortLow, t.readBit };
+   }
+   const uint32_t low = (bits >> (count - 1 - i) & 1u) != 0 ? t.shortLow : t.longLow;
+   const bool turnaround = readFrom < count && i + 1 == readFrom;
+   return { low, low + (turnaround ? t.turnaroundHigh : t.high) };
+}
+
+// From the counter start (the start of the lead-in): the switch to open
+// drain, in the high level after bit readFrom-1 (0 without read bits), and
+// the end, after the last bit and before the sample compare of the end
+// period.
+struct OneWireTimes {
+   uint32_t switchAt;
+   uint32_t endAt;
+};
+
+constexpr OneWireTimes oneWireTimes(const OneWireTicks &t, uint64_t bits, uint32_t count, uint32_t readFrom) {
+   uint32_t start = t.lead;
+   uint32_t switchAt = 0;
+   for(uint32_t i = 0; i < count; ++i) {
+      const OneWireBit bit = oneWireBit(t, bits, count, readFrom, i);
+      if(readFrom < count && i + 1 == readFrom) {
+         switchAt = start + bit.low + t.high / 2u;
+      }
+      start += bit.period;
+   }
+   return { switchAt, start + t.sample / 2u };
+}
+
 template <typename Pins>
 class RvSwdEngine {
    public:

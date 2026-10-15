@@ -65,16 +65,9 @@ constexpr uint32_t sampleWords = 32 + 2;
 // Bits 1 to count-1 and two end entries. Bit 0 goes to the registers.
 std::array<uint16_t, (rvswd::oneWireFrameBits + 1) * burstWords> table{};
 
-struct Ticks {
-   uint16_t shortLow;
-   uint16_t longLow;
-   uint16_t high;
-   uint16_t turnaroundHigh;
-   uint16_t readBit;
-   uint16_t sample;
-   uint16_t lead;
-};
-Ticks ticks{};
+// Both timers run at HCLK: TIM1 on APB2 (HCLK), TIM3 on APB1 (HCLK/2, the
+// timer clock is twice that, RM0008 7.2).
+rvswd::OneWireTicks ticks{};
 
 // Words: the GPIO registers allow only word access (RM0008 9.2).
 std::array<uint32_t, sampleWords> sampleBuffer{};
@@ -103,18 +96,14 @@ void fillEntry(uint16_t *entry, uint32_t period, uint32_t low) {
    entry[1] = 0;
    for(uint32_t channel = 1; channel <= oneWire.channel; ++channel) {
       entry[1 + channel] = channel == oneWire.channel       ? static_cast<uint16_t>(low) :
-                           channel == oneWire.sampleChannel ? ticks.sample :
+                           channel == oneWire.sampleChannel ? static_cast<uint16_t>(ticks.sample) :
                                                               0;
    }
 }
 
 void fillBit(uint16_t *entry, uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t i) {
-   if(i >= readFrom) {
-      fillEntry(entry, ticks.readBit, ticks.shortLow);
-      return;
-   }
-   const uint32_t low = (bits >> (count - 1 - i) & 1u) != 0 ? ticks.shortLow : ticks.longLow;
-   fillEntry(entry, low + (i + 1 == readFrom ? ticks.turnaroundHigh : ticks.high), low);
+   const rvswd::OneWireBit bit = rvswd::oneWireBit(ticks, bits, count, readFrom, i);
+   fillEntry(entry, bit.period, bit.low);
 }
 
 void resetTimer() {
@@ -134,12 +123,6 @@ void stop(TIM_TypeDef &tim) {
    sampleDma().disable();
 }
 
-// Timer ticks of a time. Both timers run at HCLK: TIM1 on APB2 (HCLK),
-// TIM3 on APB1 (HCLK/2, the timer clock is twice that, RM0008 7.2).
-uint16_t ticksOf(uint32_t ns) {
-   return static_cast<uint16_t>(rvswd::cyclesOfNs(SystemCoreClock, ns));
-}
-
 void initOneWire() {
    if(oneWire.timer == 1) {
       Rcc::enableTIM1Clock();
@@ -150,10 +133,7 @@ void initOneWire() {
    if(oneWire.partialRemap) {
       hw::Afio::setRemap(AFIO_MAPR_TIM3_REMAP, AFIO_MAPR_TIM3_REMAP_PARTIALREMAP);
    }
-   ticks = { ticksOf(rvswd::oneWireShortLowNs), ticksOf(rvswd::oneWireLongLowNs),
-             ticksOf(rvswd::oneWireHighNs),     ticksOf(rvswd::oneWireTurnaroundHighNs),
-             ticksOf(rvswd::oneWireReadBitNs),  ticksOf(rvswd::oneWireSampleNs),
-             ticksOf(rvswd::oneWireLeadNs) };
+   ticks = rvswd::oneWireTicks(SystemCoreClock);
 
    TIM_TypeDef &tim = timer();
    const hw::Timer t(&tim);
@@ -230,20 +210,8 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    fillEntry(&table[entries++ * burstWords], 0x1'0000, 0);
 
    // The times from the counter start, in ticks (= core cycles)
-   auto period = [&](uint32_t i) -> uint32_t { return 1u + (i == 0 ? first[0] : table[(i - 1) * burstWords]); };
+   const rvswd::OneWireTimes times = rvswd::oneWireTimes(ticks, bits, count, readFrom);
    const bool reads = readFrom < count;
-   uint32_t switchAt = ticks.lead;
-   uint32_t endAt = ticks.lead;
-   for(uint32_t i = 0; i < count; ++i) {
-      if(i + 1 == readFrom) {
-         // After the rising edge of the bit before the read bits
-         switchAt =
-         endAt + (i == 0 ? first[1 + oneWire.channel] : table[(i - 1) * burstWords + 1 + oneWire.channel]) + ticks.high / 2u;
-      }
-      endAt += period(i);
-   }
-   // In the end period, before its sample compare
-   endAt += ticks.sample / 2u;
 
    const Dma::Channel update = updateDma();
    update.setMemoryAddress(reinterpret_cast<uint32_t>(table.data()));
@@ -262,14 +230,14 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    const uint32_t start = cycleCount();
    tim.CR1 |= TIM_CR1_CEN;
    if(reads) {
-      while(cycleCount() - start < switchAt) {
+      while(cycleCount() - start < times.switchAt) {
       }
       OneWireOut::setConfig<afOpenDrain>();
       // The compare of bit readFrom-1 is before this point.
       tim.SR = ~sampleFlag;
       tim.DIER |= sampleRequest;
    }
-   while(cycleCount() - start < endAt) {
+   while(cycleCount() - start < times.endAt) {
    }
    // No request is on before bit readFrom, so the first words are the read
    // bits. A transfer after them (the end period) does not matter.
