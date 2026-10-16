@@ -1,8 +1,8 @@
 #pragma once
 
-// Maps the bits of the USB_TO_GPIO block (protocol/versaloon/GpioBlock.h) to the
-// debug pins of a board definition. Hardware-independent: the host unit
-// tests check it for every board.
+// Maps the gpio bits (protocol/GpioPins.h) to the debug pins of a board
+// definition. Hardware-independent: the host unit tests check it for every
+// board.
 //
 // TMS has an output pin and an input pin, which can be different pins (the
 // Mini: PB4 out, PB6 in). The output pin drives TMS; the input pin reads it.
@@ -12,7 +12,7 @@
 #include <optional>
 
 #include "board/BoardDefinition.h"
-#include "protocol/versaloon/GpioBlock.h"
+#include "protocol/GpioPins.h"
 
 namespace board {
 
