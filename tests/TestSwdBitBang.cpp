@@ -482,7 +482,7 @@ TEST_CASE("SWD bit-bang: the default rules are the Versaloon rules, and CONFIG s
       CHECK_FALSE(bench.port.rules().releaseOnAckError);
    };
    checkVersaloonRules();
-   // A multi image: the CMSIS-DAP processor sets its rules at start, then
+   // A dual image: the CMSIS-DAP processor sets its rules at start, then
    // the Versaloon SWD block runs INIT or CONFIG.
    bench.port.setRules(cmsisDapRules);
    bench.port.configure(1, 0, 1);

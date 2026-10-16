@@ -94,7 +94,7 @@
 // sequenceIn(): each sequence is at most 256 bits, LSB first.
 //
 // The SWD block of the Versaloon protocol does not call setRules() or
-// setClockHz(). In a multi image, the CMSIS-DAP processor sets its rules
+// setClockHz(). In a dual image, the CMSIS-DAP processor sets its rules
 // at start, also when the Versaloon personality is active. Thus
 // configure() (INIT and CONFIG of the SWD block) sets the Versaloon rules
 // again.
