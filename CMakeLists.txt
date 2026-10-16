@@ -93,9 +93,12 @@ option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 # An image that does not fit its flash limit: OFF skips the image with a
 # warning (cmake/ImageSize.cmake), ON stops the build. The size is only
 # known after the link. With OFF, the FLASH region of the linker script is
-# 64 KB larger (__vsl_flash_slack), so that the link does not fail. The CI
+# 64 KB larger (__vsl_flash_slack), so that the link does not fail. The
 # CI build jobs set ON: each image of each CI build must fit.
 option(VSL_STRICT_SIZE "Stop the build when an image does not fit its flash limit, instead of skipping the image" OFF)
+# Application images to leave out, for example app-10k: CI leaves it out of
+# a strict build of a set of personalities that does not fit it.
+set(VSL_SKIP_IMAGES "" CACHE STRING "Application images to leave out of the build (standalone, app-8k, app-10k)")
 
 # USB personalities of the firmware image (cmake/Personalities.cmake):
 # versaloon, cmsis-dap and wch-link. An image with more than one personality
@@ -137,6 +140,17 @@ if (CMAKE_CROSSCOMPILING)
         set(VSL_APP_IMAGES standalone app-8k app-10k)
     else ()
         set(VSL_APP_IMAGES standalone)
+    endif ()
+    foreach (_image ${VSL_SKIP_IMAGES})
+        if (NOT _image MATCHES "^(standalone|app-8k|app-10k)$")
+            message(FATAL_ERROR "VSL_SKIP_IMAGES: unknown image '${_image}', use standalone, app-8k or app-10k")
+        endif ()
+    endforeach ()
+    if (VSL_SKIP_IMAGES)
+        list(REMOVE_ITEM VSL_APP_IMAGES ${VSL_SKIP_IMAGES})
+    endif ()
+    if (NOT VSL_APP_IMAGES)
+        message(FATAL_ERROR "VSL_SKIP_IMAGES leaves no image for board ${BOARD}")
     endif ()
 
     # Debug log over the CDC-ACM port (src/debug/DebugLog.h). The option
@@ -321,8 +335,9 @@ if (CMAKE_CROSSCOMPILING)
     endforeach ()
     # The firmware must fit behind the legacy bootloader on all boards
     # (docs/firmware-update.md). A board without the app-10k image checks its
-    # standalone image against the app-10k limit too.
-    if (NOT "app-10k" IN_LIST VSL_APP_IMAGES)
+    # standalone image against the app-10k limit too. VSL_SKIP_IMAGES=app-10k
+    # on a board with a bootloader turns this check off.
+    if (NOT BOARD IN_LIST VSL_BOOTLOADER_BOARDS AND "standalone" IN_LIST VSL_APP_IMAGES)
         math(EXPR _limit "65536 - ${VSL_APP_OFFSET_app-10k} - ${VSL_SETTINGS_PAGE_SIZE}")
         string(APPEND _images_list "versaloon-ng-standalone.bin ${_limit}\n")
     endif ()
@@ -332,6 +347,8 @@ if (CMAKE_CROSSCOMPILING)
     if (VSL_BUILD_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
         vsl_add_bootloader()
         MESSAGE(STATUS "Building versaloon-bootloader for board " ${BOARD} " into " ${VSL_BOOTLOADER_DIR})
+    endif ()
+    if (VSL_BUILD_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS AND "app-8k" IN_LIST VSL_APP_IMAGES)
 
         # The combined image: versaloon-bootloader and the app-8k image in
         # one file from 0x08000000, for a new board and a debug probe. The
