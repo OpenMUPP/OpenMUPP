@@ -146,17 +146,17 @@ Thus a combined image fits in the first 64 KB, but the margin for the legacy boo
 It does not need the other 64 KB of flash.
 
 The firmware now builds the combined image: `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
-A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer):
+A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer and the switch request on EP0):
 
 | Image (Mini, Release) | Size | Limit |
 |---|---|---|
-| `standalone` | 55,744 bytes | 64,512 bytes |
-| `app-8k` | 55,744 bytes | 56,320 bytes |
-| `app-10k` | Does not fit: 1,472 bytes too large | 54,272 bytes |
+| `standalone` | 56,012 bytes | 64,512 bytes |
+| `app-8k` | 56,012 bytes | 56,320 bytes |
+| `app-10k` | Does not fit: 1,740 bytes too large | 54,272 bytes |
 
-The data and BSS use 16.9 KB.
+The data and BSS use 16.5 KB.
 The `app-10k` image of the combined image does not link.
-The `app-8k` image has a margin of 576 bytes only.
+The `app-8k` image has a margin of 308 bytes only.
 A `Debug` build of the combined image fits no image.
 
 ## Hardware test
