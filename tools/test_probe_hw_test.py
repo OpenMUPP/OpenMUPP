@@ -169,5 +169,119 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual((runner.args.pyocd_target, runner.args.probe_rs_chip), ("stm32f103c8", "STM32F103ZE"))
 
 
+class StepRunTest(unittest.TestCase):
+    """Runner.run with real child processes and a real log directory."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.runner = hw.Runner(hw.parse_args(["--log-dir", self.dir.name]))
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_output_and_exit_code(self):
+        code, output = self.runner.run("ok", [sys.executable, "-c", "print('hi'); raise SystemExit(3)"])
+        self.assertEqual(code, 3)
+        # The output has no command header, so the verdicts see only the tool output.
+        self.assertTrue(output.startswith("hi\n"), output)
+        with open(self.runner.log_path("ok")) as log:
+            self.assertTrue(log.read().startswith("$ "))
+
+    def test_no_stdin(self):
+        code, output = self.runner.run("stdin", [sys.executable, "-c", "input()"])
+        self.assertNotEqual(code, 0)
+        self.assertIn("EOFError", output)
+
+    def test_timeout(self):
+        code, output = self.runner.run("slow", [sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.5)
+        self.assertEqual(code, -1)
+        self.assertIn("TIMEOUT", output)
+
+    def test_missing_tool(self):
+        self.assertEqual(self.runner.run("missing", ["no-such-tool-for-the-test"])[0], 127)
+
+
+def stub_runner(test, argv, replies):
+    """A Runner whose run() answers from `replies`: {step suffix: (code, output)}."""
+    runner = hw.Runner(hw.parse_args(argv))
+    runner.args.image = hw.make_image(256)
+    runner.args.log_dir = tempfile.mkdtemp()
+    test.addCleanup(shutil.rmtree, runner.args.log_dir)
+    runner.calls = []
+
+    def run(step, cmd, timeout=hw.STEP_TIMEOUT_S):
+        runner.calls.append((step, cmd))
+        for prefix, reply in replies.items():
+            if step.endswith(prefix):
+                return reply
+        return 0, ""
+    runner.run = run
+    return runner
+
+
+def words(data):
+    return " ".join(f"{w:08x}" for w in struct.unpack(f"<{len(data) // 4}I", data))
+
+
+class PyocdVerdictTest(unittest.TestCase):
+    def verdicts(self, code, output, argv=()):
+        runner = stub_runner(self, ["--swd-speeds", "1000", "--jtag-speeds", "1000", *argv], {"kHz": (code, output)})
+        runner.pyocd()
+        return runner
+
+    def test_pass(self):
+        runner = self.verdicts(0, "PASS flash read-back\nRESULT PASS\n")
+        self.assertEqual([status for _, status, _ in runner.results], [hw.PASS, hw.PASS])
+
+    def test_fail_line_fails_the_step(self):
+        runner = self.verdicts(0, "FAIL RAM write/read\nRESULT PASS\n")
+        self.assertEqual(runner.results[0][1], hw.FAIL)
+        self.assertIn("FAIL RAM write/read", runner.results[0][2])
+
+    def test_no_result_line_fails_the_step(self):
+        self.assertEqual(self.verdicts(0, "Traceback ...\n").results[0][1], hw.FAIL)
+
+    def test_serial_goes_to_pyocd(self):
+        runner = self.verdicts(0, "RESULT PASS\n", ["--serial", "ABC123"])
+        self.assertIn("--uid", runner.calls[0][1])
+        self.assertEqual(runner.calls[0][1][-1], "ABC123")
+
+
+class ProbeRsVerdictTest(unittest.TestCase):
+    ram = "20000000: deadbeef 12345678 a5a5a5a5 5a5a5a5a\n"
+
+    def verdict(self, replies, speeds=("--jtag-speeds", "1000")):
+        runner = stub_runner(self, ["--swd-speeds", "1000", *speeds], replies)
+        runner.probe_rs()
+        return runner
+
+    def good(self, image):
+        return {" read": (0, "08000000: " + words(image)), " read RAM": (0, self.ram)}
+
+    def test_pass(self):
+        runner = self.verdict(self.good(hw.make_image(256)))
+        self.assertEqual([status for _, status, _ in runner.results], [hw.PASS, hw.PASS])
+
+    def test_read_back_differs(self):
+        replies = self.good(hw.make_image(256))
+        replies[" read"] = (0, "08000000: " + words(b"\xff" * 256))
+        self.assertEqual(self.verdict(replies).results[0][1], hw.FAIL)
+
+    def test_verify_text_fails_the_step(self):
+        replies = self.good(hw.make_image(256))
+        replies[" verify"] = (0, "Verification failed: contents do not match")
+        self.assertEqual(self.verdict(replies).results[0][1], hw.FAIL)
+
+    def test_failed_download_skips_the_rest(self):
+        runner = self.verdict({" download": (1, "Error: no probe")})
+        self.assertEqual(runner.results[0][1], hw.FAIL)
+        self.assertFalse(any(step.endswith(" verify") for step, _ in runner.calls))
+
+    def test_jtag_above_the_limit_is_skipped(self):
+        runner = self.verdict(self.good(hw.make_image(256)), ("--jtag-speeds", "1333,1334"))
+        self.assertEqual([(step, status) for step, status, _ in runner.results][1:],
+                         [("probe-rs jtag 1333 kHz", hw.PASS), ("probe-rs jtag 1334 kHz", hw.SKIP)])
+
+
 if __name__ == "__main__":
     unittest.main()
