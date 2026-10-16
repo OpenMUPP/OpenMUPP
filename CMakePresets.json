@@ -21,11 +21,7 @@
           "type": "BOOL",
           "value": "TRUE"
         },
-        "CMAKE_BUILD_TYPE": "Release",
-        "VSL_STRICT_SIZE": {
-          "type": "BOOL",
-          "value": "ON"
-        }
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {

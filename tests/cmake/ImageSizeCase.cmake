@@ -12,9 +12,10 @@
 # combined  writes boot.bin, app.bin when APP is ON, and an old combined
 #           image, then runs CombinedImage.cmake
 #
-# The line is "exit=<0|1> image=<state> copy=<state>": the exit code of the
-# script, and the state of the .bin file of the image and of the copy:
-# missing, old (the file of the older build) or new.
+# The line is "exit=<0|1> image=<state> copy=<state> image-hex=<state>
+# copy-hex=<state>": the exit code of the script, and the state of the .bin
+# and .hex files of the image and of the copy: missing, old (the file of the
+# older build) or new.
 cmake_minimum_required(VERSION 3.21)
 
 set(_cmake_dir "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
@@ -63,7 +64,9 @@ function(_vsl_state file out)
 endfunction()
 _vsl_state("${DIR}/img.bin" _image)
 _vsl_state("${DIR}/copy.bin" _copy)
+_vsl_state("${DIR}/img.hex" _image_hex)
+_vsl_state("${DIR}/copy.hex" _copy_hex)
 if (NOT _exit EQUAL 0)
     set(_exit 1)
 endif ()
-message(STATUS "exit=${_exit} image=${_image} copy=${_copy}")
+message(STATUS "exit=${_exit} image=${_image} copy=${_copy} image-hex=${_image_hex} copy-hex=${_copy_hex}")
