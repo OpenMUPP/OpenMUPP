@@ -30,6 +30,9 @@ static_assert(art::usb::CdcAcmFunctionBase::kDataPacketSize == cdcDataPacketSize
 static_assert(hw::Uid::SizeBytes == uidBytes);
 #if defined(VSL_WITH_CMSIS_DAP)
 static_assert(dap::packetMemoryUsed <= hw::UsbDevice::PacketMemorySize);
+#if defined(VSL_MULTI_PERSONALITY)
+static_assert(switchRequestCode != dap::msOs20VendorCode);
+#endif
 // The two personalities share the endpoint numbers, so the OUT endpoint is
 // double-buffered in each.
 static_assert(dap::outEndpoint == versaloonOutEndpoint);
@@ -135,6 +138,19 @@ const art::usb::Descriptors &descriptorsOf([[maybe_unused]] Personality personal
 #endif
 }
 
+#if defined(VSL_MULTI_PERSONALITY)
+// The handler of the other vendor requests to the device in a personality
+// (SwitchRequestHandler)
+art::usb::VendorRequestHandler *nextVendorHandlerOf([[maybe_unused]] Personality personality) {
+#if defined(VSL_WITH_CMSIS_DAP)
+   if(personality == Personality::CmsisDap) {
+      return &msOs20Handler;
+   }
+#endif
+   return nullptr;
+}
+#endif
+
 // The highest endpoint number of a personality, plus 1 (hw::UsbDevice)
 uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
 #if defined(VSL_WITH_WCH_LINK)
@@ -164,6 +180,9 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
 #if defined(VSL_USB_SERIAL_PORT)
    , serialPort_(cdcControlInterface, serialPortEndpoints)
 #endif
+#if defined(VSL_MULTI_PERSONALITY)
+   , switchRequest_(*functions.personalitySwitch, nextVendorHandlerOf(active))
+#endif
 {
 #if defined(VSL_USB_SERIAL_PORT)
    if(hasSerialPort()) {
@@ -184,7 +203,9 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
    case Personality::CmsisDap:
       // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
       events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
+#if !defined(VSL_MULTI_PERSONALITY)
       device_.setVendorRequestHandler(&msOs20Handler);
+#endif
       static_cast<void>(device_.addFunction(dap_));
       break;
 #endif
@@ -200,6 +221,11 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
    if(hasSerialPort()) {
       static_cast<void>(device_.addFunction(serialPort_));
    }
+#endif
+#if defined(VSL_MULTI_PERSONALITY)
+   // The switch request, and in the CMSIS-DAP personality the MS OS 2.0
+   // request after it
+   device_.setVendorRequestHandler(&switchRequest_);
 #endif
 }
 

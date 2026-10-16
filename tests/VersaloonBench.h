@@ -2,11 +2,13 @@
 
 // The firmware's USB device on the libArT USB device stack, with the fake
 // controller of libArT as the host: the descriptors, the Versaloon function
-// and a placeholder for the CDC-ACM function. For the USB tests and the
-// replay tests.
+// and a placeholder for the CDC-ACM function. With a personality switch,
+// also the switch request on EP0 (usb/SwitchRequest.h). For the USB tests
+// and the replay tests.
 
 #include "boot/BootloaderEntry.h"
 #include "protocol/CommandProcessor.h"
+#include "usb/SwitchRequest.h"
 #include "usb/UsbDescriptors.h"
 #include "usb/VersaloonFunction.h"
 
@@ -44,13 +46,21 @@ class Bench {
    public:
    // bootloader: the bootloader entry of FW_UPDATE, nullptr for none.
    // usbToXxx: the USB_TO_XXX handler, nullptr for none.
-   explicit Bench(boot::BootloaderEntry *bootloader = nullptr, protocol::UsbToXxxHandler *usbToXxx = nullptr)
-      : versaloon(testInfo, bootloader, usbToXxx)
+   // personalitySwitch: SWITCH_PERSONALITY and the switch request on EP0,
+   // nullptr for an image with one personality.
+   explicit Bench(boot::BootloaderEntry *bootloader = nullptr,
+                  protocol::UsbToXxxHandler *usbToXxx = nullptr,
+                  personality::PersonalitySwitch *personalitySwitch = nullptr)
+      : versaloon(testInfo, bootloader, usbToXxx, personalitySwitch)
       , device_(controller_, descriptors_)
       , cdc_(usb::cdcControlInterface, 2) {
       const std::array<uint8_t, usb::uidBytes> uid{ 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
                                                     0xDE, 0xF0, 0x01, 0x02, 0x03, 0x04 };
       serial_.set(uid);
+      if(personalitySwitch != nullptr) {
+         switchRequest_.emplace(*personalitySwitch);
+         device_.setVendorRequestHandler(&*switchRequest_);
+      }
       REQUIRE(device_.addFunction(versaloon));
       REQUIRE(device_.addFunction(cdc_));
       device_.start();
@@ -144,6 +154,7 @@ class Bench {
       // No BOS: the Versaloon personality is a USB 2.00 device.
       .bos = {},
    };
+   std::optional<usb::SwitchRequestHandler> switchRequest_;
    art::usb::Device device_;
    art::usb::Function cdc_;
 };

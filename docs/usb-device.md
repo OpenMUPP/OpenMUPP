@@ -161,6 +161,8 @@ To change the personality, use one of these methods:
 
 - In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
 - In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)). The status of a refused switch is `0xFF`.
+- In each personality, send the switch request on EP0 (see [Switch request on EP0](#switch-request-on-ep0)).
+  An image with WCH-Link and other personalities (work item #83) needs this request to leave WCH-Link, because the WCH-Link protocol has no free command for a switch.
 - Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the next personality in the list. With two personalities, this is the other one.
 
 The personality code is `0` for Versaloon, `1` for CMSIS-DAP and `2` for WCH-Link.
@@ -183,6 +185,46 @@ The host sees a disconnect, and then the device with the other VID:PID.
 A switch to the active personality does not reset.
 It also cancels a switch that the firmware did not do yet.
 If the flash write fails, the firmware starts again with the old personality.
+
+#### Switch request on EP0
+
+An image with more than one personality accepts a USB vendor request on the control endpoint (EP0) in each personality.
+The request has no data stage:
+
+| Field | Value |
+|---|---|
+| `bmRequestType` | `0x40`: vendor request, host to device, recipient device |
+| `bRequest` | `0x0E` (`usb::switchRequestCode`, the same code as `SWITCH_PERSONALITY`) |
+| `wValue` | The personality code |
+| `wIndex` | `0` |
+| `wLength` | `0` |
+
+The firmware sends the status stage (ACK), and then waits 10 ms, as for the other commands.
+The firmware stalls the request in these conditions:
+
+- The code is not a personality of the image.
+- `wIndex` or `wLength` is not `0`, or the direction is device to host.
+
+A stall means that the firmware does not switch.
+The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
+An image with one personality stalls the request.
+
+With libusb, the call is:
+
+```c
+libusb_control_transfer(handle, 0x40, 0x0E, code, 0, NULL, 0, 1000);
+```
+
+`usb::Device` of libArT has one handler for all vendor requests to the device (`usb::SwitchRequestHandler` in `src/usb/SwitchRequest.h`).
+The CMSIS-DAP personality also needs it for the request of the MS OS 2.0 descriptor set (vendor code `0x20`, see [MS OS 2.0 descriptors](#ms-os-20-descriptors)).
+Thus the switch request handler sends each other request to the MS OS 2.0 handler.
+The switch request code and the MS OS 2.0 vendor code must be different. A `static_assert` in `src/usb/UsbStack.cpp` checks this.
+
+On Windows, a host sends the request through the WinUSB driver of interface 0.
+The Versaloon and WCH-Link personalities need a WinUSB or libusb driver on interface 0 for their bulk endpoints, so this driver is always there.
+In the CMSIS-DAP personality, the MS OS 2.0 descriptors bind WinUSB to interface 0.
+WinUSB must also send a control request to the device recipient.
+No test on Windows confirms this yet. The hardware test of the personalities (work item #88) checks it.
 
 The key gesture has these rules:
 

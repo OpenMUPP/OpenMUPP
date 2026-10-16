@@ -3,11 +3,14 @@
 // The CMSIS-DAP personality on the libArT USB device stack, with the fake
 // controller of libArT as the host: the descriptors, the CMSIS-DAP function
 // on a processor with fake hardware, and a placeholder for the CDC-ACM
-// function. For the CMSIS-DAP USB tests.
+// function. With a personality switch, also the switch request on EP0
+// before the MS OS 2.0 request (usb/SwitchRequest.h), as in UsbStack. For
+// the CMSIS-DAP USB tests.
 
 #include "protocol/cmsisdap/DapProcessor.h"
 #include "usb/CmsisDapDescriptors.h"
 #include "usb/CmsisDapFunction.h"
+#include "usb/SwitchRequest.h"
 
 #include <FakeDeviceController.h>
 #include <doctest/doctest.h>
@@ -123,7 +126,12 @@ class DapBench {
       const std::array<uint8_t, usb::uidBytes> uid{ 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
                                                     0xDE, 0xF0, 0x01, 0x02, 0x03, 0x04 };
       serial_.set(uid);
-      device_.setVendorRequestHandler(&msOs20Handler_);
+      if(personalitySwitch != nullptr) {
+         switchRequest_.emplace(*personalitySwitch, &msOs20Handler_);
+         device_.setVendorRequestHandler(&*switchRequest_);
+      } else {
+         device_.setVendorRequestHandler(&msOs20Handler_);
+      }
       REQUIRE(device_.addFunction(function));
       REQUIRE(device_.addFunction(cdc_));
       device_.start();
@@ -208,6 +216,7 @@ class DapBench {
    };
    art::usb::msos20::DescriptorSetHandler msOs20Handler_{ usb::dap::msOs20VendorCode,
                                                           usb::desc::asSpan(usb::dap::msOs20DescriptorSet) };
+   std::optional<usb::SwitchRequestHandler> switchRequest_;
    art::usb::Device device_;
    art::usb::Function cdc_;
 };

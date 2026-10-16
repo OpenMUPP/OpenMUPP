@@ -3,12 +3,14 @@
 // The WCH-Link personality on the libArT USB device stack, with the fake
 // controller of libArT as the host: the descriptors, and the WCH-Link
 // function on a processor with the wire engine, mock pins and a mock DM.
-// For the WCH-Link USB tests.
+// With a personality switch, also the switch request on EP0
+// (usb/SwitchRequest.h). For the WCH-Link USB tests.
 
 #include "MockDebugModule.h"
 #include "MockRvSwdTarget.h"
 #include "protocol/wchlink/WchLinkProcessor.h"
 #include "protocol/wchlink/WchLinkTarget.h"
+#include "usb/SwitchRequest.h"
 #include "usb/WchLinkDescriptors.h"
 #include "usb/WchLinkFunction.h"
 
@@ -41,8 +43,9 @@ class WchLinkBench {
    static constexpr uint8_t setConfiguration = 9;
 
    // wire: the wire of the target. The pins see the frames of the other
-   // wire as noise.
-   explicit WchLinkBench(rvswd::Wire wire = rvswd::Wire::Two)
+   // wire as noise. personalitySwitch: the switch request on EP0, nullptr
+   // for an image with one personality.
+   explicit WchLinkBench(rvswd::Wire wire = rvswd::Wire::Two, personality::PersonalitySwitch *personalitySwitch = nullptr)
       : pins(wire)
       , dm(pins)
       , target(pins)
@@ -52,6 +55,10 @@ class WchLinkBench {
       const std::array<uint8_t, usb::uidBytes> uid{ 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
                                                     0xDE, 0xF0, 0x01, 0x02, 0x03, 0x04 };
       serial_.set(uid);
+      if(personalitySwitch != nullptr) {
+         switchRequest_.emplace(*personalitySwitch);
+         device_.setVendorRequestHandler(&*switchRequest_);
+      }
       REQUIRE(device_.addFunction(function));
       device_.start();
    }
@@ -151,6 +158,7 @@ class WchLinkBench {
       .configuration = usb::desc::asSpan(usb::wch::configurationDescriptor),
       .strings = art::span<const art::span<const uint8_t>>(strings_.data(), strings_.size()),
    };
+   std::optional<usb::SwitchRequestHandler> switchRequest_;
    art::usb::Device device_;
 };
 
