@@ -78,6 +78,13 @@ TEST_CASE("A bad switch request stalls and does not switch") {
                         art::span<const uint8_t>(data.data(), data.size()))
             .stalled);
    }
+   SUBCASE("The recipient interface (bmRequestType 0x41)") {
+      // The request goes to the function of interface 0, not to the switch
+      // request handler.
+      CHECK(controller
+            .controlOut(setupPacket(0x41, usb::switchRequestCode, personality::toCode(Personality::CmsisDap), 0, 0), {})
+            .stalled);
+   }
    SUBCASE("The direction device-to-host") {
       CHECK(
       controller.controlIn(setupPacket(0xC0, usb::switchRequestCode, personality::toCode(Personality::CmsisDap), 0, 1)).stalled);
