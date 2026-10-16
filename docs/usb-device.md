@@ -251,7 +251,7 @@ The results come from two runs of the script with this image. The serial loopbac
 | Check | Versaloon | CMSIS-DAP |
 |---|---|---|
 | Switch with the switch request on EP0 | pass | pass |
-| Serial loopback (default cases of the script) | pass | pass |
+| Serial loopback, quick set (3 baud rates, 8N and 8E, 1 and 2 stop bits) | pass | pass |
 | Serial loopback, all line codings (`--full-uart`, `v0.9.0-112-ga8a1abe` only) | pass | pass |
 | `DAP_UART_*` loopback | - | pass |
 | OpenOCD SWD, 1000 and 2000 kHz | pass | pass |
