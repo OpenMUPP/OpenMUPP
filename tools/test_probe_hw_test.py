@@ -4,6 +4,8 @@ Run: python3 -m unittest discover -s tools -p "test_*.py"
 """
 
 import argparse
+import contextlib
+import io
 import os
 import shutil
 import struct
@@ -14,6 +16,13 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import probe_hw_test as hw  # noqa: E402
+
+
+def silence(test):
+    """Hides the step lines of the Runner: in a CI log they look like hardware failures."""
+    redirect = contextlib.redirect_stdout(io.StringIO())
+    redirect.__enter__()
+    test.addCleanup(redirect.__exit__, None, None, None)
 
 
 def openocd_log(failed=(), jtag_tap=True, chip="0x414 flash_kb=512"):
@@ -164,6 +173,7 @@ class RunnerTest(unittest.TestCase):
         runner.all()
 
     def test_select_chip_keeps_the_options(self):
+        silence(self)
         runner = hw.Runner(hw.parse_args(["--probe-rs-chip", "STM32F103ZE"]))
         runner.select_chip(0x410, 64)
         self.assertEqual((runner.args.pyocd_target, runner.args.probe_rs_chip), ("stm32f103c8", "STM32F103ZE"))
@@ -173,6 +183,7 @@ class StepRunTest(unittest.TestCase):
     """Runner.run with real child processes and a real log directory."""
 
     def setUp(self):
+        silence(self)
         self.dir = tempfile.TemporaryDirectory()
         self.runner = hw.Runner(hw.parse_args(["--log-dir", self.dir.name]))
 
@@ -203,6 +214,7 @@ class StepRunTest(unittest.TestCase):
 
 def stub_runner(test, argv, replies):
     """A Runner whose run() answers from `replies`: {step suffix: (code, output)}."""
+    silence(test)
     runner = hw.Runner(hw.parse_args(argv))
     runner.args.image = hw.make_image(256)
     runner.args.log_dir = tempfile.mkdtemp()
