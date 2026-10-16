@@ -50,7 +50,6 @@
 // error LED (ErrorLed.h). The raw JTAG block has no acknowledge, so the
 // Versaloon personality cannot see the errors of JTAG.
 
-#include <cstddef>
 #include <cstdint>
 
 #include "protocol/SwdPort.h"

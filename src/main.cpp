@@ -59,7 +59,6 @@
 #include "board/Leds.h"
 #include "debug/DebugLog.h"
 #include "protocol/Background.h"
-#include "protocol/versaloon/GpioBlock.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
@@ -76,6 +75,7 @@
 #if defined(VSL_WITH_VERSALOON)
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
+#include "protocol/versaloon/GpioBlock.h"
 #include "protocol/versaloon/JtagRawBlock.h"
 #include "protocol/versaloon/PowerBlock.h"
 #include "protocol/versaloon/SwdBlock.h"
