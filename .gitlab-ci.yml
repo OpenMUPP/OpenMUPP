@@ -71,7 +71,7 @@ run-tool-tests:
 # Builds the application images of the board (standalone, app-8k, app-10k;
 # README "Build the firmware") with the configure preset PRESET
 # (CMakePresets.json). Release by default; a Debug build has the debug log on
-# the CDC port and SWD on. The presets set VSL_STRICT_SIZE, so the linker
+# the CDC port and SWD on. The job sets VSL_STRICT_SIZE, so the linker
 # script fails the link when an image does not fit; the size check reports
 # the size of each image in vsl-images.txt and fails on the same limit. The
 # default target also builds versaloon-bootloader for the Mini and the
@@ -86,7 +86,7 @@ run-tool-tests:
   script:
     - cd "$CI_PROJECT_DIR"
     - BUILDDIR=build/${PRESET}
-    - cmake --preset ${PRESET} -G "Unix Makefiles"
+    - cmake --preset ${PRESET} -G "Unix Makefiles" -DVSL_STRICT_SIZE=ON
     - cmake --build --preset ${PRESET} -- -j`nproc`
     - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/vsl-images.txt"
   # Only the .hex and .bin files that a user writes, with the board, the

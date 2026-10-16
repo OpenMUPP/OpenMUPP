@@ -94,7 +94,7 @@ option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 # warning (cmake/ImageSize.cmake), ON stops the build. The size is only
 # known after the link. With OFF, the FLASH region of the linker script is
 # 64 KB larger (__vsl_flash_slack), so that the link does not fail. The CI
-# presets set ON: each image of each CI build must fit.
+# CI build jobs set ON: each image of each CI build must fit.
 option(VSL_STRICT_SIZE "Stop the build when an image does not fit its flash limit, instead of skipping the image" OFF)
 
 # USB personalities of the firmware image (cmake/Personalities.cmake):
@@ -279,9 +279,9 @@ if (CMAKE_CROSSCOMPILING)
         if (image STREQUAL "app-8k")
             target_compile_definitions(${_target} PRIVATE VSL_HAS_BOOTLOADER_ENTRY)
         endif ()
-        # Relink when a linker script changes
+        # Relink when a linker script or the size check changes
         set_target_properties(${_target} PROPERTIES LINK_DEPENDS
-                "${PROJECT_SOURCE_DIR}/ldscripts/mem-f103.ld;${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld")
+                "${PROJECT_SOURCE_DIR}/ldscripts/mem-f103.ld;${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
 
         ADD_DUMP_TARGET(${_target})
         PRINT_SIZE_OF_TARGETS(${_target})
@@ -306,7 +306,6 @@ if (CMAKE_CROSSCOMPILING)
         add_custom_command(TARGET ${_target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -DIMAGE=${_name} -DLIMIT=${_limit} -DCOPY=${_file}
                     -DSTRICT=${VSL_STRICT_SIZE} -P ${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake
-                BYPRODUCTS ${_file}.hex ${_file}.bin
                 COMMENT "Checking the size of ${_name}, building ${_file}.hex and ${_file}.bin"
                 VERBATIM)
     endfunction()
