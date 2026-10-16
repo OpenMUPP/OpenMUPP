@@ -209,6 +209,19 @@ if (CMAKE_CROSSCOMPILING)
     if (VSL_DEBUG_SWD)
         list(APPEND PROJECT_DEFINES VSL_DEBUG_SWD)
     endif ()
+    # Link-time optimisation of the firmware and of all libraries (#75): the
+    # images are about 15 % smaller. It is ON by default in a Release build.
+    if (CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(_VSL_LTO_DEFAULT ON)
+    else ()
+        set(_VSL_LTO_DEFAULT OFF)
+    endif ()
+    option(VSL_LTO "Link-time optimisation (-flto)" ${_VSL_LTO_DEFAULT})
+    # For the targets below and in the dependencies. CMake adds -flto to
+    # the compile and the link, and makes the archives with gcc-ar and
+    # gcc-ranlib: with plain ar and ranlib, an archive of LTO objects has
+    # no symbol index, and the link fails.
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${VSL_LTO})
     if (VSL_STRICT_SIZE)
         set(VSL_FLASH_SLACK 0)
     else ()
@@ -238,7 +251,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", strict size: " ${VSL_STRICT_SIZE} ")")
+    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", strict size: " ${VSL_STRICT_SIZE} ", LTO: " ${VSL_LTO} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program
