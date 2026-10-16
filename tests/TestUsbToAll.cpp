@@ -1,8 +1,8 @@
 // The USB_TO_ALL dispatcher: block framing, INFO, DELAY and the sub-command
 // blocks.
 
-#include "protocol/UsbToAll.h"
-#include "protocol/UsbToXxx.h"
+#include "protocol/versaloon/UsbToAll.h"
+#include "protocol/versaloon/UsbToXxx.h"
 
 #include <doctest/doctest.h>
 

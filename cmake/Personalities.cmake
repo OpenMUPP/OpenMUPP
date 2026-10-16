@@ -32,10 +32,7 @@ endfunction()
 set(VSL_ALL_PERSONALITIES "")
 #   versaloon  the Versaloon interface of OpenOCD
 vsl_personality(versaloon CODE 0 SHORT vsl DEFINE VSL_WITH_VERSALOON SOURCES
-        "src/protocol/CommandAssembler\\.cpp" "src/protocol/CommandProcessor\\.cpp"
-        "src/protocol/UsbToAll\\.cpp" "src/protocol/UsbToXxx\\.cpp"
-        "src/protocol/GpioBlock\\.cpp" "src/protocol/JtagRawBlock\\.cpp"
-        "src/protocol/PowerBlock\\.cpp" "src/protocol/SwdBlock\\.cpp"
+        "src/protocol/versaloon/.*\\.cpp"
         "src/usb/VersaloonFunction\\.cpp" "src/boot/Bootloader\\.cpp")
 #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
 vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE VSL_WITH_CMSIS_DAP SOURCES

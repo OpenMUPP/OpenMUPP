@@ -5,7 +5,7 @@
 // unit tests check it.
 //
 // The switch commands call request(): SWITCH_PERSONALITY of the Versaloon
-// protocol (protocol/CommandProcessor.h) and ID_DAP_Vendor0 of CMSIS-DAP
+// protocol (protocol/versaloon/CommandProcessor.h) and ID_DAP_Vendor0 of CMSIS-DAP
 // (protocol/cmsisdap/DapProcessor.h). The key gesture
 // (personality/KeyGesture.h) requests the next personality. The command
 // queues its reply before the request takes effect. The main loop calls

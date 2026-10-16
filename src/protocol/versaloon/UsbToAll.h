@@ -6,7 +6,7 @@
 //
 //   [0x7F][total length u16][block][block]...
 //
-// See protocol/UsbToXxx.h for the blocks. The dispatcher runs the blocks in
+// See protocol/versaloon/UsbToXxx.h for the blocks. The dispatcher runs the blocks in
 // order and joins their replies. A top-level command 0x20-0x7E is one
 // block, as in the original firmware.
 //
@@ -20,7 +20,7 @@
 //
 // The other blocks are Block objects (GPIO, JTAG_RAW, SWD, POWER), added
 // with add(). A block type without a Block gets one CMD_NOT_SUPPORT status
-// byte. GET_TVCC (protocol/CommandProcessor.h) replies the voltage of the
+// byte. GET_TVCC (protocol/versaloon/CommandProcessor.h) replies the voltage of the
 // TargetVoltage object from setTargetVoltage(), or 0 mV without one.
 //
 // The dispatcher checks the framing of all blocks and sub-commands before
@@ -36,8 +36,8 @@
 #include <cstdint>
 #include <optional>
 
-#include "protocol/CommandProcessor.h"
-#include "protocol/UsbToXxx.h"
+#include "protocol/versaloon/CommandProcessor.h"
+#include "protocol/versaloon/UsbToXxx.h"
 
 namespace protocol {
 

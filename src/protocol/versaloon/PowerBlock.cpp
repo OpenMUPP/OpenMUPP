@@ -1,4 +1,4 @@
-#include "protocol/PowerBlock.h"
+#include "protocol/versaloon/PowerBlock.h"
 
 namespace protocol {
 

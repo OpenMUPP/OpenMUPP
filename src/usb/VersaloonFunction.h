@@ -5,7 +5,7 @@
 // tests run it on a fake controller.
 //
 // The function joins the OUT packets of a transfer into one command
-// (protocol/CommandAssembler.h), runs it (protocol/CommandProcessor.h) and
+// (protocol/versaloon/CommandAssembler.h), runs it (protocol/versaloon/CommandProcessor.h) and
 // sends the reply as one IN transfer. The command buffer and the reply
 // buffer are separate, so a reply can be longer than its command. While
 // the reply is on its way, the OUT endpoint NAKs: the next command waits.
@@ -21,7 +21,7 @@
 // OpenOCD stops.
 //
 // A wrong command (length error or overflow) gets an empty reply (a ZLP)
-// at the end of its transfer (see protocol/CommandAssembler.h). The host
+// at the end of its transfer (see protocol/versaloon/CommandAssembler.h). The host
 // then sees a reply of the wrong size at once, without a timeout. A reply
 // size from the USB_TO_XXX handler that is larger than the reply buffer
 // gets an empty reply too.
@@ -30,9 +30,9 @@
 #include <cstdint>
 #include <usb/VendorBulkFunction.h>
 
-#include "protocol/CommandAssembler.h"
-#include "protocol/CommandProcessor.h"
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/CommandAssembler.h"
+#include "protocol/versaloon/CommandProcessor.h"
+#include "protocol/versaloon/Versaloon.h"
 #include "usb/UsbDescriptors.h"
 
 namespace usb {

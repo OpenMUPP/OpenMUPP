@@ -1,6 +1,6 @@
 #pragma once
 
-// Runs one Versaloon command (protocol/Versaloon.h) and writes its reply.
+// Runs one Versaloon command (protocol/versaloon/Versaloon.h) and writes its reply.
 // Hardware-independent: the host unit tests check it.
 //
 // Common commands and their replies (all values little-endian):
@@ -85,7 +85,7 @@ class CommandProcessor {
                     UsbToXxxHandler *usbToXxx,
                     personality::PersonalitySwitch *personalitySwitch = nullptr);
 
-   // command: a complete command (protocol/CommandAssembler.h). reply: the
+   // command: a complete command (protocol/versaloon/CommandAssembler.h). reply: the
    // reply buffer, at least maxInfoText + 3 bytes. Returns the size of the
    // reply, or no value for no reply.
    std::optional<std::size_t> process(art::span<const uint8_t> command, art::span<uint8_t> reply);

@@ -15,11 +15,11 @@
 // read.
 
 #include "jtag/JtagBitBang.h"
-#include "protocol/GpioBlock.h"
-#include "protocol/JtagRawBlock.h"
-#include "protocol/SwdBlock.h"
-#include "protocol/UsbToAll.h"
-#include "protocol/UsbToXxx.h"
+#include "protocol/versaloon/GpioBlock.h"
+#include "protocol/versaloon/JtagRawBlock.h"
+#include "protocol/versaloon/SwdBlock.h"
+#include "protocol/versaloon/UsbToAll.h"
+#include "protocol/versaloon/UsbToXxx.h"
 #include "swd/SwdBitBang.h"
 
 #include "MockSwdPins.h"

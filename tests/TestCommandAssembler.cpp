@@ -1,7 +1,7 @@
 // The command assembler: joins OUT packets into Versaloon commands.
 
-#include "protocol/CommandAssembler.h"
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/CommandAssembler.h"
+#include "protocol/versaloon/Versaloon.h"
 
 #include <doctest/doctest.h>
 

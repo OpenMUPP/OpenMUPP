@@ -1,6 +1,6 @@
 #include "personality/PersonalitySwitch.h"
-#include "protocol/CommandProcessor.h"
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/CommandProcessor.h"
+#include "protocol/versaloon/Versaloon.h"
 
 #include "CmsisDapBench.h"
 

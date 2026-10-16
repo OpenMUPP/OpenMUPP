@@ -7,7 +7,7 @@
 // and the replay tests.
 
 #include "boot/BootloaderEntry.h"
-#include "protocol/CommandProcessor.h"
+#include "protocol/versaloon/CommandProcessor.h"
 #include "usb/SwitchRequest.h"
 #include "usb/UsbDescriptors.h"
 #include "usb/VersaloonFunction.h"

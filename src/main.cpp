@@ -8,12 +8,12 @@
 // after a JTAG or SWD error, the clock fault pattern when the crystal
 // fails) and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
 // enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
-// commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h),
-// with the GPIO block (protocol/GpioBlock.h) on the debug connector pins
-// the JTAG_RAW block (protocol/JtagRawBlock.h) on the JTAG port of the
-// board (board/BoardJtag.h: SPI fast path or bit-bang), and the SWD block (protocol/SwdBlock.h) on the
+// commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/versaloon/UsbToAll.h),
+// with the GPIO block (protocol/versaloon/GpioBlock.h) on the debug connector pins
+// the JTAG_RAW block (protocol/versaloon/JtagRawBlock.h) on the JTAG port of the
+// board (board/BoardJtag.h: SPI fast path or bit-bang), and the SWD block (protocol/versaloon/SwdBlock.h) on the
 // bit-bang SWD engine (swd/SwdBitBang.h). The POWER block
-// (protocol/PowerBlock.h) switches the target supply, and its poll() in the
+// (protocol/versaloon/PowerBlock.h) switches the target supply, and its poll() in the
 // main loop switches it off when the rail drops. GET_TVCC replies the
 // voltage of its Vref sense. During a long JTAG or SWD command, the
 // engines call the serial service (protocol/Background.h): it runs the
@@ -59,7 +59,6 @@
 #include "board/Leds.h"
 #include "debug/DebugLog.h"
 #include "protocol/Background.h"
-#include "protocol/GpioBlock.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
@@ -76,10 +75,11 @@
 #if defined(VSL_WITH_VERSALOON)
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
-#include "protocol/JtagRawBlock.h"
-#include "protocol/PowerBlock.h"
-#include "protocol/SwdBlock.h"
-#include "protocol/UsbToAll.h"
+#include "protocol/versaloon/GpioBlock.h"
+#include "protocol/versaloon/JtagRawBlock.h"
+#include "protocol/versaloon/PowerBlock.h"
+#include "protocol/versaloon/SwdBlock.h"
+#include "protocol/versaloon/UsbToAll.h"
 #endif
 #if defined(VSL_MULTI_PERSONALITY)
 #include "board/BoardPins.h"

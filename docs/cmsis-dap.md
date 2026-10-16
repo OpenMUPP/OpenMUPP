@@ -114,7 +114,7 @@ It uses these objects:
 
 - A `DapSwd` for the SWD transfers and sequences.
 - A `protocol::JtagPort` (`src/protocol/JtagPort.h`, on target `board::BoardJtag`) for JTAG. It is optional.
-- A `protocol::GpioPins` (on target `board::BoardGpio`) for `DAP_SWJ_Pins` and `DAP_ResetTarget`.
+- A `protocol::GpioPins` (`src/protocol/GpioPins.h`, on target `board::BoardGpio`) for `DAP_SWJ_Pins` and `DAP_ResetTarget`.
 - A `Platform` for the microsecond time, the delay and the LEDs.
 - A `DeviceInfo` with the strings and the capabilities of `DAP_Info`.
 - A `DapUart` (`DapUart.h`, on target `uart::DapUartChannel`) for the `DAP_UART_*` commands. It is optional.

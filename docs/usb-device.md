@@ -119,7 +119,7 @@ It is a list of one or more of these personalities, with `;` or `,` between them
 
 | Personality | Code | USB interface 0 | VID:PID | Sources |
 |---|---|---|---|---|
-| `versaloon` (default) | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/` and `wchlink/`) |
+| `versaloon` (default) | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/versaloon/`, `boot/Bootloader.cpp` |
 | `cmsis-dap` | `1` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
 | `wch-link` | `2` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `VSL_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
 
@@ -278,7 +278,7 @@ When the image has the Versaloon personality, the Versaloon command and reply bu
 The host sends one command in one bulk OUT transfer on endpoint `0x03`.
 It reads the reply in one bulk IN transfer on endpoint `0x82`.
 All values are little-endian.
-`src/protocol/` has the protocol code. It does not use the hardware, so the host unit tests check it.
+`src/protocol/versaloon/` has the protocol code. It does not use the hardware, so the host unit tests check it.
 
 The first byte of a command is the command code:
 
@@ -287,7 +287,7 @@ The first byte of a command is the command code:
 | `0x00`-`0x0F` | Common commands | One packet. |
 | `0x20`-`0x7F` | `USB_TO_XXX` commands | `[code][length u16][data]`. `length` is the total size, with the 3-byte header. The command can have many packets. |
 
-The firmware collects the packets until it has `length` bytes (`src/protocol/CommandAssembler.h`).
+The firmware collects the packets until it has `length` bytes (`src/protocol/versaloon/CommandAssembler.h`).
 The command buffer and the reply buffer are separate, and each has 4096 bytes.
 Thus a reply can be longer than its command.
 `GET_INFO` sends the buffer size to the host.
@@ -341,7 +341,7 @@ For an overflow, the firmware discards the packets until `length`.
 ## USB_TO_ALL
 
 OpenOCD sends all adapter operations in `USB_TO_ALL` commands (`0x7F`).
-`src/protocol/UsbToAll.h` runs them.
+`src/protocol/versaloon/UsbToAll.h` runs them.
 A `USB_TO_ALL` command contains blocks, and most blocks contain sub-commands:
 
 ```text
@@ -389,7 +389,7 @@ OpenOCD then stops with an error.
 
 ### GPIO block
 
-OpenOCD controls the reset lines SRST and TRST through the `GPIO` block (`src/protocol/GpioBlock.h`).
+OpenOCD controls the reset lines SRST and TRST through the `GPIO` block (`src/protocol/versaloon/GpioBlock.h`).
 Each bit of a `u16` mask selects one pin of the debug connector:
 
 | Bit | Signal | Mini and OtherUse | ST-Link/V2 |
@@ -501,7 +501,7 @@ Limits:
 
 ### JTAG_RAW block
 
-OpenOCD shifts all JTAG bits through the `JTAG_RAW` block (`src/protocol/JtagRawBlock.h`).
+OpenOCD shifts all JTAG bits through the `JTAG_RAW` block (`src/protocol/versaloon/JtagRawBlock.h`).
 The firmware drives the pins with GPIO bit-bang (`src/jtag/JtagBitBang.h`).
 On the Mini and the OtherUse, the [JTAG fast path](#jtag-fast-path) shifts the whole bytes with SPI and DMA.
 The pins are TCK, TMS, TDI, TDO and RTCK in the table of the [GPIO block](#gpio-block).
@@ -604,7 +604,7 @@ Limits:
 
 ### SWD block
 
-OpenOCD runs all SWD transfers through the `SWD` block (`src/protocol/SwdBlock.h`).
+OpenOCD runs all SWD transfers through the `SWD` block (`src/protocol/versaloon/SwdBlock.h`).
 The firmware drives the pins with GPIO bit-bang (`src/swd/SwdBitBang.h`).
 SWCLK is the TCK pin.
 SWDIO is the TMS pin: the firmware drives the TMS output pin and reads the TMS input pin (PB4 and PB6 on the Mini).
@@ -707,7 +707,7 @@ A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `IN
 
 ### POWER block
 
-The `POWER` block (`src/protocol/PowerBlock.h`) switches the 3.3 V supply of the target and measures the target voltage (Vref).
+The `POWER` block (`src/protocol/versaloon/PowerBlock.h`) switches the 3.3 V supply of the target and measures the target voltage (Vref).
 OpenOCD does not use it, but other tools do.
 The sub-commands use port index 0:
 
