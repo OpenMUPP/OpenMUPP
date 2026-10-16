@@ -230,12 +230,16 @@ python3 tools/probe_hw_test.py
 python3 tools/probe_hw_test.py --full-uart --skip probe-rs
 ```
 
-The OpenOCD checks are: write, verify and read back of a 32 KiB image, reset and halt, two single steps, a hardware breakpoint, RAM write and read, and run and halt.
+OpenOCD writes, verifies and reads back a 32 KiB image.
+It then checks reset and halt, two single steps, a hardware breakpoint, RAM write and read, and run and halt.
 The pyOCD checks come from `tools/pyocd_jtag_test.py`.
 probe-rs writes, verifies and reads back the image, writes and reads RAM, and resets the target.
-The script skips probe-rs on JTAG above 1000 kHz: probe-rs cannot set the target clock, and the target runs at 8 MHz after a reset.
+probe-rs cannot set the target clock, and the target runs at 8 MHz after a reset.
+Thus the script skips probe-rs on JTAG above 1333 kHz (8 MHz / 6).
 The pyOCD target and the probe-rs chip come from the device ID and the flash size of the target.
 The script reads these values in the first OpenOCD run.
+A low or medium density chip needs the `Keil.STM32F1xx_DFP` pack in pyOCD.
+With `--serial`, all tools use only the dongle with this serial number.
 
 Status: the test passed on 2026-10-16.
 Probe: OtherUse board.
@@ -247,7 +251,8 @@ The results come from two runs of the script with this image. The serial loopbac
 | Check | Versaloon | CMSIS-DAP |
 |---|---|---|
 | Switch with the switch request on EP0 | pass | pass |
-| Serial loopback (all line codings) | pass | pass |
+| Serial loopback (default cases of the script) | pass | pass |
+| Serial loopback, all line codings (`--full-uart`, `v0.9.0-112-ga8a1abe` only) | pass | pass |
 | `DAP_UART_*` loopback | - | pass |
 | OpenOCD SWD, 1000 and 2000 kHz | pass | pass |
 | OpenOCD JTAG, 1000 and 9000 kHz | pass | pass |

@@ -39,5 +39,7 @@ Hardware test status:
 - The Versaloon personality passed the OpenOCD test in JTAG and SWD mode.
 - The CMSIS-DAP personality passed the test on Linux with OpenOCD, pyOCD and probe-rs in SWD mode (see [cmsis-dap.md](cmsis-dap.md#hardware-test)).
 - The CMSIS-DAP personality passed the test on Linux with OpenOCD and pyOCD in JTAG mode (see [cmsis-dap.md](cmsis-dap.md#jtag-hardware-test)).
-- The Versaloon and the CMSIS-DAP personalities of the multi image `versaloon,cmsis-dap,wch-link` passed the test on Linux with OpenOCD, pyOCD and probe-rs, on SWD and JTAG (see [usb-device.md](usb-device.md#multi-image-hardware-test)). probe-rs ran on JTAG only at 1000 kHz.
+- The multi image `versaloon,cmsis-dap,wch-link` passed the test on Linux (see [usb-device.md](usb-device.md#multi-image-hardware-test)).
+  The Versaloon personality passed with OpenOCD on SWD and JTAG.
+  The CMSIS-DAP personality passed with OpenOCD, pyOCD and probe-rs on SWD and JTAG. probe-rs ran on JTAG only at 1000 kHz.
 - Windows (also the driverless WinUSB binding), the key switch and the WCH-Link personality of the multi image need a test on the hardware.
