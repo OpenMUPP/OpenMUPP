@@ -324,19 +324,29 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
-- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build of all images of the board, plus the size check of each image in `vsl-images.txt`.
-  The jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
+- `build-mini`: release build of all images of the Mini with the `mini` preset, plus the size check of each image in `vsl-images.txt`.
+  The build jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
   The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
-- `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PERSONALITIES=cmsis-dap`, plus the size check.
-- `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PERSONALITIES=versaloon,cmsis-dap`, plus the size check.
-  Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
-- `build-mini-dual-cmsis-dap`: the same release build of the Mini with `VSL_DEFAULT_PERSONALITY=cmsis-dap`, plus the size check.
-- `build-mini-wch-link`, `build-otheruse-wch-link`, `build-stlinkv2-wch-link`: the same release builds with `VSL_PERSONALITIES=wch-link`, plus the size check.
+- `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
+  GitLab shows each build as `build: [<board>, <suffix>, <tag>]`.
+  It builds the preset `<board><suffix>` (see [CMake presets](#cmake-presets)).
 
-Each build job configures and builds the preset with the name of the job, without `build-`.
-The jobs of the Mini run in each pipeline.
-The jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
+  | Personalities | Suffix | Tag | Boards |
+  |---|---|---|---|
+  | `versaloon` | - | - | OtherUse, ST-Link/V2 |
+  | `cmsis-dap` | `-cmsis-dap` | `-cmsis-dap` | Mini, OtherUse, ST-Link/V2 |
+  | `wch-link` | `-wch-link` | `-wch-link` | Mini, OtherUse, ST-Link/V2 |
+  | `versaloon,cmsis-dap` | `-dual` | `-vsl+dap` | Mini, OtherUse, ST-Link/V2 |
+  | `versaloon,cmsis-dap`, default `cmsis-dap` | `-dual-cmsis-dap` | `-dap+vsl` | Mini |
+  | `versaloon,cmsis-dap,wch-link` | `-triple` | `-vsl+dap+wch` | Mini, OtherUse, ST-Link/V2 |
+
+  Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
+- `build-mini-cmsis-dap-wch-link`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap,wch-link`, plus the size check.
+  This job keeps no artifacts.
+
+The build jobs of the Mini run in each pipeline.
+The build jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
@@ -349,6 +359,8 @@ The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as ar
 The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
 The ST-Link/V2 has the `standalone` image only.
 The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
+The tag of a multi image has a `+`, also in the name of the artifact archive and of the matrix job.
+In a URL, write `+` as `%2B`, for example in a link to `/-/jobs/artifacts/<ref>/download?job=<job>`.
 
 ## Branches
 

@@ -69,7 +69,7 @@ run-tool-tests:
     - python3 -m unittest discover -s tools -p "test_*.py" -v
 
 # Builds the application images of the board (standalone, app-8k, app-10k;
-# README "Build the firmware") with the configure preset PRESET
+# README "Build the firmware") with the configure preset ${BOARD}${VARIANT}
 # (CMakePresets.json). Release by default; a Debug build has the debug log on
 # the CDC port and SWD on. The job sets VSL_STRICT_SIZE, so the linker
 # script fails the link when an image does not fit; the size check reports
@@ -81,10 +81,13 @@ run-tool-tests:
   cache: *fetchcontent-cache
   variables:
     BUILD_TYPE: Release
-    # Empty for the default personality
+    # The preset is ${BOARD}${VARIANT}. Both empty for the default personality
+    VARIANT: ""
+    # The image tag of the personalities (docs/development.md "Image names")
     PROTOCOL_TAG: ""
   script:
     - cd "$CI_PROJECT_DIR"
+    - PRESET=${BOARD}${VARIANT}
     - BUILDDIR=build/${PRESET}
     - cmake --preset ${PRESET} -G "Unix Makefiles" -DVSL_STRICT_SIZE=ON
     - cmake --build --preset ${PRESET} -- -j`nproc`
@@ -93,11 +96,12 @@ run-tool-tests:
   # image, the build type and the version in the name (README "Build the
   # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link/V2
   # has the standalone image only. No .elf, .map or bootloader-only files.
+  # A tag of a multi image has a "+": encode it as %2B in a download URL.
   artifacts:
     name: "versaloon-ng-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
     paths:
-      - build/${PRESET}/versaloon-ng-${BOARD}*.hex
-      - build/${PRESET}/versaloon-ng-${BOARD}*.bin
+      - build/${BOARD}${VARIANT}/versaloon-ng-${BOARD}*.hex
+      - build/${BOARD}${VARIANT}/versaloon-ng-${BOARD}*.bin
 
 # Only the Mini jobs run on every pipeline. The jobs of the other boards are
 # manual, except on a tag, where all jobs run. A manual job allows failure,
@@ -105,114 +109,61 @@ run-tool-tests:
 .manual-unless-tag:
   rules:
     - if: "$CI_COMMIT_TAG"
+    - if: '$BOARD == "mini"'
     - when: manual
       allow_failure: true
 
+# The Versaloon personality of the Mini. This job updates the cache.
 build-mini:
   extends: .build-board-template
   cache:
     <<: *fetchcontent-cache
     policy: pull-push
   variables:
-    PRESET: mini
     BOARD: mini
-
-build-otheruse:
-  extends: [.build-board-template, .manual-unless-tag]
-  variables:
-    PRESET: otheruse
-    BOARD: otheruse
-
-build-stlinkv2:
-  extends: [.build-board-template, .manual-unless-tag]
-  variables:
-    PRESET: stlinkv2
-    BOARD: stlinkv2
 
 build-mini-debug:
   extends: .build-board-template
   variables:
     BOARD: mini
+    VARIANT: -debug
     BUILD_TYPE: Debug
-    PRESET: mini-debug
 
-# The CMSIS-DAP personality (VSL_PERSONALITIES=cmsis-dap) on all boards
-.build-cmsis-dap-template:
+# The release builds of the personality sets (#79, decision Q6). Each entry
+# gives the preset suffix VARIANT and the image tag PROTOCOL_TAG of one set.
+build:
+  extends: [.build-board-template, .manual-unless-tag]
+  parallel:
+    matrix:
+      # VSL_PERSONALITIES=versaloon. The Mini is the build-mini job.
+      - BOARD: [otheruse, stlinkv2]
+      - BOARD: [mini, otheruse, stlinkv2]
+        VARIANT: -cmsis-dap
+        PROTOCOL_TAG: -cmsis-dap
+      - BOARD: [mini, otheruse, stlinkv2]
+        VARIANT: -wch-link
+        PROTOCOL_TAG: -wch-link
+      # VSL_PERSONALITIES=versaloon,cmsis-dap. The last 1 KB flash page holds
+      # the stored personality, so each image limit of a multi image is 1 KB
+      # smaller.
+      - BOARD: [mini, otheruse, stlinkv2]
+        VARIANT: -dual
+        PROTOCOL_TAG: -vsl+dap
+      # The same, with CMSIS-DAP as the default personality
+      - BOARD: mini
+        VARIANT: -dual-cmsis-dap
+        PROTOCOL_TAG: -dap+vsl
+      # VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link
+      - BOARD: [mini, otheruse, stlinkv2]
+        VARIANT: -triple
+        PROTOCOL_TAG: -vsl+dap+wch
+
+# VSL_PERSONALITIES=cmsis-dap,wch-link, a set without Versaloon. Build and
+# size check only, no artifacts.
+build-mini-cmsis-dap-wch-link:
   extends: .build-board-template
   variables:
-    PROTOCOL_TAG: "-cmsis-dap"
-
-build-mini-cmsis-dap:
-  extends: .build-cmsis-dap-template
-  variables:
-    PRESET: mini-cmsis-dap
     BOARD: mini
-
-build-otheruse-cmsis-dap:
-  extends: [.build-cmsis-dap-template, .manual-unless-tag]
-  variables:
-    PRESET: otheruse-cmsis-dap
-    BOARD: otheruse
-
-build-stlinkv2-cmsis-dap:
-  extends: [.build-cmsis-dap-template, .manual-unless-tag]
-  variables:
-    PRESET: stlinkv2-cmsis-dap
-    BOARD: stlinkv2
-
-# The dual image (VSL_PERSONALITIES=versaloon,cmsis-dap) on all boards. The last 1 KB flash
-# page holds the stored personality, so each image limit is 1 KB smaller.
-.build-dual-template:
-  extends: .build-board-template
-  variables:
-    PROTOCOL_TAG: "-vsl+dap"
-
-build-mini-dual:
-  extends: .build-dual-template
-  variables:
-    PRESET: mini-dual
-    BOARD: mini
-
-build-otheruse-dual:
-  extends: [.build-dual-template, .manual-unless-tag]
-  variables:
-    PRESET: otheruse-dual
-    BOARD: otheruse
-
-build-stlinkv2-dual:
-  extends: [.build-dual-template, .manual-unless-tag]
-  variables:
-    PRESET: stlinkv2-dual
-    BOARD: stlinkv2
-
-# The dual image with CMSIS-DAP as the default personality
-build-mini-dual-cmsis-dap:
-  extends: .build-dual-template
-  variables:
-    PRESET: mini-dual-cmsis-dap
-    BOARD: mini
-    PROTOCOL_TAG: "-dap+vsl"
-
-# The WCH-Link personality (VSL_PERSONALITIES=wch-link) on all boards
-.build-wch-link-template:
-  extends: .build-board-template
-  variables:
-    PROTOCOL_TAG: "-wch-link"
-
-build-mini-wch-link:
-  extends: .build-wch-link-template
-  variables:
-    PRESET: mini-wch-link
-    BOARD: mini
-
-build-otheruse-wch-link:
-  extends: [.build-wch-link-template, .manual-unless-tag]
-  variables:
-    PRESET: otheruse-wch-link
-    BOARD: otheruse
-
-build-stlinkv2-wch-link:
-  extends: [.build-wch-link-template, .manual-unless-tag]
-  variables:
-    PRESET: stlinkv2-wch-link
-    BOARD: stlinkv2
+    VARIANT: -cmsis-dap-wch-link
+    PROTOCOL_TAG: -dap+wch
+  artifacts: null
