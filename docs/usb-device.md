@@ -649,6 +649,9 @@ With `-O2`, the value 8 gave 210 kHz.
 With `-Os`, the value 21 gave 230 kHz.
 `delay` 2 and more are not measured. The margin there is small.
 Measure SWCLK again after a change of the engine code.
+The measurement is from before link-time optimisation (LTO, #75).
+With LTO, each bit loop has the same instructions or one instruction more, so SWCLK is not faster.
+A new measurement with LTO is open.
 The ST-Link/V2 board has other SWD pins and is not measured.
 
 At `delay` 0, the firmware runs untimed, without the cycle counter.
