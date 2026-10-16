@@ -196,7 +196,7 @@ python3 tools/vsl_personality.py switch versaloon
 The tool finds the dongle by the VID:PID of each personality.
 For the WCH-Link personality, it also compares the product string with `Versaloon WCH-Link`.
 Other devices use the IDs `1209:0001` and `1a86:8010` too.
-The tool ignores a device with one of these IDs and an other product string.
+The tool ignores a device with one of these IDs and a different product string.
 Use `--serial` to select one dongle when more than one is connected.
 
 The tool sends the switch request on EP0 for each switch (see [Switch request on EP0](#switch-request-on-ep0)).
@@ -204,6 +204,9 @@ A firmware from before the EP0 request stalls it.
 Thus, after a stall, the tool sends `SWITCH_PERSONALITY` or `ID_DAP_Vendor0` on interface 0.
 The reply of this command tells if the firmware refused the switch.
 In the WCH-Link personality, the tool has no other command, so a stall means that the firmware refused the switch.
+The dongle can disconnect before the status stage ends.
+Thus, after a timeout, an I/O error or a lost device, the tool also waits for the new personality.
+After all other errors, the tool stops with an error message and does not wait.
 After the request, the tool waits 10 s for the device with the VID:PID of the new personality.
 
 After a command, the firmware sends the reply, and then waits 10 ms.

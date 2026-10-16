@@ -57,6 +57,13 @@ SWITCH_PERSONALITY = 0x0E
 DAP_VENDOR0 = 0x80
 DAP_INVALID = 0xFF
 LIBUSB_ERROR_PIPE = -9
+# libusb errors after which the request can have gone out: IO, NO_DEVICE,
+# TIMEOUT. The dongle can disconnect before the status stage ends.
+IN_PROGRESS_ERRORS = {
+    -1: errno.EIO,
+    -4: errno.ENODEV,
+    -7: errno.ETIMEDOUT,
+}
 TIMEOUT_MS = 1000
 ENUMERATION_TIMEOUT_S = 10.0
 
@@ -105,6 +112,12 @@ def is_stall(error):
     return error.errno == errno.EPIPE or getattr(error, "backend_error_code", None) == LIBUSB_ERROR_PIPE
 
 
+def can_be_in_progress(error):
+    """True when the request can have gone out after this USBError."""
+    code = getattr(error, "backend_error_code", None)
+    return code in IN_PROGRESS_ERRORS or error.errno in IN_PROGRESS_ERRORS.values()
+
+
 def import_usb():
     try:
         import usb.core
@@ -118,7 +131,7 @@ def get_string(usb, device, index):
     """A string descriptor of the device, or None when the host cannot read it."""
     try:
         return usb.util.get_string(device, index)
-    except (usb.core.USBError, ValueError):
+    except (usb.core.USBError, ValueError, NotImplementedError):
         return None
 
 
@@ -151,14 +164,17 @@ def send_ep0_request(usb, device, target):
 
     Returns True when the firmware accepted it, or when the result is not
     known and the switch can be in progress. Returns False on a stall.
+    Raises usb.core.USBError when the request did not go out.
     """
     try:
         device.ctrl_transfer(SWITCH_REQUEST_TYPE, SWITCH_REQUEST, PERSONALITIES[target][0], 0, None, TIMEOUT_MS)
     except usb.core.USBError as error:
         if is_stall(error):
             return False
-        # The request went out, so the switch can be in progress: wait for
-        # the target device.
+        if not can_be_in_progress(error):
+            raise
+        # The request can have gone out, so the switch can be in progress:
+        # wait for the target device.
         print("No status stage (%s), waiting for the device" % error, file=sys.stderr)
     return True
 
@@ -226,8 +242,8 @@ def command_switch(usb, args):
     except PersonalityError as error:
         print(error, file=sys.stderr)
         return 1
-    except usb.core.USBError as error:
-        print("Cannot send the command: %s" % error, file=sys.stderr)
+    except (usb.core.USBError, NotImplementedError) as error:
+        print("Cannot send the request: %s" % error, file=sys.stderr)
         return 1
     finally:
         usb.util.dispose_resources(device)

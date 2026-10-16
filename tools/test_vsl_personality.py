@@ -113,6 +113,13 @@ class FakeDevice:
         return self.reply
 
 
+def get_string(device, index):
+    value = device.strings[index]
+    if isinstance(value, Exception):
+        raise value
+    return value
+
+
 def fake_usb(devices):
     """A module like pyusb that finds the given devices."""
     usb = types.SimpleNamespace()
@@ -122,7 +129,7 @@ def fake_usb(devices):
 
     usb.core = types.SimpleNamespace(USBError=FakeUsbError, find=find)
     usb.util = types.SimpleNamespace(
-        get_string=lambda device, index: device.strings[index],
+        get_string=get_string,
         claim_interface=lambda device, interface: None,
         release_interface=lambda device, interface: None,
         dispose_resources=lambda device: None,
@@ -138,6 +145,16 @@ class FindDevicesTest(unittest.TestCase):
         ours_wch_id = FakeDevice(0x1A86, 0x8010, "Versaloon WCH-Link")
         found = vp.find_devices(fake_usb([ours, other, real, ours_wch_id]))
         self.assertEqual(found, [("wch-link", ours), ("wch-link", ours_wch_id)])
+
+    def test_unreadable_product_string(self):
+        for error in (FakeUsbError("Access denied", -3, errno.EACCES), NotImplementedError("not supported"), ValueError()):
+            device = FakeDevice(0x1209, 0x0001, error)
+            self.assertEqual(vp.find_devices(fake_usb([device])), [])
+
+    def test_unreadable_serial(self):
+        device = FakeDevice(0x0483, 0xA038, serial=NotImplementedError("not supported"))
+        self.assertEqual(vp.find_devices(fake_usb([device])), [("versaloon", device)])
+        self.assertEqual(vp.find_devices(fake_usb([device]), "A"), [])
 
     def test_serial(self):
         a = FakeDevice(0x0483, 0xA038, serial="A")
@@ -181,6 +198,27 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(self.switch(device, "versaloon"), 0)
         self.assertEqual(device.writes, [])
         self.assertEqual(self.waited, [("versaloon", "SN1")])
+
+    def test_ep0_timeout_and_io_error_wait(self):
+        for error in (FakeUsbError("Operation timed out", -7, errno.ETIMEDOUT), FakeUsbError("Input/Output Error", -1, errno.EIO)):
+            self.waited = []
+            device = FakeDevice(0x0483, 0xA038, ctrl_error=error)
+            self.assertEqual(self.switch(device, "cmsis-dap"), 0)
+            self.assertEqual(device.writes, [])
+            self.assertEqual(self.waited, [("cmsis-dap", "SN1")])
+
+    def test_ep0_other_errors_fail(self):
+        errors = (
+            FakeUsbError("Access denied", -3, errno.EACCES),
+            FakeUsbError("Entity not found", -5, errno.ENOENT),
+            FakeUsbError("Resource busy", -6, errno.EBUSY),
+            NotImplementedError("Operation not supported"),
+        )
+        for error in errors:
+            device = FakeDevice(0x0403, 0x9B3C, ctrl_error=error, reply=[0x80, 0x00])
+            self.assertEqual(self.switch(device, "versaloon"), 1)
+            self.assertEqual(device.writes, [])
+            self.assertEqual(self.waited, [])
 
     def test_stall_in_wch_link_is_a_refusal(self):
         device = FakeDevice(0x1209, 0x0001, "Versaloon WCH-Link", ctrl_error=stall())
