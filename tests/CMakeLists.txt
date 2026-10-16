@@ -143,6 +143,12 @@ vsl_personality_test(default-not-in-set "VSL_DEFAULT_PERSONALITY 'wch-link' is n
         -DVSL_PERSONALITIES=versaloon,cmsis-dap -DVSL_DEFAULT_PERSONALITY=wch-link)
 vsl_personality_test(wch-id-without-wch-link "VSL_WCH_LINK_WCH_USB_ID needs wch-link"
         -DVSL_PERSONALITIES=versaloon -DVSL_WCH_LINK_WCH_USB_ID=ON)
+vsl_personality_test(debug-cdc-wch-link-only "only the wch-link personality has no CDC port"
+        -DVSL_PERSONALITIES=wch-link -DVSL_DEBUG_CDC=ON)
+vsl_personality_test(debug-cdc-multi-wch-link "set=versaloon,wch-link default=versaloon"
+        -DVSL_PERSONALITIES=versaloon,wch-link -DVSL_DEBUG_CDC=ON)
+vsl_personality_test(default-not-in-set-hint "-UVSL_DEFAULT_PERSONALITY"
+        -DVSL_PERSONALITIES=cmsis-dap -DVSL_DEFAULT_PERSONALITY=versaloon)
 
 # The deprecated VSL_PROTOCOL: the same result as the new option, with a warning
 vsl_personality_test(protocol-warning "VSL_PROTOCOL is deprecated"
@@ -158,3 +164,35 @@ vsl_personality_test(protocol-and-personalities "Set VSL_PERSONALITIES or the de
         -DVSL_PROTOCOL=cmsis-dap -DVSL_PERSONALITIES=cmsis-dap)
 vsl_personality_test(default-protocol-alone "VSL_DEFAULT_PROTOCOL is deprecated, and ignored"
         -DVSL_PERSONALITIES=versaloon -DVSL_DEFAULT_PROTOCOL=cmsis-dap)
+vsl_personality_test(default-protocol-unknown "Unknown VSL_DEFAULT_PROTOCOL 'wch-link'"
+        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=wch-link)
+vsl_personality_test(default-protocol-and-personality "Set VSL_DEFAULT_PERSONALITY or the deprecated VSL_DEFAULT_PROTOCOL"
+        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=versaloon -DVSL_DEFAULT_PERSONALITY=cmsis-dap)
+vsl_personality_test(default-protocol-and-personality-same "set=versaloon,cmsis-dap default=cmsis-dap"
+        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=cmsis-dap -DVSL_DEFAULT_PERSONALITY=cmsis-dap)
+
+# The cache across configure runs: tests/cmake/fixture is configured in
+# one build directory again and again, in this order. Each step needs the
+# cache of the step before it.
+set(_vsl_fixture_dir "${CMAKE_CURRENT_BINARY_DIR}/personalities-fixture")
+set(_vsl_fixture_previous "")
+function(vsl_personality_cache_test name regex)
+    add_test(NAME personalities.cache.${name}
+            COMMAND ${CMAKE_COMMAND} ${ARGN} -S ${CMAKE_CURRENT_SOURCE_DIR}/cmake/fixture -B ${_vsl_fixture_dir})
+    set_tests_properties(personalities.cache.${name} PROPERTIES PASS_REGULAR_EXPRESSION "${regex}"
+            FIXTURES_SETUP vsl-cache-${name} FIXTURES_REQUIRED "${_vsl_fixture_previous}")
+    set(_vsl_fixture_previous vsl-cache-${name} PARENT_SCOPE)
+endfunction()
+add_test(NAME personalities.cache.clean COMMAND ${CMAKE_COMMAND} -E rm -rf ${_vsl_fixture_dir})
+set_tests_properties(personalities.cache.clean PROPERTIES FIXTURES_SETUP vsl-cache-clean)
+set(_vsl_fixture_previous vsl-cache-clean)
+# A first configure without options caches the empty defaults
+vsl_personality_cache_test(default "set=versaloon default=versaloon tag=\\[\\]")
+# Then the deprecated option in the same directory: no error
+vsl_personality_cache_test(protocol "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\]" -DVSL_PROTOCOL=dual)
+# The new option while VSL_PROTOCOL is still in the cache: an error
+vsl_personality_cache_test(both "not both" -DVSL_PERSONALITIES=cmsis-dap)
+# Removed from the cache: the new option works
+vsl_personality_cache_test(unset "set=cmsis-dap default=cmsis-dap" -UVSL_PROTOCOL -DVSL_PERSONALITIES=cmsis-dap)
+# A default that the new set does not have: an error with a hint
+vsl_personality_cache_test(stale-default "-UVSL_DEFAULT_PERSONALITY" -DVSL_DEFAULT_PERSONALITY=cmsis-dap -DVSL_PERSONALITIES=versaloon)
