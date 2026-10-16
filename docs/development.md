@@ -330,7 +330,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
 - `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
-  GitLab shows each build as `build: [<board>, <suffix>, <tag>]`.
+  GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -triple, -vsl+dap+wch, app-10k]` or `build: [otheruse]`.
   It builds the preset `<board><suffix>` (see [CMake presets](#cmake-presets)).
 
   | Personalities | Suffix | Tag | Boards |
@@ -365,7 +365,8 @@ The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-b
 The ST-Link/V2 has the `standalone` image only.
 The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
 The tag of a multi image has a `+`, also in the name of the artifact archive and of the matrix job.
-In a URL, write `+` as `%2B`, for example in a link to `/-/jobs/artifacts/<ref>/download?job=<job>`.
+In a URL, encode the full job name, for example in a link to `/-/jobs/artifacts/<ref>/download?job=<job>`.
+Encode `+` as `%2B`, the space as `%20`, `,` as `%2C`, `[` as `%5B` and `]` as `%5D`.
 
 ## Branches
 

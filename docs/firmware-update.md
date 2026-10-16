@@ -156,8 +156,9 @@ The bootloader uses the start of the flash, and the application uses the rest:
 The limits are hard limits for all boards.
 The firmware must also fit behind the legacy bootloader, because the existing boards need the `app-10k` image.
 Thus CI also checks the `standalone` image of the ST-Link/V2 against the `app-10k` limit.
-Exception: the triple image (`versaloon,cmsis-dap,wch-link`) does not fit `app-10k` yet.
-CI leaves out its `app-10k` image (see [Continuous integration](development.md#continuous-integration)).
+Exception: on the Mini and the OtherUse, the triple image (`versaloon,cmsis-dap,wch-link`) does not fit `app-10k` yet.
+CI leaves out the `app-10k` image of these two builds.
+The standalone image of the ST-Link/V2 triple image fits the `app-10k` limit, and CI checks it (see [Continuous integration](development.md#continuous-integration)).
 
 - `ldscripts/mem-f103.ld` has the FLASH region from the start of the application to the end of the 64 KB. With `VSL_STRICT_SIZE=ON`, the link of an image fails when the application is too large. The CI build jobs set this option.
 - Without `VSL_STRICT_SIZE`, the build skips an image that is too large, and shows a warning (see [Images that do not fit](development.md#images-that-do-not-fit)).
