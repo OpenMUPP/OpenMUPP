@@ -51,6 +51,18 @@ vsl_personality(wch-link CODE 2 SHORT wch DEFINE VSL_WITH_WCH_LINK SOURCES
 # The values of the deprecated VSL_PROTOCOL option
 set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
 
+# Declares the cache entries of the personality options. Both are empty by
+# default: empty VSL_PERSONALITIES is versaloon. Thus a value that is not
+# empty always comes from the user, and vsl_resolve_personalities() can find
+# VSL_PERSONALITIES and the deprecated VSL_PROTOCOL set together, also in a
+# build directory that has cached the default.
+function(vsl_personality_options)
+    set(VSL_PERSONALITIES "" CACHE STRING
+            "USB personalities of the image, a list with ';' or ','. Empty: versaloon. Supported: ${VSL_ALL_PERSONALITIES}")
+    set(VSL_DEFAULT_PERSONALITY "" CACHE STRING
+            "Personality of a multi image when no personality is stored. Empty: the first one of ${VSL_ALL_PERSONALITIES}")
+endfunction()
+
 # Reads these variables of the caller:
 #   VSL_PERSONALITIES        the personalities of the image, a CMake list or
 #                            a comma-separated list. Empty: versaloon.
@@ -59,6 +71,7 @@ set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
 #   VSL_PROTOCOL, VSL_DEFAULT_PROTOCOL
 #                            deprecated aliases, see below
 #   VSL_WCH_LINK_WCH_USB_ID  the USB ID of WCH for the WCH-Link personality
+#   VSL_DEBUG_CDC            the debug log on the CDC port
 # Sets these variables in the caller:
 #   VSL_PERSONALITY_SET         the personalities, in canonical order
 #   VSL_PERSONALITY_COUNT       the number of personalities
@@ -140,11 +153,17 @@ function(vsl_resolve_personalities)
     if (_default STREQUAL "")
         list(GET _personalities 0 _default)
     elseif (NOT _default IN_LIST _personalities)
-        message(FATAL_ERROR "VSL_DEFAULT_PERSONALITY '${_default}' is not in the personalities of the image: ${_personalities}")
+        message(FATAL_ERROR "VSL_DEFAULT_PERSONALITY '${_default}' is not in the personalities of the image: ${_personalities}. "
+                "Set it to one of them, or remove it from the cache with -UVSL_DEFAULT_PERSONALITY.")
     endif ()
 
     if (VSL_WCH_LINK_WCH_USB_ID AND NOT "wch-link" IN_LIST _personalities)
         message(FATAL_ERROR "VSL_WCH_LINK_WCH_USB_ID needs wch-link in VSL_PERSONALITIES.")
+    endif ()
+    # The log goes to the CDC port. In a multi image the log is silent while
+    # the WCH-Link personality is active.
+    if (VSL_DEBUG_CDC AND _personalities STREQUAL "wch-link")
+        message(FATAL_ERROR "An image with only the wch-link personality has no CDC port for the debug log. Set -DVSL_DEBUG_CDC=OFF.")
     endif ()
 
     set(_defines "")

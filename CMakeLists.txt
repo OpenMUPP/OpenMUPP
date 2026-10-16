@@ -97,15 +97,7 @@ option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 # selects the next one, and a flash page at the end of the application area
 # stores it (src/personality/).
 include(Personalities)
-# The deprecated VSL_PROTOCOL sets the personalities when it is set. The
-# cache entry of VSL_PERSONALITIES then must not exist, so that
-# vsl_resolve_personalities() finds an option that is set twice.
-if ("${VSL_PROTOCOL}" STREQUAL "")
-    set(VSL_PERSONALITIES "versaloon" CACHE STRING
-            "USB personalities of the image, a list with ';' or ',': ${VSL_ALL_PERSONALITIES}")
-endif ()
-set(VSL_DEFAULT_PERSONALITY "" CACHE STRING
-        "Personality of a multi image when no personality is stored. Empty: the first one of ${VSL_ALL_PERSONALITIES}")
+vsl_personality_options()
 
 # The WCH-Link personality uses the USB ID 1a86:8010 of WCH instead of the
 # own ID. wlink and minichlink find a probe by this ID. The vendor ID belongs
@@ -161,15 +153,10 @@ if (CMAKE_CROSSCOMPILING)
         message(FATAL_ERROR "VSL_DEBUG_SWD is for debug builds: a Release build has all LEDs. Set -DVSL_DEBUG_SWD=OFF.")
     endif ()
 
-    # Checks the personality options. Sets VSL_PERSONALITY_SET, the
-    # VSL_WITH_<P> defines (personality/Personality.h), the sources to drop
+    # Checks the personality options and VSL_DEBUG_CDC. Sets
+    # VSL_PERSONALITY_SET, the VSL_WITH_<P> defines (personality/Personality.h), the sources to drop
     # and VSL_IMAGE_TAG.
     vsl_resolve_personalities()
-    # The log goes to the CDC port. In a multi image the log is silent while
-    # the WCH-Link personality is active.
-    if (VSL_PERSONALITY_SET STREQUAL "wch-link" AND VSL_DEBUG_CDC)
-        message(FATAL_ERROR "An image with only the wch-link personality has no CDC port for the debug log. Set -DVSL_DEBUG_CDC=OFF.")
-    endif ()
 
     # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
