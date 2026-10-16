@@ -157,7 +157,8 @@ The limits are hard limits for all boards.
 The firmware must also fit behind the legacy bootloader, because the existing boards need the `app-10k` image.
 Thus CI also checks the `standalone` image of the ST-Link/V2 against the `app-10k` limit.
 
-- `ldscripts/mem-f103.ld` has the FLASH region from the start of the application to the end of the 64 KB. The link of an image fails when the application is too large.
+- `ldscripts/mem-f103.ld` has the FLASH region from the start of the application to the end of the 64 KB. With `VSL_STRICT_SIZE=ON`, the link of an image fails when the application is too large. The CI build jobs set this option.
+- Without `VSL_STRICT_SIZE`, the build skips an image that is too large, and shows a warning (see [Images that do not fit](development.md#images-that-do-not-fit)).
 - CI reports the size of each image with `ci/check-size.sh` and fails when the `.bin` file is larger than its limit.
 
 The main stack is 2 KB (`ldscripts/sections.ld`), because the STM32F103 has only 20 KB RAM.

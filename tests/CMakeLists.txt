@@ -196,3 +196,29 @@ vsl_personality_cache_test(both "not both" -DVSL_PERSONALITIES=cmsis-dap)
 vsl_personality_cache_test(unset "set=cmsis-dap default=cmsis-dap" -UVSL_PROTOCOL -DVSL_PERSONALITIES=cmsis-dap)
 # A default that the new set does not have: an error with a hint
 vsl_personality_cache_test(stale-default "-UVSL_DEFAULT_PERSONALITY" -DVSL_DEFAULT_PERSONALITY=cmsis-dap -DVSL_PERSONALITIES=versaloon)
+
+# The size check of each image and the combined image (cmake/ImageSize.cmake,
+# cmake/CombinedImage.cmake), in script mode on fake files. Each case passes
+# when the output matches <regex>: the result line, or the warning text.
+find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
+function(vsl_image_size_test name regex)
+    add_test(NAME image-size.${name}
+            COMMAND ${CMAKE_COMMAND} -DDIR=${CMAKE_CURRENT_BINARY_DIR}/image-size/${name}
+                -DPYTHON=${Python3_EXECUTABLE} ${ARGN} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ImageSizeCase.cmake)
+    set_tests_properties(image-size.${name} PROPERTIES PASS_REGULAR_EXPRESSION "${regex}")
+endfunction()
+
+vsl_image_size_test(fits "exit=0 image=new copy=new image-hex=new copy-hex=new\n" -DSCRIPT=size -DSIZE=100 -DLIMIT=100)
+vsl_image_size_test(fits-strict "exit=0 image=new copy=new image-hex=new copy-hex=new\n" -DSCRIPT=size -DSIZE=100 -DLIMIT=100 -DSTRICT=ON)
+# One byte too large: the build skips the image and removes the old copies
+vsl_image_size_test(skip "exit=0 image=missing copy=missing image-hex=missing copy-hex=missing\n" -DSCRIPT=size -DSIZE=101 -DLIMIT=100)
+# CMake wraps the warning text: [ \n]+ matches a space or a line break
+vsl_image_size_test(skip-warning "img is 101 bytes, 1 bytes larger than the limit of 100 bytes\\.[ \n]+The build[ \n]+skips this image"
+        -DSCRIPT=size -DSIZE=101 -DLIMIT=100 -DSTRICT=OFF)
+# The build stops: the script does not change the files
+vsl_image_size_test(strict "exit=1 image=new copy=old image-hex=new copy-hex=old\n" -DSCRIPT=size -DSIZE=101 -DLIMIT=100 -DSTRICT=ON)
+vsl_image_size_test(strict-error "VSL_STRICT_SIZE is ON" -DSCRIPT=size -DSIZE=101 -DLIMIT=100 -DSTRICT=ON)
+vsl_image_size_test(combined "exit=0 image=new copy=new image-hex=new copy-hex=new\n" -DSCRIPT=combined -DAPP=ON)
+# No app-8k image: the build skips the combined image and removes the old one
+vsl_image_size_test(combined-skip "exit=0 image=missing copy=missing image-hex=missing copy-hex=missing\n" -DSCRIPT=combined -DAPP=OFF)
+vsl_image_size_test(combined-skip-warning "also[ \n]+skips the combined image" -DSCRIPT=combined -DAPP=OFF)

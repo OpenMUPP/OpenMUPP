@@ -19,6 +19,8 @@ The build writes these files into the build directory:
   `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
 - `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 
+An image that does not fit its limit has no `.hex` and `.bin` files, and no copies (see [Images that do not fit](#images-that-do-not-fit)).
+
 All images use the same object files.
 Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
 One linker script, `ldscripts/mem-f103.ld`, links all images.
@@ -47,6 +49,7 @@ These options select the board, the personality and the debug features:
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [debug-log.md](debug-log.md)). Not allowed in a `Release` build, and not allowed when `wch-link` is the only personality. In a multi image, the log is silent while the WCH-Link personality is active. |
+| `VSL_STRICT_SIZE` | `OFF` (CI: `ON`) | What the build does when an image does not fit its flash limit (see [Images that do not fit](#images-that-do-not-fit)). `OFF`: the build skips the image with a warning and continues. `ON`: the build stops with an error. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
 ### Image names
@@ -72,6 +75,35 @@ The tag after the board in the file name tells the personalities of the image:
 
 The tags of the dual images changed: `-dual` is now `-vsl+dap`, and `-dual-cmsis-dap` is now `-dap+vsl`.
 This is also true when you build with the deprecated `VSL_PROTOCOL=dual`.
+
+### Images that do not fit
+
+Each image has a flash limit: the flash behind its bootloader, without the settings page of a multi image.
+`vsl-images.txt` lists the limits.
+Some sets of personalities do not fit each image, for example the Debug build of `versaloon,cmsis-dap,wch-link`.
+The size of an image is only known after the link.
+Thus a post-build step, `cmake/ImageSize.cmake`, compares the `.bin` file of each image with its limit.
+
+With `VSL_STRICT_SIZE=OFF`, the build skips an image that does not fit:
+
+- The FLASH region of the linker script is 64 KB larger (`__vsl_flash_slack`), so the link does not fail.
+- The post-build step removes the `.hex` and `.bin` files of the image and their copies, and shows a CMake warning.
+- The build continues and makes the other images.
+- When the build skips the `app-8k` image, it also skips the combined image (`cmake/CombinedImage.cmake`).
+- The `.elf` and `.map` files of a skipped image stay in the build directory. Do not program them.
+
+An example: the Release build of `versaloon,cmsis-dap,wch-link` for the Mini makes the `standalone`, `app-8k` and combined images.
+It skips the `app-10k` image.
+
+With `VSL_STRICT_SIZE=ON`, the FLASH region has no slack, and the link of an image that does not fit fails.
+The post-build step does not run.
+The CI build jobs set `VSL_STRICT_SIZE=ON`, so each image of each CI build must fit.
+The presets do not set it: a preset with another `VSL_PERSONALITIES` skips the images that do not fit.
+
+`vsl-images.txt` also lists a skipped image.
+Thus `ci/check-size.sh` fails on a skipped image, because its `.bin` file does not exist.
+
+The host test build runs the post-build steps in CMake script mode on fake files (`tests/cmake/ImageSizeCase.cmake`, tests `image-size.*`).
 
 ### Add a personality
 
@@ -287,6 +319,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
 - `build-mini`, `build-otheruse`, `build-stlinkv2`: release build of all images of the board, plus the size check of each image in `vsl-images.txt`.
+  The jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
   The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
 - `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PERSONALITIES=cmsis-dap`, plus the size check.

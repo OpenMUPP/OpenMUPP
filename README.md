@@ -75,6 +75,9 @@ A preset without a suffix builds the Versaloon personality.
 Add `-cmsis-dap`, `-dual` or `-wch-link` for the other personalities, for example `mini-cmsis-dap`.
 A `-dual` preset builds the multi image with the Versaloon and the CMSIS-DAP personalities.
 For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [CMake options](docs/development.md#cmake-options)).
+Some sets of personalities do not fit each image.
+The build skips an image that does not fit, shows a warning and makes the other images.
+With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
