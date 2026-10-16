@@ -173,10 +173,10 @@ To change the personality, use one of these methods:
 - In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
 - In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)). The status of a refused switch is `0xFF`.
 - In each personality, send the switch request on EP0 (see [Switch request on EP0](#switch-request-on-ep0)).
-  An image with WCH-Link and other personalities (work item #83) needs this request to leave WCH-Link, because the WCH-Link protocol has no free command for a switch.
+  A multi image with WCH-Link needs this request or the key to leave WCH-Link, because the WCH-Link protocol has no free command for a switch.
 - Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the next personality in the list. With two personalities, this is the other one.
-  The key also works in the WCH-Link personality. The WCH-Link personality has no switch command, so the key is the only method to leave it.
-  The ST-Link/V2 has no key: thus a multi image with WCH-Link on the ST-Link/V2 cannot leave the WCH-Link personality.
+  The key also works in the WCH-Link personality.
+  The ST-Link/V2 has no key: use the switch request on EP0 to leave the WCH-Link personality.
 
 The personality code is `0` for Versaloon, `1` for CMSIS-DAP and `2` for WCH-Link.
 The firmware refuses a switch to a code that is not in the image.

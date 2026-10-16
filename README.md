@@ -219,7 +219,7 @@ To use the key, hold it down for 3 s until all LEDs flash.
 Then release the key.
 The dongle then resets and shows as the USB device of the next personality.
 The dongle keeps the personality after a power cycle and after a firmware update with `stm32flash`.
-The WCH-Link personality has no switch command: use the key.
+The WCH-Link personality has no switch command: use the switch request on EP0 or the key (see [docs/usb-device.md](docs/usb-device.md#switch-request-on-ep0)).
 See [docs/usb-device.md](docs/usb-device.md#multi-image).
 
 The power LED shows the target power. The state LED flashes for each command of the host, and gives a double flash after a JTAG or SWD error. The USB LED shows the USB state.
