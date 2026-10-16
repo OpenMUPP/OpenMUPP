@@ -147,10 +147,18 @@ inline constexpr uint8_t dmiNop = 0x00;
 inline constexpr uint8_t dmiRead = 0x01;
 inline constexpr uint8_t dmiWrite = 0x02;
 
-// The chip type of command 0x0c for the CH32V00x, and the family code of
-// the connect response. Captured: 0x09 (CH32V003), 0x05 (CH32V208).
-inline constexpr uint8_t familyV00x = 0x09;
+// The chip type of command 0x0c and the family code of the connect
+// response. Captured: 0x09 (CH32V003), 0x05 (CH32V208); the rest match wlink.
 inline constexpr uint8_t familyV20x = 0x05;
+inline constexpr uint8_t familyV30x = 0x06;
+inline constexpr uint8_t familyV00x = 0x09;
+inline constexpr uint8_t familyCh643 = 0x0c;
+inline constexpr uint8_t familyX035 = 0x0d;
+inline constexpr uint8_t familyL103 = 0x0e;
+inline constexpr uint8_t familyCh645 = 0x46;
+inline constexpr uint8_t familyCh641 = 0x49;
+inline constexpr uint8_t familyV006 = 0x4e;
+inline constexpr uint8_t familyV317 = 0x86;
 
 // The sub-commands of command 0x06
 inline constexpr uint8_t protectionQuery = 0x01;
@@ -192,13 +200,32 @@ struct ChipFamily {
 };
 
 // The known chip series. Captured: CH32V003 (0x003, 0x09) and CH32V208
-// (0x208, 0x05). The CH32V203 and the CH32V207 are in the CH32V20x series of
-// the CH32V208. Their IDs are not captured.
-inline constexpr std::array<ChipFamily, 4> chipFamilies{ {
+// (0x208, 0x05). The other series have the same debug module, ESIG and FPEC
+// registers (reference manuals and wlink).
+inline constexpr std::array<ChipFamily, 20> chipFamilies{ {
+// 1-wire QingKe V2A (64-byte flash page)
 { 0x003, familyV00x },
+{ 0x641, familyCh641 },
+// 1-wire QingKe V2C (256-byte flash page: CH32V002/4/5/6/7, CH32M007)
+{ 0x002, familyV006 },
+{ 0x004, familyV006 },
+{ 0x005, familyV006 },
+{ 0x006, familyV006 },
+{ 0x007, familyV006 },
+// 2-wire QingKe V4 (256-byte flash page)
+{ 0x033, familyX035 },
+{ 0x035, familyX035 },
+{ 0x103, familyL103 },
 { 0x203, familyV20x },
 { 0x207, familyV20x },
 { 0x208, familyV20x },
+{ 0x303, familyV30x },
+{ 0x305, familyV30x },
+{ 0x307, familyV30x },
+{ 0x317, familyV317 },
+{ 0x643, familyCh643 },
+{ 0x645, familyCh645 },
+{ 0x653, familyCh645 },
 } };
 
 // The family code of the connect response. 0 for a chip ID that is not in

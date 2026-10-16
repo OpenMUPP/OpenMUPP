@@ -559,3 +559,40 @@ TEST_CASE("WCH-Link flash: a bus reset drops the program sequence") {
    CHECK_FALSE(fb.bench.controller().isArmed(dataOut));
    CHECK_FALSE(fb.bench.processor.wantsData());
 }
+
+TEST_CASE("WCH-Link flash: CH32V006 uses 256-byte pages and fast-page option byte programming") {
+   WchLinkBench bench(Wire::One);
+   MockWchFlash flash(bench.dm, MockWchFlash::v006);
+   bench.pins.registers[dm::chipId] = 0x0060'0700;
+   bench.enumerate();
+   REQUIRE(bench.transact(request(0x0c, { 0x4e, 0x01 })) == reply(0x0c, 0x01));
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == Bytes{ 0x82, 0x0d, 0x05, 0x4e, 0x00, 0x60, 0x07, 0x00 });
+
+   // Area alignment is 256 bytes (layoutV006), with 1024-byte blocks.
+   flash.stub = pattern(wchlink::stubSize, 0x29);
+   CHECK(bench.transact(request(0x01, u32(0x0800'0040, 256))) == reply(0x01, 0x01));
+   CHECK(bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+   for(std::size_t offset = 0; offset < flash.stub.size(); offset += 64) {
+      REQUIRE(bench.controller().sendOut(dataOut, art::span<const uint8_t>(flash.stub.data() + offset, 64)));
+      bench.mainLoop();
+   }
+   CHECK(bench.transact(request(0x02, { 0x07 })) == reply(0x02, 0x07));
+   CHECK(bench.transact(request(0x02, { 0x02 })) == errorFrame);
+
+   // Protect and unprotect with FTPG option-byte programming and hidden option bytes
+   flash.setOption(1, 0xe7);
+   flash.setOption(2, 0x12);
+   flash.setOption(3, 0x34);
+   flash.setOption(4, 0xf0);
+   CHECK(bench.transact(request(0x06, { 0x03 })) == reply(0x06, 0x03));
+   CHECK(bench.transact(request(0x0b, { 0x01 })) == reply(0x0b, 0x01));
+   REQUIRE(flash.readProtected);
+   flash.hiddenOptionWord = 0x0000'0300;
+   CHECK(bench.transact(request(0x06, { 0x02 })) == reply(0x06, 0x02));
+   CHECK(flash.option(0) == 0xa5);
+   CHECK(flash.option(1) == 0xe7);
+   CHECK(flash.option(2) == 0x12);
+   CHECK(flash.option(3) == 0x34);
+   CHECK(flash.option(4) == 0xff);
+   CHECK(flash.errors.empty());
+}

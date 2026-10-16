@@ -315,19 +315,28 @@ TEST_CASE("WCH-Link: the family code comes from a table of chip ID prefixes") {
    // Captured
    CHECK(wchlink::familyOf(v003ChipId) == 0x09);
    CHECK(wchlink::familyOf(v208ChipId) == 0x05);
-   // The CH32V20x series, not captured
+   // 1-wire V2A and V2C series
+   CHECK(wchlink::familyOf(0x6410'0500) == 0x49);
+   CHECK(wchlink::familyOf(0x0020'0600) == 0x4e);
+   CHECK(wchlink::familyOf(0x0060'0700) == 0x4e);
+   // 2-wire V4 series
    CHECK(wchlink::familyOf(0x2030'0500) == 0x05);
    CHECK(wchlink::familyOf(0x2070'050c) == 0x05);
+   CHECK(wchlink::familyOf(0x3050'0508) == 0x06);
+   CHECK(wchlink::familyOf(0x3170'0500) == 0x86);
+   CHECK(wchlink::familyOf(0x6430'0500) == 0x0c);
+   CHECK(wchlink::familyOf(0x0350'0600) == 0x0d);
+   CHECK(wchlink::familyOf(0x1030'0600) == 0x0e);
+   CHECK(wchlink::familyOf(0x6450'0500) == 0x46);
    // Unknown chips: no family code
-   CHECK(wchlink::familyOf(0x3050'0508) == 0);
    CHECK(wchlink::familyOf(0x2500'0410) == 0);
-   CHECK(wchlink::familyOf(0x0020'0600) == 0);
+   CHECK(wchlink::familyOf(0x5730'0000) == 0);
 }
 
 TEST_CASE("WCH-Link: connect to a chip without a family code fails and lets the hart run") {
    // A one-wire chip that is not in the table
    WchLinkBench bench(Wire::One);
-   bench.pins.registers[dm::chipId] = 0x0020'0600;
+   bench.pins.registers[dm::chipId] = 0x2500'0410;
    bench.enumerate();
    CHECK(bench.transact(request(0x0c, { 0x01, 0x01 })) == Bytes{ 0x82, 0x0c, 0x01, 0x01 });
    CHECK(bench.transact(request(0x0d, { 0x02 })) == connectError);
