@@ -66,16 +66,14 @@ The dongle uses the SWD pins of the board (see [Pins and USB ID](wch-link-protoc
 
 | Target | Wires | Dongle signals |
 |---|---|---|
-| CH32V003 | One wire: SWIO on PD1 | SWDIO |
-| CH32V20x | Two wires: SWDIO on PA13, SWCLK on PA14 | SWDIO and SWCLK |
+| CH32V003, CH32V002/4/5/6/7, CH32M007, CH641 | One wire: SWIO on PD1 | SWDIO |
+| CH32V20x, CH32V30x, CH32V317, CH32X035, CH32L103, CH643, CH645 | Two wires: SWDIO, SWCLK | SWDIO and SWCLK |
 
 Connect the ground of the dongle to the ground of the target.
 The dongle does not supply the target. The WCH-Link commands for the target supply are not supported.
 Power the target from its own supply.
 
-A connect needs a known chip ID.
-The firmware knows the CH32V003, CH32V203, CH32V207 and CH32V208.
-A CH32V203 and a CH32V207 are not captured (see [Connect](wch-link-protocol.md#connect)).
+A connect needs a known chip ID (see [Connect](wch-link-protocol.md#connect) for the full table of chip ID prefixes and family codes).
 For another chip, the connect fails.
 
 ## Use the probe
