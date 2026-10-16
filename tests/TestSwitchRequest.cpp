@@ -5,7 +5,7 @@
 
 #include "personality/Personality.h"
 #include "personality/PersonalitySwitch.h"
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/Versaloon.h"
 #include "usb/CmsisDapDescriptors.h"
 #include "usb/SwitchRequest.h"
 

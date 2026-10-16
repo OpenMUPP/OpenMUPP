@@ -1,7 +1,7 @@
 #pragma once
 
 // Joins the OUT packets of one bulk transfer into one Versaloon command
-// (protocol/Versaloon.h). Hardware-independent: the host unit tests check it.
+// (protocol/versaloon/Versaloon.h). Hardware-independent: the host unit tests check it.
 //
 // A common command, or an unused command byte, is one packet. A USB_TO_XXX
 // command has its total size in the header. The assembler collects packets

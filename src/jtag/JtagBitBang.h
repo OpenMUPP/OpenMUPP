@@ -1,7 +1,7 @@
 #pragma once
 
 // JTAG bit-bang engine: shifts the TDI and TMS streams of the JTAG_RAW
-// block (protocol/JtagRawBlock.h) out on GPIO pins and reads TDO.
+// block (protocol/versaloon/JtagRawBlock.h) out on GPIO pins and reads TDO.
 // Hardware-independent: a Pins type gives the pin access, so the host unit
 // tests run the bit logic on mock pins. On target, board/BoardJtag.h gives
 // FastPin access (one store or load for each pin access).

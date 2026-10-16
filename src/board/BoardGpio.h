@@ -1,9 +1,9 @@
 #pragma once
 
 // The debug connector pins of board::current for the USB_TO_GPIO block
-// (protocol/GpioBlock.h). Target only.
+// (protocol/versaloon/GpioBlock.h). Target only.
 
-#include "protocol/GpioBlock.h"
+#include "protocol/versaloon/GpioBlock.h"
 
 namespace board {
 

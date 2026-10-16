@@ -1,4 +1,4 @@
-#include "protocol/GpioBlock.h"
+#include "protocol/versaloon/GpioBlock.h"
 
 namespace protocol {
 

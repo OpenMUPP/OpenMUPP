@@ -53,7 +53,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "protocol/UsbToXxx.h"
+#include "protocol/versaloon/UsbToXxx.h"
 
 namespace protocol {
 

@@ -1,8 +1,8 @@
-#include "protocol/CommandAssembler.h"
+#include "protocol/versaloon/CommandAssembler.h"
 
 #include <algorithm>
 
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/Versaloon.h"
 
 namespace protocol {
 

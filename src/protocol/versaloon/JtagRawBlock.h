@@ -19,13 +19,13 @@
 // releases these pins. CONFIG sets the TCK frequency; kHz = 0 selects
 // adaptive clocking with RTCK. A board without RTCK replies INVALID_PARA
 // to kHz = 0. When RTCK does not follow TCK, IN_OUT stops and replies
-// TIMEOUT. TRST and SRST are in the GPIO block (protocol/GpioBlock.h).
+// TIMEOUT. TRST and SRST are in the GPIO block (protocol/versaloon/GpioBlock.h).
 
 #include <cstddef>
 #include <cstdint>
 
 #include "protocol/JtagPort.h"
-#include "protocol/UsbToXxx.h"
+#include "protocol/versaloon/UsbToXxx.h"
 
 namespace protocol {
 

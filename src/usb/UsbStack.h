@@ -89,7 +89,7 @@ class UsbStack {
       // The bootloader entry of VERSALOON_FW_UPDATE, nullptr when the
       // firmware has no bootloader
       boot::BootloaderEntry *bootloader;
-      // Runs the USB_TO_XXX commands (see protocol/CommandProcessor.h)
+      // Runs the USB_TO_XXX commands (see protocol/versaloon/CommandProcessor.h)
       protocol::UsbToXxxHandler *usbToXxx;
    };
 

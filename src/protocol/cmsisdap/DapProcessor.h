@@ -100,11 +100,11 @@
 #include <cstdint>
 #include <utils/compat/span.h>
 
-#include "protocol/GpioBlock.h"
 #include "protocol/JtagPort.h"
 #include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
 #include "protocol/cmsisdap/DapUart.h"
+#include "protocol/versaloon/GpioBlock.h"
 
 namespace personality {
 class PersonalitySwitch;

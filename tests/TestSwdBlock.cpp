@@ -1,8 +1,8 @@
 // The USB_TO_SWD block on a fake SWD port, and the request and parity
 // encoding.
 
-#include "protocol/SwdBlock.h"
-#include "protocol/UsbToAll.h"
+#include "protocol/versaloon/SwdBlock.h"
+#include "protocol/versaloon/UsbToAll.h"
 
 #include <doctest/doctest.h>
 

@@ -1,4 +1,4 @@
-#include "protocol/JtagRawBlock.h"
+#include "protocol/versaloon/JtagRawBlock.h"
 
 namespace protocol {
 

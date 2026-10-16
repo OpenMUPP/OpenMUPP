@@ -1,6 +1,6 @@
 #pragma once
 
-// The blocks of a USB_TO_ALL command (protocol/UsbToAll.h), as OpenOCD
+// The blocks of a USB_TO_ALL command (protocol/versaloon/UsbToAll.h), as OpenOCD
 // (usbtoxxx.c and usbtoxxx_internal.h) builds them. Hardware-independent.
 //
 // All values are little-endian. A block is

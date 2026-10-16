@@ -1,6 +1,6 @@
 #pragma once
 
-// Maps the bits of the USB_TO_GPIO block (protocol/GpioBlock.h) to the
+// Maps the bits of the USB_TO_GPIO block (protocol/versaloon/GpioBlock.h) to the
 // debug pins of a board definition. Hardware-independent: the host unit
 // tests check it for every board.
 //
@@ -12,7 +12,7 @@
 #include <optional>
 
 #include "board/BoardDefinition.h"
-#include "protocol/GpioBlock.h"
+#include "protocol/versaloon/GpioBlock.h"
 
 namespace board {
 

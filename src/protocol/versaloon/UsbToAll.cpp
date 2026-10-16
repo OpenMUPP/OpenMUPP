@@ -1,8 +1,8 @@
-#include "protocol/UsbToAll.h"
+#include "protocol/versaloon/UsbToAll.h"
 
 #include <algorithm>
 
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/Versaloon.h"
 
 namespace protocol {
 

@@ -1,7 +1,7 @@
 // The USB_TO_POWER block, on a fake power switch and voltage sense.
 
-#include "protocol/PowerBlock.h"
-#include "protocol/UsbToAll.h"
+#include "protocol/versaloon/PowerBlock.h"
+#include "protocol/versaloon/UsbToAll.h"
 
 #include "VersaloonBench.h"
 

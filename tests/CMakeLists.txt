@@ -65,18 +65,18 @@ add_executable(vsl-tests
         TestWchLink.cpp
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
-        ../src/protocol/CommandAssembler.cpp
-        ../src/protocol/CommandProcessor.cpp
+        ../src/protocol/versaloon/CommandAssembler.cpp
+        ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
         ../src/protocol/cmsisdap/DapProcessor.cpp
         ../src/protocol/wchlink/WchLinkFlash.cpp
         ../src/protocol/wchlink/WchLinkProcessor.cpp
-        ../src/protocol/GpioBlock.cpp
-        ../src/protocol/JtagRawBlock.cpp
-        ../src/protocol/PowerBlock.cpp
-        ../src/protocol/SwdBlock.cpp
-        ../src/protocol/UsbToAll.cpp
-        ../src/protocol/UsbToXxx.cpp
+        ../src/protocol/versaloon/GpioBlock.cpp
+        ../src/protocol/versaloon/JtagRawBlock.cpp
+        ../src/protocol/versaloon/PowerBlock.cpp
+        ../src/protocol/versaloon/SwdBlock.cpp
+        ../src/protocol/versaloon/UsbToAll.cpp
+        ../src/protocol/versaloon/UsbToXxx.cpp
         ../src/usb/VersaloonFunction.cpp
         ../src/usb/CmsisDapFunction.cpp
         ../src/usb/WchLinkFunction.cpp

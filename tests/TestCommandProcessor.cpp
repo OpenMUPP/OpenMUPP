@@ -2,8 +2,8 @@
 // of the USB_TO_XXX commands.
 
 #include "boot/BootloaderEntry.h"
-#include "protocol/CommandProcessor.h"
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/CommandProcessor.h"
+#include "protocol/versaloon/Versaloon.h"
 
 #include <doctest/doctest.h>
 

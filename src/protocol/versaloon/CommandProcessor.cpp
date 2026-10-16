@@ -1,10 +1,10 @@
-#include "protocol/CommandProcessor.h"
+#include "protocol/versaloon/CommandProcessor.h"
 
 #include <algorithm>
 
 #include "boot/BootloaderEntry.h"
 #include "personality/PersonalitySwitch.h"
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/Versaloon.h"
 
 namespace protocol {
 

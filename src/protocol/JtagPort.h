@@ -1,7 +1,7 @@
 #pragma once
 
 // The JTAG port: the interface of the JTAG engines (jtag/JtagBitBang.h,
-// jtag/JtagFastPath.h). The JTAG_RAW block (protocol/JtagRawBlock.h) uses
+// jtag/JtagFastPath.h). The JTAG_RAW block (protocol/versaloon/JtagRawBlock.h) uses
 // it.
 
 #include <cstddef>
