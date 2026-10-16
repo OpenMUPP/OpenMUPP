@@ -49,6 +49,10 @@ class ParseTest(unittest.TestCase):
     def test_probe_rs_words(self):
         self.assertEqual(hw.parse_probe_rs_words("deadbeef 00000001\n12345678\n"), [0xDEADBEEF, 1, 0x12345678])
 
+    def test_probe_rs_words_with_address(self):
+        text = "20000000: deadbeef 12345678\n20000008: a5a5a5a5 5a5a5a5a\n"
+        self.assertEqual(hw.parse_probe_rs_words(text), [0xDEADBEEF, 0x12345678, 0xA5A5A5A5, 0x5A5A5A5A])
+
     def test_chip_for(self):
         self.assertEqual(hw.chip_for(0x410, 64), ("stm32f103c8", "STM32F103C8"))
         self.assertEqual(hw.chip_for(0x414, 512), ("stm32f103rc", "STM32F103RE"))

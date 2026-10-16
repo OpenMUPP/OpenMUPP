@@ -244,8 +244,12 @@ def parse_chip_info(text):
 
 
 def parse_probe_rs_words(text):
-    """The 32-bit words of the output of `probe-rs read b32`."""
-    return [int(word, 16) for word in re.findall(r"\b[0-9a-fA-F]{8}\b", text)]
+    """The 32-bit words of the output of `probe-rs read b32`. A line can
+    start with its address ("20000000: deadbeef ..."): that is not data."""
+    words = []
+    for line in text.splitlines():
+        words += [int(word, 16) for word in re.findall(r"\b[0-9a-fA-F]{8}\b", line.split(":")[-1])]
+    return words
 
 
 def openocd_command(args, personality, transport, speed_khz, checks_path, image_path, dump_path):
