@@ -432,12 +432,13 @@ void Processor::flashCommand(uint8_t sub) {
 }
 
 const StubLayout &Processor::layout() const {
-   const uint8_t family = familyOf(chipId_);
-   if(family == familyV00x || family == familyCh641) {
+   switch(series()) {
+   case Series::V00x:
       return layoutV00x;
-   }
-   if(family == familyV006) {
+   case Series::V006:
       return layoutV006;
+   case Series::V20x:
+      break;
    }
    return layoutV20x;
 }
