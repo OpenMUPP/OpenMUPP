@@ -1,7 +1,7 @@
 #pragma once
 
-// The target power switch and the Vref sense of board::current for the
-// USB_TO_POWER block (protocol/versaloon/PowerBlock.h). Target only.
+// The target power switch and the Vref sense of board::current as
+// PowerHardware (protocol/PowerHardware.h). Target only.
 //
 // The switch pin floats when the supply is off, and drives the active level
 // of PowerSwitch::on when it is on. The sense reads the Vref pin with ADC1.
@@ -9,7 +9,7 @@
 
 #include <optional>
 
-#include "protocol/versaloon/PowerBlock.h"
+#include "protocol/PowerHardware.h"
 
 namespace board {
 
