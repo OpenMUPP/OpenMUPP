@@ -162,7 +162,7 @@ To change the personality, use one of these methods:
 - In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
 - In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)). The status of a refused switch is `0xFF`.
 - In each personality, send the switch request on EP0 (see [Switch request on EP0](#switch-request-on-ep0)).
-  This is the only command in the WCH-Link personality, because the WCH-Link protocol has no free command for it.
+  An image with WCH-Link and other personalities (work item #83) needs this request to leave WCH-Link, because the WCH-Link protocol has no free command for a switch.
 - Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the next personality in the list. With two personalities, this is the other one.
 
 The personality code is `0` for Versaloon, `1` for CMSIS-DAP and `2` for WCH-Link.
@@ -223,8 +223,8 @@ The switch request code and the MS OS 2.0 vendor code must be different. A `stat
 On Windows, a host sends the request through the WinUSB driver of interface 0.
 The Versaloon and WCH-Link personalities need a WinUSB or libusb driver on interface 0 for their bulk endpoints, so this driver is always there.
 In the CMSIS-DAP personality, the MS OS 2.0 descriptors bind WinUSB to interface 0.
-WinUSB also sends a control request to the device recipient.
-The hardware test of the personalities (work item #88) checks this on Windows.
+WinUSB must also send a control request to the device recipient.
+No test on Windows confirms this yet. The hardware test of the personalities (work item #88) checks it.
 
 The key gesture has these rules:
 

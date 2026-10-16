@@ -30,8 +30,8 @@ The `wch-link` image has these properties:
 - The image has no `VERSALOON_FW_UPDATE` command. Use the key to start the bootloader (see [Firmware update](firmware-update.md)).
 - There is no dual image with this personality. The key does not switch to it.
 - The WCH-Link protocol has no command that switches the personality.
-  An image with more than one personality accepts the switch request on EP0 in each personality, also in WCH-Link (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
-  The key also switches the personality.
+  The `wch-link` image has only one personality, so it stalls the switch request on EP0.
+  A later image with WCH-Link and other personalities (work item #83) accepts the switch request on EP0 in the WCH-Link personality too (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
 
 ## USB ID
 
