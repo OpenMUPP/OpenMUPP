@@ -94,7 +94,10 @@
 // sequenceIn(): each sequence is at most 256 bits, LSB first.
 //
 // The SWD block of the Versaloon protocol does not call setRules() or
-// setClockHz(). Its transfers do not change.
+// setClockHz(). In a multi image, the CMSIS-DAP processor sets its rules
+// at start, also when the Versaloon personality is active. Thus
+// configure() (INIT and CONFIG of the SWD block) sets the Versaloon rules
+// again.
 //
 // With a protocol::Background, the engine calls Background::service()
 // before each transfer and each retry, and between the bytes of a
@@ -223,7 +226,9 @@ class BitBangPort final : public protocol::SwdPort {
       pins_.fini();
    }
 
+   // Versaloon: also sets the Versaloon rules (see the file comment).
    void configure(uint8_t turnaround, uint16_t retries, uint16_t delay) override {
+      rules_ = TransferRules{};
       turnaround_ = turnaround;
       retries_ = retries;
       setHalfCycles(halfPeriodCycles(pins_.coreHz(), delay), delay != 0);
