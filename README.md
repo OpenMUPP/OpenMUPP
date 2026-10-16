@@ -218,13 +218,12 @@ A firmware image built with more than one personality is a multi image, for exam
 `VSL_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
 The deprecated option `VSL_PROTOCOL=dual` builds the image with the Versaloon and the CMSIS-DAP personalities.
 To change the personality, send a switch command, or use the key.
-`tools/vsl_personality.py` sends the switch request (see [Tools](#tools)).
+`tools/vsl_personality.py` sends the switch request on EP0 (see [Tools](#tools)).
 To use the key, hold it down for 3 s until all LEDs flash.
 Then release the key.
 The dongle then resets and shows as the USB device of the next personality.
 The dongle keeps the personality after a power cycle and after a firmware update with `stm32flash`.
 The WCH-Link personality has no switch command: use the switch request on EP0 or the key (see [docs/usb-device.md](docs/usb-device.md#switch-request-on-ep0)).
-`tools/vsl_personality.py` sends the switch request on EP0.
 See [docs/usb-device.md](docs/usb-device.md#multi-image).
 
 The power LED shows the target power. The state LED flashes for each command of the host, and gives a double flash after a JTAG or SWD error. The USB LED shows the USB state.
