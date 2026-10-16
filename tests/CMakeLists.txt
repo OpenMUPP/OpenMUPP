@@ -33,6 +33,7 @@ add_executable(vsl-tests
         TestErrorLed.cpp
         TestTargetPowerLed.cpp
         TestUptimeMicros.cpp
+        TestIntDiv.cpp
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
         TestCmsisDapDescriptors.cpp
