@@ -75,6 +75,13 @@ class VerdictTest(unittest.TestCase):
         status, notes = hw.openocd_verdict(log, 1, "swd", self.image, self.image)
         self.assertEqual((status, notes), (hw.FAIL, ["missing check: halt", "exit code 1"]))
 
+    def test_step_group_error_shows_error_lines(self):
+        log = "Error: SWD DPIDR read failed\nCHECK FAIL flash steps: Traceback\nCHECK FAIL debug steps: Traceback"
+        status, notes = hw.openocd_verdict(log, 1, "swd", self.image, None)
+        self.assertEqual((status, notes), (hw.FAIL, ["flash steps: Traceback", "debug steps: Traceback",
+                                                     "Error: SWD DPIDR read failed",
+                                                     "exit code 1"]))
+
     def test_read_back_differs(self):
         status, notes = hw.openocd_verdict(openocd_log(), 0, "swd", self.image, b"\xff" * 256)
         self.assertEqual((status, notes), (hw.FAIL, ["read back differs from the image"]))

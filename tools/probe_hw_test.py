@@ -197,6 +197,8 @@ OPENOCD_EXPECTED = (
     "two steps run one adds", "hardware breakpoint halts", "RAM words", "RAM block 4 KiB",
     "running", "halt",
 )
+# vsl_run reports these when vsl_flash or vsl_debug stops on an error.
+STEP_GROUPS = ("flash steps", "debug steps")
 CHECK_PATTERN = re.compile(r"^CHECK (PASS|FAIL) ([^:]+):(.*)$", re.MULTILINE)
 INFO_PATTERN = re.compile(r"INFO dev_id=0x([0-9a-fA-F]+) flash_kb=(\d+)")
 
@@ -269,9 +271,13 @@ def openocd_verdict(text, returncode, transport, image, dump):
     if not checks:
         # OpenOCD did not connect: the log tail tells more than the check list.
         return FAIL, ["no check ran"] + text.strip().splitlines()[-3:] + [f"exit code {returncode}"]
-    notes = [f"{name}: {detail}" for name, passed, detail in checks if not passed]
+    notes = [f"{name}: {detail[:120]}" for name, passed, detail in checks if not passed]
     names = {name for name, _, _ in checks}
-    notes += [f"missing check: {name}" for name in OPENOCD_EXPECTED if name not in names]
+    if names & set(STEP_GROUPS):
+        # A step group stopped on an error: the Error lines tell why, not the missing checks.
+        notes += [line for line in text.splitlines() if line.startswith("Error:")][:5]
+    else:
+        notes += [f"missing check: {name}" for name in OPENOCD_EXPECTED if name not in names]
     if dump is not None and dump != image:
         notes.append("read back differs from the image")
     if transport == "jtag" and f"tap/device found: {CPU_TAP_IDCODE}" not in text:
