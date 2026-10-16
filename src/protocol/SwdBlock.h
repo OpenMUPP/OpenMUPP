@@ -79,8 +79,10 @@ inline constexpr uint8_t defaultTurnaround = 1;
 inline constexpr uint16_t defaultRetries = 0;
 inline constexpr uint16_t defaultDelay = 1;
 
-// The parity of a word: 1 for an odd number of 1 bits
-constexpr bool parity(uint32_t value) {
+// The parity of a word: 1 for an odd number of 1 bits. Always inline: the
+// SWD engine (swd/SwdBitBang.h) uses it between the data bits and the
+// parity bit, and LTO otherwise makes it a call.
+[[gnu::always_inline]] constexpr bool parity(uint32_t value) {
    value ^= value >> 16;
    value ^= value >> 8;
    value ^= value >> 4;

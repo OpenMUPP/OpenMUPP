@@ -111,15 +111,15 @@ The size of the `standalone` image (Release build):
 
 | Board | Size | Limit |
 |---|---|---|
-| Mini | 27,124 bytes | 65,536 bytes |
-| OtherUse | 27,112 bytes | 65,536 bytes |
-| ST-Link/V2 | 26,672 bytes | 65,536 bytes |
+| Mini | 22,156 bytes | 65,536 bytes |
+| OtherUse | 22,152 bytes | 65,536 bytes |
+| ST-Link/V2 | 22,124 bytes | 65,536 bytes |
 
 The `app-8k` image has the limit 57,344 bytes, and the `app-10k` image has the limit 55,296 bytes (see [Flash layout](firmware-update.md#flash-layout-and-size-limit)).
 Each image uses less than half of its limit.
 CI checks each image against its limit (`ci/check-size.sh`).
 
-For comparison, the Versaloon image of the Mini has 31,812 bytes, the CMSIS-DAP image 35,328 bytes, and the dual image 41,488 bytes.
+For comparison, the Versaloon image of the Mini has 27,168 bytes, the CMSIS-DAP image 31,480 bytes, and the dual image 37,660 bytes.
 
 ### Combined image
 
@@ -148,20 +148,19 @@ Thus a combined image fits in the first 64 KB, but the margin for the legacy boo
 It does not need the other 64 KB of flash.
 
 The firmware now builds the combined image: `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
-A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer and the switch request on EP0):
+A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer and the switch request on EP0).
+Without link-time optimisation (LTO), the `app-10k` image did not fit: it was 1,740 bytes too large.
+Issue #75 added LTO (option `VSL_LTO`), removed the heap code of newlib and removed the 64-bit division:
 
-| Image (Mini, Release) | Size | Limit |
-|---|---|---|
-| `standalone` | 56,012 bytes | 64,512 bytes |
-| `app-8k` | 56,012 bytes | 56,320 bytes |
-| `app-10k` | Does not fit: 1,740 bytes too large | 54,272 bytes |
+| Image (Mini, Release) | Before #75 | Now | Limit |
+|---|---|---|---|
+| `standalone` | 56,012 bytes | 48,876 bytes | 64,512 bytes |
+| `app-8k` | 56,012 bytes | 48,884 bytes | 56,320 bytes |
+| `app-10k` | Does not fit | 48,876 bytes | 54,272 bytes |
 
-The data and BSS use 16.5 KB.
-The `app-10k` image of the combined image does not fit.
-The build skips it with a warning, and makes the other images (see [Images that do not fit](development.md#images-that-do-not-fit)).
-With `VSL_STRICT_SIZE=ON`, the link of the `app-10k` image fails.
-The `app-8k` image has a margin of 308 bytes only.
-A `Debug` build of the combined image fits no image: the build skips all images.
+The `app-10k` image now has a margin of 5,396 bytes.
+The data and BSS use 16.4 KB.
+A `Debug` build has no LTO. A `Debug` build of the combined image fits no image: the build skips all images (see [Images that do not fit](development.md#images-that-do-not-fit)).
 
 ## Hardware test
 

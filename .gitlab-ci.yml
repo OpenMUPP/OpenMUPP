@@ -155,14 +155,8 @@ build:
       - BOARD: mini
         VARIANT: -dual-cmsis-dap
         PROTOCOL_TAG: -dap+vsl
-      # VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link. It does not fit
-      # app-10k, so the Mini and the OtherUse leave it out (until #75). The
-      # standalone image of the ST-Link/V2 fits the app-10k limit.
-      - BOARD: [mini, otheruse]
-        VARIANT: -triple
-        PROTOCOL_TAG: -vsl+dap+wch
-        SKIP_IMAGES: app-10k
-      - BOARD: stlinkv2
+      # VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link
+      - BOARD: [mini, otheruse, stlinkv2]
         VARIANT: -triple
         PROTOCOL_TAG: -vsl+dap+wch
 

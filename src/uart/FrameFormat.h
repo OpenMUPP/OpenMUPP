@@ -25,6 +25,8 @@
 #include <optional>
 #include <usb/CdcAcmFunction.h>
 
+#include "IntDiv.h"
+
 namespace uart {
 
 enum class DataBits : uint8_t { Seven, Eight };
@@ -54,7 +56,12 @@ constexpr std::optional<uint32_t> baudRateDivider(uint32_t baudRate, uint32_t ua
    if(baudRate == 0) {
       return std::nullopt;
    }
-   const uint64_t divider = (static_cast<uint64_t>(uartClock) + baudRate / 2) / baudRate;
+   // (uartClock + baudRate / 2) / baudRate, without the 64-bit sum: with
+   // uartClock = q * baudRate + r, it is q, plus 1 when r + baudRate / 2
+   // is at least baudRate.
+   const uint32_t quotient = uartClock / baudRate;
+   const uint32_t rest = uartClock % baudRate;
+   const uint64_t divider = quotient + (rest >= baudRate - baudRate / 2 ? 1u : 0u);
    if(divider < 16 || divider > 0xFFFF) {
       return std::nullopt;
    }
