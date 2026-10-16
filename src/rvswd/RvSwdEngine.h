@@ -112,6 +112,8 @@
 #include <bit>
 #include <cstdint>
 
+#include "IntDiv.h"
+
 #include "protocol/Background.h"
 
 namespace rvswd {
@@ -174,16 +176,16 @@ inline constexpr uint32_t oneWireReleaseTimeoutNs = 5'000;
 inline constexpr uint32_t oneWireFrameGapNs = 4'000;
 inline constexpr uint32_t oneWireResetLowUs = 2'000;
 
-// Core cycles of a time, rounded up
+// Core cycles of a time, rounded up. The result must fit in 32 bits.
 constexpr uint32_t cyclesOfNs(uint32_t coreHz, uint32_t ns) {
-   return static_cast<uint32_t>((static_cast<uint64_t>(coreHz) * ns + 999'999'999u) / 1'000'000'000u);
+   return intdiv::mulDivCeil(coreHz, ns, 1'000'000'000u);
 }
 
 // Core cycles of a half SWCLK period, rounded up: SWCLK is never faster
-// than the frequency. 0 Hz gives the slowest clock (1 Hz).
+// than the frequency. 0 Hz gives the slowest clock (1 Hz). coreHz / (2 * hz)
+// rounded up, in two 32-bit steps: ceil(ceil(a / b) / c) is ceil(a / (b * c)).
 constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint32_t hz) {
-   const uint64_t cyclesPerPeriod = 2ull * (hz == 0 ? 1u : hz);
-   return static_cast<uint32_t>((coreHz + cyclesPerPeriod - 1) / cyclesPerPeriod);
+   return intdiv::ceilDiv(intdiv::ceilDiv(coreHz, 2u), hz == 0 ? 1u : hz);
 }
 
 // 1 for an odd number of 1 bits

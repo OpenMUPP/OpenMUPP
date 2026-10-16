@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "IntDiv.h"
 #include "personality/Personality.h"
 
 namespace personality {
@@ -113,7 +114,9 @@ class PersonalitySwitch {
       if(nowMs >= *dueMs_) {
          return true;
       }
-      const uint64_t elapsed = nowMs - (*dueMs_ - delayMs_);
+      // Less than delayMs_: nowMs is before *dueMs_, and the uptime
+      // was at least *dueMs_ - delayMs_ at the first isDue().
+      const auto elapsed = static_cast<uint32_t>(nowMs - (*dueMs_ - delayMs_));
       return elapsed % flashPeriodMs < flashPeriodMs / 2;
    }
 

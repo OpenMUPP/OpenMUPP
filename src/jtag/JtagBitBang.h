@@ -58,6 +58,8 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "IntDiv.h"
+
 #include "protocol/Background.h"
 #include "protocol/JtagPort.h"
 
@@ -67,10 +69,10 @@ namespace jtag {
 inline constexpr uint32_t rtckTimeoutMs = 10;
 
 // Core cycles of a half TCK period, rounded up: TCK is never faster than
-// kHz. kHz is not 0.
+// kHz. kHz is not 0. coreHz / (2000 * kHz) rounded up, in two 32-bit
+// steps: ceil(ceil(a / b) / c) is ceil(a / (b * c)).
 constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint32_t kHz) {
-   const uint64_t cyclesPerPeriod = 2ull * kHz * 1000u;
-   return static_cast<uint32_t>((coreHz + cyclesPerPeriod - 1) / cyclesPerPeriod);
+   return intdiv::ceilDiv(intdiv::ceilDiv(coreHz, 2000u), kHz);
 }
 
 enum class Clocking : uint8_t { Timed, Adaptive };
