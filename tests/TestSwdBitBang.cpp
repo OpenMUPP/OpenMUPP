@@ -472,18 +472,21 @@ constexpr std::size_t shortTransferEdges(unsigned turnaround, unsigned idle) {
 
 } // namespace
 
-TEST_CASE("SWD bit-bang: the default rules are the Versaloon rules, and CONFIG keeps the rules") {
+TEST_CASE("SWD bit-bang: the default rules are the Versaloon rules, and CONFIG sets them again") {
    Bench bench;
-   CHECK(bench.port.rules().idleCycles == swd::defaultIdleCycles);
-   CHECK(bench.port.rules().abortOnWait);
-   CHECK(bench.port.rules().dataPhase);
-   CHECK_FALSE(bench.port.rules().idleOnlyAfterOk);
-   CHECK_FALSE(bench.port.rules().releaseOnAckError);
+   const auto checkVersaloonRules = [&bench] {
+      CHECK(bench.port.rules().idleCycles == swd::defaultIdleCycles);
+      CHECK(bench.port.rules().abortOnWait);
+      CHECK(bench.port.rules().dataPhase);
+      CHECK_FALSE(bench.port.rules().idleOnlyAfterOk);
+      CHECK_FALSE(bench.port.rules().releaseOnAckError);
+   };
+   checkVersaloonRules();
+   // A multi image: the CMSIS-DAP processor sets its rules at start, then
+   // the Versaloon SWD block runs INIT or CONFIG.
    bench.port.setRules(cmsisDapRules);
    bench.port.configure(1, 0, 1);
-   CHECK(bench.port.rules().idleCycles == 0);
-   CHECK_FALSE(bench.port.rules().abortOnWait);
-   CHECK_FALSE(bench.port.rules().dataPhase);
+   checkVersaloonRules();
 }
 
 TEST_CASE("SWD bit-bang: the idle cycles after a transfer are configurable") {
