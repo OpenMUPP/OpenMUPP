@@ -119,7 +119,7 @@ It is a list of one or more of these personalities, with `;` or `,` between them
 
 | Personality | Code | USB interface 0 | VID:PID | Sources |
 |---|---|---|---|---|
-| `versaloon` (default) | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/` and `wchlink/`) |
+| `versaloon` (default) | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/versaloon/`, `boot/Bootloader.cpp` |
 | `cmsis-dap` | `1` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
 | `wch-link` | `2` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `VSL_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
 
