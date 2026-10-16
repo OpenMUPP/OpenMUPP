@@ -43,7 +43,7 @@ These options select the board, the personality and the debug features:
 | `VSL_PERSONALITIES` | `versaloon` | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `0403:9b3c` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
 | `VSL_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `VSL_PERSONALITIES`. Empty: the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `VSL_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
-| `VSL_PROTOCOL`, `VSL_DEFAULT_PROTOCOL` | not set | Deprecated. Use `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`. The build changes `VSL_PROTOCOL=dual` to `VSL_PERSONALITIES=versaloon,cmsis-dap`, and each other value to the personality with the same name. `VSL_DEFAULT_PROTOCOL` becomes `VSL_DEFAULT_PERSONALITY`. The build then shows a deprecation warning. Do not set `VSL_PROTOCOL` and `VSL_PERSONALITIES` together. To remove the old options from the cache of a build directory, use `-UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL`. |
+| `VSL_PROTOCOL`, `VSL_DEFAULT_PROTOCOL` | not set | Deprecated. Use `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`. The build changes `VSL_PROTOCOL=dual` to `VSL_PERSONALITIES=versaloon,cmsis-dap`, and each other value to the personality with the same name. `VSL_DEFAULT_PROTOCOL` becomes `VSL_DEFAULT_PERSONALITY`. The build then shows a deprecation warning. Do not set `VSL_PROTOCOL` and `VSL_PERSONALITIES` together. To remove the old options from the cache of a build directory, use `-UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL`. The presets now set `VSL_PERSONALITIES`, so an old build directory of a preset can stop with an error. Then configure it again with `cmake --preset <name> --fresh`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [debug-log.md](debug-log.md)). Not allowed in a `Release` build, and not allowed when `wch-link` is the only personality. In a multi image, the log is silent while the WCH-Link personality is active. |
@@ -94,12 +94,12 @@ The presets for the firmware use the toolchain file `cmake/gcc_arm.cmake`.
 They read `GCC_TOOLCHAIN_PREFIX` from the environment.
 The default is `/usr`.
 
-| Preset | Board | Personality (`VSL_PROTOCOL`) | Build type |
+| Preset | Board | Personalities (`VSL_PERSONALITIES`) | Build type |
 |---|---|---|---|
 | `mini`, `otheruse`, `stlinkv2` | Mini, OtherUse, ST-Link/V2 | `versaloon` | Release |
 | `mini-cmsis-dap`, `otheruse-cmsis-dap`, `stlinkv2-cmsis-dap` | Mini, OtherUse, ST-Link/V2 | `cmsis-dap` | Release |
-| `mini-dual`, `otheruse-dual`, `stlinkv2-dual` | Mini, OtherUse, ST-Link/V2 | `dual` | Release |
-| `mini-dual-cmsis-dap` | Mini | `dual`, with `VSL_DEFAULT_PROTOCOL=cmsis-dap` | Release |
+| `mini-dual`, `otheruse-dual`, `stlinkv2-dual` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
+| `mini-dual-cmsis-dap` | Mini | `versaloon,cmsis-dap`, with `VSL_DEFAULT_PERSONALITY=cmsis-dap` (tag `-dap+vsl`) | Release |
 | `mini-wch-link`, `otheruse-wch-link`, `stlinkv2-wch-link` | Mini, OtherUse, ST-Link/V2 | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
@@ -289,11 +289,11 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `build-mini`, `build-otheruse`, `build-stlinkv2`: release build of all images of the board, plus the size check of each image in `vsl-images.txt`.
   The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
-- `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PROTOCOL=cmsis-dap`, plus the size check.
-- `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PROTOCOL=dual`, plus the size check.
-  Each limit of the dual image is 1 KB smaller, because the last flash page holds the stored personality.
-- `build-mini-dual-cmsis-dap`: the dual release build of the Mini with `VSL_DEFAULT_PROTOCOL=cmsis-dap`, plus the size check.
-- `build-mini-wch-link`, `build-otheruse-wch-link`, `build-stlinkv2-wch-link`: the same release builds with `VSL_PROTOCOL=wch-link`, plus the size check.
+- `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PERSONALITIES=cmsis-dap`, plus the size check.
+- `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PERSONALITIES=versaloon,cmsis-dap`, plus the size check.
+  Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
+- `build-mini-dual-cmsis-dap`: the same release build of the Mini with `VSL_DEFAULT_PERSONALITY=cmsis-dap`, plus the size check.
+- `build-mini-wch-link`, `build-otheruse-wch-link`, `build-stlinkv2-wch-link`: the same release builds with `VSL_PERSONALITIES=wch-link`, plus the size check.
 
 Each build job configures and builds the preset with the name of the job, without `build-`.
 The jobs of the Mini run in each pipeline.

@@ -75,7 +75,7 @@ function(vsl_resolve_personalities)
     if (NOT "${VSL_PROTOCOL}" STREQUAL "")
         if (NOT "${_set}" STREQUAL "")
             message(FATAL_ERROR "Set VSL_PERSONALITIES or the deprecated VSL_PROTOCOL, not both. "
-                    "Remove VSL_PROTOCOL from the cache with -UVSL_PROTOCOL.")
+                    "Remove VSL_PROTOCOL from the cache with -UVSL_PROTOCOL, or configure with --fresh.")
         endif ()
         if (NOT VSL_PROTOCOL IN_LIST VSL_PROTOCOLS)
             message(FATAL_ERROR "Unknown VSL_PROTOCOL '${VSL_PROTOCOL}'. Supported protocols: ${VSL_PROTOCOLS}")

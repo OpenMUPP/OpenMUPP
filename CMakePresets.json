@@ -62,7 +62,7 @@
       "description": "CMSIS-DAP personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PROTOCOL": "cmsis-dap"
+        "VSL_PERSONALITIES": "cmsis-dap"
       }
     },
     {
@@ -70,8 +70,8 @@
       "description": "Dual image, Versaloon as default personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PROTOCOL": "dual",
-        "VSL_DEFAULT_PROTOCOL": "versaloon"
+        "VSL_PERSONALITIES": "versaloon,cmsis-dap",
+        "VSL_DEFAULT_PERSONALITY": "versaloon"
       }
     },
     {
@@ -79,8 +79,8 @@
       "description": "Dual image, CMSIS-DAP as default personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PROTOCOL": "dual",
-        "VSL_DEFAULT_PROTOCOL": "cmsis-dap"
+        "VSL_PERSONALITIES": "versaloon,cmsis-dap",
+        "VSL_DEFAULT_PERSONALITY": "cmsis-dap"
       }
     },
     {
@@ -88,7 +88,7 @@
       "description": "WCH-Link personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PROTOCOL": "wch-link"
+        "VSL_PERSONALITIES": "wch-link"
       }
     },
     {
