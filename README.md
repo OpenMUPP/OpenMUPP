@@ -218,7 +218,7 @@ A firmware image built with more than one personality is a multi image, for exam
 `VSL_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
 The deprecated option `VSL_PROTOCOL=dual` builds the image with the Versaloon and the CMSIS-DAP personalities.
 To change the personality, send a switch command, or use the key.
-`tools/vsl_personality.py` sends the switch command (see [Tools](#tools)).
+`tools/vsl_personality.py` sends the switch request on EP0 (see [Tools](#tools)).
 To use the key, hold it down for 3 s until all LEDs flash.
 Then release the key.
 The dongle then resets and shows as the USB device of the next personality.
@@ -235,7 +235,7 @@ The Python scripts in `tools/` need Python 3.
 
 | Script | Function | Needs |
 |---|---|---|
-| `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon` or `cmsis-dap`. | `pyusb` |
+| `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. | `pyusb` |
 | `tools/serial_loopback_test.py` | Tests the UART bridge with a loopback wire from TX to RX (see [docs/uart-bridge.md](docs/uart-bridge.md)). | `pyserial` |
 | `tools/dap_uart_loopback_test.py` | Tests the `DAP_UART_*` commands of the CMSIS-DAP personality with a loopback wire from TX to RX (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-hardware-test)). | `pyusb`, `pyserial` for `--serial-port` |
 | `tools/flash_benchmark.py` | Measures the flash speed with OpenOCD (see [docs/development.md](docs/development.md#flash-speed-benchmark)). | OpenOCD |
