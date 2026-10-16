@@ -1,7 +1,7 @@
 #pragma once
 
-// SWD bit-bang engine: runs the sequences and transfers of the SWD block
-// (protocol/versaloon/SwdBlock.h) on GPIO pins. Hardware-independent: a Pins type
+// SWD bit-bang engine: runs the sequences and transfers of an SWD port
+// (protocol/SwdPort.h) on GPIO pins. Hardware-independent: a Pins type
 // gives the pin access, so the host unit tests run the protocol on mock
 // pins with a mock target. On target, board/BoardSwd.h gives FastPin
 // access.
@@ -107,7 +107,7 @@
 #include "IntDiv.h"
 
 #include "protocol/Background.h"
-#include "protocol/versaloon/SwdBlock.h"
+#include "protocol/SwdPort.h"
 
 namespace swd {
 
