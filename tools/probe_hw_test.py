@@ -306,21 +306,33 @@ class Runner:
         return os.path.join(self.args.log_dir, re.sub(r"[^A-Za-z0-9_.-]+", "_", step) + ".log")
 
     def run(self, step, cmd, timeout=STEP_TIMEOUT_S):
-        """Runs one command, writes its log and returns (returncode, output)."""
-        print(f"---- {step}: {' '.join(cmd)}", flush=True)
+        """Runs one command and returns (returncode, output). The output goes
+        into the log file while the command runs, so `tail -f` shows it."""
+        path = self.log_path(step)
+        print(f"---- {step}: {' '.join(cmd)}\n     log: {path}", flush=True)
         start = time.monotonic()
-        try:
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                  errors="replace", timeout=timeout)
-            code, output = proc.returncode, proc.stdout
-        except FileNotFoundError as error:
-            code, output = 127, str(error)
-        except subprocess.TimeoutExpired as error:
-            out = error.stdout or ""
-            code, output = -1, (out.decode(errors="replace") if isinstance(out, bytes) else out) + "\nTIMEOUT"
-        with open(self.log_path(step), "w") as log:
-            log.write(f"$ {' '.join(cmd)}\n{output}\n[exit {code}, {time.monotonic() - start:.1f} s]\n")
-        return code, output
+        # The Python tools print through a pipe: make them flush each line.
+        env = dict(os.environ, PYTHONUNBUFFERED="1")
+        with open(path, "w") as log:
+            log.write(f"$ {' '.join(cmd)}\n")
+            log.flush()
+            header = log.tell()
+            try:
+                proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env)
+            except FileNotFoundError as error:
+                log.write(f"{error}\n")
+                return 127, str(error)
+            try:
+                code = proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                log.write(f"\nTIMEOUT after {timeout} s\n")
+                code = -1
+            log.write(f"\n[exit {code}, {time.monotonic() - start:.1f} s]\n")
+        with open(path, errors="replace") as log:
+            log.seek(header)
+            return code, log.read()
 
     def run_simple(self, step, cmd):
         """A step that passes on exit code 0."""
