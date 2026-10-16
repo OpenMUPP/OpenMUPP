@@ -500,7 +500,7 @@ The personality speaks the protocol with these parts:
 | Target | `src/protocol/wchlink/WchLinkTarget.h` | Connects the processor to the debug module layer and the wire engine |
 
 The host tests are in `tests/TestWchLink.cpp`. They send the packets through the USB function, with the wire engine on mock pins and a mock DM.
-The build option `VSL_PROTOCOL=wch-link` puts the personality into a firmware image (see [WCH-Link personality](wch-link.md)).
+The build option `VSL_PERSONALITIES` with `wch-link` puts the personality into a firmware image (see [WCH-Link personality](wch-link.md)).
 
 ### USB
 

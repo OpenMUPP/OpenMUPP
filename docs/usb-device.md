@@ -53,8 +53,8 @@ The firmware has a second USB personality: CMSIS-DAP v2 instead of the Versaloon
 Only one personality is active at a time.
 The USB peripheral has 512 bytes of packet memory.
 The Versaloon interface and a CMSIS-DAP interface do not fit together.
-The build option `VSL_PROTOCOL` selects the personality (see [Select the personality](#select-the-personality)).
-A dual image has both personalities, and selects one at each start (see [Dual image](#dual-image)).
+The build option `VSL_PERSONALITIES` selects the personalities (see [Select the personality](#select-the-personality)).
+A multi image has more than one personality, and selects one at each start (see [Multi image](#multi-image)).
 The Versaloon personality is the default.
 
 `src/usb/CmsisDapDescriptors.h` has the descriptors.
@@ -114,26 +114,35 @@ If the probe does not get WinUSB after that, delete this key and plug in the pro
 
 ### Select the personality
 
-The CMake option `VSL_PROTOCOL` selects the personality of the image:
+The CMake option `VSL_PERSONALITIES` selects the personalities of the image.
+It is a list of one or more of these personalities, with `;` or `,` between them:
 
-| `VSL_PROTOCOL` | USB interface 0 | VID:PID | Sources |
-|---|---|---|---|
-| `versaloon` (default) | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/`) |
-| `cmsis-dap` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
-| `dual` | One of the two, selected at each start | One of the two | All except `wch-link`, and `personality/`, `board/SettingsFlashPage.cpp` |
-| `wch-link` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `VSL_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
+| Personality | Code | USB interface 0 | VID:PID | Sources |
+|---|---|---|---|---|
+| `versaloon` (default) | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/` (without `cmsisdap/` and `wchlink/`) |
+| `cmsis-dap` | `1` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
+| `wch-link` | `2` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `VSL_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
 
-The option defines `VSL_WITH_VERSALOON` for the `versaloon` image, `VSL_WITH_CMSIS_DAP` for the `cmsis-dap` image and `VSL_WITH_WCH_LINK` for the `wch-link` image.
-The `dual` image gets both defines, `VSL_MULTI_PERSONALITY` and `VSL_DEFAULT_PERSONALITY=<code>`.
+For example, `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` builds an image with all three personalities.
+The order in the list does not matter.
+An image with more than one personality is a multi image (see [Multi image](#multi-image)).
+It also has `personality/` and `board/SettingsFlashPage.cpp`.
+`VSL_DEFAULT_PERSONALITY` selects the personality of a multi image when no personality is stored.
+`cmake/Personalities.cmake` has the table of the personalities (see [Add a personality](development.md#add-a-personality)).
+The deprecated option `VSL_PROTOCOL` (`versaloon`, `cmsis-dap`, `dual` or `wch-link`) still works for one release (see [CMake options](development.md#cmake-options)).
+
+The option defines `VSL_WITH_VERSALOON`, `VSL_WITH_CMSIS_DAP` or `VSL_WITH_WCH_LINK` for each personality in the image.
+A multi image also gets `VSL_MULTI_PERSONALITY` and `VSL_DEFAULT_PERSONALITY=<code>`.
 `VSL_MULTI_PERSONALITY` marks an image with more than one personality.
 `VSL_DEFAULT_PERSONALITY` is the code of the personality when no personality is stored.
 `personality::all` in `src/personality/Personality.h` is the list of the personalities in the image, in code order.
 The header makes the list from the `VSL_WITH_*` defines.
 `usb::UsbStack` and `main.cpp` use the defines to select the USB function, the descriptors and the protocol objects.
-The CMake file also removes the source files of the other personality.
+The CMake file also removes the source files of the personalities that are not in the image.
 Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
-All images except `wch-link` share the CDC-ACM serial port, the UART bridge and the debug log. All images share the LEDs.
-The `wch-link` image has two bulk endpoint pairs and no room in the packet memory for the CDC-ACM endpoints, so it has no serial port.
+The Versaloon and the CMSIS-DAP personalities share the CDC-ACM serial port, the UART bridge and the debug log. All personalities share the LEDs.
+The WCH-Link personality has two bulk endpoint pairs and no room in the packet memory for the CDC-ACM endpoints, so it has no serial port.
+In a multi image, the serial port is not there while the WCH-Link personality is active.
 
 The CMSIS-DAP image differs from the Versaloon image in these points:
 
@@ -144,16 +153,18 @@ The CMSIS-DAP image differs from the Versaloon image in these points:
 
 The names of the image files have the text `-cmsis-dap` after the board name.
 
-### Dual image
+### Multi image
 
-A dual image (`VSL_PROTOCOL=dual`) has both personalities.
+A multi image has more than one personality, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
+The old dual image is the multi image with the Versaloon and the CMSIS-DAP personalities.
 One personality is active after each start.
 The active personality has its descriptors, its USB function and its commands, as in the image with one personality.
 The firmware changes the personality only with a reset.
 
 The firmware stores the personality in the last 1 KB flash page of the application area, at `0x0800FC00`.
-The linker script keeps this page out of the image, so a dual image has 1 KB less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
-When the page holds no personality, the image uses `VSL_DEFAULT_PROTOCOL` (default `versaloon`).
+The linker script keeps this page out of the image, so a multi image has 1 KB less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
+When the page holds no personality, the image uses `VSL_DEFAULT_PERSONALITY`.
+The default is the first personality of the image in code order.
 `src/personality/PersonalityStore.h` has the page format.
 The page is a log of 16-bit records, so the firmware erases the page only one time in 512 switches.
 
@@ -162,8 +173,10 @@ To change the personality, use one of these methods:
 - In the Versaloon personality, send `SWITCH_PERSONALITY`: `[0x0E][personality u8]` (see [Versaloon commands](#versaloon-commands)).
 - In the CMSIS-DAP personality, send `ID_DAP_Vendor0`: `[0x80][personality u8]` (see [Commands](cmsis-dap.md#commands)). The status of a refused switch is `0xFF`.
 - In each personality, send the switch request on EP0 (see [Switch request on EP0](#switch-request-on-ep0)).
-  An image with WCH-Link and other personalities (work item #83) needs this request to leave WCH-Link, because the WCH-Link protocol has no free command for a switch.
+  A multi image with WCH-Link needs this request or the key to leave WCH-Link, because the WCH-Link protocol has no free command for a switch.
 - Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the next personality in the list. With two personalities, this is the other one.
+  The key also works in the WCH-Link personality.
+  The ST-Link/V2 has no key: use the switch request on EP0 to leave the WCH-Link personality.
 
 The personality code is `0` for Versaloon, `1` for CMSIS-DAP and `2` for WCH-Link.
 The firmware refuses a switch to a code that is not in the image.
@@ -237,11 +250,11 @@ The key gesture has these rules:
 - The key at reset starts the bootloader, as before (see [Firmware update](firmware-update.md)).
 - The ST-Link/V2 has no key. Use the commands.
 
-The Versaloon personality of a dual image has `VERSALOON_FW_UPDATE`, as the Versaloon image.
-The CMSIS-DAP personality has no command to start the bootloader: use the key at reset, or change to the Versaloon personality first.
+The Versaloon personality of a multi image has `VERSALOON_FW_UPDATE`, as the Versaloon image.
+The CMSIS-DAP and the WCH-Link personalities have no command to start the bootloader: use the key at reset, or change to the Versaloon personality first.
 
-The dual image links the objects of both personalities.
-The Versaloon command and reply buffers (2 x 4096 bytes) are always in RAM.
+A multi image links the objects of all its personalities.
+When the image has the Versaloon personality, the Versaloon command and reply buffers (2 x 4096 bytes) are always in RAM.
 
 ## Versaloon commands
 
@@ -270,15 +283,15 @@ The common commands are:
 | `GET_INFO` | `[0x00]` | `[buffer size u16][version text][0x00]` |
 | `GET_TVCC` | `[0x01]` | `[target voltage in mV u16]`, from the Vref sense (see [POWER block](#power-block)). The value is 0 when the board has no sense or the measurement fails. |
 | `GET_HARDWARE` | `[0x02]` | `[hardware ID u8]`, from the board definition (see [Boards](boards.md)). |
-| `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
+| `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is the code of a personality in the image (see [Multi image](#multi-image)). Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
 The version text has the form `versaloon-ng <version>, board <board>`.
 
-`SWITCH_PERSONALITY` changes the USB personality of a dual image (see [Dual image](#dual-image)).
+`SWITCH_PERSONALITY` changes the USB personality of a multi image (see [Multi image](#multi-image)).
 The firmware sends the reply, stores the personality and resets.
 An image with one personality refuses the command.
-The firmware also refuses a personality code other than `0` and `1`.
+The firmware also refuses the code of a personality that is not in the image.
 A switch to the active personality gets status `0`, and the firmware does not reset.
 Other common commands have no reply.
 The `USB_TO_XXX` commands go to the `USB_TO_ALL` dispatcher (see [USB_TO_ALL](#usb_to_all)).

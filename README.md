@@ -16,7 +16,7 @@ Build the WCH-Link image with `VSL_WCH_LINK_WCH_USB_ID` for personal use only (s
 The Versaloon and CMSIS-DAP personalities also have a USB-CDC serial port.
 The firmware bridges it to a UART of the board.
 The WCH-Link personality has no serial port.
-A dual image has the Versaloon and CMSIS-DAP personalities, and you select one at run time.
+A multi image has more than one personality, and you select one at run time.
 The firmware drives the LEDs for the target power, the command activity and the USB state.
 The key starts the bootloader, and the Versaloon personality also starts it on request (see [Flash the firmware](#flash-the-firmware)).
 
@@ -73,6 +73,8 @@ The build directory is `build/<preset>`, here `build/mini`.
 The presets `mini`, `otheruse` and `stlinkv2` build the Release images of one board.
 A preset without a suffix builds the Versaloon personality.
 Add `-cmsis-dap`, `-dual` or `-wch-link` for the other personalities, for example `mini-cmsis-dap`.
+A `-dual` preset builds the multi image with the Versaloon and the CMSIS-DAP personalities.
+For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [CMake options](docs/development.md#cmake-options)).
 `mini-debug` is the Debug build of the Mini.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
@@ -103,7 +105,7 @@ Each image has a different start address:
 
 The Mini and the OtherUse get all three images.
 The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
-A dual image (`VSL_PROTOCOL=dual`) has 1 KB less flash, because the last flash page holds the stored personality.
+A multi image has 1 KB less flash, because the last flash page holds the stored personality.
 
 The build writes these files into the build directory:
 
@@ -200,22 +202,25 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini and the OtherUse.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
 
-A firmware image built with `-DVSL_PROTOCOL=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `Versaloon CMSIS-DAP`.
+A firmware image built with `-DVSL_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `Versaloon CMSIS-DAP`.
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 The serial port works as in the default image.
 
-A firmware image built with `-DVSL_PROTOCOL=wch-link` shows as a USB device with the ID `1209:0001` and the product name `Versaloon WCH-Link`.
+A firmware image built with `-DVSL_PERSONALITIES=wch-link` shows as a USB device with the ID `1209:0001` and the product name `Versaloon WCH-Link`.
 The host tools `wlink` and `minichlink` find the probe if it has the ID `1a86:8010` (see [docs/wch-link.md](docs/wch-link.md#use-the-probe)).
 This image has no serial port.
 
-A firmware image built with `-DVSL_PROTOCOL=dual` has both personalities.
+A firmware image built with more than one personality is a multi image, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`.
+`VSL_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
+The deprecated option `VSL_PROTOCOL=dual` builds the image with the Versaloon and the CMSIS-DAP personalities.
 To change the personality, send a switch command, or use the key.
 `tools/vsl_personality.py` sends the switch command (see [Tools](#tools)).
 To use the key, hold it down for 3 s until all LEDs flash.
 Then release the key.
-The dongle then resets and shows as the other USB device.
+The dongle then resets and shows as the USB device of the next personality.
 The dongle keeps the personality after a power cycle and after a firmware update with `stm32flash`.
-See [docs/usb-device.md](docs/usb-device.md#dual-image).
+The WCH-Link personality has no switch command: use the switch request on EP0 or the key (see [docs/usb-device.md](docs/usb-device.md#switch-request-on-ep0)).
+See [docs/usb-device.md](docs/usb-device.md#multi-image).
 
 The power LED shows the target power. The state LED flashes for each command of the host, and gives a double flash after a JTAG or SWD error. The USB LED shows the USB state.
 See [docs/boards.md](docs/boards.md#start-up-and-leds) for the meaning of the LEDs.
@@ -226,7 +231,7 @@ The Python scripts in `tools/` need Python 3.
 
 | Script | Function | Needs |
 |---|---|---|
-| `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a dual image to `versaloon` or `cmsis-dap`. | `pyusb` |
+| `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon` or `cmsis-dap`. | `pyusb` |
 | `tools/serial_loopback_test.py` | Tests the UART bridge with a loopback wire from TX to RX (see [docs/uart-bridge.md](docs/uart-bridge.md)). | `pyserial` |
 | `tools/dap_uart_loopback_test.py` | Tests the `DAP_UART_*` commands of the CMSIS-DAP personality with a loopback wire from TX to RX (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-hardware-test)). | `pyusb`, `pyserial` for `--serial-port` |
 | `tools/flash_benchmark.py` | Measures the flash speed with OpenOCD (see [docs/development.md](docs/development.md#flash-speed-benchmark)). | OpenOCD |
