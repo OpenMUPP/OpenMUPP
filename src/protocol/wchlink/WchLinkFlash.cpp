@@ -30,6 +30,10 @@ constexpr uint32_t roundUp(uint32_t value, uint32_t multiple) {
    return (value + multiple - 1) / multiple * multiple;
 }
 
+constexpr uint32_t halfWithInverse(uint8_t value) {
+   return value | static_cast<uint32_t>(static_cast<uint8_t>(~value)) << 8;
+}
+
 bool ok(rvswd::Status status) {
    return status == rvswd::Status::Ok;
 }
@@ -37,7 +41,7 @@ bool ok(rvswd::Status status) {
 } // namespace
 
 void optionsFromRegisters(Series series, uint32_t obr, uint32_t wpr, uint8_t (&values)[fpec::optionBytesV20x]) {
-   if(series == Series::V00x) {
+   if(series != Series::V20x) {
       values[1] = static_cast<uint8_t>(obr >> 2);
       values[2] = static_cast<uint8_t>(obr >> 10);
       values[3] = static_cast<uint8_t>(obr >> 18);
@@ -152,12 +156,29 @@ bool Flash::setReadProtection(bool protect, Series series) {
       return false;
    }
    // OBWRE stays 1 in each write: a 0 locks the option bytes again.
-   bool done = write(fpec::ctlr, fpec::ober | fpec::obwre) && write(fpec::ctlr, fpec::ober | fpec::strt | fpec::obwre) &&
-               waitIdle() && write(fpec::ctlr, fpec::obpg | fpec::obwre);
-   // The controller writes the inverse byte itself. RDPR comes first: the
-   // chip erases the main flash when it becomes unprotected.
-   for(std::size_t i = 0; i < optionBytes && done; ++i) {
-      done = ok(target_.writeMemory(fpec::optionBytes + 2 * i, values[i], rvswd::Width::Half)) && waitIdle();
+   bool done =
+   write(fpec::ctlr, fpec::ober | fpec::obwre) && write(fpec::ctlr, fpec::ober | fpec::strt | fpec::obwre) && waitIdle();
+   if(series == Series::V006) {
+      // CH32V00X RM 18.5.2: fast page programming of the 16 option bytes
+      done = done &&
+             ((control & fpec::flock) == 0 || (write(fpec::modekeyr, fpec::key1) && write(fpec::modekeyr, fpec::key2) &&
+                                               read(fpec::ctlr, control) && (control & fpec::flock) == 0)) &&
+             write(fpec::ctlr, fpec::ftpg | fpec::obwre) &&
+             write(fpec::ctlr, fpec::ftpg | fpec::bufrst | fpec::obwre) && waitIdle();
+      for(std::size_t i = 0; i < optionBytes && done; i += 2) {
+         const uint32_t word = halfWithInverse(values[i]) | halfWithInverse(values[i + 1]) << 16;
+         done = write(fpec::optionBytes + 2 * i, word) && write(fpec::ctlr, fpec::ftpg | fpec::bufload | fpec::obwre) &&
+                waitIdle();
+      }
+      done = done && write(fpec::addr, fpec::optionBytes) && write(fpec::ctlr, fpec::ftpg | fpec::strt | fpec::obwre) &&
+             waitIdle();
+   } else {
+      // The controller writes the inverse byte itself. RDPR comes first:
+      // the chip erases the main flash when it becomes unprotected.
+      done = done && write(fpec::ctlr, fpec::obpg | fpec::obwre);
+      for(std::size_t i = 0; i < optionBytes && done; ++i) {
+         done = ok(target_.writeMemory(fpec::optionBytes + 2 * i, values[i], rvswd::Width::Half)) && waitIdle();
+      }
    }
    done = write(fpec::ctlr, 0) && lockController() && done;
    // Unprotect: the reset loads FLASH_OBR from the new option bytes. The
