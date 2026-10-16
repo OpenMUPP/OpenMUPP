@@ -99,6 +99,8 @@ With `VSL_STRICT_SIZE=ON`, the FLASH region has no slack, and the link of an ima
 The post-build step also fails.
 All presets set `VSL_STRICT_SIZE=ON`, so each image of each CI build must fit.
 
+The host test build runs the post-build steps in CMake script mode on fake files (`tests/cmake/ImageSizeCase.cmake`, tests `image-size.*`).
+
 ### Add a personality
 
 `cmake/Personalities.cmake` has one `vsl_personality()` block for each personality.
