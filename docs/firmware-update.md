@@ -14,14 +14,14 @@ To start `versaloon-bootloader`, use one of these methods:
 
 To start the legacy bootloader, hold the key (PB9) down while you connect the board to USB.
 
-A firmware image built with `VSL_PROTOCOL=cmsis-dap` has no Versaloon interface.
+A firmware image built with `VSL_PERSONALITIES=cmsis-dap` has no Versaloon interface.
 It has no `VERSALOON_FW_UPDATE` command.
 Use the key to start the bootloader.
-A firmware image built with `VSL_PROTOCOL=wch-link` has no `VERSALOON_FW_UPDATE` command either. Use the key.
-A dual image in the CMSIS-DAP personality has no `VERSALOON_FW_UPDATE` command either.
-Change it to the Versaloon personality first, or use the key (see [Dual image](usb-device.md#dual-image)).
+A firmware image built with `VSL_PERSONALITIES=wch-link` has no `VERSALOON_FW_UPDATE` command either. Use the key.
+A multi image in the CMSIS-DAP or the WCH-Link personality has no `VERSALOON_FW_UPDATE` command either.
+Change it to the Versaloon personality first, or use the key (see [Multi image](usb-device.md#multi-image)).
 
-A dual image stores its personality in the flash page at `0x0800FC00`.
+A multi image stores its personality in the flash page at `0x0800FC00`.
 `stm32flash -w` erases only the pages of the image, so an update keeps the stored personality.
 A mass erase of the flash also erases this page.
 The firmware then starts with its default personality.
@@ -147,7 +147,7 @@ The firmware initializes its DATA and BSS sections. It does not use RAM content 
 The OtherUse has an STM32F103C8 with 64 KB flash.
 The bootloader uses the start of the flash, and the application uses the rest:
 
-| Image | Bootloader | Application | Size limit | Size limit, dual image |
+| Image | Bootloader | Application | Size limit | Size limit, multi image |
 |---|---|---|---|---|
 | `standalone` | none | `0x08000000` | 64 KB | 63 KB |
 | `app-8k` | `versaloon-bootloader`, 8 KB | `0x08002000` | 56 KB | 55 KB |

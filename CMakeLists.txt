@@ -91,27 +91,26 @@ set(VSL_APP_OFFSET_app-10k 10240)
 # for the board. Only for boards that the bootloader supports.
 option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 
-# USB personality of the firmware image.
-#   versaloon  the Versaloon interface of OpenOCD (default)
-#   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
-#   dual       both personalities. One is active after each start. A switch
-#              command or the key selects the other one, and a flash page at
-#              the end of the application area stores it (src/personality/).
-#   wch-link   the WCH-Link interface of wlink and minichlink: the dongle
-#              debugs a WCH RISC-V target (CH32V) over the two-wire or the
-#              one-wire debug interface. The device has no serial port.
-set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
-set(VSL_PROTOCOL "versaloon" CACHE STRING "USB personality: ${VSL_PROTOCOLS}")
-set_property(CACHE VSL_PROTOCOL PROPERTY STRINGS ${VSL_PROTOCOLS})
-# The personality of a dual image when no personality is stored
-set(VSL_DEFAULT_PROTOCOLS versaloon cmsis-dap)
-set(VSL_DEFAULT_PROTOCOL "versaloon" CACHE STRING "Default personality of a dual image: ${VSL_DEFAULT_PROTOCOLS}")
-set_property(CACHE VSL_DEFAULT_PROTOCOL PROPERTY STRINGS ${VSL_DEFAULT_PROTOCOLS})
+# USB personalities of the firmware image (cmake/Personalities.cmake):
+# versaloon, cmsis-dap and wch-link. An image with more than one personality
+# has one active personality after each start. A switch command or the key
+# selects the next one, and a flash page at the end of the application area
+# stores it (src/personality/).
+include(Personalities)
+# The deprecated VSL_PROTOCOL sets the personalities when it is set. The
+# cache entry of VSL_PERSONALITIES then must not exist, so that
+# vsl_resolve_personalities() finds an option that is set twice.
+if ("${VSL_PROTOCOL}" STREQUAL "")
+    set(VSL_PERSONALITIES "versaloon" CACHE STRING
+            "USB personalities of the image, a list with ';' or ',': ${VSL_ALL_PERSONALITIES}")
+endif ()
+set(VSL_DEFAULT_PERSONALITY "" CACHE STRING
+        "Personality of a multi image when no personality is stored. Empty: the first one of ${VSL_ALL_PERSONALITIES}")
 
 # The WCH-Link personality uses the USB ID 1a86:8010 of WCH instead of the
 # own ID. wlink and minichlink find a probe by this ID. The vendor ID belongs
 # to WCH: use it for personal use only. CI does not publish this image.
-option(VSL_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in a wch-link image, for personal use only" OFF)
+option(VSL_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-link personality, for personal use only" OFF)
 
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
@@ -162,75 +161,34 @@ if (CMAKE_CROSSCOMPILING)
         message(FATAL_ERROR "VSL_DEBUG_SWD is for debug builds: a Release build has all LEDs. Set -DVSL_DEBUG_SWD=OFF.")
     endif ()
 
-    if (NOT VSL_PROTOCOL IN_LIST VSL_PROTOCOLS)
-        message(FATAL_ERROR "Unknown VSL_PROTOCOL '${VSL_PROTOCOL}'. Supported protocols: ${VSL_PROTOCOLS}")
-    endif ()
-    if (NOT VSL_DEFAULT_PROTOCOL IN_LIST VSL_DEFAULT_PROTOCOLS)
-        message(FATAL_ERROR "Unknown VSL_DEFAULT_PROTOCOL '${VSL_DEFAULT_PROTOCOL}'. Supported: ${VSL_DEFAULT_PROTOCOLS}")
-    endif ()
-    if (VSL_WCH_LINK_WCH_USB_ID AND NOT VSL_PROTOCOL STREQUAL "wch-link")
-        message(FATAL_ERROR "VSL_WCH_LINK_WCH_USB_ID is for VSL_PROTOCOL=wch-link only.")
-    endif ()
-    if (VSL_PROTOCOL STREQUAL "wch-link" AND VSL_DEBUG_CDC)
-        message(FATAL_ERROR "A wch-link image has no CDC port for the debug log. Set -DVSL_DEBUG_CDC=OFF.")
+    # Checks the personality options. Sets VSL_PERSONALITY_SET, the
+    # VSL_WITH_<P> defines (personality/Personality.h), the sources to drop
+    # and VSL_IMAGE_TAG.
+    vsl_resolve_personalities()
+    # The log goes to the CDC port. In a multi image the log is silent while
+    # the WCH-Link personality is active.
+    if (VSL_PERSONALITY_SET STREQUAL "wch-link" AND VSL_DEBUG_CDC)
+        message(FATAL_ERROR "An image with only the wch-link personality has no CDC port for the debug log. Set -DVSL_DEBUG_CDC=OFF.")
     endif ()
 
     # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
-    set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER})
-    # An image has the sources of its personality only: the CMSIS-DAP image
+    set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER} ${VSL_PERSONALITY_DEFINES})
+    # An image has the sources of its personalities only: the CMSIS-DAP image
     # does not link the Versaloon command buffers (usb/VersaloonFunction.h).
-    # The dual image has the sources of both of its personalities.
+    # The shared sources (BoardSwd, BoardJtag, BoardGpio) stay: -gc-sections
+    # drops what an image does not use.
     set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
-    # The sources of the WCH-Link personality
-    set(_vsl_wch_link_files "src/protocol/wchlink/WchLinkFlash\\.cpp" "src/protocol/wchlink/WchLinkProcessor\\.cpp"
-            "src/usb/WchLinkFunction\\.cpp" "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp")
-    # The sources of the Versaloon and the CMSIS-DAP personalities
-    set(_vsl_versaloon_files "src/protocol/CommandAssembler\\.cpp" "src/protocol/CommandProcessor\\.cpp"
-            "src/protocol/UsbToAll\\.cpp" "src/protocol/UsbToXxx\\.cpp"
-            "src/protocol/GpioBlock\\.cpp" "src/protocol/JtagRawBlock\\.cpp"
-            "src/protocol/PowerBlock\\.cpp" "src/protocol/SwdBlock\\.cpp"
-            "src/usb/VersaloonFunction\\.cpp" "src/boot/Bootloader\\.cpp")
-    set(_vsl_cmsis_dap_files "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
-            "src/usb/CmsisDapFunction\\.cpp")
-    # The flash page of the stored personality: only in a dual image
-    set(_vsl_settings_files "src/board/SettingsFlashPage\\.cpp")
-    set(VSL_SETTINGS_PAGE_SIZE 0)
-    # VSL_WITH_<P>: the personalities in the image (personality/Personality.h).
-    # More than one: VSL_MULTI_PERSONALITY, and VSL_DEFAULT_PERSONALITY is
-    # the code of the personality when none is stored.
-    if (VSL_PROTOCOL STREQUAL "dual")
-        list(APPEND PROJECT_DEFINES VSL_WITH_VERSALOON VSL_WITH_CMSIS_DAP VSL_MULTI_PERSONALITY)
-        if (VSL_DEFAULT_PROTOCOL STREQUAL "cmsis-dap")
-            list(APPEND PROJECT_DEFINES VSL_DEFAULT_PERSONALITY=1)
-            set(VSL_IMAGE_TAG "-dual-cmsis-dap")
-        else ()
-            list(APPEND PROJECT_DEFINES VSL_DEFAULT_PERSONALITY=0)
-            set(VSL_IMAGE_TAG "-dual")
-        endif ()
-        set(_vsl_other_protocol_files ${_vsl_wch_link_files})
-        set(_vsl_settings_files "")
-        # One STM32F103 flash page at the end of the application area
+    set(_vsl_dropped_files ${VSL_PERSONALITY_DROPPED_SOURCES})
+    # The flash page of the stored personality: only in a multi image. It is
+    # one STM32F103 flash page at the end of the application area.
+    if (VSL_PERSONALITY_COUNT GREATER 1)
         set(VSL_SETTINGS_PAGE_SIZE 1024)
-    elseif (VSL_PROTOCOL STREQUAL "cmsis-dap")
-        list(APPEND PROJECT_DEFINES VSL_WITH_CMSIS_DAP)
-        set(VSL_IMAGE_TAG "-cmsis-dap")
-        set(_vsl_other_protocol_files ${_vsl_versaloon_files} ${_vsl_wch_link_files})
-    elseif (VSL_PROTOCOL STREQUAL "wch-link")
-        list(APPEND PROJECT_DEFINES VSL_WITH_WCH_LINK)
-        set(VSL_IMAGE_TAG "-wch-link")
-        if (VSL_WCH_LINK_WCH_USB_ID)
-            list(APPEND PROJECT_DEFINES VSL_WCH_LINK_WCH_USB_ID)
-            # The name tells the image apart: it must not be a release artifact
-            set(VSL_IMAGE_TAG "-wch-link-wch-id")
-        endif ()
-        set(_vsl_other_protocol_files ${_vsl_versaloon_files} ${_vsl_cmsis_dap_files})
     else ()
-        list(APPEND PROJECT_DEFINES VSL_WITH_VERSALOON)
-        set(VSL_IMAGE_TAG "")
-        set(_vsl_other_protocol_files ${_vsl_cmsis_dap_files} ${_vsl_wch_link_files})
+        list(APPEND _vsl_dropped_files "src/board/SettingsFlashPage\\.cpp")
+        set(VSL_SETTINGS_PAGE_SIZE 0)
     endif ()
-    foreach (_file ${_vsl_other_protocol_files} ${_vsl_settings_files})
+    foreach (_file ${_vsl_dropped_files})
         list(FILTER VSL_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
     endforeach ()
     if (VSL_DEBUG_CDC)
@@ -266,7 +224,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", protocol: " ${VSL_PROTOCOL} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ")")
+    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program

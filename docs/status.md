@@ -25,13 +25,13 @@ The CMSIS-DAP personality is a CMSIS-DAP v2 probe:
 - It runs SWD and JTAG transfers, and `DAP_TransferAbort` during a transfer command.
 - It has no SWO. The `DAP_UART_*` commands can take the UART from the CDC-ACM serial port (see [cmsis-dap.md](cmsis-dap.md#uart-commands)).
 
-The dual image has both personalities.
-A switch command or the key selects the other personality, and a flash page stores it.
+A multi image has more than one personality, for example Versaloon and CMSIS-DAP (the old dual image).
+A switch command or the key selects the next personality, and a flash page stores it.
 
 The WCH-Link personality is a WCH-LinkE in RISC-V mode:
 
 - It reads and writes the memory of a CH32V003 (one wire) and a CH32V20x (two wires), and it erases, programs, protects and unprotects the flash.
-- It has no serial port, no UART bridge and no debug log, and it is not part of the dual image.
+- It has no serial port, no UART bridge and no debug log. A multi image can have it, but only the key switches to it and from it.
 - Its hardware test is in progress (work item #71). On a CH32V208, wlink (status, dump, erase, flash, protect, unprotect) and minichlink (info, read, write) work (see [wch-link.md](wch-link.md#hardware-test)).
 
 Hardware test status:
@@ -39,4 +39,4 @@ Hardware test status:
 - The Versaloon personality passed the OpenOCD test in JTAG and SWD mode.
 - The CMSIS-DAP personality passed the test on Linux with OpenOCD, pyOCD and probe-rs in SWD mode (see [cmsis-dap.md](cmsis-dap.md#hardware-test)).
 - The CMSIS-DAP personality passed the test on Linux with OpenOCD and pyOCD in JTAG mode (see [cmsis-dap.md](cmsis-dap.md#jtag-hardware-test)).
-- probe-rs in JTAG mode, Windows (also the driverless WinUSB binding) and the dual image need a test on the hardware.
+- probe-rs in JTAG mode, Windows (also the driverless WinUSB binding) and the multi images need a test on the hardware.

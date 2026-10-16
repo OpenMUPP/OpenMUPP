@@ -4,7 +4,7 @@ This document describes the CMSIS-DAP v2.1 command processor for SWD and JTAG.
 The code is in `src/protocol/cmsisdap/`.
 `usb::CmsisDapFunction` (`src/usb/CmsisDapFunction.h`) moves the packets over USB.
 See the [CMSIS-DAP personality](usb-device.md#cmsis-dap-personality).
-The build option `VSL_PROTOCOL=cmsis-dap` puts the function and the processor into the firmware image (see [Build](#build)).
+The build option `VSL_PERSONALITIES` with `cmsis-dap` puts the function and the processor into the firmware image (see [Build](#build)).
 
 ## Build
 
@@ -15,10 +15,10 @@ cmake --preset mini-cmsis-dap
 cmake --build --preset mini-cmsis-dap -j
 ```
 
-Or set the CMake option `VSL_PROTOCOL` to `cmsis-dap`:
+Or set the CMake option `VSL_PERSONALITIES` to `cmsis-dap`:
 
 ```sh
-cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DVSL_PROTOCOL=cmsis-dap
+cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DVSL_PERSONALITIES=cmsis-dap
 cmake --build build/mini-dap -j
 ```
 
@@ -26,7 +26,7 @@ The default value is `versaloon`.
 The default image does not change.
 The build then writes `versaloon-ng-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
-All boards build with both values.
+All boards build with this value.
 
 The `cmsis-dap` image has these properties:
 
@@ -37,8 +37,8 @@ The `cmsis-dap` image has these properties:
   On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
 
 A `cmsis-dap` image has only this personality.
-A `dual` image (`VSL_PROTOCOL=dual`) has both personalities.
-Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, with the switch request on EP0, or with the key (see [Dual image](usb-device.md#dual-image)).
+A multi image has `cmsis-dap` and other personalities, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
+Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, with the switch request on EP0, or with the key (see [Multi image](usb-device.md#multi-image)).
 The switch request on EP0 and the request of the MS OS 2.0 descriptor set use the same handler (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
 
 ## Limits
@@ -129,7 +129,7 @@ Between two packets, `UsbStack::poll()` delivers the USB events again.
 Thus the InComplete event of the last response frees the IN endpoint, and the next response goes out while the next packet runs.
 This loop has no limit. It ends only when no packet is stored after an event delivery.
 A host that sends packets in a pipeline (pyOCD, OpenOCD) keeps a packet stored during a long memory read or a flash download.
-During that time, the rest of the main loop does not run: the LEDs do not change, the key gesture of the dual image waits, and the debug log waits.
+During that time, the rest of the main loop does not run: the LEDs do not change, the key gesture of a multi image waits, and the debug log waits.
 The serial service still runs during the commands, so the UART bridge loses no data.
 Before E6, the commands ran inside the event delivery, with the same effect.
 Thus the OUT endpoint stays armed while a command runs, if a slot is free.
@@ -168,7 +168,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x21` | `DAP_UART_Transfer` | Sends and receives UART data. Up to 59 bytes to send and 58 bytes to receive in one packet. |
 | `0x22` | `DAP_UART_Control` | Enables, disables and flushes the receiver and the transmitter. |
 | `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
-| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a dual image: `[0x80][personality u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for another personality code. The firmware then stores the personality and resets. An image with one personality replies `ID_DAP_Invalid`. See [Dual image](usb-device.md#dual-image). |
+| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. An image with one personality replies `ID_DAP_Invalid`. See [Multi image](usb-device.md#multi-image). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
@@ -498,7 +498,7 @@ Findings:
 pyOCD, OpenOCD and probe-rs do not use these commands, so the script sends them directly on interface 0.
 It needs the pyusb Python package and Python 3.
 
-1. Write a `cmsis-dap` or a `dual` image, and select the CMSIS-DAP personality.
+1. Write a `cmsis-dap` image or a multi image with `cmsis-dap`, and select the CMSIS-DAP personality.
 2. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini and the OtherUse).
 3. Run the script:
 

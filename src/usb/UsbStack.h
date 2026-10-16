@@ -4,8 +4,8 @@
 // the protocol interface of one personality and, in most personalities,
 // one CDC-ACM serial port. Target only.
 //
-// The build selects the personalities of the image (VSL_PROTOCOL in
-// CMakeLists.txt). Each one has a define, its descriptors and its USB
+// The build selects the personalities of the image (VSL_PERSONALITIES,
+// cmake/Personalities.cmake). Each one has a define, its descriptors and its USB
 // function:
 //
 //   versaloon   the Versaloon vendor interface of OpenOCD,

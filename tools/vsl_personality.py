@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shows and switches the USB personality of a dual image (VSL_PROTOCOL=dual).
+"""Shows and switches the USB personality of a multi image (VSL_PERSONALITIES).
 
 The script finds the dongle by its VID:PID and sends the switch command on
 interface 0:
@@ -11,7 +11,7 @@ interface 0:
 
 The personality code is 0 for Versaloon and 1 for CMSIS-DAP. After the
 reply, the dongle resets and enumerates as the target device. The script
-then waits for the target device. See docs/usb-device.md, "Dual image".
+then waits for the target device. See docs/usb-device.md, "Multi image".
 
 Usage:
     python3 vsl_personality.py show

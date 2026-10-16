@@ -82,7 +82,7 @@ Three fault and event patterns replace the normal function:
 |---|---|---|
 | State | Double flash: two flashes of 60 ms, each 600 ms | A JTAG or SWD transfer failed. The pattern starts at the first error and stops 2 s after the last error. Each new error restarts the 2 s. During the pattern, the state LED does not show the command activity. |
 | State | Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. The power LED still shows the target voltage. |
-| All | Three flashes in 0.6 s, then on | The key has been down for 3 s: the dongle switches the personality of a dual image. After the flashes, all LEDs stay on until you release the key. The dongle then resets. |
+| All | Three flashes in 0.6 s, then on | The key has been down for 3 s: the dongle switches the personality of a multi image. After the flashes, all LEDs stay on until you release the key. The dongle then resets. |
 
 A probe error is a transfer that ends with a FAULT acknowledge, no acknowledge, a parity error, or a WAIT acknowledge after all retries.
 In the CMSIS-DAP personality, these are the transfers of `DAP_Transfer` and `DAP_TransferBlock`, on SWD and on JTAG.

@@ -14,7 +14,7 @@ cmake --preset mini-wch-link
 cmake --build --preset mini-wch-link -j
 ```
 
-Or set the CMake option `VSL_PROTOCOL` to `wch-link`.
+Or set the CMake option `VSL_PERSONALITIES` to `wch-link`.
 All boards build with this value.
 The build writes `versaloon-ng-<board>-wch-link-<image>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
@@ -28,10 +28,12 @@ The `wch-link` image has these properties:
 - The image does not link the Versaloon and CMSIS-DAP code. The SWD and JTAG engines of these personalities are not used.
 - The LEDs show the target power, the command activity and the USB state. They show no probe error pattern.
 - The image has no `VERSALOON_FW_UPDATE` command. Use the key to start the bootloader (see [Firmware update](firmware-update.md)).
-- There is no dual image with this personality. The key does not switch to it.
-- The WCH-Link protocol has no command that switches the personality.
+- A multi image can have this personality with others, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
+  The switch commands of the other personalities (code `2`), the switch request on EP0 and the key switch to it.
+  The WCH-Link protocol has no command that switches the personality.
+  To leave the WCH-Link personality, use the switch request on EP0 or the key (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
   The `wch-link` image has only one personality, so it stalls the switch request on EP0.
-  A later image with WCH-Link and other personalities (work item #83) accepts the switch request on EP0 in the WCH-Link personality too (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
+  While the WCH-Link personality is active, the image has no serial port, and the debug log of a `Debug` build is silent.
 
 ## USB ID
 
@@ -52,8 +54,9 @@ The vendor ID `1a86` belongs to WCH.
 Use this option only for personal use.
 Do not publish an image with this ID.
 The names of these image files have `-wch-link-wch-id` after the board.
+In a multi image, the tag ends with `-wch-id`, for example `-vsl+dap+wch-wch-id`.
 CI does not build this image.
-The option is only valid with `VSL_PROTOCOL=wch-link`.
+The option is only valid when `VSL_PERSONALITIES` has `wch-link`.
 
 ## Connect a target
 
@@ -141,11 +144,20 @@ The data and BSS grow from 15.9 KB to 16.4 KB. The RAM has 19.75 KB.
 
 Thus a combined image fits in the first 64 KB, but the margin for the legacy bootloader is small.
 It does not need the other 64 KB of flash.
-The firmware needs more work for a combined image.
-A third personality needs a descriptor set, a switch code and a change of the key cycle.
-The WCH-Link personality has no serial port, but the other two have one.
-Thus the USB stack must change its function list.
-The combined image is not part of the epic.
+
+The firmware now builds the combined image: `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
+A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer):
+
+| Image (Mini, Release) | Size | Limit |
+|---|---|---|
+| `standalone` | 55,744 bytes | 64,512 bytes |
+| `app-8k` | 55,744 bytes | 56,320 bytes |
+| `app-10k` | Does not fit: 1,472 bytes too large | 54,272 bytes |
+
+The data and BSS use 16.9 KB.
+The `app-10k` image of the combined image does not link.
+The `app-8k` image has a margin of 576 bytes only.
+A `Debug` build of the combined image fits no image.
 
 ## Hardware test
 
