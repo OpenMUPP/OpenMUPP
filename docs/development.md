@@ -134,14 +134,20 @@ The default is `/usr`.
 | `mini-dual-cmsis-dap` | Mini | `versaloon,cmsis-dap`, with `VSL_DEFAULT_PERSONALITY=cmsis-dap` (tag `-dap+vsl`) | Release |
 | `mini-wch-link`, `otheruse-wch-link`, `stlinkv2-wch-link` | Mini, OtherUse, ST-Link/V2 | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
+| `mini-triple`, `otheruse-triple`, `stlinkv2-triple` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
+| `mini-cmsis-dap-wch-link` | Mini | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
+Each firmware preset inherits a hidden `board-<board>` preset.
+A preset with a suffix also inherits the hidden `personalities-<suffix>` preset.
+The `personalities-*` presets set `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`.
+They are for the sets of personalities that CI builds.
+For another set, add `-DVSL_PERSONALITIES=<list>` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
-The names of the firmware presets are the names of the CI jobs, without `build-`.
-CI does not build the `mini-wch-link-wch-id` preset.
+CI builds each firmware preset, except `mini-wch-link-wch-id`.
 CI uses these presets (see [Continuous integration](#continuous-integration)).
 
 Add a preset for a local setup in `CMakeUserPresets.json`.

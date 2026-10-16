@@ -58,7 +58,7 @@
       }
     },
     {
-      "name": "protocol-cmsis-dap",
+      "name": "personalities-cmsis-dap",
       "description": "CMSIS-DAP personality",
       "hidden": true,
       "cacheVariables": {
@@ -66,7 +66,7 @@
       }
     },
     {
-      "name": "protocol-dual",
+      "name": "personalities-dual",
       "description": "Dual image, Versaloon as default personality",
       "hidden": true,
       "cacheVariables": {
@@ -75,7 +75,7 @@
       }
     },
     {
-      "name": "protocol-dual-cmsis-dap",
+      "name": "personalities-dual-cmsis-dap",
       "description": "Dual image, CMSIS-DAP as default personality",
       "hidden": true,
       "cacheVariables": {
@@ -84,7 +84,7 @@
       }
     },
     {
-      "name": "protocol-wch-link",
+      "name": "personalities-wch-link",
       "description": "WCH-Link personality",
       "hidden": true,
       "cacheVariables": {
@@ -92,17 +92,35 @@
       }
     },
     {
-      "name": "protocol-wch-link-wch-id",
+      "name": "personalities-wch-link-wch-id",
       "description": "WCH-Link personality with the USB ID of WCH, for personal use only",
       "hidden": true,
       "inherits": [
-        "protocol-wch-link"
+        "personalities-wch-link"
       ],
       "cacheVariables": {
         "VSL_WCH_LINK_WCH_USB_ID": {
           "type": "BOOL",
           "value": "ON"
         }
+      }
+    },
+    {
+      "name": "personalities-triple",
+      "description": "Multi image with all three personalities, Versaloon as default personality",
+      "hidden": true,
+      "cacheVariables": {
+        "VSL_PERSONALITIES": "versaloon,cmsis-dap,wch-link",
+        "VSL_DEFAULT_PERSONALITY": "versaloon"
+      }
+    },
+    {
+      "name": "personalities-cmsis-dap-wch-link",
+      "description": "Multi image with CMSIS-DAP and WCH-Link, CMSIS-DAP as default personality",
+      "hidden": true,
+      "cacheVariables": {
+        "VSL_PERSONALITIES": "cmsis-dap,wch-link",
+        "VSL_DEFAULT_PERSONALITY": "cmsis-dap"
       }
     },
     {
@@ -125,7 +143,7 @@
       "displayName": "Versaloon Mini, CMSIS-DAP",
       "inherits": [
         "board-mini",
-        "protocol-cmsis-dap"
+        "personalities-cmsis-dap"
       ]
     },
     {
@@ -133,7 +151,7 @@
       "displayName": "Versaloon Mini, dual image",
       "inherits": [
         "board-mini",
-        "protocol-dual"
+        "personalities-dual"
       ]
     },
     {
@@ -149,7 +167,7 @@
       "displayName": "Versaloon Mini, dual image, CMSIS-DAP default",
       "inherits": [
         "board-mini",
-        "protocol-dual-cmsis-dap"
+        "personalities-dual-cmsis-dap"
       ]
     },
     {
@@ -157,7 +175,7 @@
       "displayName": "Versaloon Mini, WCH-Link",
       "inherits": [
         "board-mini",
-        "protocol-wch-link"
+        "personalities-wch-link"
       ]
     },
     {
@@ -165,7 +183,23 @@
       "displayName": "Versaloon Mini, WCH-Link, USB ID of WCH",
       "inherits": [
         "board-mini",
-        "protocol-wch-link-wch-id"
+        "personalities-wch-link-wch-id"
+      ]
+    },
+    {
+      "name": "mini-triple",
+      "displayName": "Versaloon Mini, triple image",
+      "inherits": [
+        "board-mini",
+        "personalities-triple"
+      ]
+    },
+    {
+      "name": "mini-cmsis-dap-wch-link",
+      "displayName": "Versaloon Mini, CMSIS-DAP and WCH-Link",
+      "inherits": [
+        "board-mini",
+        "personalities-cmsis-dap-wch-link"
       ]
     },
     {
@@ -180,7 +214,7 @@
       "displayName": "OtherUse, CMSIS-DAP",
       "inherits": [
         "board-otheruse",
-        "protocol-cmsis-dap"
+        "personalities-cmsis-dap"
       ]
     },
     {
@@ -188,7 +222,7 @@
       "displayName": "OtherUse, dual image",
       "inherits": [
         "board-otheruse",
-        "protocol-dual"
+        "personalities-dual"
       ]
     },
     {
@@ -196,7 +230,15 @@
       "displayName": "OtherUse, WCH-Link",
       "inherits": [
         "board-otheruse",
-        "protocol-wch-link"
+        "personalities-wch-link"
+      ]
+    },
+    {
+      "name": "otheruse-triple",
+      "displayName": "OtherUse, triple image",
+      "inherits": [
+        "board-otheruse",
+        "personalities-triple"
       ]
     },
     {
@@ -211,7 +253,7 @@
       "displayName": "ST-Link/V2, CMSIS-DAP",
       "inherits": [
         "board-stlinkv2",
-        "protocol-cmsis-dap"
+        "personalities-cmsis-dap"
       ]
     },
     {
@@ -219,7 +261,7 @@
       "displayName": "ST-Link/V2, dual image",
       "inherits": [
         "board-stlinkv2",
-        "protocol-dual"
+        "personalities-dual"
       ]
     },
     {
@@ -227,7 +269,15 @@
       "displayName": "ST-Link/V2, WCH-Link",
       "inherits": [
         "board-stlinkv2",
-        "protocol-wch-link"
+        "personalities-wch-link"
+      ]
+    },
+    {
+      "name": "stlinkv2-triple",
+      "displayName": "ST-Link/V2, triple image",
+      "inherits": [
+        "board-stlinkv2",
+        "personalities-triple"
       ]
     },
     {
@@ -270,6 +320,14 @@
       "configurePreset": "mini-wch-link-wch-id"
     },
     {
+      "name": "mini-triple",
+      "configurePreset": "mini-triple"
+    },
+    {
+      "name": "mini-cmsis-dap-wch-link",
+      "configurePreset": "mini-cmsis-dap-wch-link"
+    },
+    {
       "name": "otheruse",
       "configurePreset": "otheruse"
     },
@@ -286,6 +344,10 @@
       "configurePreset": "otheruse-wch-link"
     },
     {
+      "name": "otheruse-triple",
+      "configurePreset": "otheruse-triple"
+    },
+    {
       "name": "stlinkv2",
       "configurePreset": "stlinkv2"
     },
@@ -300,6 +362,10 @@
     {
       "name": "stlinkv2-wch-link",
       "configurePreset": "stlinkv2-wch-link"
+    },
+    {
+      "name": "stlinkv2-triple",
+      "configurePreset": "stlinkv2-triple"
     },
     {
       "name": "host-tests",

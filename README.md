@@ -72,9 +72,10 @@ cmake --build --preset mini -j
 The build directory is `build/<preset>`, here `build/mini`.
 The presets `mini`, `otheruse` and `stlinkv2` build the Release images of one board.
 A preset without a suffix builds the Versaloon personality.
-Add `-cmsis-dap`, `-dual` or `-wch-link` for the other personalities, for example `mini-cmsis-dap`.
+Add `-cmsis-dap`, `-dual`, `-wch-link` or `-triple` for the other personalities, for example `mini-cmsis-dap`.
 A `-dual` preset builds the multi image with the Versaloon and the CMSIS-DAP personalities.
-For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [CMake options](docs/development.md#cmake-options)).
+A `-triple` preset builds the multi image with the Versaloon, the CMSIS-DAP and the WCH-Link personalities.
+For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,wch-link` (see [CMake options](docs/development.md#cmake-options)).
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
