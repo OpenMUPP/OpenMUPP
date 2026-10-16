@@ -27,11 +27,16 @@ reads, and run and halt. The image has a vector table and a loop at
 probe-rs writes the image, verifies it, reads it back, writes and reads RAM
 and resets the target. probe-rs cannot set the target clock before each
 command, and the target runs at 8 MHz after a reset. TCK must not be above
-F_CPU / 6, so the script skips probe-rs JTAG above 1000 kHz.
+F_CPU / 6, so the script skips probe-rs JTAG above 1333 kHz.
 
 The first OpenOCD run reads the device ID and the flash size of the target.
 The script uses them to select the pyOCD target and the probe-rs chip, as
-long as --pyocd-target and --probe-rs-chip are not given.
+long as --pyocd-target and --probe-rs-chip are not given. A low or medium
+density chip needs the Keil.STM32F1xx_DFP pack in pyOCD
+(`pyocd pack install stm32f103c8`).
+
+With --serial, OpenOCD, pyOCD and probe-rs use only the dongle with this
+serial number.
 
 The full output of each step goes into a log file in --log-dir. The script
 ends with a table of the results, and exits with code 1 when a step fails.
@@ -69,6 +74,8 @@ DEFAULT_SIZE = 32 * 1024
 SEED = 0x5A17
 # The target runs at 8 MHz after reset, and JTAG needs TCK <= F_CPU / 6.
 SETUP_SPEED_KHZ = 1000
+# probe-rs cannot set the target clock: TCK <= 8 MHz / 6
+PROBE_RS_JTAG_MAX_KHZ = 1333
 DEFAULT_SWD_SPEEDS = [1000, 2000]
 DEFAULT_JTAG_SPEEDS = [1000, 9000]
 STEP_TIMEOUT_S = 300
@@ -205,9 +212,10 @@ INFO_PATTERN = re.compile(r"INFO dev_id=0x([0-9a-fA-F]+) flash_kb=(\d+)")
 
 # STM32F1 DBGMCU_IDCODE device ID -> (pyOCD target, probe-rs chip) by flash KiB.
 # Low and medium density have 1 KiB flash pages, high density 2 KiB pages,
-# so the flash algorithm must match the density.
+# so the flash algorithm must match the density. The pyOCD targets of low
+# and medium density come from the Keil.STM32F1xx_DFP pack.
 CHIPS = {
-    0x412: {16: ("stm32f103c4", "STM32F103C4"), 32: ("stm32f103c6", "STM32F103C6")},
+    0x412: {32: ("stm32f103c6", "STM32F103C6")},
     0x410: {64: ("stm32f103c8", "STM32F103C8"), 128: ("stm32f103cb", "STM32F103CB")},
     0x414: {256: ("stm32f103rc", "STM32F103RC"), 384: ("stm32f103rc", "STM32F103RD"),
             512: ("stm32f103rc", "STM32F103RE")},
@@ -276,6 +284,8 @@ def openocd_command(args, personality, transport, speed_khz, checks_path, image_
     for script_dir in args.search:
         cmd += ["-s", script_dir]
     cmd += OPENOCD_INTERFACES[personality]
+    if args.serial:
+        cmd += ["-c", f"adapter serial {args.serial}"]
     cmd += ["-c", f"transport select {transport}", "-f", "target/stm32f1x.cfg", "-f", CLOCK_SCRIPT, "-f", checks_path]
     # The target script sets its own adapter speed, so set the speed after it.
     for command in [
@@ -341,7 +351,7 @@ class Runner:
             log.flush()
             header = log.tell()
             try:
-                proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env)
+                proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, env=env)
             except FileNotFoundError as error:
                 log.write(f"{error}\n")
                 return 127, str(error)
@@ -452,7 +462,8 @@ class Runner:
             for speed in self.speeds(transport):
                 step = f"pyocd {transport} {speed} kHz"
                 code, output = self.run(step, [self.args.pyocd_python, os.path.join(TOOLS_DIR, "pyocd_jtag_test.py"),
-                                               str(speed * 1000), "--protocol", transport, "--target", target])
+                                               str(speed * 1000), "--protocol", transport, "--target", target,
+                                               *(["--uid", self.args.serial] if self.args.serial else [])])
                 fails = [line for line in output.splitlines() if line.startswith("FAIL ")]
                 ok = code == 0 and "RESULT PASS" in output and not fails
                 notes = [] if ok else (fails or output.strip().splitlines()[-5:]) + [f"exit code {code}"]
@@ -472,8 +483,8 @@ class Runner:
         for transport in ("swd", "jtag"):
             for speed in self.speeds(transport):
                 step = f"probe-rs {transport} {speed} kHz"
-                if transport == "jtag" and speed > SETUP_SPEED_KHZ:
-                    self.record(step, SKIP, ["the target runs at 8 MHz: TCK must not be above 1333 kHz"])
+                if transport == "jtag" and speed > PROBE_RS_JTAG_MAX_KHZ:
+                    self.record(step, SKIP, [f"the target runs at 8 MHz: TCK must not be above {PROBE_RS_JTAG_MAX_KHZ} kHz"])
                     continue
                 common = ["--chip", chip, "--protocol", transport, "--speed", str(speed), "--probe", probe,
                           "--non-interactive"]
@@ -586,6 +597,7 @@ def main(argv=None):
         runner.all()
     except KeyboardInterrupt:
         print("\nInterrupted")
+        runner.record("interrupted", FAIL, ["the run did not end"])
     return runner.summary()
 
 

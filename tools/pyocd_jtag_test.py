@@ -104,6 +104,7 @@ def main():
     parser.add_argument("freq", type=int, nargs="?", default=1000000, help="TCK or SWCLK in Hz (default 1000000)")
     parser.add_argument("--protocol", choices=("jtag", "swd"), default="jtag")
     parser.add_argument("--target", default="stm32f103rc", help="pyOCD target type (default stm32f103rc)")
+    parser.add_argument("--uid", help="the unique ID (USB serial number) of the probe")
     args = parser.parse_args()
     freq = args.freq
     jtag = args.protocol == "jtag"
@@ -112,7 +113,7 @@ def main():
             self, CHAIN_IR_LENGTHS)
     data = make_image()
     session = ConnectHelper.session_with_chosen_probe(
-        blocking=False, target_override=args.target,
+        blocking=False, unique_id=args.uid, target_override=args.target,
         options={"dap_protocol": args.protocol, "frequency": 1000000, "connect_mode": "under-reset"})
     if session is None:
         print("RESULT FAIL: no probe found")
