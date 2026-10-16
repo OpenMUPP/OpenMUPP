@@ -183,14 +183,28 @@ The firmware refuses a switch to a code that is not in the image.
 The key cycle uses the code order and skips the personalities that are not in the image.
 The settings page has room for four personality codes (`0` to `3`).
 A new personality gets the next code, one entry in `personality::everyPersonality` and one `VSL_WITH_*` define in `personality::has()`.
-`tools/vsl_personality.py` sends the commands from the host.
+`tools/vsl_personality.py` sends the switch from the host.
 It needs the `pyusb` package:
 
 ```sh
 python3 tools/vsl_personality.py show
 python3 tools/vsl_personality.py switch cmsis-dap
+python3 tools/vsl_personality.py switch wch-link
 python3 tools/vsl_personality.py switch versaloon
 ```
+
+The tool finds the dongle by the VID:PID of each personality.
+For the WCH-Link personality, it also compares the product string with `Versaloon WCH-Link`.
+Other devices use the IDs `1209:0001` and `1a86:8010` too.
+The tool ignores a device with one of these IDs and an other product string.
+Use `--serial` to select one dongle when more than one is connected.
+
+The tool sends the switch request on EP0 for each switch (see [Switch request on EP0](#switch-request-on-ep0)).
+A firmware from before the EP0 request stalls it.
+Thus, after a stall, the tool sends `SWITCH_PERSONALITY` or `ID_DAP_Vendor0` on interface 0.
+The reply of this command tells if the firmware refused the switch.
+In the WCH-Link personality, the tool has no other command, so a stall means that the firmware refused the switch.
+After the request, the tool waits 10 s for the device with the VID:PID of the new personality.
 
 After a command, the firmware sends the reply, and then waits 10 ms.
 Then the firmware disconnects from USB, writes the flash page and resets.

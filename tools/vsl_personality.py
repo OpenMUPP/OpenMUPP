@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 """Shows and switches the USB personality of a multi image (VSL_PERSONALITIES).
 
-The script finds the dongle by its VID:PID and sends the switch command on
-interface 0:
+The script finds the dongle by its VID:PID and sends the switch request on
+EP0, the control endpoint (bmRequestType 0x40, bRequest 0x0E, wValue code,
+wIndex 0, wLength 0). Each personality of a multi image accepts it.
+
+Firmware from before the EP0 request stalls it. Then the script sends the
+switch command of the active personality on interface 0:
 
     Versaloon personality (0483:a038):  SWITCH_PERSONALITY [0x0E][code]
                                         reply [status], 0 = accepted
     CMSIS-DAP personality (0403:9b3c):  ID_DAP_Vendor0 [0x80][code]
                                         response [0x80][status], 0 = accepted
 
-The personality code is 0 for Versaloon and 1 for CMSIS-DAP. After the
-reply, the dongle resets and enumerates as the target device. The script
-then waits for the target device. See docs/usb-device.md, "Multi image".
+The WCH-Link personality (1209:0001 or 1a86:8010) has no switch command, so
+a stall there means that the firmware refused the switch.
+
+The personality code is 0 for Versaloon, 1 for CMSIS-DAP and 2 for
+WCH-Link. After the request, the dongle resets and enumerates as the target
+device. The script then waits for the target device. See docs/usb-device.md,
+"Multi image".
 
 Usage:
     python3 vsl_personality.py show
     python3 vsl_personality.py switch cmsis-dap
+    python3 vsl_personality.py switch wch-link
     python3 vsl_personality.py switch versaloon --serial 0123456789AB
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
@@ -23,20 +32,31 @@ The unit tests in test_vsl_personality.py need no pyusb and no hardware.
 """
 
 import argparse
+import errno
 import sys
 import time
 
-# Personality name -> (code, VID, PID)
+# Personality name -> (code, ((VID, PID), ...))
 PERSONALITIES = {
-    "versaloon": (0, 0x0483, 0xA038),
-    "cmsis-dap": (1, 0x0403, 0x9B3C),
+    "versaloon": (0, ((0x0483, 0xA038),)),
+    "cmsis-dap": (1, ((0x0403, 0x9B3C),)),
+    "wch-link": (2, ((0x1209, 0x0001), (0x1A86, 0x8010))),
 }
 
+# Other devices use these USB IDs too (the pid.codes test ID, the real
+# WCH-LinkE), so the product string must also match.
+PRODUCT_STRINGS = {
+    "wch-link": "Versaloon WCH-Link",
+}
+
+SWITCH_REQUEST_TYPE = 0x40  # vendor, host to device, recipient device
+SWITCH_REQUEST = 0x0E
 OUT_ENDPOINT = 0x03
 IN_ENDPOINT = 0x82
 SWITCH_PERSONALITY = 0x0E
 DAP_VENDOR0 = 0x80
 DAP_INVALID = 0xFF
+LIBUSB_ERROR_PIPE = -9
 TIMEOUT_MS = 1000
 ENUMERATION_TIMEOUT_S = 10.0
 
@@ -47,18 +67,20 @@ class PersonalityError(Exception):
 
 def personality_of(vid, pid):
     """The personality name of a VID:PID, or None."""
-    for name, (_code, p_vid, p_pid) in PERSONALITIES.items():
-        if (vid, pid) == (p_vid, p_pid):
+    for name, (_code, ids) in PERSONALITIES.items():
+        if (vid, pid) in ids:
             return name
     return None
 
 
 def switch_request(active, target):
-    """The command that switches from the active personality to target."""
+    """The in-protocol command that switches from the active personality to target."""
     code = PERSONALITIES[target][0]
     if active == "versaloon":
         return bytes([SWITCH_PERSONALITY, code])
-    return bytes([DAP_VENDOR0, code])
+    if active == "cmsis-dap":
+        return bytes([DAP_VENDOR0, code])
+    raise PersonalityError("the %s personality has no switch command" % active)
 
 
 def check_reply(active, reply):
@@ -78,6 +100,11 @@ def check_reply(active, reply):
         raise PersonalityError("the firmware refused the switch (status %d)" % reply[1])
 
 
+def is_stall(error):
+    """True when a USBError is a stall (EPIPE) of the device."""
+    return error.errno == errno.EPIPE or getattr(error, "backend_error_code", None) == LIBUSB_ERROR_PIPE
+
+
 def import_usb():
     try:
         import usb.core
@@ -87,14 +114,26 @@ def import_usb():
     return usb
 
 
+def get_string(usb, device, index):
+    """A string descriptor of the device, or None when the host cannot read it."""
+    try:
+        return usb.util.get_string(device, index)
+    except (usb.core.USBError, ValueError):
+        return None
+
+
 def find_devices(usb, serial=None):
     """(personality, device) for each dongle, optionally with one serial number."""
     result = []
-    for name, (_code, vid, pid) in PERSONALITIES.items():
-        for device in usb.core.find(find_all=True, idVendor=vid, idProduct=pid):
-            if serial is not None and usb.util.get_string(device, device.iSerialNumber) != serial:
-                continue
-            result.append((name, device))
+    for name, (_code, ids) in PERSONALITIES.items():
+        for vid, pid in ids:
+            for device in usb.core.find(find_all=True, idVendor=vid, idProduct=pid):
+                product = PRODUCT_STRINGS.get(name)
+                if product is not None and get_string(usb, device, device.iProduct) != product:
+                    continue
+                if serial is not None and get_string(usb, device, device.iSerialNumber) != serial:
+                    continue
+                result.append((name, device))
     return result
 
 
@@ -107,13 +146,58 @@ def wait_for(usb, target, serial, timeout_s):
     return False
 
 
+def send_ep0_request(usb, device, target):
+    """Sends the switch request on EP0.
+
+    Returns True when the firmware accepted it, or when the result is not
+    known and the switch can be in progress. Returns False on a stall.
+    """
+    try:
+        device.ctrl_transfer(SWITCH_REQUEST_TYPE, SWITCH_REQUEST, PERSONALITIES[target][0], 0, None, TIMEOUT_MS)
+    except usb.core.USBError as error:
+        if is_stall(error):
+            return False
+        # The request went out, so the switch can be in progress: wait for
+        # the target device.
+        print("No status stage (%s), waiting for the device" % error, file=sys.stderr)
+    return True
+
+
+def send_command(usb, device, active, target):
+    """Sends the in-protocol switch command on interface 0.
+
+    Raises PersonalityError when the firmware refuses the switch, and
+    usb.core.USBError when the command does not go out.
+    """
+    request = switch_request(active, target)
+    try:
+        if device.is_kernel_driver_active(0):
+            device.detach_kernel_driver(0)
+    except (NotImplementedError, usb.core.USBError):
+        pass
+    try:
+        usb.util.claim_interface(device, 0)
+        device.write(OUT_ENDPOINT, request, TIMEOUT_MS)
+        try:
+            check_reply(active, device.read(IN_ENDPOINT, 64, TIMEOUT_MS))
+        except usb.core.USBError as error:
+            # The command went out, so the switch can be in progress: wait
+            # for the target device.
+            print("No reply (%s), waiting for the device" % error, file=sys.stderr)
+    finally:
+        try:
+            usb.util.release_interface(device, 0)
+        except usb.core.USBError:
+            pass
+
+
 def command_show(usb, args):
     devices = find_devices(usb, args.serial)
     if not devices:
         print("No dongle found")
         return 1
     for name, device in devices:
-        serial = usb.util.get_string(device, device.iSerialNumber)
+        serial = get_string(usb, device, device.iSerialNumber)
         print("%s  %04x:%04x  serial %s" % (name, device.idVendor, device.idProduct, serial))
     return 0
 
@@ -130,33 +214,22 @@ def command_switch(usb, args):
     if active == args.personality:
         print("The dongle has the %s personality already" % active)
         return 0
-    serial = usb.util.get_string(device, device.iSerialNumber)
+    serial = get_string(usb, device, device.iSerialNumber)
     try:
-        if device.is_kernel_driver_active(0):
-            device.detach_kernel_driver(0)
-    except (NotImplementedError, usb.core.USBError):
-        pass
-    try:
-        usb.util.claim_interface(device, 0)
-        device.write(OUT_ENDPOINT, switch_request(active, args.personality), TIMEOUT_MS)
-    except usb.core.USBError as error:
-        print("Cannot send the command: %s" % error, file=sys.stderr)
-        usb.util.dispose_resources(device)
-        return 1
-    try:
-        check_reply(active, device.read(IN_ENDPOINT, 64, TIMEOUT_MS))
+        if not send_ep0_request(usb, device, args.personality):
+            if active == "wch-link":
+                print("The firmware refused the switch", file=sys.stderr)
+                return 1
+            # A stall: the firmware refused the switch, or it is from before
+            # the EP0 request. The in-protocol command tells which one.
+            send_command(usb, device, active, args.personality)
     except PersonalityError as error:
         print(error, file=sys.stderr)
         return 1
     except usb.core.USBError as error:
-        # The command went out, so the switch can be in progress: wait for
-        # the target device.
-        print("No reply (%s), waiting for the device" % error, file=sys.stderr)
+        print("Cannot send the command: %s" % error, file=sys.stderr)
+        return 1
     finally:
-        try:
-            usb.util.release_interface(device, 0)
-        except usb.core.USBError:
-            pass
         usb.util.dispose_resources(device)
     print("Switching from %s to %s ..." % (active, args.personality))
     if not wait_for(usb, args.personality, serial, ENUMERATION_TIMEOUT_S):
