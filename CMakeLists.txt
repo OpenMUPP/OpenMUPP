@@ -90,6 +90,12 @@ set(VSL_APP_OFFSET_app-10k 10240)
 # Build versaloon-bootloader (dependencies/versaloon-bootloader, cmake/Bootloader.cmake)
 # for the board. Only for boards that the bootloader supports.
 option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
+# An image that does not fit its flash limit: OFF skips the image with a
+# warning (cmake/ImageSize.cmake), ON stops the build. The size is only
+# known after the link. With OFF, the FLASH region of the linker script is
+# 64 KB larger (__vsl_flash_slack), so that the link does not fail. The CI
+# presets set ON: each image of each CI build must fit.
+option(VSL_STRICT_SIZE "Stop the build when an image does not fit its flash limit, instead of skipping the image" OFF)
 
 # USB personalities of the firmware image (cmake/Personalities.cmake):
 # versaloon, cmsis-dap and wch-link. An image with more than one personality
@@ -187,11 +193,16 @@ if (CMAKE_CROSSCOMPILING)
     if (VSL_DEBUG_SWD)
         list(APPEND PROJECT_DEFINES VSL_DEBUG_SWD)
     endif ()
+    if (VSL_STRICT_SIZE)
+        set(VSL_FLASH_SLACK 0)
+    else ()
+        set(VSL_FLASH_SLACK 65536)
+    endif ()
     set(CXX_OPTIONS -fno-exceptions -fno-rtti -fno-use-cxa-atexit -Wno-volatile)
     set(COMMON_OPTIONS -Os -ffunction-sections -fdata-sections -g -fno-common -fmessage-length=0 -fsigned-char -Werror=odr --specs=nano.specs --specs=nosys.specs)
     set(C_OPTIONS -std=gnu11)
     set(DEBUG_OPTIONS -Wall -Wextra -Og)
-    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -Wl,--defsym=__vsl_settings_size=${VSL_SETTINGS_PAGE_SIZE} -Tmem-f103.ld -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -Wl,--defsym=__vsl_settings_size=${VSL_SETTINGS_PAGE_SIZE} -Wl,--defsym=__vsl_flash_slack=${VSL_FLASH_SLACK} -Tmem-f103.ld -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
 endif ()
 
 # Central interface target to unify compile/link flags and defines across all used libraries and executables
@@ -211,7 +222,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ")")
+    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", strict size: " ${VSL_STRICT_SIZE} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program
@@ -284,14 +295,20 @@ if (CMAKE_CROSSCOMPILING)
             # The stamp step writes the header into the ELF file and makes
             # the .hex and .bin files. A separate objcopy step would fill the
             # gaps with 0x00 and give a wrong CRC.
-            vsl_stamp_image(${_target} BIN ${_name}.bin HEX ${_name}.hex MAX_LENGTH ${_limit})
+            # The FLASH region of the link, with the slack: the size check
+            # below compares the image with the real limit.
+            math(EXPR _link_limit "${_limit} + ${VSL_FLASH_SLACK}")
+            vsl_stamp_image(${_target} BIN ${_name}.bin HEX ${_name}.hex MAX_LENGTH ${_link_limit})
         endif ()
-        # Post-build steps run in the order of the calls: the copies come
-        # after the stamp step.
+        # Post-build steps run in the order of the calls: the size check
+        # comes after the stamp step. It makes the copies when the image
+        # fits, and skips the image when it does not fit.
         add_custom_command(TARGET ${_target} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy ${_name}.hex ${_file}.hex
-                COMMAND ${CMAKE_COMMAND} -E copy ${_name}.bin ${_file}.bin
-                COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin")
+                COMMAND ${CMAKE_COMMAND} -DIMAGE=${_name} -DLIMIT=${_limit} -DCOPY=${_file}
+                    -DSTRICT=${VSL_STRICT_SIZE} -P ${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake
+                BYPRODUCTS ${_file}.hex ${_file}.bin
+                COMMENT "Checking the size of ${_name}, building ${_file}.hex and ${_file}.bin"
+                VERBATIM)
     endfunction()
 
     # vsl-images.txt lists each image with its size limit, one line
@@ -323,18 +340,21 @@ if (CMAKE_CROSSCOMPILING)
         find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
         set(_name versaloon-ng-with-bootloader)
         set(_file versaloon-ng-${BOARD}${VSL_IMAGE_TAG}-with-bootloader-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
+        # cmake/CombinedImage.cmake skips the combined image when the build
+        # skipped the app-8k image. The app-8k .bin file is not in DEPENDS:
+        # it can be missing. The .elf file of the app-8k image is.
         add_custom_command(
                 OUTPUT ${_name}.bin ${_name}.hex
-                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py"
-                    --bootloader "${VSL_BOOTLOADER_DIR}/versaloon-bootloader-${BOARD}.bin"
-                    --app versaloon-ng-app-8k.bin --app-offset ${VSL_APP_OFFSET_app-8k}
-                    --bin ${_name}.bin --hex ${_name}.hex
-                COMMAND ${CMAKE_COMMAND} -E copy ${_name}.hex ${_file}.hex
-                COMMAND ${CMAKE_COMMAND} -E copy ${_name}.bin ${_file}.bin
+                COMMAND ${CMAKE_COMMAND} -DPYTHON=${Python3_EXECUTABLE}
+                    -DTOOL=${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py
+                    -DBOOTLOADER=${VSL_BOOTLOADER_DIR}/versaloon-bootloader-${BOARD}.bin
+                    -DAPP=versaloon-ng-app-8k.bin -DAPP_OFFSET=${VSL_APP_OFFSET_app-8k}
+                    -DIMAGE=${_name} -DCOPY=${_file}
+                    -P ${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake
                 DEPENDS versaloon-bootloader versaloon-ng-app-8k.elf
                     "${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py"
+                    "${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake"
                     "${VSL_BOOTLOADER_DIR}/versaloon-bootloader-${BOARD}.bin"
-                    "${CMAKE_CURRENT_BINARY_DIR}/versaloon-ng-app-8k.bin"
                 BYPRODUCTS ${_file}.hex ${_file}.bin
                 COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin"
                 VERBATIM)

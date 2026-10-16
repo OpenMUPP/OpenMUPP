@@ -155,9 +155,11 @@ A Release build of the Mini measured these sizes (`.bin` files, with the one-wir
 | `app-10k` | Does not fit: 1,740 bytes too large | 54,272 bytes |
 
 The data and BSS use 16.5 KB.
-The `app-10k` image of the combined image does not link.
+The `app-10k` image of the combined image does not fit.
+The build skips it with a warning, and makes the other images (see [Images that do not fit](development.md#images-that-do-not-fit)).
+With `VSL_STRICT_SIZE=ON`, the link of the `app-10k` image fails.
 The `app-8k` image has a margin of 308 bytes only.
-A `Debug` build of the combined image fits no image.
+A `Debug` build of the combined image fits no image: the build skips all images.
 
 ## Hardware test
 
