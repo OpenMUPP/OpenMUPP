@@ -2,6 +2,7 @@
 // with the fake controller of libArT as the host.
 
 #include "CmsisDapBench.h"
+#include "SwitchRequestHost.h"
 
 #include <doctest/doctest.h>
 #include <usb/MsOs20.h>
@@ -478,4 +479,29 @@ TEST_CASE("DAP_TransferAbort waits at the OUT endpoint when all slots are in use
    const auto block = bench.read();
    REQUIRE(block.has_value());
    CHECK((*block)[1] == 0x02);
+}
+
+TEST_CASE("The switch request in the CMSIS-DAP personality") {
+   personality::PersonalitySwitch personalitySwitch{ personality::Personality::CmsisDap };
+   DapBench bench("Product", &personalitySwitch);
+   bench.enumerate();
+   auto &controller = bench.controller();
+
+   SUBCASE("The request switches") {
+      CHECK_FALSE(vsltest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
+      CHECK(vsltest::switchesTo(personalitySwitch, personality::Personality::Versaloon));
+   }
+   SUBCASE("The MS OS 2.0 request goes to the next handler") {
+      const auto set =
+      controller.controlIn(vsltest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
+                                                static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())));
+      CHECK_FALSE(set.stalled);
+      CHECK(set.data == bytes(usb::dap::msOs20DescriptorSet));
+      CHECK_FALSE(personalitySwitch.requested().has_value());
+   }
+   SUBCASE("Another vendor code stalls") {
+      CHECK(
+      controller.controlIn(vsltest::setupPacket(0xC0, static_cast<uint8_t>(usb::dap::msOs20VendorCode + 1), 0, 7, 16)).stalled);
+      CHECK(controller.controlOut(vsltest::setupPacket(usb::switchRequestType, 0x0F, 0, 0, 0), {}).stalled);
+   }
 }

@@ -3,6 +3,7 @@
 // pins and a mock DM. The request and response bytes come from the
 // WCH-LinkE captures in docs/wch-link-captures (docs/wch-link-protocol.md).
 
+#include "SwitchRequestHost.h"
 #include "WchLinkBench.h"
 
 #include <doctest/doctest.h>
@@ -743,4 +744,24 @@ TEST_CASE("WCH-Link: a cleared halt of the data IN endpoint sends the data packe
    bench.mainLoop();
    CHECK(bench.readData() == Bytes{ 0x01, 0x02, 0x03, 0x04 });
    CHECK_FALSE(bench.readData().has_value());
+}
+
+TEST_CASE("The switch request in the WCH-Link personality") {
+   personality::PersonalitySwitch personalitySwitch{ personality::Personality::WchLink };
+   WchLinkBench bench(Wire::Two, &personalitySwitch);
+   bench.enumerate();
+
+   CHECK_FALSE(vsltest::switchRequest(bench.controller(), personality::toCode(personality::Personality::CmsisDap)).stalled);
+   CHECK(vsltest::switchesTo(personalitySwitch, personality::Personality::CmsisDap));
+}
+
+TEST_CASE("The switch request works before SET_CONFIGURATION") {
+   personality::PersonalitySwitch personalitySwitch{ personality::Personality::WchLink };
+   WchLinkBench bench(Wire::Two, &personalitySwitch);
+   auto &controller = bench.controller();
+   controller.busReset();
+   bench.request(WchLinkBench::setAddress, 5);
+
+   CHECK_FALSE(vsltest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
+   CHECK(vsltest::switchesTo(personalitySwitch, personality::Personality::Versaloon));
 }
