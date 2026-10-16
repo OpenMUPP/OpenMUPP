@@ -572,8 +572,16 @@ The family code of the response comes from a table of chip ID prefixes (the top 
 | Prefix | Chip series | Family code | Source |
 |---|---|---|---|
 | `003` | CH32V003 | `09` | Captured |
+| `641` | CH641 | `49` | Reference manual and wlink |
+| `002`, `004`, `005`, `006`, `007` | CH32V002/4/5/6/7, CH32M007 | `4e` | CH32V00X reference manual and wlink |
 | `208` | CH32V208 | `05` | Captured |
 | `203`, `207` | CH32V203, CH32V207 | `05` | Same series as the CH32V208. Not captured. |
+| `303`, `305`, `307` | CH32V30x | `06` | Reference manual and wlink |
+| `317` | CH32V317 | `86` | Reference manual and wlink |
+| `033`, `035` | CH32X035 | `0d` | Reference manual and wlink |
+| `103` | CH32L103 | `0e` | Reference manual and wlink |
+| `643` | CH643 | `0c` | Reference manual and wlink |
+| `645`, `653` | CH645 | `46` | Reference manual and wlink |
 
 A chip ID that is not in the table gives the error frame. A wrong family code would make the host use wrong chip settings without a warning.
 The processor then resumes the hart and ends `dmactive`, as the quit does. It tries no other wire.
@@ -601,7 +609,7 @@ This occurs when no `03`, connect or quit came before it, or when the host reads
 ### Flash
 
 The flash module (`src/protocol/wchlink/WchLinkFlash.h`) does the flash commands.
-The CH32V00x and the CH32V20x have the same flash controller registers for these commands (reference manuals in the datasheet store, chapter "Flash Memory and User Option Bytes").
+The supported series have the same flash controller registers for these commands (reference manuals in the datasheet store, chapter "Flash Memory and User Option Bytes").
 
 Each flash command starts with a reset that halts the hart:
 
@@ -615,16 +623,16 @@ The WCH-LinkE sets a clock of its own at the connect of a CH32V208 (see [Probe a
 The CH32V20x manual asks for a system clock of 120 MHz or less for flash operations. A target program can set 144 MHz.
 minichlink also resets with `haltreq` before its program sequence.
 
-The processor selects the RAM layout from the family code of the connect: `09` gives the CH32V00x layout, `05` the CH32V20x layout.
+The processor selects the RAM layout from the family code of the connect: `09` and `49` give the CH32V003 layout, `4e` the CH32V00X (CH32V002/4/5/6/7) layout, and the remaining two-wire V4 family codes give the CH32V20x layout.
 
-| Item | CH32V00x | CH32V20x |
-|---|---|---|
-| Stub address | `0x20000000` | `0x20000000` |
-| Buffer, block size | `0x20000200`, 1024 bytes | `0x20001000`, 4096 bytes |
-| Checksum word | `0x20000610` | `0x20002010` |
-| Page size | 64 bytes | 256 bytes |
-| Stack pointer | `0x20000800` (end of 2 KB RAM) | `0x20002800` (end of 10 KB RAM, the smallest CH32V20x) |
-| Option bytes (half words) | 6 | 8 |
+| Item | CH32V003 (`09`, `49`) | CH32V00X (`4e`) | CH32V20x (`05`, `06`, `86`, `0c`, `0d`, `0e`, `46`) |
+|---|---|---|---|
+| Stub address | `0x20000000` | `0x20000000` | `0x20000000` |
+| Buffer, block size | `0x20000200`, 1024 bytes | `0x20000200`, 1024 bytes | `0x20001000`, 4096 bytes |
+| Checksum word | `0x20000610` | `0x20000610` | `0x20002010` |
+| Page size | 64 bytes | 256 bytes | 256 bytes |
+| Stack pointer | `0x20000800` (end of 2 KB RAM) | `0x20000800` | `0x20002800` (end of 10 KB RAM, the smallest CH32V20x) |
+| Option bytes (half words) | 6 | 8 | 8 |
 
 #### Own algorithm
 
@@ -633,14 +641,17 @@ The commands without a stub use the flash controller registers directly, with DM
 - **Unlock.** Read `FLASH_CTLR`. Write `KEY1` and `KEY2` to `FLASH_KEYR` only if `LOCK` is 1: a key write to an unlocked controller locks it until the next reset.
 - **Wait.** Read `FLASH_STATR` until `BSY` is 0, one read each 1 ms, for 3 s at most. Then write 1 to `EOP` and `WRPRTERR`. A `WRPRTERR` is a failure.
 - **Mass erase (`02 01`).** Reset, unlock, `FLASH_CTLR` `MER`, then `MER` and `STRT`, wait, `FLASH_CTLR` 0, lock (`LOCK` and `FLOCK`).
-- **Protect (`06 03`) and unprotect (`06 02`).** Reset. Read the old option bytes (see below). Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`). Program each option byte with `OBPG` and a 16-bit write, and wait after each byte. Then `FLASH_CTLR` 0 and lock.
+- **Protect (`06 03`) and unprotect (`06 02`).** Reset. Read the old option bytes (see below). Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`).
+  - On CH32V003 (`09`, `49`) and the two-wire V4 series: program each option byte with `OBPG` and a 16-bit write, and wait after each byte.
+  - On CH32V00X (`4e`), `FLASH_CTLR` has no `OBPG` bit (CH32V00X reference manual 18.5.2): unlock `FLOCK` via `FLASH_MODEKEYR`, clear the internal page buffer (`FTPG | BUFRST`), load 4 32-bit words (each holding two option bytes and their inverses) into `0x1ffff800`–`0x1ffff80c` with `FTPG | BUFLOAD`, write `0x1ffff800` to `FLASH_ADDR`, and program the page (`FTPG | STRT`).
+  Then `FLASH_CTLR` 0 and lock.
   Each `FLASH_CTLR` write keeps `OBWRE` 1: a 0 locks the option bytes again.
   - `RDPR` gets `0xa5` (unprotect) or `0x00` (protect). The value `0xcc` is not used, because it is a permanent protection on other chips.
   - `USER`, `DATA0` and `DATA1` keep their values. The CH32V20x `USER` byte holds the split of RAM and flash.
   - The old values come from `FLASH_OBR` and `FLASH_WPR` first. These registers hold the loaded option bytes, also on a protected chip.
     No capture shows that a debugger can read the option byte area of a protected chip: a protected flash read gives a fixed word (`v003-wlink-dump-protected.pcapng`).
-    - CH32V00x: `USER` is `FLASH_OBR` bits 9 to 2, `DATA0` bits 17 to 10, `DATA1` bits 25 to 18 (reference manual 16.3.7).
-    - CH32V20x: `USER` bits 2 to 0 are `FLASH_OBR` bits 4 to 2, and `USER` bits 7 to 5 (`SRAM_CODE_MODE`) are `FLASH_OBR` bits 10 to 8. `USER` bits 4 and 3 are reserved (1). The manual gives two different places for `SRAM_CODE_MODE` (32.4.6 and 32.6). `FLASH_OBR` has no `DATA` bytes, so they get `0xff`.
+    - CH32V003 and CH32V00X: `USER` is `FLASH_OBR` bits 9 to 2, `DATA0` bits 17 to 10, `DATA1` bits 25 to 18 (CH32V003 RM 16.3.7, CH32V00X RM 18.3.7).
+    - CH32V20x and the other V4 series: `USER` bits 2 to 0 are `FLASH_OBR` bits 4 to 2, and `USER` bits 7 to 5 (`SRAM_CODE_MODE`) are `FLASH_OBR` bits 10 to 8. `USER` bits 4 and 3 are reserved (1). The manual gives two different places for `SRAM_CODE_MODE` (32.4.6 and 32.6). `FLASH_OBR` has no `DATA` bytes, so they get `0xff`.
     - `WRPR0` to `WRPR3` are the bytes of `FLASH_WPR`.
   - Then the module reads the option byte area. A byte that has its correct inverse replaces the value from the registers. A failed read is no error.
   - Unprotect writes `0xff` to the write protection bytes (`WRPR`). Protect keeps them.

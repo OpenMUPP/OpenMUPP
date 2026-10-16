@@ -432,11 +432,26 @@ void Processor::flashCommand(uint8_t sub) {
 }
 
 const StubLayout &Processor::layout() const {
-   return familyOf(chipId_) == familyV00x ? layoutV00x : layoutV20x;
+   switch(series()) {
+   case Series::V00x:
+      return layoutV00x;
+   case Series::V006:
+      return layoutV006;
+   case Series::V20x:
+      break;
+   }
+   return layoutV20x;
 }
 
 Series Processor::series() const {
-   return familyOf(chipId_) == familyV00x ? Series::V00x : Series::V20x;
+   const uint8_t family = familyOf(chipId_);
+   if(family == familyV00x || family == familyCh641) {
+      return Series::V00x;
+   }
+   if(family == familyV006) {
+      return Series::V006;
+   }
+   return Series::V20x;
 }
 
 bool Processor::endProgram() {

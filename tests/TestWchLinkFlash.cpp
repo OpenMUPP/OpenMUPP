@@ -559,3 +559,101 @@ TEST_CASE("WCH-Link flash: a bus reset drops the program sequence") {
    CHECK_FALSE(fb.bench.controller().isArmed(dataOut));
    CHECK_FALSE(fb.bench.processor.wantsData());
 }
+
+TEST_CASE("WCH-Link flash: CH32V006 uses 256-byte pages and fast-page option byte programming") {
+   WchLinkBench bench(Wire::One);
+   MockWchFlash flash(bench.dm, MockWchFlash::v006);
+   bench.pins.registers[dm::chipId] = 0x0060'0700;
+   bench.enumerate();
+   REQUIRE(bench.transact(request(0x0c, { 0x4e, 0x01 })) == reply(0x0c, 0x01));
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == Bytes{ 0x82, 0x0d, 0x05, 0x4e, 0x00, 0x60, 0x07, 0x00 });
+
+   // Area alignment is 256 bytes (layoutV006), with 1024-byte blocks.
+   flash.stub = pattern(wchlink::stubSize, 0x29);
+   CHECK(bench.transact(request(0x01, u32(0x0800'0040, 256))) == reply(0x01, 0x01));
+   CHECK(bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+   for(std::size_t offset = 0; offset < flash.stub.size(); offset += 64) {
+      REQUIRE(bench.controller().sendOut(dataOut, art::span<const uint8_t>(flash.stub.data() + offset, 64)));
+      bench.mainLoop();
+   }
+   CHECK(bench.transact(request(0x02, { 0x07 })) == reply(0x02, 0x07));
+   CHECK(bench.transact(request(0x02, { 0x02 })) == errorFrame);
+
+   // Protect and unprotect with FTPG option-byte programming and hidden option bytes
+   flash.setOption(1, 0xe7);
+   flash.setOption(2, 0x12);
+   flash.setOption(3, 0x34);
+   flash.setOption(4, 0xf0);
+   CHECK(bench.transact(request(0x06, { 0x03 })) == reply(0x06, 0x03));
+   CHECK(bench.transact(request(0x0b, { 0x01 })) == reply(0x0b, 0x01));
+   REQUIRE(flash.readProtected);
+   flash.hiddenOptionWord = 0x0000'0300;
+   CHECK(bench.transact(request(0x06, { 0x02 })) == reply(0x06, 0x02));
+   CHECK(flash.option(0) == 0xa5);
+   CHECK(flash.option(1) == 0xe7);
+   CHECK(flash.option(2) == 0x12);
+   CHECK(flash.option(3) == 0x34);
+   CHECK(flash.option(4) == 0xff);
+   CHECK(flash.errors.empty());
+}
+
+// Connects with the chip type, programs one block with the host stub, and
+// unprotects. A wrong family mapping changes the area alignment, the block
+// size or the option byte programming, and the mock flash then records an error.
+static void
+checkFamilyFlash(Wire wire, const MockWchFlash::Chip &kind, uint32_t chipId, uint8_t family, const wchlink::StubLayout &layout, std::size_t optionBytes) {
+   WchLinkBench bench(wire);
+   MockWchFlash flash(bench.dm, kind);
+   bench.pins.registers[dm::chipId] = chipId;
+   bench.enumerate();
+   REQUIRE(bench.transact(request(0x0c, { family, 0x01 })) == reply(0x0c, 0x01));
+   const Bytes connected{ 0x82,
+                          0x0d,
+                          0x05,
+                          family,
+                          static_cast<uint8_t>(chipId >> 24),
+                          static_cast<uint8_t>(chipId >> 16),
+                          static_cast<uint8_t>(chipId >> 8),
+                          static_cast<uint8_t>(chipId) };
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connected);
+
+   const Bytes image = pattern(layout.blockSize, 0x31);
+   flash.stub = pattern(wchlink::stubSize, 0x29);
+   CHECK(bench.transact(request(0x01, u32(0x0800'0000, static_cast<uint32_t>(image.size())))) == reply(0x01, 0x01));
+   CHECK(bench.transact(request(0x02, { 0x05 })) == reply(0x02, 0x05));
+   for(std::size_t offset = 0; offset < flash.stub.size(); offset += 64) {
+      REQUIRE(bench.controller().sendOut(dataOut, art::span<const uint8_t>(flash.stub.data() + offset, 64)));
+      bench.mainLoop();
+   }
+   CHECK(bench.transact(request(0x02, { 0x07 })) == reply(0x02, 0x07));
+   CHECK(bench.transact(request(0x02, { 0x02 })) == reply(0x02, 0x02));
+   for(std::size_t offset = 0; offset < image.size(); offset += 64) {
+      REQUIRE(bench.controller().sendOut(dataOut, art::span<const uint8_t>(image.data() + offset, 64)));
+      bench.mainLoop();
+   }
+   CHECK(bench.readData() == blockAck);
+   CHECK(bench.transact(request(0x02, { 0x08 })) == reply(0x02, 0x08));
+   CHECK(flash.word(MockWchFlash::flashBase) == (image[0] | image[1] << 8 | image[2] << 16 | static_cast<uint32_t>(image[3]) << 24));
+
+   flash.setOption(1, 0xe7);
+   flash.setOption(2, 0x12);
+   CHECK(bench.transact(request(0x06, { 0x03 })) == reply(0x06, 0x03));
+   CHECK(bench.transact(request(0x0b, { 0x01 })) == reply(0x0b, 0x01));
+   REQUIRE(flash.readProtected);
+   CHECK(bench.transact(request(0x06, { 0x02 })) == reply(0x06, 0x02));
+   CHECK(flash.option(0) == 0xa5);
+   CHECK(flash.option(1) == 0xe7);
+   CHECK(flash.option(2) == 0x12);
+   for(std::size_t i = 4; i < optionBytes; ++i) {
+      CHECK(flash.option(i) == 0xff);
+   }
+   CHECK(flash.errors.empty());
+}
+
+TEST_CASE("WCH-Link flash: CH641 (family 0x49) uses the CH32V00X layout and OBPG") {
+   checkFamilyFlash(Wire::One, MockWchFlash::v003, 0x6410'0500, 0x49, wchlink::layoutV00x, wchlink::fpec::optionBytesV00x);
+}
+
+TEST_CASE("WCH-Link flash: CH32V30X (family 0x06) uses the CH32V20X layout") {
+   checkFamilyFlash(Wire::Two, MockWchFlash::v208, 0x3050'0508, 0x06, wchlink::layoutV20x, wchlink::fpec::optionBytesV20x);
+}
