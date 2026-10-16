@@ -52,6 +52,7 @@ import argparse
 import os
 import random
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -252,6 +253,24 @@ def parse_probe_rs_words(text):
     return words
 
 
+def script_python(command):
+    """The interpreter in the #! line of an installed Python command (pipx
+    and venv installs have their own), or None."""
+    path = shutil.which(command)
+    try:
+        with open(path, "rb") as f:
+            line = f.readline().decode(errors="replace")
+    except (TypeError, OSError):
+        return None
+    if not line.startswith("#!"):
+        return None
+    parts = line[2:].split()
+    # "#!/usr/bin/env python3" names the interpreter in the second word.
+    if parts and os.path.basename(parts[0]) == "env":
+        parts = parts[1:]
+    return shutil.which(parts[0]) if parts and "python" in os.path.basename(parts[0]) else None
+
+
 def openocd_command(args, personality, transport, speed_khz, checks_path, image_path, dump_path):
     cmd = [args.openocd]
     for script_dir in args.search:
@@ -432,8 +451,8 @@ class Runner:
         for transport in ("swd", "jtag"):
             for speed in self.speeds(transport):
                 step = f"pyocd {transport} {speed} kHz"
-                code, output = self.run(step, self.python_tool(
-                    "pyocd_jtag_test.py", str(speed * 1000), "--protocol", transport, "--target", target))
+                code, output = self.run(step, [self.args.pyocd_python, os.path.join(TOOLS_DIR, "pyocd_jtag_test.py"),
+                                               str(speed * 1000), "--protocol", transport, "--target", target])
                 fails = [line for line in output.splitlines() if line.startswith("FAIL ")]
                 ok = code == 0 and "RESULT PASS" in output and not fails
                 notes = [] if ok else (fails or output.strip().splitlines()[-5:]) + [f"exit code {code}"]
@@ -539,6 +558,7 @@ def parse_args(argv):
     parser.add_argument("--port", help="the CDC-ACM port (default: found by VID:PID)")
     parser.add_argument("--full-uart", action="store_true", help="run all baud rates and formats of the UART tests")
     parser.add_argument("--pyocd-target", help="pyOCD target type (default: from the device ID)")
+    parser.add_argument("--pyocd-python", help="Python with pyOCD (default: the one of the pyocd command)")
     parser.add_argument("--probe-rs-chip", help="probe-rs chip name (default: from the device ID)")
     parser.add_argument("--settle", type=float, default=2.0, help="seconds to wait after a switch (default: 2)")
     parser.add_argument("--log-dir", help="directory for the logs (default: a new temporary directory)")
@@ -546,6 +566,7 @@ def parse_args(argv):
     parser.add_argument("-s", "--search", action="append", default=[], help="OpenOCD script directory")
     parser.add_argument("--probe-rs", default="probe-rs", help="probe-rs executable")
     args = parser.parse_args(argv)
+    args.pyocd_python = args.pyocd_python or script_python("pyocd") or sys.executable
     if args.size < 0x100 or args.size % 4:
         parser.error("--size must be a multiple of 4 and at least 256")
     return args

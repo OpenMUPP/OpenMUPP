@@ -5,9 +5,12 @@ Run: python3 -m unittest discover -s tools -p "test_*.py"
 
 import argparse
 import os
+import shutil
 import struct
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import probe_hw_test as hw  # noqa: E402
@@ -52,6 +55,20 @@ class ParseTest(unittest.TestCase):
     def test_probe_rs_words_with_address(self):
         text = "20000000: deadbeef 12345678\n20000008: a5a5a5a5 5a5a5a5a\n"
         self.assertEqual(hw.parse_probe_rs_words(text), [0xDEADBEEF, 0x12345678, 0xA5A5A5A5, 0x5A5A5A5A])
+
+    def test_script_python(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name, line in (("venv", f"#!{sys.executable}\n"), ("envpy", "#!/usr/bin/env python3\n"),
+                               ("shell", "#!/bin/sh\n")):
+                path = os.path.join(d, name)
+                with open(path, "w") as f:
+                    f.write(line)
+                os.chmod(path, 0o755)
+            with mock.patch.dict(os.environ, {"PATH": d + os.pathsep + os.environ["PATH"]}):
+                self.assertEqual(hw.script_python("venv"), sys.executable)
+                self.assertEqual(hw.script_python("envpy"), shutil.which("python3"))
+                self.assertIsNone(hw.script_python("shell"))
+                self.assertIsNone(hw.script_python("no-such-command"))
 
     def test_chip_for(self):
         self.assertEqual(hw.chip_for(0x410, 64), ("stm32f103c8", "STM32F103C8"))
