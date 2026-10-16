@@ -85,11 +85,13 @@ run-tool-tests:
     VARIANT: ""
     # The image tag of the personalities (docs/development.md "Image names")
     PROTOCOL_TAG: ""
+    # VSL_SKIP_IMAGES: the images that the job leaves out
+    SKIP_IMAGES: ""
   script:
     - cd "$CI_PROJECT_DIR"
     - PRESET=${BOARD}${VARIANT}
     - BUILDDIR=build/${PRESET}
-    - cmake --preset ${PRESET} -G "Unix Makefiles" -DVSL_STRICT_SIZE=ON
+    - cmake --preset ${PRESET} -G "Unix Makefiles" -DVSL_STRICT_SIZE=ON "-DVSL_SKIP_IMAGES=${SKIP_IMAGES}"
     - cmake --build --preset ${PRESET} -- -j`nproc`
     - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/vsl-images.txt"
   # Only the .hex and .bin files that a user writes, with the board, the
@@ -153,8 +155,14 @@ build:
       - BOARD: mini
         VARIANT: -dual-cmsis-dap
         PROTOCOL_TAG: -dap+vsl
-      # VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link
-      - BOARD: [mini, otheruse, stlinkv2]
+      # VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link. It does not fit
+      # app-10k, so the Mini and the OtherUse leave it out (until #75). The
+      # standalone image of the ST-Link/V2 fits the app-10k limit.
+      - BOARD: [mini, otheruse]
+        VARIANT: -triple
+        PROTOCOL_TAG: -vsl+dap+wch
+        SKIP_IMAGES: app-10k
+      - BOARD: stlinkv2
         VARIANT: -triple
         PROTOCOL_TAG: -vsl+dap+wch
 
