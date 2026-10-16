@@ -98,6 +98,7 @@ option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 option(VSL_STRICT_SIZE "Stop the build when an image does not fit its flash limit, instead of skipping the image" OFF)
 # Application images to leave out, for example app-10k: CI leaves it out of
 # a strict build of a set of personalities that does not fit it.
+# A CMake list or a comma-separated list, as VSL_PERSONALITIES.
 set(VSL_SKIP_IMAGES "" CACHE STRING "Application images to leave out of the build (standalone, app-8k, app-10k)")
 
 # USB personalities of the firmware image (cmake/Personalities.cmake):
@@ -141,13 +142,14 @@ if (CMAKE_CROSSCOMPILING)
     else ()
         set(VSL_APP_IMAGES standalone)
     endif ()
-    foreach (_image ${VSL_SKIP_IMAGES})
+    string(REPLACE "," ";" _vsl_skip_images "${VSL_SKIP_IMAGES}")
+    foreach (_image ${_vsl_skip_images})
         if (NOT _image MATCHES "^(standalone|app-8k|app-10k)$")
             message(FATAL_ERROR "VSL_SKIP_IMAGES: unknown image '${_image}', use standalone, app-8k or app-10k")
         endif ()
     endforeach ()
-    if (VSL_SKIP_IMAGES)
-        list(REMOVE_ITEM VSL_APP_IMAGES ${VSL_SKIP_IMAGES})
+    if (_vsl_skip_images)
+        list(REMOVE_ITEM VSL_APP_IMAGES ${_vsl_skip_images})
     endif ()
     if (NOT VSL_APP_IMAGES)
         message(FATAL_ERROR "VSL_SKIP_IMAGES leaves no image for board ${BOARD}")
@@ -262,7 +264,7 @@ if (CMAKE_CROSSCOMPILING)
     # versaloon-bootloader. The bootloader starts only an image with a valid
     # header. The tool is in the bootloader submodule.
     set(_vsl_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/versaloon-bootloader/cmake/VslStampImage.cmake")
-    if ("app-8k" IN_LIST VSL_APP_IMAGES)
+    if ("app-8k" IN_LIST VSL_APP_IMAGES OR "app-10k" IN_LIST VSL_APP_IMAGES)
         if (NOT EXISTS "${_vsl_stamp_cmake}")
             message(FATAL_ERROR "${_vsl_stamp_cmake} not found. The images behind a bootloader need it. "
                     "Run: git submodule update --init --recursive")
