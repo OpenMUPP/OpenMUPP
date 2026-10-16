@@ -434,7 +434,7 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    template <bool Timed>
-   void writeBits(uint32_t value, uint32_t count) {
+   [[gnu::always_inline]] void writeBits(uint32_t value, uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
          writeBit<Timed>((value & 1u) != 0);
          value >>= 1;
@@ -442,7 +442,7 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    template <bool Timed>
-   uint32_t readBits(uint32_t count) {
+   [[gnu::always_inline]] uint32_t readBits(uint32_t count) {
       uint32_t value = 0;
       for(uint32_t i = 0; i < count; ++i) {
          value |= static_cast<uint32_t>(readBit<Timed>()) << i;
@@ -452,7 +452,7 @@ class BitBangPort final : public protocol::SwdPort {
 
    // Clock cycles with SWDIO released, for a turnaround
    template <bool Timed>
-   void clocks(uint32_t count) {
+   [[gnu::always_inline]] void clocks(uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
          static_cast<void>(readBit<Timed>());
       }
