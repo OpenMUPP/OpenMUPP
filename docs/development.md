@@ -50,6 +50,7 @@ These options select the board, the personality and the debug features:
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
 | `VSL_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [debug-log.md](debug-log.md)). Not allowed in a `Release` build, and not allowed when `wch-link` is the only personality. In a multi image, the log is silent while the WCH-Link personality is active. |
 | `VSL_STRICT_SIZE` | `OFF` (CI: `ON`) | What the build does when an image does not fit its flash limit (see [Images that do not fit](#images-that-do-not-fit)). `OFF`: the build skips the image with a warning and continues. `ON`: the build stops with an error. |
+| `VSL_SKIP_IMAGES` | empty | Application images to leave out of the build: a list of `standalone`, `app-8k` and `app-10k`, separated by `,` or `;`, for example `app-8k,app-10k`. Without `app-8k`, the build makes no `with-bootloader` image. On a board with a bootloader, the standalone image of a build without `app-10k` has no check against the `app-10k` limit. CI uses `app-10k` for the triple image of the Mini and the OtherUse. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
 ### Image names
@@ -134,14 +135,20 @@ The default is `/usr`.
 | `mini-dual-cmsis-dap` | Mini | `versaloon,cmsis-dap`, with `VSL_DEFAULT_PERSONALITY=cmsis-dap` (tag `-dap+vsl`) | Release |
 | `mini-wch-link`, `otheruse-wch-link`, `stlinkv2-wch-link` | Mini, OtherUse, ST-Link/V2 | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
+| `mini-triple`, `otheruse-triple`, `stlinkv2-triple` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
+| `mini-cmsis-dap-wch-link` | Mini | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
+Each firmware preset inherits a hidden `board-<board>` preset.
+A preset with a suffix also inherits the hidden `personalities-<suffix>` preset.
+The `personalities-*` presets set `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`.
+They are for the sets of personalities that CI builds.
+For another set, add `-DVSL_PERSONALITIES=<list>` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
-The names of the firmware presets are the names of the CI jobs, without `build-`.
-CI does not build the `mini-wch-link-wch-id` preset.
+CI builds each firmware preset, except `mini-wch-link-wch-id`.
 CI uses these presets (see [Continuous integration](#continuous-integration)).
 
 Add a preset for a local setup in `CMakeUserPresets.json`.
@@ -318,19 +325,33 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
-- `build-mini`, `build-otheruse`, `build-stlinkv2`: release build of all images of the board, plus the size check of each image in `vsl-images.txt`.
-  The jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
+- `build-mini`: release build of all images of the Mini with the `mini` preset, plus the size check of each image in `vsl-images.txt`.
+  The build jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
   The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
-- `build-mini-cmsis-dap`, `build-otheruse-cmsis-dap`, `build-stlinkv2-cmsis-dap`: the same release builds with `VSL_PERSONALITIES=cmsis-dap`, plus the size check.
-- `build-mini-dual`, `build-otheruse-dual`, `build-stlinkv2-dual`: the same release builds with `VSL_PERSONALITIES=versaloon,cmsis-dap`, plus the size check.
-  Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
-- `build-mini-dual-cmsis-dap`: the same release build of the Mini with `VSL_DEFAULT_PERSONALITY=cmsis-dap`, plus the size check.
-- `build-mini-wch-link`, `build-otheruse-wch-link`, `build-stlinkv2-wch-link`: the same release builds with `VSL_PERSONALITIES=wch-link`, plus the size check.
+- `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
+  GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -triple, -vsl+dap+wch, app-10k]` or `build: [otheruse]`.
+  It builds the preset `<board><suffix>` (see [CMake presets](#cmake-presets)).
 
-Each build job configures and builds the preset with the name of the job, without `build-`.
-The jobs of the Mini run in each pipeline.
-The jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
+  | Personalities | Suffix | Tag | Boards |
+  |---|---|---|---|
+  | `versaloon` | - | - | OtherUse, ST-Link/V2 |
+  | `cmsis-dap` | `-cmsis-dap` | `-cmsis-dap` | Mini, OtherUse, ST-Link/V2 |
+  | `wch-link` | `-wch-link` | `-wch-link` | Mini, OtherUse, ST-Link/V2 |
+  | `versaloon,cmsis-dap` | `-dual` | `-vsl+dap` | Mini, OtherUse, ST-Link/V2 |
+  | `versaloon,cmsis-dap`, default `cmsis-dap` | `-dual-cmsis-dap` | `-dap+vsl` | Mini |
+  | `versaloon,cmsis-dap,wch-link` | `-triple` | `-vsl+dap+wch` | Mini, OtherUse, ST-Link/V2 |
+
+  The triple image does not fit `app-10k`.
+  Thus its jobs for the Mini and the OtherUse set `SKIP_IMAGES: app-10k` (option `VSL_SKIP_IMAGES`), and make no `app-10k` image.
+  Issue #75 makes the image smaller.
+  The standalone image of the ST-Link/V2 fits the `app-10k` limit.
+  Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
+- `build-mini-cmsis-dap-wch-link`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap,wch-link`, plus the size check.
+  This job keeps no artifacts.
+
+The build jobs of the Mini run in each pipeline.
+The build jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
@@ -343,6 +364,9 @@ The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as ar
 The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
 The ST-Link/V2 has the `standalone` image only.
 The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
+The tag of a multi image has a `+`, also in the name of the artifact archive and of the matrix job.
+In a URL, encode the full job name, for example in a link to `/-/jobs/artifacts/<ref>/download?job=<job>`.
+Encode `+` as `%2B`, the space as `%20`, `,` as `%2C`, `[` as `%5B` and `]` as `%5D`.
 
 ## Branches
 
