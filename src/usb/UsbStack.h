@@ -45,6 +45,9 @@
 #include "personality/Personality.h"
 #include "usb/SerialEventQueue.h"
 #include "usb/SerialPortConfig.h"
+#if defined(VSL_MULTI_PERSONALITY)
+#include "usb/SwitchRequest.h"
+#endif
 #if defined(VSL_WITH_CMSIS_DAP)
 #include "usb/CmsisDapFunction.h"
 #endif
@@ -99,9 +102,10 @@ class UsbStack {
       cmsisdap::Processor *dap;
       // Runs the WCH-Link requests (see usb/WchLinkFunction.h)
       wchlink::Processor *wch;
-      // Takes SWITCH_PERSONALITY of the Versaloon protocol, nullptr in an
-      // image with one personality. The CMSIS-DAP processor has its own
-      // pointer to it (ID_DAP_Vendor0).
+      // Takes SWITCH_PERSONALITY of the Versaloon protocol and the switch
+      // request on EP0 (usb/SwitchRequest.h), nullptr in an image with one
+      // personality. The CMSIS-DAP processor has its own pointer to it
+      // (ID_DAP_Vendor0).
       personality::PersonalitySwitch *personalitySwitch;
    };
 
@@ -218,6 +222,10 @@ class UsbStack {
 #endif
 #if defined(VSL_USB_SERIAL_PORT)
    art::usb::CdcAcmFunction<serialRxSize, serialTxSize> serialPort_;
+#endif
+#if defined(VSL_MULTI_PERSONALITY)
+   // The vendor requests to the device in each personality
+   SwitchRequestHandler switchRequest_;
 #endif
 };
 

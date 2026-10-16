@@ -29,6 +29,9 @@ The `wch-link` image has these properties:
 - The LEDs show the target power, the command activity and the USB state. They show no probe error pattern.
 - The image has no `VERSALOON_FW_UPDATE` command. Use the key to start the bootloader (see [Firmware update](firmware-update.md)).
 - There is no dual image with this personality. The key does not switch to it.
+- The WCH-Link protocol has no command that switches the personality.
+  An image with more than one personality accepts the switch request on EP0 in each personality, also in WCH-Link (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
+  The key also switches the personality.
 
 ## USB ID
 

@@ -38,7 +38,8 @@ The `cmsis-dap` image has these properties:
 
 A `cmsis-dap` image has only this personality.
 A `dual` image (`VSL_PROTOCOL=dual`) has both personalities.
-Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, or with the key (see [Dual image](usb-device.md#dual-image)).
+Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, with the switch request on EP0, or with the key (see [Dual image](usb-device.md#dual-image)).
+The switch request on EP0 and the request of the MS OS 2.0 descriptor set use the same handler (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
 
 ## Limits
 
