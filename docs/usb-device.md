@@ -216,6 +216,60 @@ A switch to the active personality does not reset.
 It also cancels a switch that the firmware did not do yet.
 If the flash write fails, the firmware starts again with the old personality.
 
+#### Multi image hardware test
+
+`tools/probe_hw_test.py` tests the Versaloon and the CMSIS-DAP personalities of a multi image on an STM32F1 target.
+Connect the target on SWD and JTAG, and connect the UART TX pin to the UART RX pin.
+The script switches to the Versaloon personality and runs the serial loopback test and OpenOCD with the `vsllink` driver.
+It then switches to the CMSIS-DAP personality and runs the serial and `DAP_UART_*` loopback tests, OpenOCD, pyOCD and probe-rs.
+Each tool runs on SWD and JTAG, at each speed of `--swd-speeds` and `--jtag-speeds`.
+The script erases the flash of the target:
+
+```sh
+python3 tools/probe_hw_test.py
+python3 tools/probe_hw_test.py --full-uart --skip probe-rs
+```
+
+OpenOCD writes, verifies and reads back a 32 KiB image.
+It then checks reset and halt, two single steps, a hardware breakpoint, RAM write and read, and run and halt.
+The pyOCD checks come from `tools/pyocd_jtag_test.py`.
+probe-rs writes, verifies and reads back the image, writes and reads RAM, and resets the target.
+probe-rs cannot set the target clock, and the target runs at 8 MHz after a reset.
+Thus the script skips probe-rs on JTAG above 1333 kHz (8 MHz / 6).
+The pyOCD target and the probe-rs chip come from the device ID and the flash size of the target.
+The script reads these values in the first OpenOCD run.
+A low or medium density chip needs the `Keil.STM32F1xx_DFP` pack in pyOCD.
+With `--serial`, all tools use only the dongle with this serial number.
+
+Status: the test passed on 2026-10-16.
+Probe: OtherUse board.
+Image: `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `otheruse` preset, `Release` build, `v0.9.0-113-gb2dab08` (`dev` with the fix of the SWD rules below).
+Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
+Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD and probe-rs. The test did not record the pyOCD and probe-rs versions.
+The results come from two runs of the script with this image. The serial loopback passed with `--full-uart` on `v0.9.0-112-ga8a1abe`.
+
+| Check | Versaloon | CMSIS-DAP |
+|---|---|---|
+| Switch with the switch request on EP0 | pass | pass |
+| Serial loopback, quick set (3 baud rates, 8N and 8E, 1 and 2 stop bits) | pass | pass |
+| Serial loopback, all line codings (`--full-uart`, `v0.9.0-112-ga8a1abe` only) | pass | pass |
+| `DAP_UART_*` loopback | - | pass |
+| OpenOCD SWD, 1000 and 2000 kHz | pass | pass |
+| OpenOCD JTAG, 1000 and 9000 kHz | pass | pass |
+| pyOCD SWD, 1000 and 2000 kHz | - | pass |
+| pyOCD JTAG, 1000 and 9000 kHz | - | pass |
+| probe-rs SWD, 1000 and 2000 kHz | - | pass |
+| probe-rs JTAG, 1000 kHz | - | pass |
+
+Findings:
+
+- With `v0.9.0-112-ga8a1abe`, OpenOCD with the `vsllink` driver failed on SWD in the multi image.
+  The first MEM-AP access got the status FAILED (`usbtoswd command 0x28 failed with 0x01`).
+  The cause: the CMSIS-DAP processor sets its SWD transfer rules on the shared SWD engine at start, also when the Versaloon personality is active.
+  The Versaloon SWD block then ran without idle cycles, and without the ABORT write before a WAIT retry.
+  Now INIT and CONFIG of the Versaloon SWD block set the Versaloon rules again (MR !69 and !70).
+- The test did not cover the key switch, the old switch commands, the WCH-Link personality and Windows.
+
 #### Switch request on EP0
 
 An image with more than one personality accepts a USB vendor request on the control endpoint (EP0) in each personality.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pyOCD JTAG test of an STM32F1 target on the CMSIS-DAP personality.
+"""pyOCD JTAG (or SWD) test of an STM32F1 target on the CMSIS-DAP personality.
 
 pyOCD 0.45.1 sends DAP_JTAG_Configure with one device of IR length 4. The
 STM32F1 has two TAPs: the Cortex-M3 DAP (IR length 4, next to TDO) and the
@@ -8,8 +8,9 @@ class to configure the chain with the IR lengths 4 and 5. pyOCD does not
 scan for the TAPs: the chain is set by the script.
 
 The script checks, in this order:
-  - DAP_JTAG_IDCODE of device 0, and the error replies for device 2 and
-    for bad DAP_JTAG_Configure values (9 devices, IR length 0, IR length 33);
+  - JTAG only: DAP_JTAG_IDCODE of device 0, and the error replies for
+    device 2 and for bad DAP_JTAG_Configure values (9 devices, IR length 0,
+    IR length 33);
   - flash, read back (compared in Python) and reset and halt;
   - step, hardware breakpoint, resume and halt;
   - RAM write and read (4 words and an 8 KiB block).
@@ -24,9 +25,19 @@ clock goes back to 8 MHz at each reset.
 
 The script erases the flash of the target.
 
+With --protocol swd, the script does the same checks on SWD, without the
+JTAG chain patch and the DAP_JTAG_* checks.
+
+The default target is the built-in pyOCD target stm32f103rc (2 KiB flash
+pages). For a low or medium density STM32F103 (1 KiB pages), select the
+target of the chip with --target, for example stm32f103c8 (needs the
+Keil.STM32F1xx_DFP pack).
+
 Usage:
     python3 pyocd_jtag_test.py [TCK in Hz, default 1000000]
+    python3 pyocd_jtag_test.py 4000000 --protocol swd --target stm32f103c8
 """
+import argparse
 import os
 import random
 import struct
@@ -38,8 +49,6 @@ from pyocd.probe.pydapaccess import cmsis_dap_core as core
 
 CHAIN_IR_LENGTHS = [4, 5]  # device 0 = CPU DAP (next to TDO), device 1 = boundary scan
 _orig_jtag_configure = core.CMSISDAPProtocol.jtag_configure
-core.CMSISDAPProtocol.jtag_configure = lambda self, devices_irlen=None: _orig_jtag_configure(
-    self, CHAIN_IR_LENGTHS)
 
 from pyocd.core.helpers import ConnectHelper  # noqa: E402
 from pyocd.core.target import Target  # noqa: E402
@@ -91,11 +100,25 @@ def check_dap_commands(probe):
 
 def main():
     global ok
-    freq = int(sys.argv[1]) if len(sys.argv) > 1 else 1000000
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("freq", type=int, nargs="?", default=1000000, help="TCK or SWCLK in Hz (default 1000000)")
+    parser.add_argument("--protocol", choices=("jtag", "swd"), default="jtag")
+    parser.add_argument("--target", default="stm32f103rc", help="pyOCD target type (default stm32f103rc)")
+    parser.add_argument("--uid", help="the unique ID (USB serial number) of the probe")
+    args = parser.parse_args()
+    freq = args.freq
+    jtag = args.protocol == "jtag"
+    if jtag:
+        core.CMSISDAPProtocol.jtag_configure = lambda self, devices_irlen=None: _orig_jtag_configure(
+            self, CHAIN_IR_LENGTHS)
     data = make_image()
-    with ConnectHelper.session_with_chosen_probe(
-            target_override="stm32f103rc",
-            options={"dap_protocol": "jtag", "frequency": 1000000, "connect_mode": "under-reset"}) as session:
+    session = ConnectHelper.session_with_chosen_probe(
+        blocking=False, unique_id=args.uid, target_override=args.target,
+        options={"dap_protocol": args.protocol, "frequency": 1000000, "connect_mode": "under-reset"})
+    if session is None:
+        print("RESULT FAIL: no probe found")
+        return 1
+    with session:
         t = session.target
         probe = session.probe
 
@@ -117,7 +140,8 @@ def main():
         def slow_clock():
             probe.set_clock(1000000)
 
-        check_dap_commands(probe)
+        if jtag:
+            check_dap_commands(probe)
         t.halt()
         check("halted", t.get_state() == Target.State.HALTED)
         fast_clock()
