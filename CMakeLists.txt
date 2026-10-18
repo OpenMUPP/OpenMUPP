@@ -169,12 +169,26 @@ if (CMAKE_CROSSCOMPILING)
     set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
     set(_vsl_dropped_files ${VSL_PERSONALITY_DROPPED_SOURCES})
     # The flash page of the stored personality: only in a multi image. It is
-    # one STM32F103 flash page at the end of the application area.
+    # one STM32F103 flash page at the end of the application area. The
+    # STM32H5 has 8 KB flash sectors and no settings sector yet (#93).
+    # The one-wire engine of WCH-Link uses the timers and DMA1 of the
+    # STM32F1. The STM32H5 engine is #98.
+    if ("wch-link" IN_LIST VSL_PERSONALITY_SET AND NOT STM32_FAMILY STREQUAL "STM32F1")
+        message(FATAL_ERROR "Board ${BOARD}: the wch-link personality needs the one-wire engine, which the ${STM32_FAMILY} does not have yet.")
+    endif ()
+    if (VSL_PERSONALITY_COUNT GREATER 1 AND NOT STM32_FAMILY STREQUAL "STM32F1")
+        message(FATAL_ERROR "Board ${BOARD}: a multi image (VSL_PERSONALITIES=${VSL_PERSONALITY_SET}) needs a settings sector, which the ${STM32_FAMILY} does not have yet. Select one personality.")
+    endif ()
     if (VSL_PERSONALITY_COUNT GREATER 1)
         set(VSL_SETTINGS_PAGE_SIZE 1024)
     else ()
         list(APPEND _vsl_dropped_files "src/board/SettingsFlashPage\\.cpp")
         set(VSL_SETTINGS_PAGE_SIZE 0)
+    endif ()
+    # STM32F1 only: the bootloader entry (BKP registers, app-8k image), the
+    # JTAG fast path (#97) and the one-wire engine of WCH-Link (#98).
+    if (NOT STM32_FAMILY STREQUAL "STM32F1")
+        list(APPEND _vsl_dropped_files "src/boot/Bootloader\\.cpp" "src/board/BoardJtagFast\\.cpp" "src/board/BoardRvSwd\\.cpp")
     endif ()
     foreach (_file ${_vsl_dropped_files})
         list(FILTER VSL_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
@@ -273,7 +287,7 @@ if (CMAKE_CROSSCOMPILING)
         set(_target versaloon-ng-${image}.elf)
         set(_name versaloon-ng-${image})
         set(_offset ${VSL_APP_OFFSET_${image}})
-        math(EXPR _limit "65536 - ${_offset} - ${VSL_SETTINGS_PAGE_SIZE}")
+        math(EXPR _limit "${VSL_FLASH_SIZE} - ${_offset} - ${VSL_SETTINGS_PAGE_SIZE}")
         set(VSL_APP_LIMIT_${image} ${_limit} PARENT_SCOPE)
         add_executable(${_target} src/main.cpp)
         # system-stm32 is an OBJECT library (start-up code, vector table).
@@ -327,12 +341,13 @@ if (CMAKE_CROSSCOMPILING)
         vsl_add_app_image(${_image})
         string(APPEND _images_list "versaloon-ng-${_image}.bin ${VSL_APP_LIMIT_${_image}}\n")
     endforeach ()
-    # The firmware must fit behind the legacy bootloader on all boards
+    # The firmware must fit behind the legacy bootloader on all STM32F1 boards
     # (docs/firmware-update.md). A board without the app-10k image checks its
     # standalone image against the app-10k limit too. VSL_SKIP_IMAGES=app-10k
-    # on a board with a bootloader turns this check off.
-    if (NOT BOARD IN_LIST VSL_BOOTLOADER_BOARDS AND "standalone" IN_LIST VSL_APP_IMAGES)
-        math(EXPR _limit "65536 - ${VSL_APP_OFFSET_app-10k} - ${VSL_SETTINGS_PAGE_SIZE}")
+    # on a board with a bootloader turns this check off. The legacy
+    # bootloader is STM32F1 only.
+    if (NOT BOARD IN_LIST VSL_BOOTLOADER_BOARDS AND "standalone" IN_LIST VSL_APP_IMAGES AND STM32_FAMILY STREQUAL "STM32F1")
+        math(EXPR _limit "${VSL_FLASH_SIZE} - ${VSL_APP_OFFSET_app-10k} - ${VSL_SETTINGS_PAGE_SIZE}")
         string(APPEND _images_list "versaloon-ng-standalone.bin ${_limit}\n")
     endif ()
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_images_list}")
@@ -371,7 +386,7 @@ if (CMAKE_CROSSCOMPILING)
         add_custom_target(versaloon-ng-with-bootloader ALL DEPENDS ${_name}.bin ${_name}.hex)
         # The combined image ends where the app-8k image ends: its limit is the
         # flash without the settings page.
-        math(EXPR _limit "65536 - ${VSL_SETTINGS_PAGE_SIZE}")
+        math(EXPR _limit "${VSL_FLASH_SIZE} - ${VSL_SETTINGS_PAGE_SIZE}")
         file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_name}.bin ${_limit}\n")
     endif ()
 else ()
