@@ -8,6 +8,8 @@
 static_assert(board::current.family == board::Family::Stm32F1, "the board is not an STM32F1 board");
 #elif defined(STM32H5)
 static_assert(board::current.family == board::Family::Stm32H5, "the board is not an STM32H5 board");
+// BoardJtagFast.cpp is STM32F1 only. The STM32H5 fast path is #97.
+static_assert(!board::current.hasJtagFastPath(), "the STM32H5 has no JTAG fast path yet");
 #else
 #error "Unsupported STM32 family"
 #endif

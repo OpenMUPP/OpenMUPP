@@ -20,13 +20,24 @@ namespace {
 bool clockFromCrystal = false;
 
 void configureClocks() {
+#if defined(STM32F1)
    // SYSCLK 72 MHz, USB 48 MHz. On failure the clock stays on HSI.
    clockFromCrystal = Rcc::setClock72MhzHSE(board::current.hseFrequency);
    SystemCoreClockUpdate();
+#else
+   // SYSCLK 250 MHz from the crystal (HSE_VALUE, board/BoardChecks.cpp).
+   // On failure the clock stays on HSI. USB runs from the HSI48 and the
+   // CRS (usb/UsbStack.cpp).
+   clockFromCrystal = Rcc::setClock250MhzHSE();
+   // The ICACHE must skip the read-only flash (UID for the USB serial
+   // number), else the read faults.
+   Rcc::disableCacheOfReadOnlyFlash();
+   Rcc::enableICache();
+#endif
    SysTick_Config(SystemCoreClock / 1000); // 1 ms tick
 
-   // All boards have an STM32F103 in a 48-pin package: ports A to C.
-   // Port D has only the crystal pins.
+   // The STM32F1 boards have a 48-pin package: ports A to C. Port D has
+   // only the crystal pins. The NUCLEO-H533RE uses ports A to C too.
    Rcc::enableGPIOAClock();
    Rcc::enableGPIOBClock();
    Rcc::enableGPIOCClock();

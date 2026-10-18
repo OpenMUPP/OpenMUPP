@@ -98,4 +98,6 @@ using BoardJtag = std::conditional_t<current.hasJtagFastPath(), jtag::FastPort<J
 // bit-bang with TCK idle high.
 extern template class jtag::BitBangPort<board::JtagPins>;
 extern template class jtag::BitBangPort<board::JtagPins, jtag::TckIdle::High>;
+#if defined(STM32F1)
 extern template class jtag::FastPort<board::JtagPins, board::JtagSpi>;
+#endif
