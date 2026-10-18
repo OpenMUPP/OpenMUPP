@@ -23,7 +23,7 @@ An image that does not fit its limit has no `.hex` and `.bin` files, and no copi
 
 All images use the same object files.
 Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
-One linker script, `ldscripts/mem-f103.ld`, links all images.
+One linker script of the board links all images. The STM32F1 boards use `ldscripts/mem-f103.ld` (see [MCU family](boards.md#mcu-family)).
 CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
 
 For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.

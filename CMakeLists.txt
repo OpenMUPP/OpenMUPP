@@ -28,6 +28,10 @@ Include(FetchContent)
 # Extract git revision
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/generate_version.cmake")
 
+# BOARD and its MCU family, CMSIS device, crystal and linker script. Before
+# project(): the toolchain file takes the CPU flags from STM32_FAMILY.
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Boards.cmake")
+
 project(versaloon-ng
         LANGUAGES C CXX ASM
         VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}"
@@ -64,19 +68,9 @@ set(PROJECT_INCLUDE_DIRS
         ${PROJECT_SOURCE_DIR}/src
 )
 
-# Board -> crystal frequency. All boards have an STM32F103x8 or STM32F103xB.
-# CMSIS has one define (STM32F103xB) for both parts.
-#   mini      Versaloon Mini, 12 MHz crystal
-#   otheruse  OtherUse, 12 MHz crystal
-#   stlinkv2  ST-Link/V2 clone, 8 MHz crystal (compile-only target)
-set(VSL_BOARDS mini otheruse stlinkv2)
-# Boards that versaloon-bootloader supports (cmake/Bootloader.cmake)
-set(VSL_BOOTLOADER_BOARDS mini otheruse)
-set(BOARD "mini" CACHE STRING "Board to build for: ${VSL_BOARDS}")
-set_property(CACHE BOARD PROPERTY STRINGS ${VSL_BOARDS})
-
 # Application images. Each image is the same firmware, linked for one start
-# address (ldscripts/mem-f103.ld). The value is the space in bytes in front
+# address (the linker script of the board, ldscripts/mem-f103.ld for the
+# STM32F1 boards). The value is the space in bytes in front
 # of the application:
 #   standalone  0       0x08000000, no bootloader: flash with a debug probe
 #   app-8k      8192    0x08002000, behind versaloon-bootloader (8 KB)
@@ -120,21 +114,6 @@ option(VSL_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-lin
 if (CMAKE_CROSSCOMPILING)
     if (NOT CMAKE_BUILD_TYPE)
         set(CMAKE_BUILD_TYPE Release)
-    endif ()
-    if (NOT BOARD IN_LIST VSL_BOARDS)
-        message(FATAL_ERROR "Unknown BOARD '${BOARD}'. Supported boards: ${VSL_BOARDS}")
-    endif ()
-
-    set(STM32_FAMILY "STM32F1" CACHE STRING "STM32 family to build for" FORCE)
-    set(STM32_DEVICE "STM32F103xB" CACHE STRING "STM32 device define for CMSIS" FORCE)
-    # system-stm32 gives HSE_VALUE to the CMSIS SystemCoreClockUpdate() and the
-    # Rcc clock recipes. With a wrong value the core clock and the ADC clock
-    # are computed wrong. src/board/BoardChecks.cpp checks that this value is
-    # the crystal of the board definition.
-    if (BOARD STREQUAL "stlinkv2")
-        set(SYSTEM_STM32_HSE_VALUE "8000000" CACHE STRING "HSE crystal frequency in Hz" FORCE)
-    else ()
-        set(SYSTEM_STM32_HSE_VALUE "12000000" CACHE STRING "HSE crystal frequency in Hz" FORCE)
     endif ()
 
     if (BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
@@ -231,7 +210,7 @@ if (CMAKE_CROSSCOMPILING)
     set(COMMON_OPTIONS -Os -ffunction-sections -fdata-sections -g -fno-common -fmessage-length=0 -fsigned-char -Werror=odr --specs=nano.specs --specs=nosys.specs)
     set(C_OPTIONS -std=gnu11)
     set(DEBUG_OPTIONS -Wall -Wextra -Og)
-    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -Wl,--defsym=__vsl_settings_size=${VSL_SETTINGS_PAGE_SIZE} -Wl,--defsym=__vsl_flash_slack=${VSL_FLASH_SLACK} -Tmem-f103.ld -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -Wl,--defsym=__vsl_settings_size=${VSL_SETTINGS_PAGE_SIZE} -Wl,--defsym=__vsl_flash_slack=${VSL_FLASH_SLACK} -T${VSL_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
 endif ()
 
 # Central interface target to unify compile/link flags and defines across all used libraries and executables
@@ -310,7 +289,7 @@ if (CMAKE_CROSSCOMPILING)
         endif ()
         # Relink when a linker script or the size check changes
         set_target_properties(${_target} PROPERTIES LINK_DEPENDS
-                "${PROJECT_SOURCE_DIR}/ldscripts/mem-f103.ld;${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
+                "${PROJECT_SOURCE_DIR}/ldscripts/${VSL_LDSCRIPT};${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
 
         ADD_DUMP_TARGET(${_target})
         PRINT_SIZE_OF_TARGETS(${_target})
@@ -342,7 +321,7 @@ if (CMAKE_CROSSCOMPILING)
     # vsl-images.txt lists each image with its size limit, one line
     # "<bin-file> <limit-in-bytes>". CI runs ci/check-size.sh on each line.
     # The limit of an application image is the FLASH region of
-    # ldscripts/mem-f103.ld. The combined image is added below.
+    # the board linker script (VSL_LDSCRIPT). The combined image is added below.
     set(_images_list "")
     foreach (_image ${VSL_APP_IMAGES})
         vsl_add_app_image(${_image})

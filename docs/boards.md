@@ -3,9 +3,26 @@
 This document describes the board support of the firmware: the board definitions, the start-up and the LEDs.
 The README lists the supported boards.
 
-All boards use an STM32F103x8 or STM32F103xB.
+## MCU family
+
+The board selects the MCU family of the dongle.
+The firmware knows two families: STM32F1 and STM32H5.
+All current boards use an STM32F103x8 or STM32F103xB (family STM32F1).
 CMSIS has one device define (`STM32F103xB`) for both parts.
-The build sets `SYSTEM_STM32_HSE_VALUE` of system-stm32 from the board crystal.
+No board uses the STM32H5 yet.
+
+`cmake/Boards.cmake` has one line for each board, with these values:
+
+| Value | Use |
+|---|---|
+| Family | `STM32_FAMILY` of system-stm32. The toolchain file `cmake/gcc_arm.cmake` sets the CPU flags from it. |
+| Device | `STM32_DEVICE` of system-stm32, the CMSIS device define. |
+| Crystal | `SYSTEM_STM32_HSE_VALUE` of system-stm32, in Hz. 0 is a board without a crystal. |
+| Linker script | The memory linker script in `ldscripts/`, for example `mem-f103.ld`. |
+
+`CMakeLists.txt` reads `cmake/Boards.cmake` before `project()`.
+The toolchain file needs `STM32_FAMILY` before the compiler checks start.
+At the moment, only the STM32F1 family has CPU flags in `cmake/gcc_arm.cmake`.
 
 ## Board definitions
 
@@ -13,7 +30,8 @@ Each board has one `constexpr` board definition in `src/board/boards/`.
 The board definition holds all board-specific data:
 
 - The pin map: JTAG and SWD, UART, Vref sense, power switch, LEDs, key and USB pull-up.
-- The crystal frequency.
+- The MCU family.
+- The crystal frequency. The value 0 is a board without a crystal. Only an STM32H5 board can have no crystal: its USB clock comes from the HSI48 and the clock recovery system (CRS).
 - The JTAG fast path (SPI and DMA, see [JTAG fast path](usb-device.md#jtag-fast-path)). It is only available when the board links TCK (PB13) to PB3.
 - The hardware ID that `VERSALOON_GET_HARDWARE` returns.
 
@@ -22,25 +40,41 @@ CMake defines `VSL_BOARD_<BOARD>` (for example `VSL_BOARD_MINI`), and `src/board
 The protocol and the engines read board data only through `board::current`.
 `src/board/BoardPins.h` maps a board pin to the system-stm32 `GpioPin` and `FastPin` drivers.
 
-Some functions come from the pin map, not from a separate field:
+The family and the crystal share one 32-bit word.
+Thus a board definition stays 68 bytes, the same size as before the family field.
+The firmware keeps the definition of the board in the flash.
+
+Some functions come from the pin map and the family, not from a separate field:
 
 - `board::adcChannelOf()` gives the ADC channel of the Vref pin.
+  The channels of the STM32F103 come from RM0008. The channels of the STM32H523/H533 come from DS14539.
+- `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
+  The STM32H5 has no one-wire engine yet, so this function gives no timer for it.
+- `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
+  The crystal pins are PD0 and PD1 on the STM32F103, and PH0 and PH1 on the STM32H5.
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
   The setting frees all debug port pins that the board uses, and keeps the rest.
   The Mini and the OtherUse use PA14 for an LED, so they disable the debug port.
   The ST-Link/V2 keeps JTAG and SWD.
+  The debug port pins are the same on the two families.
+  The STM32F103 frees the pins with `AFIO_MAPR.SWJ_CFG`.
+  The STM32H5 has no AFIO. Its debug port pins are in AF0 after reset, and the GPIO mode of a pin frees the pin.
 - `board::withSwd()` gives the board of a debug build with `VSL_DEBUG_SWD`.
   It removes the LEDs on the SWD pins (PA13, PA14), so the debug port keeps SWD.
   On the Mini and the OtherUse, the USB LED (PA14) is then not available.
 
 The build fails when a board definition is not valid.
 Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
+The build also fails when the family of the board definition is different from `STM32_FAMILY`.
+The JTAG fast path has fixed pins. TMS is on SPI1 MISO: PB4 on the STM32F103, PA6 on the STM32H5.
+The crystal range is 4 MHz to 16 MHz on the STM32F103, and 4 MHz to 50 MHz on the STM32H5.
 
 To add a board:
 
 1. Add a header with the board definition in `src/board/boards/`.
 2. Add the board to `src/board/Board.h`.
-3. Add the board and its crystal to `VSL_BOARDS` and `SYSTEM_STM32_HSE_VALUE` in `CMakeLists.txt`.
+3. Add the board to `VSL_BOARDS` in `cmake/Boards.cmake`, with its family, device, crystal and linker script.
+   A new family also needs CPU flags in `cmake/gcc_arm.cmake`.
 4. Add a build job to `.gitlab-ci.yml` and a test to `tests/TestBoards.cpp`.
 
 ## Start-up and LEDs
