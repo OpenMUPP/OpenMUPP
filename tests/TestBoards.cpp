@@ -191,14 +191,22 @@ TEST_CASE("oneWireTimerOf gives a timer channel on the SWDIO output of each boar
 }
 
 TEST_CASE("adcChannelOf gives the STM32H5 ADC channel of a pin") {
-   CHECK(board::adcChannelOf(H5, { Port::A, 0 }) == 0);
-   CHECK(board::adcChannelOf(H5, { Port::A, 2 }) == 14);
-   CHECK(board::adcChannelOf(H5, { Port::A, 5 }) == 19);
-   CHECK(board::adcChannelOf(H5, { Port::A, 7 }) == 7);
-   CHECK(board::adcChannelOf(H5, { Port::B, 0 }) == 9);
-   CHECK(board::adcChannelOf(H5, { Port::B, 1 }) == 5);
-   CHECK(board::adcChannelOf(H5, { Port::C, 0 }) == 10);
-   CHECK(board::adcChannelOf(H5, { Port::C, 5 }) == 8);
+   // DS14539 table 14: all ADC pins of the 64-pin package
+   struct Expected {
+      Pin pin;
+      uint8_t channel;
+   };
+   constexpr Expected table[] = {
+      { { Port::A, 0 }, 0 },  { { Port::A, 1 }, 1 },  { { Port::A, 2 }, 14 }, { { Port::A, 3 }, 15 },
+      { { Port::A, 4 }, 18 }, { { Port::A, 5 }, 19 }, { { Port::A, 6 }, 3 },  { { Port::A, 7 }, 7 },
+      { { Port::B, 0 }, 9 },  { { Port::B, 1 }, 5 },  { { Port::C, 0 }, 10 }, { { Port::C, 1 }, 11 },
+      { { Port::C, 2 }, 12 }, { { Port::C, 3 }, 13 }, { { Port::C, 4 }, 4 },  { { Port::C, 5 }, 8 },
+   };
+   for(const auto &e : table) {
+      CAPTURE(static_cast<int>(e.pin.port));
+      CAPTURE(static_cast<int>(e.pin.number));
+      CHECK(board::adcChannelOf(H5, e.pin) == e.channel);
+   }
    CHECK_FALSE(board::adcChannelOf(H5, { Port::A, 8 }));
    CHECK_FALSE(board::adcChannelOf(H5, { Port::B, 2 }));
    CHECK_FALSE(board::adcChannelOf(H5, { Port::C, 6 }));
