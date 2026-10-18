@@ -34,7 +34,7 @@ void BoardPower::init() {
    Adc::configureClock();
    const Adc adc(ADC1);
    adc.enable();
-   adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.vref->pin)), sampling);
+   adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin)), sampling);
    adcReady_ = adc.calibrate();
 }
 
@@ -63,7 +63,7 @@ std::optional<uint16_t> BoardPower::senseMillivolts() {
       return std::nullopt;
    }
    const Adc adc(ADC1);
-   const auto channel = static_cast<Adc::Channel>(*adcChannelOf(current.vref->pin));
+   const auto channel = static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin));
    uint32_t sum = 0;
    for(unsigned i = 0; i < conversions; ++i) {
       uint16_t raw = 0;

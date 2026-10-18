@@ -13,7 +13,14 @@
 
 namespace board {
 
-enum class Port : uint8_t { A, B, C, D };
+// MCU family of the dongle. The pin functions (ADC channels, timers, SPI
+// pins of the JTAG fast path) and the reserved pins depend on it.
+enum class Family : uint8_t {
+   Stm32F1, // STM32F103 (RM0008)
+   Stm32H5  // STM32H523/H533 (RM0481)
+};
+
+enum class Port : uint8_t { A, B, C, D, E, F, G, H };
 
 // GPIO pin, e.g. Pin{ Port::B, 13 } for PB13. A structural type, so it can
 // be a template argument (see board::FastPinOf).
@@ -55,9 +62,9 @@ struct DebugPins {
 };
 
 // The JTAG fast path (SPI and DMA) needs TCK on SPI2 SCK (PB13), TDI on
-// SPI2 MOSI (PB15), TDO on SPI2 MISO (PB14), and TMS on the remapped SPI1
-// MISO (PB4). SPI1 is a slave and gets its clock from TCK through a board
-// link to the remapped SPI1 SCK (PB3).
+// SPI2 MOSI (PB15), TDO on SPI2 MISO (PB14), and TMS on SPI1 MISO (PB4 on
+// the STM32F103 with the SPI1 remap, PA6 on the STM32H5). SPI1 is a slave
+// and gets its clock from TCK through a board link to SPI1 SCK (PB3).
 struct JtagFastPath {
    Pin tckLink;
 
@@ -81,10 +88,11 @@ struct VrefSense {
    constexpr bool operator==(const VrefSense &) const = default;
 };
 
+namespace detail {
+
 // ADC1/ADC2 input channel of a pin on the STM32F103 (RM0008 11.3.1):
 // PA0-PA7 are channels 0-7, PB0-PB1 are 8-9 and PC0-PC5 are 10-15.
-// Empty when the pin has no ADC input.
-constexpr std::optional<uint8_t> adcChannelOf(Pin pin) {
+constexpr std::optional<uint8_t> adcChannelOfF1(Pin pin) {
    switch(pin.port) {
    case Port::A:
       if(pin.number <= 7) {
@@ -101,10 +109,45 @@ constexpr std::optional<uint8_t> adcChannelOf(Pin pin) {
          return static_cast<uint8_t>(10 + pin.number);
       }
       break;
-   case Port::D:
+   default:
       break;
    }
    return std::nullopt;
+}
+
+// ADC1/ADC2 positive input (INPx) of a pin on the STM32H523/H533
+// (DS14539 table 14, the pins of the 64-pin package).
+constexpr std::optional<uint8_t> adcChannelOfH5(Pin pin) {
+   constexpr std::array<uint8_t, 8> portA{ { 0, 1, 14, 15, 18, 19, 3, 7 } };
+   constexpr std::array<uint8_t, 2> portB{ { 9, 5 } };
+   constexpr std::array<uint8_t, 6> portC{ { 10, 11, 12, 13, 4, 8 } };
+   switch(pin.port) {
+   case Port::A:
+      if(pin.number < portA.size()) {
+         return portA[pin.number];
+      }
+      break;
+   case Port::B:
+      if(pin.number < portB.size()) {
+         return portB[pin.number];
+      }
+      break;
+   case Port::C:
+      if(pin.number < portC.size()) {
+         return portC[pin.number];
+      }
+      break;
+   default:
+      break;
+   }
+   return std::nullopt;
+}
+
+} // namespace detail
+
+// ADC input channel of a pin. Empty when the pin has no ADC input.
+constexpr std::optional<uint8_t> adcChannelOf(Family family, Pin pin) {
+   return family == Family::Stm32F1 ? detail::adcChannelOfF1(pin) : detail::adcChannelOfH5(pin);
 }
 
 // One wire (SDI) of the WCH-Link personality: a timer makes the bits on
@@ -123,7 +166,12 @@ struct OneWireTimer {
 
 // The timer of a SWDIO output pin on the STM32F103 (RM0008 9.3.7 and
 // table 78). Empty when the pin has no supported timer channel.
-constexpr std::optional<OneWireTimer> oneWireTimerOf(Pin tmsOut) {
+// The STM32H5 has no one-wire engine yet (GPDMA instead of DMA1, #98), so
+// it gets no timer.
+constexpr std::optional<OneWireTimer> oneWireTimerOf(Family family, Pin tmsOut) {
+   if(family != Family::Stm32F1) {
+      return std::nullopt;
+   }
    // TIM3_CH1 (partial remap); TIM3_UP on DMA1 ch3, TIM3_CH3 on ch2
    if(tmsOut == Pin{ Port::B, 4 }) {
       return OneWireTimer{ 3, 1, false, true, 3, 3, 2 };
@@ -154,7 +202,12 @@ struct Leds {
 
 struct Definition {
    std::string_view name;
-   uint32_t hseFrequency; // crystal, Hz
+   // Crystal, Hz. 0: the board has no crystal (STM32H5 only, USB then runs
+   // from the HSI48 with the CRS).
+   uint32_t hseFrequency : 28;
+   // In the word of the crystal: a definition stays 68 bytes. The firmware
+   // keeps board::current in flash (BoardGpio reads the debug pins).
+   Family family : 4;
    uint8_t hardwareId;    // reply of VERSALOON_GET_HARDWARE
    DebugPins debug;
    std::optional<JtagFastPath> jtagFastPath;
@@ -176,14 +229,14 @@ struct Definition {
 };
 
 // Pins that no board signal can use: USB D- and D+ (PA11, PA12) and the
-// crystal (PD0, PD1). The SWD pins of the dongle MCU (PA13, PA14) are not
-// in this list, because a release build of the Mini uses PA14 for an LED.
-inline constexpr std::array<Pin, 4> reservedPins{ {
-{ Port::A, 11 },
-{ Port::A, 12 },
-{ Port::D, 0 },
-{ Port::D, 1 },
-} };
+// crystal (PD0 and PD1 on the STM32F103, PH0 and PH1 on the STM32H5). The
+// crystal pins stay reserved on a board without a crystal. The SWD pins of
+// the dongle MCU (PA13, PA14) are not in this list, because a release
+// build of the Mini uses PA14 for an LED.
+constexpr std::array<Pin, 4> reservedPins(Family family) {
+   const Port crystal = family == Family::Stm32F1 ? Port::D : Port::H;
+   return { { { Port::A, 11 }, { Port::A, 12 }, { crystal, 0 }, { crystal, 1 } } };
+}
 
 namespace detail {
 
@@ -221,9 +274,10 @@ constexpr std::array<std::optional<Pin>, 18> allPins(const Definition &def) {
 
 // True when the pins of the definition are valid: pin numbers 0-15, no pin
 // used twice (TMS out and in can be one pin), no reserved pin, a Vref pin
-// with an ADC channel, and the fixed fast
-// path pins when the board has the JTAG fast path. Each board header checks
-// its definition with a static_assert.
+// with an ADC channel, and the fixed fast path pins when the board has the
+// JTAG fast path. The crystal must be in the range of the family, and an
+// STM32F103 board must have one. Each board header checks its definition
+// with a static_assert.
 constexpr bool isValid(const Definition &def) {
    const auto pins = detail::allPins(def);
    for(std::size_t i = 0; i < pins.size(); ++i) {
@@ -233,7 +287,7 @@ constexpr bool isValid(const Definition &def) {
       if(!detail::isValidPin(*pins[i])) {
          return false;
       }
-      for(const auto &reserved : reservedPins) {
+      for(const auto &reserved : reservedPins(def.family)) {
          if(*pins[i] == reserved) {
             return false;
          }
@@ -246,20 +300,28 @@ constexpr bool isValid(const Definition &def) {
    }
    if(def.jtagFastPath) {
       const auto &d = def.debug;
+      const Pin spi1Miso = def.family == Family::Stm32F1 ? Pin{ Port::B, 4 } : Pin{ Port::A, 6 };
       if(d.tck != Pin{ Port::B, 13 } || d.tdi != Pin{ Port::B, 15 } || d.tdo != Pin{ Port::B, 14 } ||
-         d.tmsOut != Pin{ Port::B, 4 } || def.jtagFastPath->tckLink != Pin{ Port::B, 3 }) {
+         d.tmsOut != spi1Miso || def.jtagFastPath->tckLink != Pin{ Port::B, 3 }) {
          return false;
       }
    }
-   if(def.vref && (!adcChannelOf(def.vref->pin) || def.vref->divider == 0)) {
+   if(def.vref && (!adcChannelOf(def.family, def.vref->pin) || def.vref->divider == 0)) {
       return false;
    }
-   return def.hseFrequency >= 4'000'000 && def.hseFrequency <= 16'000'000;
+   if(def.hseFrequency == 0) {
+      return def.family != Family::Stm32F1;
+   }
+   // HSE crystal range: RM0008 7.2.1 (STM32F103), DS14539 (STM32H5)
+   const uint32_t maxHse = def.family == Family::Stm32F1 ? 16'000'000 : 50'000'000;
+   return def.hseFrequency >= 4'000'000 && def.hseFrequency <= maxHse;
 }
 
-// Serial wire JTAG (SWJ) debug port of the dongle MCU, as AFIO_MAPR.SWJ_CFG
-// sets it (RM0008 9.3.5). The JTAG-DP uses PA15 (JTDI), PB3 (JTDO) and PB4
-// (NJTRST); the SW-DP uses PA13 (SWDIO) and PA14 (SWCLK).
+// Serial wire JTAG (SWJ) debug port of the dongle MCU. On both families the
+// JTAG-DP uses PA15 (JTDI), PB3 (JTDO) and PB4 (NJTRST), and the SW-DP uses
+// PA13 (SWDIO) and PA14 (SWCLK). The STM32F103 frees the pins with
+// AFIO_MAPR.SWJ_CFG (RM0008 9.3.5). The STM32H5 has no AFIO: the pins are
+// AF0 after reset, and a GPIO mode frees each pin.
 enum class SwjConfig : uint8_t {
    Full,    // JTAG-DP and SW-DP on
    NoJtag,  // SW-DP only: frees PA15, PB3 and PB4
