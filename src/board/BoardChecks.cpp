@@ -15,8 +15,7 @@ static_assert(board::current.family == board::Family::Stm32H5, "the board is not
 // CMake sets HSE_VALUE (SYSTEM_STM32_HSE_VALUE) from BOARD. The CMSIS clock
 // code and the board definition must agree on the crystal. A board without
 // a crystal does not use HSE_VALUE.
-static_assert(board::current.hseFrequency == 0 || HSE_VALUE == board::current.hseFrequency,
-              "HSE_VALUE does not match the board crystal");
+static_assert(board::current.hseFrequency == 0 || HSE_VALUE == board::current.hseFrequency, "HSE_VALUE does not match the board crystal");
 
 // The debug pins map to FastPin. The JTAG and SWD engines use them so.
 static_assert(board::FastPinOf<board::current.debug.tck>::mask != 0);

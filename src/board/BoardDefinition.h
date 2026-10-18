@@ -208,7 +208,7 @@ struct Definition {
    // In the word of the crystal: a definition stays 68 bytes. The firmware
    // keeps board::current in flash (BoardGpio reads the debug pins).
    Family family : 4;
-   uint8_t hardwareId;    // reply of VERSALOON_GET_HARDWARE
+   uint8_t hardwareId; // reply of VERSALOON_GET_HARDWARE
    DebugPins debug;
    std::optional<JtagFastPath> jtagFastPath;
    std::optional<Uart> uart;
