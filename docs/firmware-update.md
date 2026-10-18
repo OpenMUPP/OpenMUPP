@@ -31,7 +31,7 @@ The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 | Status | Meaning |
 |---|---|
 | `0x00` | Accepted. The firmware starts the bootloader. |
-| `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. The `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The ST-Link/V2 has only the `standalone` image. The firmware continues to run. |
+| `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. The `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The ST-Link/V2 and the NUCLEO-H533RE have only the `standalone` image. The firmware continues to run. |
 
 After the reply, the firmware does these steps:
 

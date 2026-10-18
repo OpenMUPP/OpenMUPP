@@ -139,6 +139,9 @@ The default is `/usr`.
 | `mini-triple`, `otheruse-triple`, `stlinkv2-triple` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
 | `mini-cmsis-dap-wch-link` | Mini | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
+| `nucleoh533` | NUCLEO-H533RE | `versaloon` | Release |
+| `nucleoh533-cmsis-dap` | NUCLEO-H533RE | `cmsis-dap` | Release |
+| `nucleoh533-debug` | NUCLEO-H533RE | `versaloon` | Debug |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.

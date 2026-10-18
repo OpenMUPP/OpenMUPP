@@ -2,6 +2,7 @@
 
 versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini and the OtherUse.
 A build for an ST-Link/V2 clone also exists, but it has no hardware test (see [Boards](#boards)).
+The port to the NUCLEO-H533RE (STM32H5) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
@@ -29,8 +30,12 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 | `mini` | Versaloon Mini | 12 MHz | target |
 | `otheruse` | OtherUse | 12 MHz | target |
 | `stlinkv2` | ST-Link/V2 clone | 8 MHz | compile-only |
+| `nucleoh533` | NUCLEO-H533RE | 24 MHz | target, 3.3 V targets only |
 
-All boards use an STM32F103x8 or STM32F103xB.
+The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB.
+The NUCLEO-H533RE uses an STM32H533RE.
+It has one personality for each image, and no WCH-Link personality yet.
+See [docs/boards.md](docs/boards.md#nucleo-h533re) for its limits and the wiring to the target.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
 
 ## Get the source code
@@ -47,8 +52,8 @@ In an existing clone, run `git submodule update --init --recursive`.
 The submodules are:
 
 - `libArT`: core library (streams, logging, USB device stack).
-- `system-stm32`: start-up code, CMSIS and peripheral drivers. The `dev` branch has the STM32F1 support.
-- `libart-stm32`: STM32 adapters for libArT. The `dev` branch has the STM32F1 support.
+- `system-stm32`: start-up code, CMSIS and peripheral drivers. The `dev` branch has the STM32F1 and the STM32H5 support.
+- `libart-stm32`: STM32 adapters for libArT. The `dev` branch has the STM32F1 and the STM32H5 support.
 - `versaloon-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
 
 ## Requirements
@@ -80,6 +85,7 @@ Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini.
+The presets `nucleoh533`, `nucleoh533-cmsis-dap` and `nucleoh533-debug` build the NUCLEO-H533RE.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
@@ -95,7 +101,7 @@ cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
 cmake --build build/mini -j
 ```
 
-Use `-DBOARD=otheruse` or `-DBOARD=stlinkv2` for the other boards.
+Use `-DBOARD=otheruse`, `-DBOARD=stlinkv2` or `-DBOARD=nucleoh533` for the other boards.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
 
 The build links the same firmware into one or more application images.
@@ -109,6 +115,7 @@ Each image has a different start address:
 
 The Mini and the OtherUse get all three images.
 The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
+The NUCLEO-H533RE gets the `standalone` image only, with 512 KB flash.
 A multi image has 1 KB less flash, because the last flash page holds the stored personality.
 
 The build writes these files into the build directory:

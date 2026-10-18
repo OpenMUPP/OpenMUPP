@@ -7,9 +7,9 @@ The README lists the supported boards.
 
 The board selects the MCU family of the dongle.
 The firmware knows two families: STM32F1 and STM32H5.
-All current boards use an STM32F103x8 or STM32F103xB (family STM32F1).
+The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB (family STM32F1).
 CMSIS has one device define (`STM32F103xB`) for both parts.
-No board uses the STM32H5 yet.
+The NUCLEO-H533RE uses an STM32H533RE (family STM32H5, see [NUCLEO-H533RE](#nucleo-h533re)).
 
 `cmake/Boards.cmake` has one line for each board, with these values:
 
@@ -19,10 +19,12 @@ No board uses the STM32H5 yet.
 | Device | `STM32_DEVICE` of system-stm32, the CMSIS device define. |
 | Crystal | `SYSTEM_STM32_HSE_VALUE` of system-stm32, in Hz. 0 is a board without a crystal. |
 | Linker script | The memory linker script in `ldscripts/`, for example `mem-f103.ld`. |
+| Flash | The flash size in bytes. The size limit of each application image comes from it. The STM32F1 boards use 64 KB, the flash of the STM32F103x8. |
 
 `CMakeLists.txt` reads `cmake/Boards.cmake` before `project()`.
 The toolchain file needs `STM32_FAMILY` before the compiler checks start.
-At the moment, only the STM32F1 family has CPU flags in `cmake/gcc_arm.cmake`.
+`cmake/gcc_arm.cmake` has CPU flags for the STM32F1 (Cortex-M3) and the STM32H5 (Cortex-M33).
+Both families use soft float, as system-stm32 and libart-stm32.
 
 ## Board definitions
 
@@ -83,7 +85,9 @@ To add a board:
 The system-stm32 start-up code calls `os_startup_initialize_hardware()` (`src/initialize_hardware.cpp`) before `main()`.
 This function does these steps:
 
-1. It sets the system clock to 72 MHz from the board crystal, and the SysTick to 1 ms.
+1. It sets the system clock from the board crystal, and the SysTick to 1 ms.
+   The STM32F1 runs at 72 MHz.
+   The STM32H5 runs at 250 MHz, with the instruction cache on.
 2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
    The Mini and the OtherUse disable the debug port. A debug probe can then connect only under reset.
    With `VSL_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
@@ -97,6 +101,8 @@ This function does these steps:
 The JTAG, SWD, UART and Vref pins stay inputs until their drivers configure them.
 
 `main()` starts the USB device when the clock comes from the crystal (see [USB device](usb-device.md)).
+The STM32F1 gets the USB clock from the PLL.
+The STM32H5 gets the USB clock from the HSI48, and the clock recovery system (CRS) trims it from the USB start-of-frame packets.
 The main loop runs the USB device and the UART bridge. It also drives the LEDs.
 A `wch-link` image has no serial port and no UART bridge (see [WCH-Link personality](wch-link.md)).
 
@@ -135,3 +141,66 @@ The reset of the switch waits until the key is up for 50 ms, because a key that 
 The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
 
+## NUCLEO-H533RE
+
+The board `nucleoh533` is the NUCLEO-H533RE (MB1814, user manual UM3121).
+It has an STM32H533RET6 and a 24 MHz crystal.
+The pin map is the pin map of the new probe board with the STM32H523, so the two board definitions are almost the same.
+
+The Nucleo has no level shifters and no target power switch.
+Connect only targets with a 3.3 V supply.
+The Nucleo and the target must have a common ground.
+
+The firmware on the Nucleo has these limits:
+
+- One personality for each image: Versaloon or CMSIS-DAP. A multi image needs a settings sector (#93). The build stops with an error for a multi image.
+- No WCH-Link personality. The one-wire engine of the STM32H5 is #98. The build stops with an error for `wch-link`.
+- Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE` refuses the request (see [Firmware update](firmware-update.md)).
+- Bit-bang JTAG only. The JTAG fast path is #97.
+- The timing of the bit-bang engines is not yet measured at 250 MHz (#94).
+
+### Wiring to the target
+
+The pins are on the ST morpho connectors CN7 and CN10.
+Some pins are also on the ARDUINO connectors.
+
+| Signal | Pin | Connector | Note |
+|---|---|---|---|
+| TCK, SWCLK | PB13 | CN10 pin 30 | |
+| TMS, SWDIO (output) | PA6 | CN10 pin 13 (D12) | Connect a wire from PA6 to PA7. Connect the target to one of the two pins. |
+| TMS, SWDIO (input) | PA7 | CN10 pin 15 (D11) | |
+| TDI | PB15 | CN10 pin 26 | |
+| TDO | PB14 | CN10 pin 28 | |
+| TRST | PB4 | CN10 pin 27 (D5) | Optional |
+| SRST | PB10 | CN10 pin 25 (D6) | |
+| RTCK | PA0 | CN7 pin 28 (A0) | Optional |
+| UART TX (to target RX) | PA9 | CN10 pin 2 | USART1 of the serial bridge |
+| UART RX (from target TX) | PA10 | CN10 pin 4 | |
+| Vref sense | PB0 | CN7 pin 34 (A3) | Optional. Connect the target supply, 3.3 V maximum. No divider. |
+| GND | GND | CN7 pin 8 | |
+
+The default solder bridges of the NUCLEO-H533RE also connect PB14 and PB15 to CN10 pins 35 and 37, and to the ARDUINO pins D1 and D0.
+
+The board has these other signals:
+
+| Signal | Pin | Note |
+|---|---|---|
+| State LED | PA5 | LD2, green. The board has no power LED and no USB LED. |
+| Key | PC13 | B1, the blue button. |
+| USB | PA11, PA12 | USB Type-C connector CN3. The D+ pull-up is in the STM32H5. |
+
+Without a Vref connection, the Vref value of the Versaloon personality is not valid.
+
+### Flash the firmware
+
+Connect the USB connector of the on-board STLINK-V3EC (CN1).
+Write the `standalone` image with the STLINK-V3EC, for example:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32h5x.cfg \
+        -c "program versaloon-ng-standalone.bin 0x08000000 verify reset exit"
+```
+
+Then connect the user USB connector CN3 to the host.
+The firmware keeps the SW-DP of the STM32H5 on, so the STLINK-V3EC can connect at any time.
+The STLINK-V3EC uses PA13 and PA14. The firmware does not use these pins.
