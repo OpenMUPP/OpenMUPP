@@ -160,6 +160,27 @@ build:
         VARIANT: -triple
         PROTOCOL_TAG: -vsl+dap+wch
 
+# NUCLEO-H533RE (STM32H5, #89): all presets of the board, on every
+# pipeline. The board has the standalone image only, and one personality
+# for each image. Its own cache key: the H5 builds fetch the CMSIS packages
+# of the H5 and the Cortex-M33.
+build-nucleoh533:
+  extends: .build-board-template
+  cache:
+    <<: *fetchcontent-cache
+    key: fetchcontent-firmware-h5
+    policy: pull-push
+  parallel:
+    matrix:
+      - BOARD: nucleoh533
+        VARIANT: ""
+      - BOARD: nucleoh533
+        VARIANT: -cmsis-dap
+        PROTOCOL_TAG: -cmsis-dap
+      - BOARD: nucleoh533
+        VARIANT: -debug
+        BUILD_TYPE: Debug
+
 # VSL_PERSONALITIES=cmsis-dap,wch-link, a set without Versaloon. Build and
 # size check only, no artifacts.
 build-mini-cmsis-dap-wch-link:
