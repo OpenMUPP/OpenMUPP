@@ -299,8 +299,11 @@ void startVersaloon() {
 }
 
 void beforeUsbPollVersaloon(uint64_t nowMs) {
-   if(bootloaderEntry.isDue(nowMs)) {
-      boot::enterBootloader();
+   // Only the app-8k image links boot::enterBootloader() (an STM32F1 board)
+   if constexpr(hasBootloaderEntry) {
+      if(bootloaderEntry.isDue(nowMs)) {
+         boot::enterBootloader();
+      }
    }
 }
 

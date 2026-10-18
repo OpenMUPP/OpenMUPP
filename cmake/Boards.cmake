@@ -8,19 +8,24 @@
 #   device    STM32_DEVICE, the CMSIS device define
 #   crystal   HSE crystal in Hz, 0 for a board without a crystal
 #   ldscript  memory linker script in ldscripts/
+#   flash     flash size in bytes. The size limit of the application images
+#             comes from it (CMakeLists.txt).
 # The family and the crystal must be the same as in the board definition
 # (src/board/boards/). src/board/BoardChecks.cpp checks this.
 #
 #   mini      Versaloon Mini
 #   otheruse  OtherUse
 #   stlinkv2  ST-Link/V2 clone (compile-only target)
+#   nucleoh533 NUCLEO-H533RE
 # The STM32F1 boards have an STM32F103x8 or an STM32F103xB. CMSIS has one
-# define (STM32F103xB) for both parts.
-set(VSL_BOARDS mini otheruse stlinkv2)
-#                       family  device      crystal  ldscript
-set(VSL_BOARD_mini      STM32F1 STM32F103xB 12000000 mem-f103.ld)
-set(VSL_BOARD_otheruse  STM32F1 STM32F103xB 12000000 mem-f103.ld)
-set(VSL_BOARD_stlinkv2  STM32F1 STM32F103xB 8000000  mem-f103.ld)
+# define (STM32F103xB) for both parts. The firmware uses only the 64 KB of
+# the STM32F103x8.
+set(VSL_BOARDS mini otheruse stlinkv2 nucleoh533)
+#                         family  device      crystal  ldscript     flash
+set(VSL_BOARD_mini        STM32F1 STM32F103xB 12000000 mem-f103.ld  65536)
+set(VSL_BOARD_otheruse    STM32F1 STM32F103xB 12000000 mem-f103.ld  65536)
+set(VSL_BOARD_stlinkv2    STM32F1 STM32F103xB 8000000  mem-f103.ld  65536)
+set(VSL_BOARD_nucleoh533  STM32H5 STM32H533xx 24000000 mem-h533.ld  524288)
 # Boards that versaloon-bootloader supports (cmake/Bootloader.cmake)
 set(VSL_BOOTLOADER_BOARDS mini otheruse)
 set(BOARD "mini" CACHE STRING "Board to build for: ${VSL_BOARDS}")
@@ -35,6 +40,7 @@ if (BOARD IN_LIST VSL_BOARDS)
     list(GET VSL_BOARD_${BOARD} 1 _vsl_device)
     list(GET VSL_BOARD_${BOARD} 2 _vsl_crystal)
     list(GET VSL_BOARD_${BOARD} 3 VSL_LDSCRIPT)
+    list(GET VSL_BOARD_${BOARD} 4 VSL_FLASH_SIZE)
     set(STM32_FAMILY "${_vsl_family}" CACHE STRING "STM32 family to build for" FORCE)
     set(STM32_DEVICE "${_vsl_device}" CACHE STRING "STM32 device define for CMSIS" FORCE)
     # system-stm32 gives HSE_VALUE to the CMSIS SystemCoreClockUpdate() and

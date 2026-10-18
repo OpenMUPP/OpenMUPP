@@ -3,6 +3,9 @@
 #include <array>
 #include <delaybusywait.h>
 #include <peripherals/Rcc.h>
+#if !defined(STM32F1)
+#include <peripherals/Crs.h>
+#endif
 #include <peripherals/Uid.h>
 
 #include "Hardware.h"
@@ -161,6 +164,30 @@ uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
    return endpointCount;
 }
 
+#if !defined(STM32F1)
+// USB clock of the STM32H5: HSI48, trimmed by the CRS from the USB SOF
+// packets. PA11 and PA12 are USB_DM and USB_DP on AF10. A failure leaves
+// USB without a clock, and the host sees no device.
+void startUsbClock() {
+   if(!Rcc::enableHSI48()) {
+      LOG_ERROR(debug::appLog, "USB: HSI48 does not start");
+      return;
+   }
+   Rcc::setUSBClockSource(Rcc::USBClockSource::HSI48);
+   Rcc::enableCRSClock();
+   if(hw::Crs::configure({})) {
+      hw::Crs::enable();
+   }
+   for(const uint8_t pin : { 11, 12 }) {
+      const auto gpio = board::gpioPin({ board::Port::A, pin });
+      gpio.setAlternateFunction(hw::GpioPin::AlternateFunction::AF10);
+      gpio.configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::None,
+                     hw::GpioPin::Speed::VeryHigh);
+   }
+   Rcc::enableUSBClock();
+}
+#endif
+
 } // namespace
 
 UsbStack::UsbStack(Personality active, const Functions &functions)
@@ -238,10 +265,14 @@ void UsbStack::start() {
       hardware_.setPullupCallback(&UsbStack::setPullUp, nullptr);
    }
 
+#if defined(STM32F1)
    // USBPRE is set by the 72 MHz clock setup, before the clock is enabled.
    Rcc::enableUSBClock();
+#else
+   startUsbClock();
+#endif
    // Before begin(), which enables the interrupt (Hardware.h)
-   NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, hardware::usbIrqPriority);
+   NVIC_SetPriority(hw::usbfs::Irq, hardware::usbIrqPriority);
    controller_.begin();
    device_.start();
 }
@@ -283,10 +314,14 @@ void UsbStack::poll() {
 }
 
 void UsbStack::disconnect() {
-   NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
+   NVIC_DisableIRQ(hw::usbfs::Irq);
    if(const auto pullUp = board::current.usbPullUp) {
       board::write(*pullUp, false);
    } else {
+#if !defined(STM32F1)
+      // The host sees the disconnect when the internal D+ pull-up is off
+      hw::usbfs::setInternalPullup(false);
+#else
       // Stop the transceiver and reset the USB peripheral, then turn off
       // its clock. The GPIO then drives D+ (PA12) low.
       USB->CNTR = USB_CNTR_FRES | USB_CNTR_PDWN;
@@ -294,6 +329,7 @@ void UsbStack::disconnect() {
       RCC->APB1RSTR &= ~RCC_APB1RSTR_USBRST;
       RCC->APB1ENR &= ~RCC_APB1ENR_USBEN;
       board::configureOutput(board::Signal{ { board::Port::A, 12 }, board::Active::High }, false);
+#endif
    }
    delaymS(disconnectMs);
 }

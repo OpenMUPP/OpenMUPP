@@ -58,6 +58,17 @@
       }
     },
     {
+      "name": "board-nucleoh533",
+      "description": "Board nucleoh533",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "cacheVariables": {
+        "BOARD": "nucleoh533"
+      }
+    },
+    {
       "name": "personalities-cmsis-dap",
       "description": "CMSIS-DAP personality",
       "hidden": true,
@@ -281,6 +292,29 @@
       ]
     },
     {
+      "name": "nucleoh533",
+      "displayName": "NUCLEO-H533RE",
+      "inherits": [
+        "board-nucleoh533"
+      ]
+    },
+    {
+      "name": "nucleoh533-cmsis-dap",
+      "displayName": "NUCLEO-H533RE, CMSIS-DAP",
+      "inherits": [
+        "board-nucleoh533",
+        "personalities-cmsis-dap"
+      ]
+    },
+    {
+      "name": "nucleoh533-debug",
+      "displayName": "NUCLEO-H533RE, Debug",
+      "inherits": [
+        "debug",
+        "board-nucleoh533"
+      ]
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "description": "Native build of the unit tests (no toolchain file)",
@@ -366,6 +400,18 @@
     {
       "name": "stlinkv2-triple",
       "configurePreset": "stlinkv2-triple"
+    },
+    {
+      "name": "nucleoh533",
+      "configurePreset": "nucleoh533"
+    },
+    {
+      "name": "nucleoh533-cmsis-dap",
+      "configurePreset": "nucleoh533-cmsis-dap"
+    },
+    {
+      "name": "nucleoh533-debug",
+      "configurePreset": "nucleoh533-debug"
     },
     {
       "name": "host-tests",

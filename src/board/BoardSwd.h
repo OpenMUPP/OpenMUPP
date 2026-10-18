@@ -32,10 +32,16 @@ class SwdPins {
       SwdioOut::write(level);
       SwdioOut::setOutput();
    }
-   // Input first, then the pull-up: SWDIO does not glitch.
+   // Input first, then the pull-up: SWDIO does not glitch. On the STM32H5,
+   // PUPDR keeps the pull-up of init() in both directions, so only the mode
+   // changes.
    [[gnu::always_inline]] void swdioRelease() {
+#if defined(STM32F1)
       SwdioOut::setConfig<pullUpInput>();
       SwdioOut::set();
+#else
+      SwdioOut::setInput();
+#endif
    }
    [[gnu::always_inline]] void swdioWrite(bool level) {
       SwdioOut::write(level);
@@ -51,9 +57,11 @@ class SwdPins {
    }
 
    private:
+#if defined(STM32F1)
    // Input with pull: ODR high selects the pull-up.
    static constexpr uint8_t pullUpInput =
    hw::gpio_f1::pinConfig(hw::GpioPin::Mode::Input, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::Up);
+#endif
 
    using Swclk = FastPinOf<current.debug.tck>;
    using SwdioOut = FastPinOf<current.debug.tmsOut>;

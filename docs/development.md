@@ -139,6 +139,9 @@ The default is `/usr`.
 | `mini-triple`, `otheruse-triple`, `stlinkv2-triple` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
 | `mini-cmsis-dap-wch-link` | Mini | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
+| `nucleoh533` | NUCLEO-H533RE | `versaloon` | Release |
+| `nucleoh533-cmsis-dap` | NUCLEO-H533RE | `cmsis-dap` | Release |
+| `nucleoh533-debug` | NUCLEO-H533RE | `versaloon` | Debug |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
@@ -346,14 +349,16 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
 - `build-mini-cmsis-dap-wch-link`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap,wch-link`, plus the size check.
   This job keeps no artifacts.
+- `build-nucleoh533`: a `parallel:matrix` job with the presets `nucleoh533`, `nucleoh533-cmsis-dap` and `nucleoh533-debug`, plus the size check.
 
-The build jobs of the Mini run in each pipeline.
+The build jobs of the Mini and the NUCLEO-H533RE run in each pipeline.
 The build jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
 The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
-`build-mini` and `run-unit-tests` update the cache, and the other jobs only read it.
+`build-mini`, `build-nucleoh533` and `run-unit-tests` update the cache, and the other jobs only read it.
+`build-nucleoh533` has its own cache key, because the STM32H5 needs other CMSIS packages.
 In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
 Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.
