@@ -55,7 +55,15 @@ SET(CMAKE_AR "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-ar${TOOL_EXECUTABLE_SUFFIX}
 SET(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> qcs <TARGET> <LINK_FLAGS> <OBJECTS>")
 SET(CMAKE_C_ARCHIVE_FINISH   true)
 
-SET (MCU_FLAGS "-mcpu=cortex-m3 -mthumb -mfloat-abi=soft -fsingle-precision-constant")
+# CPU flags of the MCU family. CMakeLists.txt sets STM32_FAMILY from BOARD
+# (cmake/Boards.cmake) before project(), so before this file runs. The
+# try_compile projects of CMake get STM32_FAMILY too.
+LIST(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES STM32_FAMILY)
+IF(STM32_FAMILY STREQUAL "STM32F1")
+    SET(MCU_FLAGS "-mcpu=cortex-m3 -mthumb -mfloat-abi=soft -fsingle-precision-constant")
+ELSE()
+    MESSAGE(FATAL_ERROR "cmake/gcc_arm.cmake: no CPU flags for STM32_FAMILY '${STM32_FAMILY}'. Set a known BOARD.")
+ENDIF()
 SET(CMAKE_C_FLAGS_DEBUG "-Og -g -fstack-usage -fno-move-loop-invariants -g3 ${MCU_FLAGS}" CACHE INTERNAL "c compiler flags debug")
 SET(CMAKE_CXX_FLAGS_DEBUG "-Og -g -fstack-usage -fno-move-loop-invariants -g3 -fabi-version=0 ${MCU_FLAGS}" CACHE INTERNAL "cxx compiler flags debug")
 SET(CMAKE_ASM_FLAGS_DEBUG "-g" CACHE INTERNAL "asm compiler flags debug")

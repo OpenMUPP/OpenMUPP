@@ -41,8 +41,8 @@ void configureOutput(Pin pin, bool level) {
 // oneWireSampleNs plus the DMA time. The code reads no timer or DMA
 // register during the frame.
 
-static_assert(oneWireTimerOf(current.debug.tmsOut), "the SWDIO output pin has no one-wire timer");
-constexpr OneWireTimer oneWire = *oneWireTimerOf(current.debug.tmsOut);
+static_assert(oneWireTimerOf(current.family, current.debug.tmsOut), "the SWDIO output pin has no one-wire timer");
+constexpr OneWireTimer oneWire = *oneWireTimerOf(current.family, current.debug.tmsOut);
 
 using OneWireOut = FastPinOf<current.debug.tmsOut>;
 using OneWireIn = FastPinOf<current.debug.tmsIn>;

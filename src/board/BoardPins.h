@@ -4,11 +4,14 @@
 
 #include "board/BoardDefinition.h"
 
-#include <Afio.h>
 #include <cmsis_device.h>
 #include <cstdint>
 #include <peripherals/FastPin.h>
 #include <peripherals/GpioPin.h>
+
+#if defined(STM32F1)
+#include <Afio.h>
+#endif
 
 namespace board {
 
@@ -51,6 +54,8 @@ inline bool isAsserted(Signal signal) {
    return gpioPin(signal.pin).read() == signal.levelFor(true);
 }
 
+#if defined(STM32F1)
+// The STM32H5 has no AFIO: a GPIO mode frees a debug port pin.
 constexpr hw::Afio::SwjConfig afioSwjConfig(SwjConfig config) {
    switch(config) {
    case SwjConfig::Full:
@@ -62,5 +67,6 @@ constexpr hw::Afio::SwjConfig afioSwjConfig(SwjConfig config) {
    }
    return hw::Afio::SwjConfig::Disabled;
 }
+#endif
 
 } // namespace board

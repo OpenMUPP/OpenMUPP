@@ -4,7 +4,6 @@
 // static constructors and main().
 #include <startup-hooks.h>
 
-#include <Afio.h>
 #include <cmsis_device.h>
 #include <peripherals/GpioPin.h>
 #include <peripherals/Rcc.h>
@@ -69,8 +68,11 @@ void os_startup_initialize_hardware() {
    configureClocks();
 
    // Set the debug port before the pins: the JTAG-DP and the SW-DP own
-   // their pins (PA13-PA15, PB3, PB4) until SWJ_CFG releases them.
+   // their pins (PA13-PA15, PB3, PB4) until SWJ_CFG releases them. The
+   // STM32H5 has no SWJ_CFG: the GPIO mode of a pin releases it.
+#if defined(STM32F1)
    hw::Afio::setSwjConfig(board::afioSwjConfig(board::swjConfig(board::current)));
+#endif
 
    configurePins();
 

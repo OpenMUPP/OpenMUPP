@@ -14,6 +14,7 @@ namespace board {
 inline constexpr Definition stLinkV2{
    .name = "stlinkv2",
    .hseFrequency = 8'000'000,
+   .family = Family::Stm32F1,
    // ST_Link in the original Versaloon firmware
    .hardwareId = 0x38,
    .debug{

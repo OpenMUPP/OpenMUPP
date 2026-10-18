@@ -12,7 +12,12 @@ namespace board {
 // a stopped counter would make the timed waits endless. Call it before
 // each bit-bang operation.
 [[gnu::always_inline]] inline void startCycleCounter() {
+#if defined(DCB)
+   // Armv8-M (STM32H5): the CMSIS core header has DCB, not CoreDebug.
+   DCB->DEMCR |= DCB_DEMCR_TRCENA_Msk;
+#else
    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+#endif
    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
