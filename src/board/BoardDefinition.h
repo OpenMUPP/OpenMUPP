@@ -62,9 +62,11 @@ struct DebugPins {
 };
 
 // The JTAG fast path (SPI and DMA) needs TCK on SPI2 SCK (PB13), TDI on
-// SPI2 MOSI (PB15), TDO on SPI2 MISO (PB14), and TMS on SPI1 MISO (PB4 on
-// the STM32F103 with the SPI1 remap, PA6 on the STM32H5). SPI1 is a slave
-// and gets its clock from TCK through a board link to SPI1 SCK (PB3).
+// SPI2 MOSI (PB15), TDO on SPI2 MISO (PB14), and TMS on SPI1 MISO. SPI1 MISO
+// is PB4 on the STM32F103 (SPI1 remap). On the STM32H5 it is PA6: PB4 can
+// also be SPI1 MISO there, but the pin map of the H5 boards (#89) uses PB4
+// for TRST. SPI1 is a slave and gets its clock from TCK through a board
+// link to SPI1 SCK (PB3).
 struct JtagFastPath {
    Pin tckLink;
 
