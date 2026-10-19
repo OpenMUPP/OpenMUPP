@@ -150,7 +150,9 @@ FlashWord readWord(std::size_t index) {
    // cleared: its delay after the read is not specified.
    while((FLASH->ECCDETR & FLASH_ECCR_ECCD) != 0) {
    }
-   // Only a correction of this word: an instruction fetch can also set ECCC
+   // Only a correction of this word: an instruction fetch can also set ECCC.
+   // Limit: ECCCORR keeps only the first address, so a fetch correction just
+   // before the read hides a correction of this word.
    const uint32_t ecccorr = FLASH->ECCCORR;
    if((ecccorr & FLASH_ECCR_ECCC) != 0) {
       eccError = eccError || eccSlot(ecccorr) == index;
