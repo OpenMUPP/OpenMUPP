@@ -116,7 +116,8 @@ Each image has a different start address:
 The Mini and the OtherUse get all three images.
 The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
 The NUCLEO-H533RE gets the `standalone` image only, with 512 KB flash.
-A multi image has 1 KB less flash, because the last flash page holds the stored personality.
+A multi image has less flash, because the end of the flash holds the stored personality.
+This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the NUCLEO-H533RE.
 
 The build writes these files into the build directory:
 
