@@ -153,7 +153,7 @@ The Nucleo and the target must have a common ground.
 
 The firmware on the Nucleo has these limits:
 
-- One personality for each image: Versaloon or CMSIS-DAP. A multi image needs a settings sector (#93). The build stops with an error for a multi image.
+- The personalities Versaloon and CMSIS-DAP, alone or in a multi image. A multi image keeps the last 8 KB flash sector of bank 2 for the stored personality (see [Multi image](usb-device.md#multi-image)).
 - No WCH-Link personality. The one-wire engine of the STM32H5 is #98. The build stops with an error for `wch-link`.
 - Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE` refuses the request (see [Firmware update](firmware-update.md)).
 - Bit-bang JTAG only. The JTAG fast path is #97.

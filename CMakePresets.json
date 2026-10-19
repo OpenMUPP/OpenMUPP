@@ -307,6 +307,14 @@
       ]
     },
     {
+      "name": "nucleoh533-dual",
+      "displayName": "NUCLEO-H533RE, dual image",
+      "inherits": [
+        "board-nucleoh533",
+        "personalities-dual"
+      ]
+    },
+    {
       "name": "nucleoh533-debug",
       "displayName": "NUCLEO-H533RE, Debug",
       "inherits": [
@@ -408,6 +416,10 @@
     {
       "name": "nucleoh533-cmsis-dap",
       "configurePreset": "nucleoh533-cmsis-dap"
+    },
+    {
+      "name": "nucleoh533-dual",
+      "configurePreset": "nucleoh533-dual"
     },
     {
       "name": "nucleoh533-debug",

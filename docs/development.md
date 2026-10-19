@@ -141,6 +141,7 @@ The default is `/usr`.
 | `mini-debug` | Mini | `versaloon` | Debug |
 | `nucleoh533` | NUCLEO-H533RE | `versaloon` | Release |
 | `nucleoh533-cmsis-dap` | NUCLEO-H533RE | `cmsis-dap` | Release |
+| `nucleoh533-dual` | NUCLEO-H533RE | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
 | `nucleoh533-debug` | NUCLEO-H533RE | `versaloon` | Debug |
 | `host-tests` | Host | - | Debug |
 
@@ -349,7 +350,8 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
 - `build-mini-cmsis-dap-wch-link`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap,wch-link`, plus the size check.
   This job keeps no artifacts.
-- `build-nucleoh533`: a `parallel:matrix` job with the presets `nucleoh533`, `nucleoh533-cmsis-dap` and `nucleoh533-debug`, plus the size check.
+- `build-nucleoh533`: a `parallel:matrix` job with the presets `nucleoh533`, `nucleoh533-cmsis-dap`, `nucleoh533-dual` and `nucleoh533-debug`, plus the size check.
+  The limit of the dual image is 8 KB smaller, because the last flash sector holds the stored personality.
 
 The build jobs of the Mini and the NUCLEO-H533RE run in each pipeline.
 The build jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
