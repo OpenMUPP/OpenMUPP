@@ -27,8 +27,10 @@ class SettingsFlashPage final : public personality::FlashPage {
    public:
 #if defined(STM32F1)
    static constexpr std::size_t sizeBytes = 1024;
-#else
+#elif defined(STM32H5)
    static constexpr std::size_t sizeBytes = 8 * 1024;
+#else
+#error "SettingsFlashPage: no settings page for this STM32 family"
 #endif
 
    [[nodiscard]] art::span<const uint16_t> slots() const override;

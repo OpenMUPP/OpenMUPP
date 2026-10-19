@@ -77,7 +77,7 @@ bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
 
 } // namespace board
 
-#else // STM32H5 (RM0481 chapter 7)
+#elif defined(STM32H5) // RM0481 chapter 7
 
 #include <array>
 #include <peripherals/Rcc.h>
@@ -102,19 +102,54 @@ FLASH_CCR_CLR_EOP | FLASH_CCR_CLR_WRPERR | FLASH_CCR_CLR_PGSERR | FLASH_CCR_CLR_
 // The slots of the sector. slots() reads the sector into it.
 std::array<uint16_t, slotCount> view{};
 
-// NMI_Handler() takes a double ECC error as a corrupt slot only while
-// readWord() reads the sector.
+// Set while readWord() reads the sector, and by NMI_Handler() for a double
+// ECC error in the sector.
 volatile bool readingSector = false;
 volatile bool eccError = false;
 
+uint32_t sectorOffset() {
+   return reinterpret_cast<uint32_t>(__vsl_settings_start) - FLASH_BASE;
+}
+
+// The physical bank of the sector is bank 2. With SWAP_BANK, the address is in
+// the other bank.
+bool inPhysicalBank2() {
+   const bool swapped = (FLASH->OPTSR_CUR & FLASH_OPTSR_SWAP_BANK) != 0;
+   return (sectorOffset() >= bankBytes) != swapped;
+}
+
+// True when FLASH_ECCDETR points into the sector. ADDR_ECC counts flash words
+// from the start of the bank (16 bits: 1 MB banks, RM0481 table 88).
+bool isSectorEccError(uint32_t eccdetr) {
+   const uint32_t first = (sectorOffset() % bankBytes) / personality::flashWordBytes;
+   const uint32_t word = eccdetr & FLASH_ECCR_ADDR_ECC;
+   const bool bank2 = (eccdetr & FLASH_ECCR_BK_ECC) != 0;
+   return bank2 == inPhysicalBank2() && word >= first && word < first + slotCount;
+}
+
+// A single ECC correction (ECCC) gives no NMI and returns the corrected data,
+// so a word with one written bit reads as erased. readWord() takes it as an
+// ECC error, so the store never writes that word again.
+void clearEccCorrection() {
+   FLASH->ECCCORR = (FLASH->ECCCORR & FLASH_ECCR_ECCIE) | FLASH_ECCR_ECCC;
+}
+
 FlashWord readWord(std::size_t index) {
    const auto *const source = reinterpret_cast<const volatile uint32_t *>(&__vsl_settings_start[index]);
+   clearEccCorrection();
    eccError = false;
    readingSector = true;
    const FlashWord word{ source[0], source[1], source[2], source[3] };
-   // The ECC NMI comes after the read: take it before readingSector is cleared
    __DSB();
    __ISB();
+   // The NMI clears ECCD. Wait for it, so it comes before readingSector is
+   // cleared: its delay after the read is not specified.
+   while((FLASH->ECCDETR & FLASH_ECCR_ECCD) != 0) {
+   }
+   if((FLASH->ECCCORR & FLASH_ECCR_ECCC) != 0) {
+      clearEccCorrection();
+      eccError = true;
+   }
    readingSector = false;
    return word;
 }
@@ -143,7 +178,7 @@ void unlock() {
 // Waits for the end of the operation, locks the flash controller and turns
 // the ICACHE on again. True when the operation had no error.
 bool finish(uint32_t operation) {
-   while((FLASH->NSSR & FLASH_SR_BSY) != 0) {
+   while((FLASH->NSSR & (FLASH_SR_BSY | FLASH_SR_WBNE | FLASH_SR_DBNE)) != 0) {
    }
    const bool ok = (FLASH->NSSR & errorFlags) == 0;
    FLASH->NSCR &= ~operation;
@@ -161,11 +196,9 @@ art::span<const uint16_t> SettingsFlashPage::slots() const {
 }
 
 bool SettingsFlashPage::erase() {
-   const uint32_t offset = reinterpret_cast<uint32_t>(__vsl_settings_start) - FLASH_BASE;
-   // BKSEL selects the physical bank: with SWAP_BANK, the address is in the other bank
-   const bool swapped = (FLASH->OPTSR_CUR & FLASH_OPTSR_SWAP_BANK) != 0;
-   const bool bank2 = (offset >= bankBytes) != swapped;
-   const uint32_t sector = (offset % bankBytes) / FLASH_SECTOR_SIZE;
+   // BKSEL selects the physical bank
+   const bool bank2 = inPhysicalBank2();
+   const uint32_t sector = (sectorOffset() % bankBytes) / FLASH_SECTOR_SIZE;
    unlock();
    FLASH->NSCR = (FLASH->NSCR & ~(FLASH_CR_SNB | FLASH_CR_BKSEL)) | FLASH_CR_SER | (sector << FLASH_CR_SNB_Pos) |
                  (bank2 ? FLASH_CR_BKSEL : 0U);
@@ -202,16 +235,24 @@ bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
 
 // A double ECC error raises the NMI (RM0481 7.9.10). A write that a power
 // loss cut can leave a flash word of the sector with a bad ECC: readWord()
-// then gets a corrupt slot. Any other double ECC error stops here.
+// then gets a corrupt slot. Any other NMI stops here, as in system-stm32.
 extern "C" void NMI_Handler() {
-   if(board::readingSector && (FLASH->ECCDETR & FLASH_ECCR_ECCD) != 0) {
+   const uint32_t eccdetr = FLASH->ECCDETR;
+   if((eccdetr & FLASH_ECCR_ECCD) != 0 && (board::readingSector || board::isSectorEccError(eccdetr))) {
       FLASH->ECCDETR = FLASH_ECCR_ECCD;
       ICACHE->CR |= ICACHE_CR_CACHEINV;
       board::eccError = true;
       return;
    }
+#if defined(DEBUG)
+   if((DCB->DHCSR & DCB_DHCSR_C_DEBUGEN_Msk) != 0) {
+      __BKPT(0);
+   }
+#endif
    for(;;) {
    }
 }
 
+#else
+#error "SettingsFlashPage: no settings page for this STM32 family"
 #endif
