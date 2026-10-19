@@ -76,13 +76,16 @@ TEST_CASE("A flash word holds the record in its low half-word, all other bits 1"
 }
 
 TEST_CASE("A flash word with an ECC error is a corrupt slot") {
+   // One written bit: the ECC corrects the word to erased and reports ECCC
    CHECK(slotOf(erasedWord, true) == corruptSlot);
    CHECK(slotOf(flashWordOf(PersonalityStore::recordOf(Personality::Versaloon)), true) == corruptSlot);
 }
 
-TEST_CASE("A partly written flash word is never erased and never a record") {
+TEST_CASE("A partly written flash word that the ECC does not correct is never erased and never a record") {
    const uint16_t record = PersonalityStore::recordOf(Personality::Versaloon);
-   // The record half-word is erased, but other bits of the word are written
+   // The record half-word is erased, but other bits of the word are written.
+   // On the target the ECC corrects one wrong bit (ECCC); these words model
+   // a cut write with more wrong bits that still has a valid ECC.
    for(std::size_t i = 0; i < 4; ++i) {
       FlashWord word = erasedWord;
       word[i] &= (i == 0) ? 0xFFFEFFFFU : 0xFFFFFFFEU;
@@ -135,12 +138,14 @@ TEST_CASE("A cut write that left the record half-word erased is not written agai
    PersonalityStore store{ sector };
    REQUIRE(store.store(Personality::CmsisDap));
 
-   // Slot 1: only a bit of the second 32-bit word was written
-   sector.words[1][1] = 0xFFFFFFFEU;
+   // Slot 1: only some bits of the second 32-bit word were written, and the
+   // ECC reports no error
+   sector.words[1][1] = 0xFFFFF0F0U;
    sector.refresh();
 
    REQUIRE(store.store(Personality::Versaloon));
    CHECK(store.load() == Personality::Versaloon);
    CHECK_FALSE(sector.eccError[1]);
+   CHECK(sector.words[1][1] == 0xFFFFF0F0U);
    CHECK(sector.words[2] == flashWordOf(PersonalityStore::recordOf(Personality::Versaloon)));
 }

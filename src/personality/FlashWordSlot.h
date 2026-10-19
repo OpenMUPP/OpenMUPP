@@ -12,8 +12,12 @@
 // A power loss during a write can leave any mix of bits, and a bad ECC.
 // slotOf() maps each flash word that is not erased and not a full record
 // to corruptSlot. The log treats it as a cut record: load() returns no
-// value, and the next store() writes the next slot. A word with only some
-// bits written is never seen as erased, so the store never writes it again.
+// value, and the next store() writes the next slot. The ECC corrects a
+// word with one wrong bit, for example back to an erased word, and detects
+// a word with two wrong bits. The driver reports both as an ECC error, and
+// slotOf() gives corruptSlot. Thus a cut write is not seen as erased, and the
+// store does not write that word again. Limit: a word with three or more
+// wrong bits can pass the ECC; slotOf() then sees the data as it is.
 
 #include <array>
 #include <cstddef>
@@ -35,7 +39,8 @@ constexpr FlashWord flashWordOf(uint16_t record) {
    return { 0xFFFF0000U | record, 0xFFFFFFFFU, 0xFFFFFFFFU, 0xFFFFFFFFU };
 }
 
-// The log slot of a flash word. eccError: the read gave a double ECC error.
+// The log slot of a flash word. eccError: the read gave an ECC correction
+// or a double ECC error.
 constexpr uint16_t slotOf(const FlashWord &word, bool eccError) {
    if(eccError) {
       return corruptSlot;
