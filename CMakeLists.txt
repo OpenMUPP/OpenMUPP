@@ -169,18 +169,19 @@ if (CMAKE_CROSSCOMPILING)
     set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
     set(_vsl_dropped_files ${VSL_PERSONALITY_DROPPED_SOURCES})
     # The flash page of the stored personality: only in a multi image. It is
-    # one STM32F103 flash page at the end of the application area. The
-    # STM32H5 has 8 KB flash sectors and no settings sector yet (#93).
+    # at the end of the application area: one 1 KB flash page on the
+    # STM32F103, one 8 KB flash sector on the STM32H5.
     # The one-wire engine of WCH-Link uses the timers and DMA1 of the
     # STM32F1. The STM32H5 engine is #98.
     if ("wch-link" IN_LIST VSL_PERSONALITY_SET AND NOT STM32_FAMILY STREQUAL "STM32F1")
         message(FATAL_ERROR "Board ${BOARD}: the wch-link personality needs the one-wire engine, which the ${STM32_FAMILY} does not have yet.")
     endif ()
-    if (VSL_PERSONALITY_COUNT GREATER 1 AND NOT STM32_FAMILY STREQUAL "STM32F1")
-        message(FATAL_ERROR "Board ${BOARD}: a multi image (VSL_PERSONALITIES=${VSL_PERSONALITY_SET}) needs a settings sector, which the ${STM32_FAMILY} does not have yet. Select one personality.")
-    endif ()
-    if (VSL_PERSONALITY_COUNT GREATER 1)
+    if (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32F1")
         set(VSL_SETTINGS_PAGE_SIZE 1024)
+    elseif (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32H5")
+        set(VSL_SETTINGS_PAGE_SIZE 8192)
+    elseif (VSL_PERSONALITY_COUNT GREATER 1)
+        message(FATAL_ERROR "Board ${BOARD}: a multi image (VSL_PERSONALITIES=${VSL_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have. Select one personality.")
     else ()
         list(APPEND _vsl_dropped_files "src/board/SettingsFlashPage\\.cpp")
         set(VSL_SETTINGS_PAGE_SIZE 0)

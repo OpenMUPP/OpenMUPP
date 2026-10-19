@@ -45,6 +45,7 @@ add_executable(vsl-tests
         TestSerialEventQueue.cpp
         TestBootloaderEntry.cpp
         TestPersonalityStore.cpp
+        TestFlashWordSlot.cpp
         TestPersonalitySwitch.cpp
         TestSwitchRequest.cpp
         TestKeyGesture.cpp

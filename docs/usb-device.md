@@ -162,11 +162,20 @@ The active personality has its descriptors, its USB function and its commands, a
 The firmware changes the personality only with a reset.
 
 The firmware stores the personality in the last 1 KB flash page of the application area, at `0x0800FC00`.
-The linker script keeps this page out of the image, so a multi image has 1 KB less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
+On the NUCLEO-H533RE (STM32H5), the page is the last 8 KB flash sector of bank 2, at `0x0807E000`.
+The linker script keeps this page out of the image.
+Thus a multi image has 1 KB (STM32F103) or 8 KB (STM32H5) less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
 When the page holds no personality, the image uses `VSL_DEFAULT_PERSONALITY`.
 The default is the first personality of the image in code order.
 `src/personality/PersonalityStore.h` has the page format.
 The page is a log of 16-bit records, so the firmware erases the page only one time in 512 switches.
+The STM32H5 writes the flash in 128-bit flash words with ECC (error correction code), and each flash word can be written only one time.
+Thus each record uses one flash word, and the sector also holds 512 records.
+`src/personality/FlashWordSlot.h` has the layout of a flash word.
+A power loss during a write can leave a flash word with a bad ECC.
+A read of that flash word causes an NMI (non-maskable interrupt).
+The NMI handler of the firmware then marks the record as not valid, and the image starts with its default personality.
+The firmware also marks a record as not valid when the ECC corrected one bit of it.
 
 To change the personality, use one of these methods:
 

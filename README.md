@@ -34,7 +34,7 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 
 The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB.
 The NUCLEO-H533RE uses an STM32H533RE.
-It has one personality for each image, and no WCH-Link personality yet.
+It has no WCH-Link personality yet.
 See [docs/boards.md](docs/boards.md#nucleo-h533re) for its limits and the wiring to the target.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
 
@@ -85,7 +85,7 @@ Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini.
-The presets `nucleoh533`, `nucleoh533-cmsis-dap` and `nucleoh533-debug` build the NUCLEO-H533RE.
+The presets `nucleoh533`, `nucleoh533-cmsis-dap`, `nucleoh533-dual` and `nucleoh533-debug` build the NUCLEO-H533RE.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
@@ -116,7 +116,8 @@ Each image has a different start address:
 The Mini and the OtherUse get all three images.
 The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
 The NUCLEO-H533RE gets the `standalone` image only, with 512 KB flash.
-A multi image has 1 KB less flash, because the last flash page holds the stored personality.
+A multi image has less flash, because the end of the flash holds the stored personality.
+This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the NUCLEO-H533RE.
 
 The build writes these files into the build directory:
 
