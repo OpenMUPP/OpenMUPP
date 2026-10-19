@@ -88,7 +88,7 @@ TEST_CASE("A partly written flash word that the ECC does not correct is never er
    // a cut write with more wrong bits that still has a valid ECC.
    for(std::size_t i = 0; i < 4; ++i) {
       FlashWord word = erasedWord;
-      word[i] &= (i == 0) ? 0xFFFEFFFFU : 0xFFFFFFFEU;
+      word[i] &= (i == 0) ? 0xFFF0FFFFU : 0xFFFFFFF0U;
       CHECK(slotOf(word, false) == corruptSlot);
    }
    // The record is complete, but one more bit is written
