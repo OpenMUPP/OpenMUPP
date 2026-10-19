@@ -118,13 +118,17 @@ bool inPhysicalBank2() {
    return (sectorOffset() >= bankBytes) != swapped;
 }
 
-// True when FLASH_ECCDETR points into the sector. ADDR_ECC counts flash words
-// from the start of the bank (16 bits: 1 MB banks, RM0481 table 88).
-bool isSectorEccError(uint32_t eccdetr) {
+// The slot that FLASH_ECCCORR or FLASH_ECCDETR points to, slotCount when the
+// address is not in the sector. ADDR_ECC counts flash words from the start
+// of the bank (16 bits: 1 MB banks, RM0481 table 88).
+std::size_t eccSlot(uint32_t eccRegister) {
    const uint32_t first = (sectorOffset() % bankBytes) / personality::flashWordBytes;
-   const uint32_t word = eccdetr & FLASH_ECCR_ADDR_ECC;
-   const bool bank2 = (eccdetr & FLASH_ECCR_BK_ECC) != 0;
-   return bank2 == inPhysicalBank2() && word >= first && word < first + slotCount;
+   const uint32_t word = eccRegister & FLASH_ECCR_ADDR_ECC;
+   const bool bank2 = (eccRegister & FLASH_ECCR_BK_ECC) != 0;
+   if(bank2 != inPhysicalBank2() || word < first || word >= first + slotCount) {
+      return slotCount;
+   }
+   return word - first;
 }
 
 // A single ECC correction (ECCC) gives no NMI and returns the corrected data,
@@ -146,9 +150,11 @@ FlashWord readWord(std::size_t index) {
    // cleared: its delay after the read is not specified.
    while((FLASH->ECCDETR & FLASH_ECCR_ECCD) != 0) {
    }
-   if((FLASH->ECCCORR & FLASH_ECCR_ECCC) != 0) {
+   // Only a correction of this word: an instruction fetch can also set ECCC
+   const uint32_t ecccorr = FLASH->ECCCORR;
+   if((ecccorr & FLASH_ECCR_ECCC) != 0) {
+      eccError = eccError || eccSlot(ecccorr) == index;
       clearEccCorrection();
-      eccError = true;
    }
    readingSector = false;
    return word;
@@ -238,7 +244,7 @@ bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
 // then gets a corrupt slot. Any other NMI stops here, as in system-stm32.
 extern "C" void NMI_Handler() {
    const uint32_t eccdetr = FLASH->ECCDETR;
-   if((eccdetr & FLASH_ECCR_ECCD) != 0 && (board::readingSector || board::isSectorEccError(eccdetr))) {
+   if((eccdetr & FLASH_ECCR_ECCD) != 0 && (board::readingSector || board::eccSlot(eccdetr) < board::slotCount)) {
       FLASH->ECCDETR = FLASH_ECCR_ECCD;
       ICACHE->CR |= ICACHE_CR_CACHEINV;
       board::eccError = true;
