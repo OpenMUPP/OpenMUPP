@@ -53,13 +53,14 @@ bool RvDtmTap::clock(bool tms, bool tdi) {
    bool out = true;
    if(state_ == State::ShiftDr || state_ == State::ShiftIr) {
       out = (shift_ & 1u) != 0;
-      shift_ = (shift_ >> 1) | (static_cast<uint32_t>(tdi) << (length_ - 1));
+      shift_ = (shift_ >> 1) | (static_cast<uint64_t>(tdi) << (length_ - 1));
    }
    const Next &n = next[static_cast<std::size_t>(state_)];
    state_ = tms ? n.high : n.low;
    switch(state_) {
    case State::Reset:
       ir_ = rvDtm::irIdcode;
+      hardReset();
       break;
    case State::CaptureIr:
       shift_ = rvDtm::irCapture;
@@ -70,6 +71,9 @@ bool RvDtmTap::clock(bool tms, bool tdi) {
       break;
    case State::CaptureDr:
       captureDr();
+      break;
+   case State::UpdateDr:
+      updateDr();
       break;
    default:
       break;
@@ -84,14 +88,57 @@ void RvDtmTap::captureDr() {
       length_ = 32;
       break;
    case rvDtm::irDtmcs:
-      shift_ = rvDtm::dtmcs;
+      shift_ = rvDtm::dtmcs | (error_ ? rvDtm::opFailed << rvDtm::dmistatShift : 0u);
       length_ = 32;
+      break;
+   case rvDtm::irDmi:
+      shift_ = (static_cast<uint64_t>(address_) << rvDtm::addressShift) |
+               (static_cast<uint64_t>(data_) << rvDtm::dataShift) | (error_ ? rvDtm::opFailed : rvDtm::opNop);
+      length_ = rvDtm::dmiLength;
       break;
    default:
       shift_ = 0;
       length_ = 1;
       break;
    }
+}
+
+void RvDtmTap::updateDr() {
+   if(ir_ == rvDtm::irDmi) {
+      dmiAccess();
+   } else if(ir_ == rvDtm::irDtmcs) {
+      const auto value = static_cast<uint32_t>(shift_);
+      if((value & rvDtm::dmihardreset) != 0) {
+         hardReset();
+      } else if((value & rvDtm::dmireset) != 0) {
+         error_ = false;
+      }
+   }
+}
+
+void RvDtmTap::dmiAccess() {
+   const auto op = static_cast<uint32_t>(shift_ & 0x3u);
+   if(error_ || (op != rvDtm::opRead && op != rvDtm::opWrite)) {
+      return;
+   }
+   address_ = static_cast<uint8_t>((shift_ >> rvDtm::addressShift) & rvswd::addressMask);
+   rvswd::Status status;
+   if(op == rvDtm::opRead) {
+      uint32_t data = 0;
+      status = target_.dmiRead(address_, data);
+      if(status == rvswd::Status::Ok) {
+         data_ = data;
+      }
+   } else {
+      status = target_.dmiWrite(address_, static_cast<uint32_t>(shift_ >> rvDtm::dataShift));
+   }
+   error_ = status != rvswd::Status::Ok;
+}
+
+void RvDtmTap::hardReset() {
+   error_ = false;
+   address_ = 0;
+   data_ = 0;
 }
 
 } // namespace cmsisdap
