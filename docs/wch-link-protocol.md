@@ -7,24 +7,11 @@ The facts come from USB captures and logic analyzer captures of a real probe. A 
 Status: the USB protocol and the wire frames are captured on a CH32V003 (one wire) and on a CH32V208 (two wires).
 A few fields are open (see [Open questions](#open-questions)).
 
-## Capture setup
+## Captures
 
-| Item | Value |
-|---|---|
-| Probe | WCH-LinkE, USB ID `1a86:8010`, `bcdDevice` 2.19, product string `WCH-Link` (from `lsusb`, not in the captures) |
-| Probe type | wlink reports `WCH-Link v2.19(v39) (WCH-LinkE-CH32V305)`. The info response holds `02 13 12 00` (see [Command 0x0d](#command-0x0d-info-connect-quit)). The source of `v39` is open |
-| Target 1 | CH32V003F4P6 (16 KB flash), chip ID `0x00300500`, one-wire interface on PD1 |
-| Target 2 | CH32V208WBU6 (160 KB flash), chip ID `0x2080053c`, two-wire interface on PA13 (SWDIO) and PA14 (SWCLK), external power |
-| Host tools | wlink 0.1.2 and minichlink (a local build, version not recorded) |
-| Capture | Linux `usbmon` on the bus of the probe, filtered to the probe address |
-
-The captures are in [`wch-link-captures/`](wch-link-captures/).
-Each file has the traffic of one tool command.
-The file name gives the target, the tool and the command, for example `v003-wlink-flash.pcapng`.
-The prefix `v003-` marks the CH32V003. The prefix `v208-` marks the CH32V208.
-`v003-mc-write-head.pcapng` holds only the first 4000 frames of the minichlink write.
-The full capture had 13 MB.
-On the CH32V208, the minichlink write has 4 KB only.
+The captures are in [`wch-link-captures/`](wch-link-captures/README.md), with the setup, the file names and the decoders.
+The targets are a CH32V003 (one wire) and a CH32V208 (two wires). The host tools are wlink 0.1.2 and minichlink.
+A file name in parentheses, for example (`v208-wlink-protect.pcapng`), names the capture that shows a fact.
 
 ## USB interface
 
@@ -404,11 +391,8 @@ Flash write data does not use this reversal. The image goes out in file order.
 
 ## Wire timing (CH32V208, two wires)
 
-Source: `wch-link-captures/v208-wlink-status-timing.csv`. A Saleae Logic Pro recorded `wlink status` at 500 MS/s (2 ns).
-Channel 0 is SWDIO (PA13). Channel 1 is SWCLK (PA14). Channel 2 is NRST.
+Source: `v208-wlink-status-timing.csv`, a logic analyzer capture of `wlink status` at 500 MS/s (2 ns), with SWDIO, SWCLK and NRST.
 The probe used its default speed (`0c … 01`).
-The file has one row for each state change, with the time in seconds. Time zero is the first falling edge of SWDIO.
-The logic threshold was not recorded.
 
 Measured facts:
 
@@ -434,7 +418,7 @@ Observations about the frames:
 
 ### Speed setting
 
-`v208-wlink-status-low-timing.csv` and `v208-wlink-status-medium-timing.csv` are the same run with `wlink --speed low status` (speed byte `03`) and `--speed medium status` (`02`). Same channels and sample rate.
+`v208-wlink-status-low-timing.csv` and `v208-wlink-status-medium-timing.csv` are the same run with `wlink --speed low status` (speed byte `03`) and `--speed medium status` (`02`).
 
 | Phase | Default speed (`01`) | Medium speed (`02`) | Low speed (`03`) |
 |---|---|---|---|
@@ -450,8 +434,7 @@ Conclusions:
 
 ## Wire timing (CH32V003, one wire)
 
-Source: `wch-link-captures/v003-wlink-status-timing.csv`. The same Saleae Logic Pro recorded `wlink status` at 500 MS/s.
-Channel 0 is SWIO (PD1). Channels 1 and 2 were not connected (constant 0 in the file).
+Source: `v003-wlink-status-timing.csv`, a logic analyzer capture of `wlink status` at 500 MS/s, with SWIO only.
 The probe used its default speed. The run took 93 ms.
 
 Measured facts:
@@ -544,11 +527,8 @@ Observations:
 
 ### Who drives a bit (analog capture)
 
-Source: an analog capture of `wlink status` on the CH32V208 with the WCH-LinkE, at 12.5 MS/s.
-Two parts of it are in the repository, with the time in seconds and the voltages of SWDIO and SWCLK:
-
-- `wch-link-captures/v208-wlink-status-analog-connect.csv`: the first five connect frames (−0.2 to 1.2 ms).
-- `wch-link-captures/v208-wlink-status-analog-frames.csv`: the first frames of 54 clocks (46.0 to 47.1 ms).
+Source: an analog capture of `wlink status` on the CH32V208, at 12.5 MS/s.
+Two parts of it are in the repository: `v208-wlink-status-analog-connect.csv` (the first five connect frames) and `v208-wlink-status-analog-frames.csv` (the first frames of 54 clocks).
 
 The voltage of SWDIO in the high phase of SWCLK tells the driver:
 
