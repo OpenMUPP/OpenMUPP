@@ -409,7 +409,7 @@ The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (
 
 Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, OtherUse with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
 The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
-The [bridge hardware test](#bridge-hardware-test) has the CH32V003 results. The CH32V20x config is not tested on hardware.
+The [bridge hardware test](#bridge-hardware-test) has the results of the three configs.
 
 ### Bridge switch
 
@@ -612,6 +612,56 @@ Rates, with the target at its reset clock:
 OpenOCD is about 4 times faster on the CH32V003 than on the CH32V006.
 On the CH32V003, it uses the program buffer. This test did not capture the USB packets of the CH32V003.
 The CH32V006 refuses the program buffer, so OpenOCD uses the abstract command there (see [OpenOCD configs](#openocd-configs)).
+
+#### CH32V208 on the OtherUse
+
+The probe, OpenOCD, GDB and probe-rs are the same as for the CH32V006.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-24 |
+| Target | CH32V208WBU6 on two wires (SWDIO, SWCLK), with its own supply. BOOT0 is tied low. probe-rs uses `--chip CH32V208WBU6` |
+| OpenOCD config | `ch32v20x-cmsis-dap.cfg`, default `WORKAREASIZE` (`0x2800`) |
+| Test programs | The counter loops of the CH32V006 test (counter at `0x20001000`, 16 KB flash program) |
+
+| Test | Tool | Result |
+|---|---|---|
+| Examine | OpenOCD | Pass. IDCODE `0x15653101`, `XLEN=32`, `misa=0x40901105` (RV32IMAC, U and X) |
+| `halt`, `resume` | OpenOCD | Pass |
+| `step` | OpenOCD, GDB `stepi` | Pass |
+| `reg` | OpenOCD, GDB | Pass: `pc`, `a0`, `a1`, `x31`, `dcsr` |
+| `mdw`, `mww` | OpenOCD, GDB | Pass on a halted hart |
+| Software breakpoint in RAM | OpenOCD `bp`, GDB `break` | Pass |
+| Hardware breakpoint | OpenOCD `bp ... hw` | Fail, in OpenOCD: "Found 0 triggers". See note 1 |
+| Hardware breakpoint | probe-rs `gdb`, GDB `hbreak` | Pass in flash. probe-rs finds 4 `mcontrol` triggers |
+| `load_image` to RAM | OpenOCD, GDB `load` | Pass, with `verify_image` |
+| Reset by `ndmreset` | OpenOCD `reset run` | Pass |
+| Reset by `ndmreset` | OpenOCD `reset halt` | Fail, "timed out while waiting for target halted". With BOOT0 low, 8 of 8 runs failed. Before that, 1 of 6 runs passed. See note 2 |
+| WCH registers `0x7c` to `0x7f` | OpenOCD `riscv dmi_read` | `00000000`, `00000000`, `00000000`, `2080053c` |
+| `shutdown` | OpenOCD | Pass. The bridge is off after it |
+| `info` | probe-rs | probe-rs finds the DTM, but it cannot identify the chip. The same result as on the CH32V006 |
+| `read` | probe-rs | Pass. 16 KB of flash agree with the image |
+| `download --verify` | probe-rs, built-in flash algorithm | Pass in 4 of 4 runs with BOOT0 low. 16 KB in 14.5 s, with the verify. After `probe-rs reset`, the program runs. See note 3 |
+| `gdb` | probe-rs, GDB | Pass: connect, `stepi`, registers up to `x31`, memory read and write, `hbreak` |
+| Wrong wiring | OpenOCD | See note 4 |
+
+Notes:
+
+1. On the CH32V208, the `tinfo` CSR (`0x7a4`) reads 0, without an exception. OpenOCD takes `tinfo` 0 as "no trigger" (`get_trigger_types()` in `src/target/riscv/riscv.c`), and stops the count. It does not look at the type in `tdata1`. `tdata1` of trigger 0 reads `20000000` (type 2, `mcontrol`). probe-rs uses the type in `tdata1`, and finds 4 triggers.
+2. After a reset with `haltreq`, the CH32V208 sets `allhavereset` before it halts. A poll of `dmstatus` after the reset reads `allrunning` and `allhavereset` first, and `allhalted` about 0.8 ms later. OpenOCD waits only for `allhavereset` (`deassert_reset()` in `src/target/riscv/riscv-013.c`). Then it writes `ackhavereset`, and this write also clears `haltreq`. When `haltreq` goes to 0 before the hart halts, the hart continues to run. OpenOCD then halts the hart to set `dcsr.ebreak*`, resumes it, and waits for a halt until the timeout. The debug spec 0.13 expects the hart to halt when `haltreq` stays set during the reset. In a manual sequence with `riscv dmi_write`, the `ackhavereset` write came 5 ms after the reset. Then the hart halted in 10 of 10 tries. The CH32V006 and the CH32V003 halt in time.
+3. In a first run, BOOT0 was not connected. Then address `0x00000000` showed the system bootloader (the same words as `0x1fff8000`) after some resets, and the user flash after others. The test image is linked at `0x00000000`, so probe-rs compared against the bootloader, and the verify failed in 3 of 6 runs. The user flash at `0x08000000` was correct each time. With BOOT0 low, address `0x00000000` showed the user flash after 10 of 10 resets.
+4. SWCLK was not connected in a first run. OpenOCD waited 5 s, and stopped with "Debug Module did not become active". DTMCS read `0x871`: `dmistat` 2, the sticky DMI error. OpenOCD does not show this error (see [DMI errors](#dmi-errors)).
+
+Rates, with the target at its reset clock:
+
+| Measurement | Result |
+|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.83 ms for each read |
+| OpenOCD memory read, `dump_image` of 8 KB RAM | 0.95 s (8.4 KiB/s) |
+| OpenOCD memory write, `load_image` of 8 KB RAM | 0.90 s (8.9 KiB/s) |
+| OpenOCD memory read, `dump_image` of 16 KB flash | 1.89 s (8.5 KiB/s) |
+| probe-rs `read` of 16 KB | 2.77 s (5.8 KiB/s), with the attach |
+| probe-rs `download --verify` of 16 KB | 14.5 s |
 
 ## Tests
 
