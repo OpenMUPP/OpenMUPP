@@ -12,7 +12,7 @@ A few fields are open (see [Open questions](#open-questions)).
 - All bytes are hexadecimal, without `0x`. Example: `0d`.
 - A packet in the text has the form `CMD LEN payload`, without the header byte (`81` for a request, `82` for a response).
   Example: `0d 01 02` is command `0d`, length 1, payload `02`. The full request packet is `81 0d 01 02`.
-- A packet in the text that starts with `81` or `82` shows the header byte too. The document uses this form only where the header byte is not the usual one (see [Framing](#framing)).
+- A packet in the text that starts with `81` or `82` shows the header byte too. The document uses this form for the error frame and the reply to an unknown command, because the short form is not clear there (see [Framing](#framing)).
 - The words `addr` and `len` in a packet are u32 big-endian fields. Example: `03 08 addr len`.
 - A column with the title "payload" shows the payload only, without `CMD` and `LEN`.
 - A number with `0x`, for example `0x2080053c`, is a value: an address, a register value or a chip ID.
@@ -69,40 +69,58 @@ Multi-byte values in command payloads are big-endian.
 
 ## Command overview
 
-The table has all commands and sub-commands of the captures and of the host tools.
-The column "Seen" tells the source: "captured" is a USB capture, "tools" is a request that wlink or minichlink can send but no capture has, and "notes" is the notes of epic #63.
+The table has all commands and sub-commands of the captures.
+It also has the requests that the source code of wlink 0.1.2 and minichlink (`pgm-wch-linke.c`) can send.
+The column "Seen" tells the source of a row:
+
+- "captured": a USB capture.
+- "tools": the source code of wlink or minichlink. No capture has the request, so the probe response is not known.
+- "notes": the notes of epic #63.
+
+A name in quotes is the name in the wlink source code.
 
 | Request | Name | Response | Seen | Section |
 |---|---|---|---|---|
 | `01 08 addr len` | Set the flash area | `01 01 01` | captured | [Flash program](#flash-program-wlink) |
 | `02 01 01` | Mass erase | `02 01 01` | captured | [Erase](#erase-wlink-erase) |
 | `02 01 02` | Start the data phase of a program | `02 01 02` | captured | [Flash program](#flash-program-wlink) |
+| `02 01 04` | "WriteFlashAndVerify". wlink sends it in place of `02 01 02` | not known | tools | — |
 | `02 01 05` | Start the stub transfer | `02 01 05` | captured | [Flash program](#flash-program-wlink) |
-| `02 01 06` | Verify (not confirmed) | not known | notes | [Flash program](#flash-program-wlink) |
+| `02 01 06` | "Prepare" in wlink, verify in the notes of epic #63. Not confirmed | not known | tools, notes | [Flash program](#flash-program-wlink) |
 | `02 01 07` | After the stub transfer. Likely: prepare the flash | `02 01 07` | captured | [Flash program](#flash-program-wlink) |
 | `02 01 08` | End of the program | `02 01 08` | captured | [Flash program](#flash-program-wlink) |
+| `02 01 0b` | wlink sends it in place of `02 01 07` for one chip type (`riscvchip` 1) | not known | tools | — |
 | `02 01 0c` | Start the memory read | `02 01 0c`, then the data on `0x82` | captured | [Memory read](#memory-read-0x03) |
 | `03 08 addr len` | Set the memory read range | `03 01 01` | captured | [Memory read](#memory-read-0x03) |
 | `06 01 01` | Protection query | `06 01 01` (protected) or `06 01 02` (unprotected) | captured | [Read protection](#command-0x06-read-protection) |
 | `06 01 02` | Unprotect | `06 01 02` | captured | [Read protection](#command-0x06-read-protection) |
 | `06 01 03` | Protect | `06 01 03` | captured | [Read protection](#command-0x06-read-protection) |
-| `06 01 04` | Unknown | `06 01 00` | captured | [Read protection](#command-0x06-read-protection) |
+| `06 01 04` | Unknown. wlink: "CheckReadProtectEx" | `06 01 00` | captured | [Read protection](#command-0x06-read-protection) |
+| `06 08 02 b ff ff ff ff ff ff` | "UnprotectEx". minichlink sends `b` = `ff` or `f7` | not known | tools | — |
+| `06 08 03 b ff ff ff ff ff ff` | "ProtectEx". minichlink sends `b` = `f7` | not known | tools | — |
+| `06 07 02 …`, `06 07 03 …` | Unprotect and protect for the CH570 (minichlink) | not known | tools | — |
 | `08 06 reg data op` | DMI access. `reg` and `op` are u8 fields | `08 06 reg data status` | captured | [DMI access](#command-0x08-dmi-access) |
 | `0b 01 01` | Reset and run the target | `0b 01 01` | captured | [Reset](#reset-0x0b) |
+| `0b 01 02` | "Chip" reset. The wlink source says that the memory is not reset | not known | tools | — |
+| `0b 01 03` | "Normal" reset | not known | tools | — |
 | `0c 02 type speed` | Configure the chip type and the speed | `0c 01 01` | captured | [Configure](#command-0x0c-configure) |
 | `0d 01 01` | Probe information | `0d 04 02 13 12 00` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
 | `0d 01 02` | Connect | `0d 05 family chip-id` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
 | `0d 01 03` | Unknown (minichlink sends it first) | `0d 01 03` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
-| `0d 01 04` | Unknown | `0d 01 00` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
-| `0d 01 05` | Split of RAM and flash (tools). The effect on the probe is not known | `0d 01 05` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
-| `0d 01 08`, `0d 01 0f` | Erase by the reset pin or by the power | not known | tools | — |
-| `0d 01 09` to `0d 01 0c` | Target power | not known | tools | — |
-| `0d 01 13` to `0d 01 15` | Reset pin | not known | tools | — |
-| `0d 01 ee` | SDI print | not known | tools | — |
+| `0d 01 04` | Likely: read the split of RAM and flash ("GetChipRomRamSplit", CH32V2 and CH32V3 only). Not confirmed | `0d 01 00` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
+| `0d 01 05` | Unknown. The tools send the split with a parameter (next row) | `0d 01 05` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
+| `0d 02 05 n` | Set the split of RAM and flash | not known | tools | — |
+| `0d 02 08 chip` | Erase the code flash by the reset pin | not known | tools | — |
+| `0d 02 0f chip` | Erase the code flash by the power. minichlink sends `0d 01 0f 09`: its `LEN` is 1, but the payload has 2 bytes | not known | tools | — |
+| `0d 01 09`, `0d 01 0a` | Target power 3.3 V on, off | not known | tools | — |
+| `0d 01 0b`, `0d 01 0c` | Target power 5 V on, off | not known | tools | — |
+| `0d 02 0e 13`, `0d 02 0e 14`, `0d 02 0e 15` | Reset pin low, high, floating (wlink). minichlink sends `0d 01 13` for low | not known | tools | — |
+| `0d 02 ee 00`, `0d 02 ee 01` | SDI print off, on (firmware 2.10 or later) | not known | tools | — |
 | `0d 01 ff` | Quit | `0d 01 ff` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
-| `0e …` | Disable debug | not known | notes | — |
+| `0e 01 01` | Disable debug ("DisableDebug") | not known | tools, notes | — |
 | `11 01 05`, `11 01 06` | Chip information | 20 raw bytes, no header | captured | [Chip information](#command-0x11-chip-information) |
-| Any other | Unknown command | `82 81 01 ff` | captured | [Framing](#framing) |
+| `11 01 09` | Chip information (wlink "V1", minichlink) | not known | tools | — |
+| `7f 01 00` (unknown command) | Unknown command. No other unknown command was tested | `82 81 01 ff` | captured | [Framing](#framing) |
 | `0d 01 02` without a target | Error frame | `81 55 01 01` | captured | [Framing](#framing) |
 
 ## Command `0x0d`: info, connect, quit
@@ -112,26 +130,26 @@ The column "Seen" tells the source: "captured" is a USB capture, "tools" is a re
 | `01` | Probe information | `02 13 12 00` |
 | `02` | Connect to the target (RISC-V) | `09 00 30 05 00` (CH32V003), `05 20 80 05 3c` (CH32V208) |
 | `03` | Unknown. minichlink sends it first. wlink does not. | `03` |
-| `04` | Unknown. wlink sends it on the CH32V208 after the first protection query. | `00` |
+| `04` | Likely: read the split of RAM and flash. wlink names it "GetChipRomRamSplit" and sends it only for the CH32V2 and CH32V3. Not confirmed. In the captures, wlink sends it on the CH32V208 after the first protection query. | `00` |
 | `ff` | Quit. The probe resumes the core and releases the target (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). | `ff` |
 
 - **Probe information.** Byte 0 and byte 1 are the major and minor version of the firmware (2 and 19). This matches `bcdDevice` 2.19. Byte 2 (`0x12`) is the probe type. wlink maps it to `WCH-LinkE-CH32V305`. Byte 3 is `0x00`.
 - **Connect.** The probe starts the debug interface and does the chip detection. This takes about 90 ms on the CH32V003 and about 59 ms on the CH32V208. A connect after an erase or a protect command takes the same time. Byte 0 is a chip family code (`0x09` for the CH32V003, `0x05` for the CH32V208). Bytes 1 to 4 are the chip ID (u32 BE: `0x00300500`, `0x2080053c`).
 - **Quit.** The host sends this at the end of every session. A session is connect to quit.
 - **Sub-command `03`.** The probe needed about 74 ms to answer in 5 of 7 CH32V003 runs. It needed 1 ms in the other 2. On the CH32V208 it needed 0.9 ms or less. The reason is not known.
-- **Other values.** `0d 01 05` gets the echo `0d 01 05`, but it is not a no-op. The reply took 184 ms (CH32V003) and 97 ms (CH32V208). The next quit took 46 ms and 24 ms, instead of 0.2 ms (`v003-raw-errors.pcapng`, `v208-raw-errors.pcapng`). The effect is not known.
+- **Other values.** `0d 01 05` gets the echo `0d 01 05`, but it is not a no-op. The tools send `05` with a parameter, as `0d 02 05 n` (set the split of RAM and flash). The reply took 184 ms (CH32V003) and 97 ms (CH32V208). The next quit took 46 ms and 24 ms, instead of 0.2 ms (`v003-raw-errors.pcapng`, `v208-raw-errors.pcapng`). The effect is not known.
 - **Length check.** A memory read with a wrong length (`03 01 00`) gets a normal reply `03 01 01`. The probe does not check the length.
 
 ## Command `0x0c`: configure
 
-Request payload: `chip-type speed`.
+Request payload: `type speed`. `type` is the chip type.
 
 - wlink sends `01 speed` before the connect command and `family speed` after it. Here `family` is the first byte of the connect response (`09` or `05`).
   With the generic code `01`, the connect command still works on both chips.
   minichlink sends only `09 speed`, before the connect command, also on the CH32V208 (family `05`). The connect command still works.
 - The speed byte: `01` is high (the default), `02` is medium, `03` is low. Captures of `wlink --speed low|medium|high` show this.
-  The wlink help text gives 4000 kHz for medium and 400 kHz for low. The measured two-wire clock does not agree:
-  at low speed, all frames use about 478 kHz. At high and medium speed, a DMI write of the host uses about 907 kHz and a DMI read about 478 kHz (see [Speed setting](#speed-setting)).
+  The wlink help text gives 6000 kHz for high, 4000 kHz for medium and 400 kHz for low. The measured two-wire clock does not agree.
+  The connect frames use the same clock at all speeds. After the connect, at low speed, all frames use about 478 kHz. At high and medium speed, a DMI write of the host uses about 907 kHz and a DMI read about 478 kHz (see [Speed setting](#speed-setting)).
   On one wire, the speed byte has no visible effect (see [Speed setting (CH32V003)](#speed-setting-ch32v003)).
 - The probe answers `01`.
 
@@ -158,7 +176,7 @@ The difference between sub-command `05` and `06` is open.
 | `01` | Query | `02` unprotected, `01` protected |
 | `02` | Unprotect | `02` (CH32V003: 108 ms. CH32V208: 210 ms) |
 | `03` | Protect | `03` (CH32V003: 103 ms. CH32V208: 59 ms) |
-| `04` | Unknown. wlink sends it after a query that returned `02`. | `00` |
+| `04` | Unknown. wlink names it "CheckReadProtectEx" and sends it after a query that returned `02`. | `00` |
 
 Facts about the protection:
 
@@ -352,7 +370,7 @@ The probe reads the target when the command arrives, not at connect:
 |---|---|---|
 | `0x11` | The words at `0x1ffff7e0`, `0x1ffff7e8`, `0x1ffff7ec` and `0x1ffff7f0` (`ffff00a0`, `6213f0eb`, `2f30dc32`, `e339e339`) | The first 16 bytes of the answer |
 | `06 01 01` | `0x4002201c` (`000000fc`) and `0x40022020` (`ffffffff`) | The protection state in the answer |
-| `0d 01 04` | `0x1ffff802` (`0000003f`), with the command `0x02000000` (a read of one byte) | Not known. The answer is `00`. |
+| `0d 01 04` | `0x1ffff802` (`0000003f`), with the command `0x02000000` (a read of one byte) | Likely the split of RAM and flash: `0x1ffff802` is the `USER` option byte, which holds `SRAM_CODE_MODE` on the CH32V20x. Not confirmed. The answer is `00`. |
 
 The evidence is the reply time. It grows with the speed byte, because the target reads run at the clock that `0c` sets:
 
@@ -389,7 +407,7 @@ It does not use `0x01`, `0x02` or `0x03` and does not use endpoint `0x02`.
 It runs the flash write from the host with abstract commands and the program buffer.
 
 On the CH32V208, minichlink uses the stub flow of wlink (it prints "binary blob write"):
-`01` (area), `02 01 05`, the 512-byte stub on `0x02`, `02 01 07`, `02 01 02`, the data on `0x02`, then quit.
+`01 08 addr len` (area), `02 01 05`, the 512-byte stub on `0x02`, `02 01 07`, `02 01 02`, the data on `0x02`, then quit.
 It differs from wlink in these points (`v208-mc-write.pcapng`):
 
 - It sends the stub and the data in transfers of 256 bytes (2 transfers for the stub, 16 for the 4 KB), not 64 bytes.
@@ -649,7 +667,7 @@ The table lists the questions of epic #63 and their state.
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
-| Verify sub-command (`02 01 06`?) | **Open.** No capture used it. |
+| Meaning of `02 01 06` | **Open.** The notes of epic #63 call it verify. wlink calls it "Prepare". No capture used it. |
 | Meaning of `0d 01 03`, `0d 01 04`, `0d 01 05`, `06 01 04`, `11 01 05`, `11 01 06`, `02 01 05` and `02 01 07` | **Open.** The observed behavior is in this document. |
 | Does the probe do target accesses of its own? | Answered: the connect command halts the core. The commands `0x11`, `06 01 01` and `0d 01 04` read the target. The quit command resumes the core (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). |
 | Meaning of the 85-clock frames, the response bits, the tail bits, and the failure of one-wire frames in the `dump` captures | **Partly answered.** The 85-clock frames are `dmstatus` reads (see [Connect frames](#connect-frames)). The response bits and the tail bits are a handshake (see [Wire frame format](#wire-frame-format)). The one-wire `dump` frames are open. The operation field values are answered: a write bit and a parity bit (see [Wire frame format](#wire-frame-format)). |
