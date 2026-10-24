@@ -191,7 +191,6 @@ class MockWchFlash {
       mode = 0;
       addr = 0;
       keySteps_ = {};
-      optionBuffer_.fill(0xffff);
       readProtected = option(wchlink::fpec::optionRdpr) != wchlink::fpec::rdprUnprotected;
       const uint32_t user = option(1);
       if(chip_.series != wchlink::Series::V20x) {
@@ -351,24 +350,7 @@ class MockWchFlash {
       locked = locked || (value & fpec::lock) != 0;
       flocked = flocked || (value & fpec::flock) != 0;
       obwre = obwre && (value & fpec::obwre) != 0;
-      mode = value & opMask & ~(fpec::strt | fpec::bufload | fpec::bufrst);
-      if((value & fpec::bufrst) != 0) {
-         if((mode & fpec::ftpg) == 0 || flocked) {
-            errors.push_back("BUFRST without FTPG or while FLOCK is set");
-            return;
-         }
-         optionBuffer_.fill(0xffff);
-         operationDone();
-         return;
-      }
-      if((value & fpec::bufload) != 0) {
-         if((mode & fpec::ftpg) == 0 || flocked) {
-            errors.push_back("BUFLOAD without FTPG or while FLOCK is set");
-            return;
-         }
-         operationDone();
-         return;
-      }
+      mode = value & opMask & ~fpec::strt;
       if((value & fpec::strt) == 0) {
          return;
       }
@@ -519,7 +501,6 @@ class MockWchFlash {
    MockDebugModule &dm_;
    Chip chip_;
    KeySteps keySteps_;
-   std::array<uint16_t, wchlink::fpec::optionBytesV20x> optionBuffer_{};
    bool strtArmed_{ false };
    uint32_t busyLeft_{ 0 };
 };

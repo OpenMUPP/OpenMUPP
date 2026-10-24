@@ -67,9 +67,6 @@ inline constexpr uint32_t strt = 1u << 6;
 inline constexpr uint32_t lock = 1u << 7;
 inline constexpr uint32_t obwre = 1u << 9;
 inline constexpr uint32_t flock = 1u << 15;
-inline constexpr uint32_t ftpg = 1u << 16;
-inline constexpr uint32_t bufload = 1u << 18;
-inline constexpr uint32_t bufrst = 1u << 19;
 
 // The user option bytes: half words with the value in the low byte and its
 // inverse in the high byte. RDPR, USER, DATA0, DATA1, WRPR0-WRPR3. The
@@ -89,7 +86,7 @@ inline constexpr std::size_t optionBytesV20x = 8;
 enum class Series : uint8_t {
    // CH32V003, CH641: 6 option half words, programmed with OBPG
    V00x,
-   // CH32V002/4/5/6/7, CH32M007: 8 option half words, programmed with FTPG
+   // CH32V002/4/5/6/7, CH32M007: 8 option half words, programmed with OBPG half words, each with STRT and its inverse
    V006,
    // CH32V20x, CH32V30x, CH32X035, CH32L103, CH643, CH645: 8 option half
    // words, programmed with OBPG
