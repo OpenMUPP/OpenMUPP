@@ -240,6 +240,12 @@ On each wire, the processor does these probe actions:
 3. Halt the hart: `dmcontrol` `80000001` two times, then the `dmstatus` poll.
 4. Read the chip ID at `0x7f`. The values `00000000` and `ffffffff` tell that no target is present.
 5. Write CSR `0x7c0` with `0x00000300`.
+6. Family code `4e` only (CH32V00X): set up the clock, as the WCH-LinkE does (see [CH32V006](wch-link-protocol.md#ch32v006-one-wire-qingke-v2c)).
+   Write `FLASH_ACTLR` with `2`, `RCC_CFGR0` with `0` and `RCC_INTR` with `009d0000`.
+   Set `PLLON` in `RCC_CTLR` and wait for `PLLRDY`. Write `RCC_CFGR0` with `2` and wait for `SWS` to show the PLL.
+   Write `FLASH_CTLR` with `00008080` and `FLASH_STATR` with `0000b020`.
+   The processor uses the memory access method of the wire, not the abstract command of the probe.
+   A failed access or a poll without result gives the error frame.
 
 The family code of the response comes from a table of chip ID prefixes (the top 12 bits). wlink selects the chip settings from this code.
 
@@ -264,10 +270,11 @@ The processor does not do these probe actions:
 
 - The 85-clock connect frames (see [Connect frames](wch-link-protocol.md#connect-frames)). The CH32V208 connects without them.
 - The writes to the clock registers of the CH32V208 at connect.
+- The repeated reads and writes back of the same value in the clock setup of the CH32V00X, and the `abstractcs` clear before it.
 - The read of `0x1ffff7c4` of the CH32V003 at connect.
 - The read of `0x1ffff802` for `0d 01 04`.
 
-Their meaning is not known. The flash operations do not need the clock setup: each flash operation starts with a reset (see [Flash](#flash)).
+Their meaning is not known. The flash operations do not need the clock setup (the reset undoes the clock setup of the CH32V00X): each flash operation starts with a reset (see [Flash](#flash)).
 
 ### Memory read
 
