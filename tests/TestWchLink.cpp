@@ -317,8 +317,8 @@ TEST_CASE("WCH-Link: connect on one wire does the clock setup of the CH32V006") 
    CHECK(bench.processor.connected());
    // The PLL turns on, RCC_CFGR0 selects it, then the flash controller is back at its reset state.
    const std::vector<Store> expected{
-      { 0x4002'2000, 0x0000'0002 }, { 0x4002'1004, 0 },           { 0x4002'1008, 0x009d'0000 },
-      { 0x4002'1000, 0x0150'9c83 }, { 0x4002'1004, 2 },           { 0x4002'2010, 0x0000'8080 },
+      { 0x4002'2000, 0x0000'0002 }, { 0x4002'1004, 0 }, { 0x4002'1008, 0x009d'0000 },
+      { 0x4002'1000, 0x0150'9c83 }, { 0x4002'1004, 2 }, { 0x4002'2010, 0x0000'8080 },
       { 0x4002'200c, 0x0000'b020 },
    };
    // The stores of the module (data0, data1) are not in `stores`.
@@ -697,8 +697,9 @@ TEST_CASE("WCH-Link: quit resumes the hart, ends dmactive and releases the pins"
    connect(bench);
    REQUIRE(bench.dm.halted);
    CHECK(bench.transact(request(0x0d, { 0xff })) == Bytes{ 0x82, 0x0d, 0x01, 0xff });
-   // The quit of the probe (v208-wlink-status-timing.csv)
+   // The quit of the probe (v208-wlink-status-timing.csv), with the haltreq clear that wlink resume sends
    const std::vector<Access> expected{
+      W(dm::dmcontrol, 0x0000'0001),
       W(dm::dmcontrol, 0x4000'0001),
       R(dm::dmstatus, 0x0003'0c82),
       W(dm::dmcontrol, 0x4000'0000),

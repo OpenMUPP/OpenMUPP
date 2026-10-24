@@ -271,11 +271,11 @@ bool Processor::setupClock() {
       return false;
    };
    uint32_t control = 0;
-   return write(cs::flashActlr, cs::flashActlrValue) && write(cs::rccCfgr0, 0) && write(cs::rccIntr, cs::rccIntrClear) &&
-          target_.readMemory(cs::rccCtlr, control) == rvswd::Status::Ok && write(cs::rccCtlr, control | cs::pllOn) &&
-          poll(cs::rccCtlr, cs::pllReady, cs::pllReady) && write(cs::rccCfgr0, cs::switchPll) &&
-          poll(cs::rccCfgr0, cs::switchStatusMask, cs::switchStatusPll) && write(cs::flashCtlr, cs::flashCtlrValue) &&
-          write(cs::flashStatr, cs::flashStatrValue);
+   return write(cs::flashActlr, cs::flashActlrValue) && write(cs::rccCfgr0, 0) &&
+          write(cs::rccIntr, cs::rccIntrClear) && target_.readMemory(cs::rccCtlr, control) == rvswd::Status::Ok &&
+          write(cs::rccCtlr, control | cs::pllOn) && poll(cs::rccCtlr, cs::pllReady, cs::pllReady) &&
+          write(cs::rccCfgr0, cs::switchPll) && poll(cs::rccCfgr0, cs::switchStatusMask, cs::switchStatusPll) &&
+          write(cs::flashCtlr, cs::flashCtlrValue) && write(cs::flashStatr, cs::flashStatrValue);
 }
 
 void Processor::quit() {
