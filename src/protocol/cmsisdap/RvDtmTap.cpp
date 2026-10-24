@@ -2,8 +2,6 @@
 
 #include <cstddef>
 
-#include "protocol/wchlink/WchLinkProcessor.h"
-
 namespace cmsisdap {
 
 namespace {

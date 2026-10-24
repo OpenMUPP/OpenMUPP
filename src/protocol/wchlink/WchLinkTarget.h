@@ -15,6 +15,14 @@
 
 namespace wchlink {
 
+// The WCH DM registers that the connect writes with unlockValue, also in
+// the RISC-V bridge of CMSIS-DAP (cmsisdap::RvDtmTap)
+namespace wchdm {
+inline constexpr uint8_t unlock1 = 0x7e;
+inline constexpr uint8_t unlock2 = 0x7d;
+inline constexpr uint32_t unlockValue = 0x5aa5'0400;
+} // namespace wchdm
+
 // The speed byte of the configure command (0x0c)
 enum class Speed : uint8_t {
    High = 1,
