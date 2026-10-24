@@ -346,7 +346,7 @@ A transfer to another device also writes the IR again.
 ## RISC-V DTM bridge
 
 Status: in progress (#103). The host tests run the parts below. The firmware does not use them yet.
-A test image showed OpenOCD and probe-rs on a CH32V208 through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures-with-a-ch32v208)).
+Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
 The host sees a CMSIS-DAP adapter in JTAG mode, with one RISC-V Debug Transport Module (DTM) on the chain.
@@ -386,6 +386,8 @@ After it, the sticky error blocks all accesses until Test-Logic-Reset, and OpenO
 A capture on 2026-10-24 (CH32V208, two wires, a test image) shows this: the first DMI read failed, and OpenOCD then read `dmcontrol` for 5 s ([openocd-ch32v208-attach-at-boot.pcapng](cmsis-dap-captures/openocd-ch32v208-attach-at-boot.pcapng)).
 That access failed because the test image called `attach()` at boot, not because of a wire error ([Connect](cmsis-dap-captures/README.md#connect)).
 The [unplug capture](cmsis-dap-captures/README.md#errors) shows the same limit with a real wire error.
+On one wire, a frame without an answer of the target reads `ffffffff` and gives `op` 0, not `op` 2 ([One wire](cmsis-dap-captures/README.md#one-wire)).
+Thus the host sees data that the target did not send. The planned changes below do not cover this yet.
 
 Planned changes (#103):
 

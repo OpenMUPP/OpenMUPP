@@ -3,7 +3,7 @@
 This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode for the CMSIS-DAP RISC-V bridge (#103).
 
 - The B0 captures (#104) have no target. They show which DAP commands the TAP emulator must follow.
-- The bridge captures have the emulated TAP and a CH32V208. They show the host tools on the bridge. See [Bridge captures with a CH32V208](#bridge-captures-with-a-ch32v208).
+- The bridge captures have the emulated TAP and a CH32V208 or a CH32V006. They show the host tools on the bridge. See [Bridge captures](#bridge-captures).
 
 ## Setup
 
@@ -114,10 +114,10 @@ Only OpenOCD shifts an IR (`0x7f`, `0x10` and `0x11`). probe-rs shifts no IR.
   The bridge captures below close most of these gaps.
 - The flash and halt commands of both tools are not in these captures.
 
-## Bridge captures with a CH32V208
+## Bridge captures
 
 Date: 2026-10-24.
-These captures run the host tools on the emulated TAP (#105, #106) and a CH32V208 on two wires.
+These captures run the host tools on the emulated TAP (#105, #106). The target is a CH32V208 on two wires, or a CH32V006 on one wire.
 The firmware does not use the TAP yet (#107). Thus test images route the CMSIS-DAP JTAG port to the TAP all the time.
 Do not merge their changes.
 
@@ -126,15 +126,16 @@ Do not merge their changes.
 | A | `4905274` | At boot, in `startDap()` | No | No | The `main.cpp` and `cmake/Personalities.cmake` parts of the patch, without the `RvDtmTap` part. Plus `dapRvTarget.attach(rvswd::Wire::Two);` in `startDap()` |
 | B | `df6009d` | At `DAP_Connect`, in `RvDtmTap::init()` | Yes | Yes | The patch, plus `dmiWrite(0x7e, 0x5aa50400)` and `dmiWrite(0x7d, 0x5aa50400)` after `attach()` in `RvDtmTap::init()` |
 | C | `df6009d` | At `DAP_Connect`, in `RvDtmTap::init()` | No | Yes | [bridge-test-image.patch](bridge-test-image.patch) |
+| D | `df6009d` | At `DAP_Connect`, in `RvDtmTap::init()` | Yes | Yes | Image B, with `rvswd::Wire::One` in place of `rvswd::Wire::Two` |
 
-All images use two wires. Image A has IDCODE `0x15653001`, images B and C have `0x15653101`.
+Images A, B and C use two wires. Image D uses one wire. Image A has IDCODE `0x15653001`, the other images have `0x15653101`.
 With the marker, a failed DMI access puts its `rvswd::Status` into the DMI data as `0xBAD0000n`, to show the reason in a capture.
 Image A has no marker: its failed accesses show the data of the last good read (`d=00000000`). This data does not give the reason.
 
 | Item | Value |
 |---|---|
 | Probe | Versaloon OtherUse, test image (`otheruse-cmsis-dap`, `app-10k`), USB ID `0403:9b3c` |
-| Target | CH32V208 on two wires (SWDIO, SWCLK) |
+| Target | CH32V208 on two wires (SWDIO, SWCLK), or CH32V006 on one wire (SWDIO). Each target has its own supply |
 | OpenOCD | `0.12.0+dev-01707-gf7037392b` (local build), `interface/cmsis-dap.cfg` and [ch32v-minimal.cfg](ch32v-minimal.cfg) |
 | probe-rs | 0.32.0 |
 | Decoder | [tools/usb-pcap/dtm.py](../../tools/usb-pcap/dtm.py): the IR, DR and DMI scans, with the TDO bits of the replies |
@@ -153,7 +154,7 @@ python3 tools/usb-pcap/dtm.py docs/cmsis-dap-captures/<file> <device address>
 | `probe-rs-read-ch32v208.pcapng` | 41 | B | `probe-rs read --chip CH32V208WBU6 --protocol jtag b32 0x08000000 4` | Pass: the same flash words as OpenOCD |
 | `openocd-ch32v208-unplug.pcapng` | 41 | B | OpenOCD server. SWDIO is disconnected, then connected again | See [Errors](#errors) |
 | `openocd-ch32v208-no-unlock.pcapng` | 43 | C | `openocd ... -c init -c halt -c "mdw 0x08000000 4" -c shutdown`, after a power cycle of the target | Pass |
-
+| `openocd-ch32v006.pcapng` | 55 | D | `openocd ... -c init -c halt -c "reg pc" -c "mww 0x20000000 0x87654321" -c "mdw 0x20000000 1" -c resume -c shutdown` | Pass: OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`, RV32EC), halts, and reads back the RAM word. `pc` is 0, and the flash reads `ffffffff`: probably the flash of this target is empty |
 
 ### Results
 
@@ -173,6 +174,15 @@ The last image calls `attach()` at `DAP_Connect`, without the unlock writes, and
 Thus the time of `attach()` causes the failure, not the unlock writes. The bridge must attach when it switches on (#107).
 The cause in the first image is not known. A probable cause: a command before the first scan changes the shared SWCLK and SWDIO pins.
 
+### One wire
+
+Image D passes on the CH32V006 after a power cycle of the target. Each DMI access gets an answer (`op` 0).
+Two earlier runs of image D on the same target failed, before a power cycle. In these runs, each DMI read gave `ffffffff` with `op` 0.
+On one wire, `ffffffff` is a frame without an answer of the target.
+A connect of the `wch-link` personality (`wlink status`) then passed on the same wiring.
+After that, image D passed again, also after a power cycle of the target only. The cause of the earlier failure is not known.
+These failed runs are not in the repository.
+
 ### Errors
 
 The capture `openocd-ch32v208-unplug.pcapng` shows the DMI error model (`docs/cmsis-dap.md`, "DMI errors") on hardware:
@@ -186,4 +196,6 @@ The capture `openocd-ch32v208-unplug.pcapng` shows the DMI error model (`docs/cm
 
 - OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine, and "halted due to undefined" after the recovery. Check these in B5 (#109).
 - The flash commands of both tools are not in these captures.
-- A one-wire target (CH32V003, CH32V006) is not in these captures.
+- probe-rs on a one-wire target is not in these captures.
+- The one-wire captures have no run of image C (without the unlock writes).
+- On one wire, a frame without an answer gives `ffffffff` with `op` 0, not `op` 2. Thus the host sees no error. Check this in the error model (`docs/cmsis-dap.md`, "DMI errors").
