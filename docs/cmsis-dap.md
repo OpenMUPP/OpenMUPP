@@ -357,8 +357,12 @@ One test sends the abort during the WAIT retries of one SWD transfer, from the s
 
 `tests/TestRvDtmTap.cpp` runs the emulated TAP of the RISC-V bridge (`src/protocol/cmsisdap/RvDtmTap.h`, #103).
 The TAP is a JTAG port without pins: it follows TMS and TDI and gives TDO.
-It has a 5-bit IR, IDCODE, DTMCS (`version` 1, `abits` 7) and BYPASS.
+It has a 5-bit IR, IDCODE, DTMCS (`version` 1, `abits` 7), DMI and BYPASS.
+Update-DR of the DMI register does the access on the wire, with the wire engine of the `wch-link` personality (`wchlink::Target`).
+The next Capture-DR gives the result: `op` 0 (success) or 2 (failed).
+A failed access sets a sticky error. `dmireset`, `dmihardreset` and Test-Logic-Reset clear it.
 The tests check the TAP state machine and each register.
+They run the DMI accesses on the wire engine with mock pins and the mock DM, on one wire and on two wires: read, write, failure and reset.
 They also send the requests of the OpenOCD and probe-rs captures (`tests/replay/dap-*.trace`) through the processor, with the TAP as its JTAG port.
 The scan chain rules of OpenOCD (`jtag_examine_chain()`, `jtag_validate_ircapture()`) and the DR length of probe-rs must pass on the replies.
 The firmware does not use the TAP yet.

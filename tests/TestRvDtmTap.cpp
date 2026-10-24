@@ -10,6 +10,9 @@
 #include "protocol/cmsisdap/RvDtmTap.h"
 
 #include "CmsisDapBench.h"
+#include "MockDebugModule.h"
+#include "MockRvSwdTarget.h"
+#include "protocol/wchlink/WchLinkTarget.h"
 
 #include <doctest/doctest.h>
 
@@ -97,6 +100,22 @@ Bits scan(RvDtmTap &tap, bool ir, const Bits &tdi) {
    return tdo;
 }
 
+// The TAP on the wire engine, with mock pins and a mock DM
+struct Dtm {
+   explicit Dtm(rvswd::Wire wire = rvswd::Wire::Two)
+      : pins(wire)
+      , dm(pins)
+      , target(pins)
+      , tap(target) {
+      target.attach(wire);
+   }
+
+   vsltest::MockRvSwdTarget pins;
+   vsltest::MockDebugModule dm;
+   wchlink::RvSwdTarget<vsltest::MockRvSwdTarget> target;
+   RvDtmTap tap;
+};
+
 // Test-Logic-Reset, then Run-Test/Idle
 void reset(RvDtmTap &tap) {
    clock(tap, bits("111110"));
@@ -125,7 +144,8 @@ TEST_CASE("RV DTM TAP: five TMS high bits reach Test-Logic-Reset from each state
    };
    for(const auto &[path, state] : paths) {
       CAPTURE(path);
-      RvDtmTap tap;
+      Dtm d;
+      RvDtmTap &tap = d.tap;
       clock(tap, bits("11111" + path));
       CHECK(tap.state() == state);
       clock(tap, ones(5));
@@ -135,7 +155,8 @@ TEST_CASE("RV DTM TAP: five TMS high bits reach Test-Logic-Reset from each state
 }
 
 TEST_CASE("RV DTM TAP: Test-Logic-Reset selects IDCODE") {
-   RvDtmTap tap;
+   Dtm d;
+   RvDtmTap &tap = d.tap;
    reset(tap);
    // IDCODE, then the TDI bits 32 bits later
    const Bits tdo = scan(tap, false, zeros(32) + ones(32));
@@ -144,7 +165,8 @@ TEST_CASE("RV DTM TAP: Test-Logic-Reset selects IDCODE") {
 }
 
 TEST_CASE("RV DTM TAP: IR capture is 00001 and the IR has 5 bits") {
-   RvDtmTap tap;
+   Dtm d;
+   RvDtmTap &tap = d.tap;
    reset(tap);
    const Bits tdo = scan(tap, true, bits("10101") + ones(3));
    CHECK(tdo == bits("10000") + bits("101"));
@@ -153,20 +175,22 @@ TEST_CASE("RV DTM TAP: IR capture is 00001 and the IR has 5 bits") {
 }
 
 TEST_CASE("RV DTM TAP: DTMCS") {
-   RvDtmTap tap;
+   Dtm d;
+   RvDtmTap &tap = d.tap;
    reset(tap);
    scan(tap, true, valueBits(cmsisdap::rvDtm::irDtmcs, 5));
    CHECK(tap.ir() == cmsisdap::rvDtm::irDtmcs);
    CHECK(value(scan(tap, false, zeros(32)), 0, 32) == cmsisdap::rvDtm::dtmcs);
-   // A write (dmireset) has no effect.
+   // dmireset without an error changes nothing.
    scan(tap, false, valueBits(1u << 16, 32));
    CHECK(value(scan(tap, false, zeros(32)), 0, 32) == cmsisdap::rvDtm::dtmcs);
 }
 
 TEST_CASE("RV DTM TAP: BYPASS is 1 bit and captures 0") {
-   for(const uint8_t ir : { cmsisdap::rvDtm::irBypass, cmsisdap::rvDtm::irDmi, uint8_t{ 0x00 }, uint8_t{ 0x05 } }) {
+   for(const uint8_t ir : { cmsisdap::rvDtm::irBypass, uint8_t{ 0x00 }, uint8_t{ 0x05 } }) {
       CAPTURE(int{ ir });
-      RvDtmTap tap;
+      Dtm d;
+      RvDtmTap &tap = d.tap;
       reset(tap);
       scan(tap, true, valueBits(ir, 5));
       CHECK(tap.ir() == ir);
@@ -175,7 +199,8 @@ TEST_CASE("RV DTM TAP: BYPASS is 1 bit and captures 0") {
 }
 
 TEST_CASE("RV DTM TAP: Pause-DR keeps the shift register") {
-   RvDtmTap tap;
+   Dtm d;
+   RvDtmTap &tap = d.tap;
    reset(tap);
    // Shift-DR: 10 bits, Exit1-DR, Pause-DR, Exit2-DR, Shift-DR: 22 bits
    clock(tap, bits("100"));
@@ -188,14 +213,16 @@ TEST_CASE("RV DTM TAP: Pause-DR keeps the shift register") {
 }
 
 TEST_CASE("RV DTM TAP: TDO is high outside the shift states") {
-   RvDtmTap tap;
+   Dtm d;
+   RvDtmTap &tap = d.tap;
    // Test-Logic-Reset, Run-Test/Idle, Select-DR-Scan, Capture-DR
    CHECK(clock(tap, bits("11110010")) == ones(8));
    CHECK(tap.state() == State::CaptureDr);
 }
 
 TEST_CASE("RV DTM TAP: an IR scan through Pause-IR updates the IR once") {
-   RvDtmTap tap;
+   Dtm d;
+   RvDtmTap &tap = d.tap;
    reset(tap);
    // Select-DR-Scan, Select-IR-Scan, Capture-IR, Shift-IR: 2 bits,
    // Exit1-IR, Pause-IR, Exit2-IR, Shift-IR: 3 bits, Exit1-IR, Update-IR
@@ -207,6 +234,165 @@ TEST_CASE("RV DTM TAP: an IR scan through Pause-IR updates the IR once") {
    clock(tap, bits("001"), { dtmcs[2], dtmcs[3], dtmcs[4] });
    clock(tap, bits("10"));
    CHECK(tap.ir() == cmsisdap::rvDtm::irDtmcs);
+}
+
+namespace {
+
+using cmsisdap::rvDtm::opFailed;
+using cmsisdap::rvDtm::opNop;
+using cmsisdap::rvDtm::opRead;
+using cmsisdap::rvDtm::opWrite;
+
+// The fields of the DMI register
+struct Dmi {
+   uint8_t address;
+   uint32_t data;
+   uint32_t op;
+
+   bool operator==(const Dmi &) const = default;
+};
+
+void selectIr(RvDtmTap &tap, uint8_t ir) {
+   scan(tap, true, valueBits(ir, 5));
+}
+
+// One DMI scan, IR DMI selected: the request goes in, the captured
+// fields come out.
+Dmi dmi(RvDtmTap &tap, const Dmi &request) {
+   const Bits tdo = scan(tap, false, valueBits(request.op, 2) + valueBits(request.data, 32) + valueBits(request.address, 7));
+   REQUIRE(tdo.size() == cmsisdap::rvDtm::dmiLength);
+   return { static_cast<uint8_t>(value(tdo, 34, 7)), value(tdo, 2, 32), value(tdo, 0, 2) };
+}
+
+uint32_t readDtmcs(RvDtmTap &tap) {
+   selectIr(tap, cmsisdap::rvDtm::irDtmcs);
+   return value(scan(tap, false, zeros(32)), 0, 32);
+}
+
+void writeDtmcs(RvDtmTap &tap, uint32_t v) {
+   selectIr(tap, cmsisdap::rvDtm::irDtmcs);
+   scan(tap, false, valueBits(v, 32));
+}
+
+uint32_t dmistat(uint32_t dtmcs) {
+   return (dtmcs >> cmsisdap::rvDtm::dmistatShift) & 0x3u;
+}
+
+constexpr uint8_t data0 = rvswd::dm::data0;
+constexpr uint8_t chipId = rvswd::dm::chipId;
+// The chip ID of the mock DM
+constexpr uint32_t chipIdValue = 0x0030'0500;
+
+// dmcontrol dmactive: the DM takes writes to its other registers.
+void activate(RvDtmTap &tap) {
+   dmi(tap, { rvswd::dm::dmcontrol, rvswd::dm::dmactive, opWrite });
+}
+
+// A read of chipId that fails: no target answers on two wires.
+void failRead(Dtm &d) {
+   d.pins.present = false;
+   dmi(d.tap, { chipId, 0, opRead });
+   d.pins.present = true;
+}
+
+} // namespace
+
+TEST_CASE("RV DTM TAP: a DMI read gives its data at the next Capture-DR") {
+   for(const rvswd::Wire wire : { rvswd::Wire::One, rvswd::Wire::Two }) {
+      CAPTURE(static_cast<int>(wire));
+      Dtm d(wire);
+      RvDtmTap &tap = d.tap;
+      reset(tap);
+      selectIr(tap, cmsisdap::rvDtm::irDmi);
+      CHECK(dmi(tap, { chipId, 0, opRead }) == Dmi{ 0, 0, opNop });
+      // The access is done at Update-DR, before the next scan.
+      REQUIRE(d.pins.accesses.size() == 1);
+      CHECK(d.pins.accesses[0].address == chipId);
+      CHECK_FALSE(d.pins.accesses[0].write);
+      CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ chipId, chipIdValue, opNop });
+      CHECK(d.pins.accesses.size() == 1);
+   }
+}
+
+TEST_CASE("RV DTM TAP: a DMI write") {
+   Dtm d;
+   RvDtmTap &tap = d.tap;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   activate(tap);
+   dmi(tap, { data0, 0x12345678, opWrite });
+   CHECK(d.pins.registers[data0] == 0x12345678u);
+   // The data is the data of the last read.
+   CHECK(dmi(tap, { data0, 0, opRead }) == Dmi{ data0, 0, opNop });
+   CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ data0, 0x12345678, opNop });
+}
+
+TEST_CASE("RV DTM TAP: op 0 and op 3 do no DMI access") {
+   Dtm d;
+   RvDtmTap &tap = d.tap;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   dmi(tap, { chipId, 0, opNop });
+   dmi(tap, { chipId, 0, 3 });
+   CHECK(d.pins.accesses.empty());
+   CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ 0, 0, opNop });
+}
+
+TEST_CASE("RV DTM TAP: a failed access sets the sticky error until dmireset") {
+   Dtm d;
+   RvDtmTap &tap = d.tap;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   activate(tap);
+   dmi(tap, { chipId, 0, opRead });
+   failRead(d);
+   // The failed read keeps the data of the read before it.
+   CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ chipId, chipIdValue, opFailed });
+   CHECK(dmistat(readDtmcs(tap)) == 2u);
+
+   // While the error is set, Update-DR starts no access.
+   const std::size_t accesses = d.pins.accesses.size();
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   dmi(tap, { data0, 0x0BADF00D, opWrite });
+   CHECK(dmi(tap, { 0, 0, opNop }).op == opFailed);
+   CHECK(d.pins.accesses.size() == accesses);
+
+   writeDtmcs(tap, cmsisdap::rvDtm::dmireset);
+   CHECK(dmistat(readDtmcs(tap)) == 0u);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   CHECK(dmi(tap, { data0, 0x0BADF00D, opWrite }) == Dmi{ chipId, chipIdValue, opNop });
+   CHECK(d.pins.registers[data0] == 0x0BADF00Du);
+}
+
+TEST_CASE("RV DTM TAP: a failed write sets the error") {
+   Dtm d(rvswd::Wire::One);
+   RvDtmTap &tap = d.tap;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   d.pins.failOneWireFrame = true;
+   dmi(tap, { data0, 1, opWrite });
+   d.pins.failOneWireFrame = false;
+   CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ data0, 0, opFailed });
+}
+
+TEST_CASE("RV DTM TAP: dmihardreset and Test-Logic-Reset clear the error and the result") {
+   for(const bool tlr : { false, true }) {
+      CAPTURE(tlr);
+      Dtm d;
+      RvDtmTap &tap = d.tap;
+      reset(tap);
+      selectIr(tap, cmsisdap::rvDtm::irDmi);
+      dmi(tap, { chipId, 0, opRead });
+      failRead(d);
+      if(tlr) {
+         reset(tap);
+      } else {
+         writeDtmcs(tap, cmsisdap::rvDtm::dmihardreset);
+      }
+      CHECK(dmistat(readDtmcs(tap)) == 0u);
+      selectIr(tap, cmsisdap::rvDtm::irDmi);
+      CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ 0, 0, opNop });
+   }
 }
 
 namespace {
@@ -368,7 +554,8 @@ struct Bridge {
       }
    }
 
-   RvDtmTap tap;
+   Dtm dtm;
+   RvDtmTap &tap{ dtm.tap };
    vsltest::FakeDapSwd swd;
    vsltest::FakeDapGpio gpio;
    RunningPlatform platform;
