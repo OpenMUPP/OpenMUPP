@@ -346,7 +346,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The OpenOCD configs (#108) and the hardware test (#109) are not done yet.
+Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is not done yet.
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -376,6 +376,35 @@ cmake --build --preset mini-cmsis-dap-rv-bridge -j
 ```
 
 The bridge adds about 6.4 KB to the image: the `app-10k` image of the Mini is 38,240 of 55,296 bytes.
+
+### OpenOCD configs
+
+`etc/openocd/` has a config for each target family:
+
+| Config | Targets | Wire | `WORKAREASIZE` default |
+|---|---|---|---|
+| `ch32v003-cmsis-dap.cfg` | CH32V003 | One wire | `0x800` (2 KB) |
+| `ch32v00x-cmsis-dap.cfg` | CH32V002, CH32V004, CH32V005, CH32V006, CH32V007 | One wire | `0x1000` (4 KB, the CH32V002) |
+| `ch32v20x-cmsis-dap.cfg` | CH32V20x | Two wires | `0x2800` (10 KB, the CH32V203x6) |
+
+Each config sources `ch32v-cmsis-dap-bridge.cfg`. This file selects the adapter (`0403:9b3c`, JTAG) and creates the TAP and the `riscv` target.
+The work area starts at `0x20000000`, without backup.
+The default `WORKAREASIZE` is the RAM of the smallest part. Set the RAM of your part before the config, for example 8 KB on the CH32V006:
+
+```sh
+openocd -c "set WORKAREASIZE 0x2000" -f etc/openocd/ch32v00x-cmsis-dap.cfg
+```
+
+The common file replaces the `jtag_init` proc of OpenOCD. The proc sends `cmsis-dap cmd 0x81 0x01` before the chain scan.
+A TAP `setup` event is too late: OpenOCD sends it after the chain scan.
+An image without the bridge replies `ID_DAP_Invalid`. Then `init` stops with "The probe has no RISC-V bridge".
+The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
+The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
+The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (#110).
+
+Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, OtherUse with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
+The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
+The CH32V003 and CH32V20x configs are not tested on hardware.
 
 ### Bridge switch
 
@@ -434,7 +463,7 @@ The IDCODE is `0x15653101`: version 1, part `0x5653` ("VS"), and a manufacturer 
 - JEP106 assigns no ID 0. Thus no real part has this manufacturer code, and no tool shows a manufacturer name for it. OpenOCD shows `<invalid>`.
 - probe-rs 0.32.0 rejects an IDCODE whose 11-bit manufacturer field (bits 11:1) is 0 or `0x7F` (`IdCode::valid()`). The field of this IDCODE is `0x80`. A capture with the first value, `0x15653001` (field 0), showed the rejection.
 - WCH has no JEP106 manufacturer code. The WCH fork of OpenOCD uses `0x00001` for its targets, which probe-rs rejects.
-- OpenOCD accepts each IDCODE. The bridge configs (#108) will give this value with `-expected-id`.
+- OpenOCD accepts each IDCODE. The [OpenOCD configs](#openocd-configs) give this value with `-expected-id`.
 
 ### DMI errors
 
