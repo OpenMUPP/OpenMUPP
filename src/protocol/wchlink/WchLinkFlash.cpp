@@ -26,13 +26,13 @@ inline constexpr uint32_t pollCount = Flash::operationTimeoutUs / Flash::pollInt
 // The padding of a block: erased flash
 inline constexpr uint32_t erasedWord = 0xffff'ffffu;
 
+constexpr uint32_t roundUp(uint32_t value, uint32_t multiple) {
+   return (value + multiple - 1) / multiple * multiple;
+}
+
 // The option half word with its inverse byte
 constexpr uint32_t halfWithInverse(uint8_t value) {
    return value | static_cast<uint32_t>(static_cast<uint8_t>(~value)) << 8;
-}
-
-constexpr uint32_t roundUp(uint32_t value, uint32_t multiple) {
-   return (value + multiple - 1) / multiple * multiple;
 }
 
 bool ok(rvswd::Status status) {
