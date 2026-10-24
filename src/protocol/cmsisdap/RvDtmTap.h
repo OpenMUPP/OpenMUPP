@@ -25,6 +25,11 @@
 // access. op 3 (busy) never occurs: the access ends before the next scan.
 // A write and a failed read keep the data of the last read.
 //
+// Limit: mainline OpenOCD checks op 2 only in its batch memory read, and
+// sends dmireset only after op 3. A failed single access then looks like a
+// success, and the sticky error blocks all accesses until Test-Logic-Reset.
+// The error model is an open question of #103 (open question 4).
+//
 // TDO is the bit 0 of the shift register in Shift-DR and Shift-IR, and high
 // in the other states, as an open TDO line with a pull-up.
 
