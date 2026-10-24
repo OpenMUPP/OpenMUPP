@@ -64,6 +64,7 @@ add_executable(vsl-tests
         TestCmsisDap.cpp
         TestCmsisDapJtag.cpp
         TestRvDtmTap.cpp
+        TestRvBridge.cpp
         TestWchLink.cpp
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp

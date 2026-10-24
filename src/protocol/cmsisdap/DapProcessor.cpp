@@ -160,6 +160,8 @@ constexpr std::array<SwjPin, 6> swjPinTable{ {
 { 0x20, protocol::gpio::trst, protocol::PinMode::OpenDrain, true },
 { 0x80, protocol::gpio::srst, protocol::PinMode::OpenDrain, true },
 } };
+// The SWD pins of DAP_SWJ_Pins: SWCLK/TCK and SWDIO/TMS
+constexpr uint8_t swjSwdPins = 0x03;
 
 // DAP_HostStatus
 constexpr uint8_t hostStatusConnected = 0;
@@ -176,7 +178,8 @@ Processor::Processor(DapSwd &swd,
                      protocol::JtagPort *jtag,
                      personality::PersonalitySwitch *personalitySwitch,
                      DapUart *uart,
-                     boot::BootloaderEntry *bootloader)
+                     boot::BootloaderEntry *bootloader,
+                     Bridge *bridge)
    : swd_(swd)
    , jtag_(jtag)
    , gpio_(gpio)
@@ -184,7 +187,8 @@ Processor::Processor(DapSwd &swd,
    , info_(info)
    , personalitySwitch_(personalitySwitch)
    , uart_(uart)
-   , bootloader_(bootloader) {
+   , bootloader_(bootloader)
+   , bridge_(bridge) {
    if(jtag_.available()) {
       info_.capabilities = static_cast<uint16_t>(info_.capabilities | capability::jtag);
    }
@@ -226,6 +230,9 @@ void Processor::hostGone() {
    responses_ = 0;
    responseFirst_ = 0;
    disconnect();
+   if(bridge_ != nullptr) {
+      bridge_->enable(false);
+   }
    if(uart_ != nullptr) {
       uart_->hostGone();
    }
@@ -374,6 +381,12 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       }
       out.u8(command::invalid);
       return true;
+   case command::vendor1:
+      if(bridge_ != nullptr) {
+         return switchBridge(in, out);
+      }
+      out.u8(command::invalid);
+      return true;
    case command::executeCommands:
    case command::queueCommands:
       if(!nested) {
@@ -427,6 +440,23 @@ bool Processor::switchPersonality(PacketReader &in, PacketWriter &out) {
    // The main loop stores the personality and resets after the reply
    // delay: the transport sends this response first.
    personalitySwitch_->request(*target);
+   out.u8(statusOk);
+   return true;
+}
+
+bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
+   const uint8_t on = in.u8();
+   if(!in.ok()) {
+      return false;
+   }
+   out.u8(command::vendor1);
+   if(on > 1) {
+      out.u8(statusError);
+      return true;
+   }
+   bridge_->enable(on == 1);
+   // The other port has another TAP state and IR.
+   jtag_.invalidate();
    out.u8(statusOk);
    return true;
 }
@@ -902,6 +932,9 @@ bool Processor::swjPins(PacketReader &in, PacketWriter &out) {
          gpio_.configure(pin.gpio, pin.mode, (output & pin.bit) != 0);
          selected = static_cast<uint8_t>(selected | pin.bit);
       }
+   }
+   if(bridge_ != nullptr && (selected & swjSwdPins) != 0) {
+      bridge_->pinsChanged();
    }
    uint8_t value = pinsIn();
    if(wait != 0) {
