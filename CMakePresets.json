@@ -117,6 +117,20 @@
       }
     },
     {
+      "name": "personalities-cmsis-dap-rv-bridge",
+      "description": "CMSIS-DAP personality with the RISC-V DTM bridge",
+      "hidden": true,
+      "inherits": [
+        "personalities-cmsis-dap"
+      ],
+      "cacheVariables": {
+        "VSL_CMSIS_DAP_RV_BRIDGE": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
       "name": "personalities-triple",
       "description": "Multi image with all three personalities, Versaloon as default personality",
       "hidden": true,
@@ -155,6 +169,14 @@
       "inherits": [
         "board-mini",
         "personalities-cmsis-dap"
+      ]
+    },
+    {
+      "name": "mini-cmsis-dap-rv-bridge",
+      "displayName": "Versaloon Mini, CMSIS-DAP with the RISC-V bridge",
+      "inherits": [
+        "board-mini",
+        "personalities-cmsis-dap-rv-bridge"
       ]
     },
     {
@@ -226,6 +248,14 @@
       "inherits": [
         "board-otheruse",
         "personalities-cmsis-dap"
+      ]
+    },
+    {
+      "name": "otheruse-cmsis-dap-rv-bridge",
+      "displayName": "OtherUse, CMSIS-DAP with the RISC-V bridge",
+      "inherits": [
+        "board-otheruse",
+        "personalities-cmsis-dap-rv-bridge"
       ]
     },
     {
@@ -342,6 +372,10 @@
       "configurePreset": "mini-cmsis-dap"
     },
     {
+      "name": "mini-cmsis-dap-rv-bridge",
+      "configurePreset": "mini-cmsis-dap-rv-bridge"
+    },
+    {
       "name": "mini-dual",
       "configurePreset": "mini-dual"
     },
@@ -376,6 +410,10 @@
     {
       "name": "otheruse-cmsis-dap",
       "configurePreset": "otheruse-cmsis-dap"
+    },
+    {
+      "name": "otheruse-cmsis-dap-rv-bridge",
+      "configurePreset": "otheruse-cmsis-dap-rv-bridge"
     },
     {
       "name": "otheruse-dual",
