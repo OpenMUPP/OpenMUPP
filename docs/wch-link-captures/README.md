@@ -12,7 +12,7 @@ They are the evidence for [wch-link-protocol.md](../wch-link-protocol.md).
 | Target 1 | CH32V003F4P6 (16 KB flash), chip ID `0x00300500`, one-wire interface on PD1 |
 | Target 2 | CH32V208WBU6 (160 KB flash), chip ID `0x2080053c`, two-wire interface on PA13 (SWDIO) and PA14 (SWCLK), external power |
 | Host tools | wlink 0.1.2 and minichlink (a local build, version not recorded). The `v006-` captures use wlink 0.1.3 and minichlink from ch32fun commit `a800cbd` |
-| Target 3 (`v006-` files) | CH32V006K8U6 (62 KB flash), chip ID `0x00600620`, QingKe V2C core. The probe is a WCH-LinkE with the same USB ID. wlink reports firmware v3.3(v39), minichlink reports 2.19. The cause of the difference is open |
+| Target 3 (`v006-` files) | CH32V006K8U6 (62 KB flash), chip ID `0x00600620`, QingKe V2C core. The probe is the same WCH-LinkE as for the other targets (firmware 2.19, info response `02 13 12 00`). wlink 0.1.3 shows its version as `v3.3(v39)`. The cause of this display is open |
 | USB capture | Linux `usbmon` on the bus of the probe, filtered to the probe address |
 | Logic analyzer | Saleae Logic Pro |
 
