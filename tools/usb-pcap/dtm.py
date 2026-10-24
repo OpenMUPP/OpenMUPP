@@ -9,12 +9,18 @@ TMS bits through the TAP state machine, and prints one line for each scan:
   DMI <op> a=<address> d=<data> | prev: a=<address> d=<data> op=<status>
 "prev" is the captured value: the result of the access before. Bits without the
 TDO capture flag read as 0. Test-Logic-Reset selects IDCODE (0x01).
+A scan longer than the register keeps its last bits, as the TAP does: the IR is the
+last 5 bits, a DMI scan the last 41 bits.
+Limit: it skips DAP_Transfer and DAP_TransferBlock. The firmware scans for these
+commands too, so the TAP state and the IR after them are not known until the next TLR.
 """
 import sys
 from pcap import usb
 from dap import NEXT
 
+IR_LENGTH = 5
 IR_DMI = 0x11
+DMI_LENGTH = 41
 OPS = {0: 'nop', 1: 'rd', 2: 'wr', 3: 'rsv'}
 
 def bit(data, offset, i):
@@ -60,9 +66,12 @@ def scans(path, dev, ep_out, ep_in):
                 v = sum(b << i for i, b in enumerate(ti))
                 w = sum(b << i for i, b in enumerate(to))
                 if kind == 'SHIR':
-                    ir = v & 0x1f
+                    if len(ti) >= IR_LENGTH:
+                        ir = v >> (len(ti) - IR_LENGTH) & 0x1f
                     yield f"IR {len(ti)}b {v:#x}"
-                elif ir == IR_DMI and len(ti) >= 41:
+                elif ir == IR_DMI and len(ti) >= DMI_LENGTH:
+                    v >>= len(ti) - DMI_LENGTH
+                    w &= (1 << DMI_LENGTH) - 1
                     yield (f"DMI {OPS[v & 3]} a={v >> 34 & 0x7f:#04x} d={v >> 2 & 0xffffffff:08x}"
                            f" | prev: a={w >> 34 & 0x7f:#04x} d={w >> 2 & 0xffffffff:08x} op={w & 3}")
                 else:

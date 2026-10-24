@@ -22,6 +22,34 @@ class ClocksTest(unittest.TestCase):
                          [(1, 1, None), (0, 1, None), (1, 1, None)])
 
 
+def seq(*entries):
+    """DAP_JTAG_Sequence from (tms, tdi bit string) entries, without capture; the first bit is the LSB."""
+    out = bytes([0x14, len(entries)])
+    for tms, tdi in entries:
+        out += bytes([len(tdi) | tms << 6]) + int(tdi[::-1], 2).to_bytes((len(tdi) + 7) // 8, 'little')
+    return out
+
+
+class ScansTest(unittest.TestCase):
+    def decode(self, *requests):
+        packets = []
+        for request in requests:
+            packets.append({'dev': 1, 'ep': 3, 'type': 'S', 'data': request})
+            packets.append({'dev': 1, 'ep': 0x82, 'type': 'C', 'data': bytes([0x14, 0x00])})
+        original = dtm.usb
+        dtm.usb = lambda path: packets
+        try:
+            return list(dtm.scans('', 1, 3, 0x82))
+        finally:
+            dtm.usb = original
+
+    def test_a_long_ir_scan_keeps_its_last_5_bits(self):
+        # TLR, RTI, IR scan of 16 bits (8 zeros, then 8 ones), Update-IR, DR scan of 1 bit
+        lines = self.decode(seq((1, '11111'), (0, '0'), (1, '11'), (0, '00'), (0, '000000001111111'),
+                                (1, '1'), (1, '1'), (1, '1'), (0, '00'), (1, '0'), (1, '1')))
+        self.assertEqual(lines, ['IR 16b 0xff00', 'DR ir=0x1f 1b in=0x0 out=0x0'])
+
+
 class CaptureTest(unittest.TestCase):
     def test_openocd_finds_the_dtm_and_reads_dmcontrol(self):
         lines = list(dtm.scans(os.path.join(CAPTURES, 'openocd-ch32v208.pcapng'), 41, 3, 0x82))
