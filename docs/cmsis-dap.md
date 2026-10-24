@@ -542,7 +542,7 @@ This section has the results of the steps that are done.
 Notes:
 
 1. One time, the first `step` did not change `pc`. The flash was erased at that time, and the hart reset again and again. With a program in flash, every `step` passed: after `reset halt`, after a `pc` write, and after `halt`.
-2. When GDB connects, probe-rs reads all 32 general registers. The CH32V006 is RV32E and has only `x0` to `x15`. The abstract command for `x16` (regno `0x1010`) gives `cmderr` 3 (exception), and probe-rs ends the session with "A RISC-V specific error occurred". probe-rs does not use the E extension of `misa` here. The bridge sends the correct result of the target.
+2. When GDB connects, probe-rs reads all 32 general registers. The CH32V006 is RV32E and has only `x0` to `x15`. The abstract command for `x16` (regno `0x1010`) gives `cmderr` 3 (exception), and probe-rs ends the session with "A RISC-V specific error occurred". probe-rs does not use the E extension of `misa` here. The bridge sends the correct result of the target. An original WCH-LinkE (firmware 2.19) with the probe-rs `wlink` driver gives the same failure on the same CH32V006.
 3. The script sends `81 00`, `DAP_Connect` to JTAG and `DAP_SWJ_Clock` 9 MHz. Then it sends 20 DR scans of 128 bits with TDO capture. These scans use the SPI fast path: a TCK of 9 MHz is above the fast path limit of 1125 kHz. The test did not measure the pins. Then the script sends `81 01` and reads the IDCODE `0x15653101` from the emulated TAP. OpenOCD then examines the hart, halts it and reads RAM and flash.
 
 Rates, with the target at its reset clock:
