@@ -192,22 +192,22 @@ The build option `VSL_PERSONALITIES` with `wch-link` puts the personality into a
 
 | Command | Behavior |
 |---|---|
-| `0d 01` | Replies `02 13 12 00`, the values of the captured WCH-LinkE |
-| `0d 02` | Connects (see below) |
-| `0d 03`, `0d 04` | Reply `03` and `00`. No target access. |
-| `0d ff` | Quit: `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
+| `0d 01 01` | Replies `02 13 12 00`, the values of the captured WCH-LinkE |
+| `0d 01 02` | Connects (see below) |
+| `0d 01 03`, `0d 01 04` | Reply `03` and `00`. No target access. |
+| `0d 01 ff` | Quit: `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
 | Other `0d` values | The unknown-command reply (see below) |
 | `0c` | Ignores the chip type, and sets the speed. Replies `01`. |
 | `08` | DMI access. `op` `00` does no access. A failure, or an access before a connect, gives the status `02`. |
 | `03`, then `02 01 0c` | Memory read on endpoint `0x82` |
 | `11` | Reads the four words at the command, and adds the chip ID of the connect |
-| `06 01` | Protection query. Reads `0x4002201c` (`FLASH_OBR`) and `0x40022020` at the command. Replies `01` when `RDPRT` (bit 1 of `FLASH_OBR`) is 1, else `02`. |
-| `0b 01` | Writes `dmcontrol` `00000003` (`ndmreset`), waits 1 ms, writes `00000001`, then `10000001` (`ackhavereset`). The hart runs after the reset. |
+| `06 01 01` | Protection query. Reads `0x4002201c` (`FLASH_OBR`) and `0x40022020` at the command. Replies `01` when `RDPRT` (bit 1 of `FLASH_OBR`) is 1, else `02`. |
+| `0b 01 01` | Writes `dmcontrol` `00000003` (`ndmreset`), waits 1 ms, writes `00000001`, then `10000001` (`ackhavereset`). The hart runs after the reset. |
 | `01` | Keeps the flash area (address and length) for the program sequence. Replies `01`. |
-| `02 01` | Mass erase with the own algorithm (see [Flash](#flash)) |
-| `02 05`, `02 07`, `02 02`, `02 08` | The program sequence with the host stub (see [Flash](#flash)) |
-| `06 02`, `06 03` | Unprotect and protect with the own algorithm (see [Flash](#flash)). Reply `02` and `03`. |
-| `06 04` | Replies `00`. No target access. |
+| `02 01 01` | Mass erase with the own algorithm (see [Flash](#flash)) |
+| `02 01 05`, `02 01 07`, `02 01 02`, `02 01 08` | The program sequence with the host stub (see [Flash](#flash)) |
+| `06 01 02`, `06 01 03` | Unprotect and protect with the own algorithm (see [Flash](#flash)). Reply `02` and `03`. |
+| `06 01 04` | Replies `00`. No target access. |
 | `0e` | Not captured. The processor does the quit and echoes the sub-command. Before a connect, it only echoes. |
 
 All other commands get the reply of the WCH-LinkE to an unknown command: `82 81 01 ff`.
@@ -217,7 +217,7 @@ It also includes the firmware-update and the mode-switch commands of the WCH-Lin
 The `0d` sub-commands other than `01`, `02`, `03`, `04` and `ff` also get this reply.
 wlink and minichlink use them for actions of the probe: target power (`09` to `0c`), erase by the reset pin or by the power (`08`, `0f`), the reset pin (`13` to `15`), the split of RAM and flash (`05`), and SDI print (`ee`).
 An echo tells the host that the action occurred. The processor does not do these actions, so it refuses them.
-The WCH-LinkE echoes `0d 05` (see [Command `0x0d`](wch-link-protocol.md#command-0x0d-info-connect-quit)). The processor does not.
+The WCH-LinkE echoes `0d 01 05` (see [Command `0x0d`](wch-link-protocol.md#command-0x0d-info-connect-quit)). The processor does not.
 A packet without the header `81` gets the same reply.
 
 A command that needs a target before a connect, or a failed target access, gives the error frame `81 55 01 01`.
@@ -263,7 +263,7 @@ The processor does not do these probe actions:
 - The 85-clock connect frames (see [Connect frames](wch-link-protocol.md#connect-frames)). The CH32V208 connects without them.
 - The writes to the clock registers of the CH32V208 at connect.
 - The read of `0x1ffff7c4` of the CH32V003 at connect.
-- The read of `0x1ffff802` for `0d 04`.
+- The read of `0x1ffff802` for `0d 01 04`.
 
 Their meaning is not known. The flash operations do not need the clock setup: each flash operation starts with a reset (see [Flash](#flash)).
 
@@ -312,8 +312,8 @@ The commands without a stub use the flash controller registers directly, with DM
 
 - **Unlock.** Read `FLASH_CTLR`. Write `KEY1` and `KEY2` to `FLASH_KEYR` only if `LOCK` is 1: a key write to an unlocked controller locks it until the next reset.
 - **Wait.** Read `FLASH_STATR` until `BSY` is 0, one read each 1 ms, for 3 s at most. Then write 1 to `EOP` and `WRPRTERR`. A `WRPRTERR` is a failure.
-- **Mass erase (`02 01`).** Reset, unlock, `FLASH_CTLR` `MER`, then `MER` and `STRT`, wait, `FLASH_CTLR` 0, lock (`LOCK` and `FLOCK`).
-- **Protect (`06 03`) and unprotect (`06 02`).** Reset. Read the old option bytes (see below). Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`).
+- **Mass erase (`02 01 01`).** Reset, unlock, `FLASH_CTLR` `MER`, then `MER` and `STRT`, wait, `FLASH_CTLR` 0, lock (`LOCK` and `FLOCK`).
+- **Protect (`06 01 03`) and unprotect (`06 01 02`).** Reset. Read the old option bytes (see below). Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`).
   - On CH32V003 (`09`, `49`) and the two-wire V4 series: program each option byte with `OBPG` and a 16-bit write, and wait after each byte.
   - On CH32V00X (`4e`), `FLASH_CTLR` has no `OBPG` bit (CH32V00X reference manual 18.5.2): unlock `FLOCK` via `FLASH_MODEKEYR`, clear the internal page buffer (`FTPG | BUFRST`), load 4 32-bit words (each holding two option bytes and their inverses) into `0x1ffff800`–`0x1ffff80c` with `FTPG | BUFLOAD`, write `0x1ffff800` to `FLASH_ADDR`, and program the page (`FTPG | STRT`).
   Then `FLASH_CTLR` 0 and lock.
@@ -330,7 +330,7 @@ The commands without a stub use the flash controller registers directly, with DM
   - When `RDPR` becomes `0xa5` on a protected chip, the chip erases the main flash itself.
   - After an unprotect, the module resets the target again with `ndmreset`. The WCH-LinkE answers a query after an unprotect with `02` (`v003-wlink-flash-protected.pcapng`), so it also reloads `FLASH_OBR` in some way.
     The reference manuals do not agree with themselves here. The unprotect procedure asks for a power-on reset to load the new `RDPR` (CH32V003 16.5.4, CH32V20x 32.6.4, step 3). The notes of `FLASH_OBR` say that a system reset loads it.
-    If `ndmreset` does not load `RDPR`, the query after `06 02` still gives `01`, and `wlink flash` sends the unprotect again in a loop. The hardware test must check this.
+    If `ndmreset` does not load `RDPR`, the query after `06 01 02` still gives `01`, and `wlink flash` sends the unprotect again in a loop. The hardware test must check this.
     After a protect, a query still gives `02` until the next reset (`v208-wlink-protect.pcapng`). The module does not reset.
 
 On one wire, a 16-bit write uses the program of [Program buffer programs](#program-buffer-programs).
@@ -341,13 +341,13 @@ The host sends the stub of its chip (see [The stub](wch-link-protocol.md#the-stu
 
 | Request | Action |
 |---|---|
-| `01 addr len` | Keeps the area. |
-| `02 05` | Reset. Reads `dpc`, `dcsr` and `mstatus`. Sets `dcsr.ebreakm` and clears `mstatus.MIE`. Arms the data OUT endpoint for the stub. |
+| `01 08 addr len` | Keeps the area. |
+| `02 01 05` | Reset. Reads `dpc`, `dcsr` and `mstatus`. Sets `dcsr.ebreakm` and clears `mstatus.MIE`. Arms the data OUT endpoint for the stub. |
 | Stub, 512 bytes | Written to RAM at the stub address, one word for each 4 bytes, in file order (little-endian). |
-| `02 07` | Calls the stub with `a0` = `01` (unlock). Only one time in each sequence: a second unlock would lock the controller. |
-| `02 02` | Starts the data phase. The area address must be a multiple of the page size. |
+| `02 01 07` | Calls the stub with `a0` = `01` (unlock). Only one time in each sequence: a second unlock would lock the controller. |
+| `02 01 02` | Starts the data phase. The area address must be a multiple of the page size. |
 | Image | Written to the buffer. When a block is full, or at the end of the area, the processor writes the checksum word and calls the stub with `a0` = `1c` (page erase, program, verify), `a1` = the block address, `a2` = the block length. Then it sends `41 01 01 04` on the data IN endpoint. |
-| `02 08` | Locks the controller (`LOCK` and `FLOCK` in `FLASH_CTLR`). Writes `dpc`, `dcsr` and `mstatus` back. Replies `08` if the image was complete. |
+| `02 01 08` | Locks the controller (`LOCK` and `FLOCK` in `FLASH_CTLR`). Writes `dpc`, `dcsr` and `mstatus` back. Replies `08` if the image was complete. |
 
 A stub call writes `a0`, `a1`, `a2`, `sp` and `dpc` with abstract register writes and resumes the hart.
 The processor then reads `dmstatus` each 1 ms until the hart halts, for 3 s at most. Then it reads the result in `a0`.
@@ -356,12 +356,12 @@ If the hart does not halt, the processor halts it, and the call fails.
 - A short last block is filled with `0xff` to the end of its page, because the stub programs whole pages. The stub call gets the length to the end of the page.
   A length that is not a multiple of 4 fills the last word with `0xff` too.
 - The image goes to the stub in the bytes of the area only. Bytes after the end of the area are ignored.
-  The data OUT endpoint stays armed after the end of the area, until `02 08`, a quit or a connect. Thus a host that sends more bytes than the area (for example padding to a block) gets no NAK. The captures use areas of whole blocks only.
-- A failed block gives `41 01 01 ff`. The failure value is not captured. The processor then takes no more data, and `02 08` gives the error frame.
+  The data OUT endpoint stays armed after the end of the area, until `02 01 08`, a quit or a connect. Thus a host that sends more bytes than the area (for example padding to a block) gets no NAK. The captures use areas of whole blocks only.
+- A failed block gives `41 01 01 ff`. The failure value is not captured. The processor then takes no more data, and `02 01 08` gives the error frame.
 - A request out of order gives the error frame. Before a connect, all flash commands give the error frame.
-- A quit, a connect, an erase or a protection command ends a sequence as `02 08` does. A quit then resumes the hart at the reset vector, because `dpc` is the value after the reset.
+- A quit, a connect, an erase or a protection command ends a sequence as `02 01 08` does. A quit then resumes the hart at the reset vector, because `dpc` is the value after the reset.
 - minichlink does not read the block acknowledge. The acknowledge waits on the data IN endpoint until the host reads it, as the packets of a memory read do.
-  A quit or a connect drops an acknowledge that is not on its way yet, and takes back the acknowledge on its way. Thus a memory read (`02 0c`) of a later tool gets its own data (issue #77).
+  A quit or a connect drops an acknowledge that is not on its way yet, and takes back the acknowledge on its way. Thus a memory read (`02 01 0c`) of a later tool gets its own data (issue #77).
 
 ### Speed
 
