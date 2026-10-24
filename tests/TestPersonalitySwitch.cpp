@@ -1,3 +1,4 @@
+#include "boot/BootloaderEntry.h"
 #include "personality/PersonalitySwitch.h"
 #include "protocol/versaloon/CommandProcessor.h"
 #include "protocol/versaloon/Versaloon.h"
@@ -118,6 +119,34 @@ TEST_CASE("SWITCH_PERSONALITY is refused in an image with one personality") {
    CHECK(runVersaloon(processor, { protocol::switchPersonality, 0x01 }) == Bytes{ protocol::switchRefused });
 }
 
+TEST_CASE("SWITCH_PERSONALITY with the bootloader code requests the bootloader") {
+   boot::BootloaderEntry bootloader;
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   protocol::CommandProcessor processor(versaloonInfo, &bootloader, nullptr, &personalitySwitch);
+
+   CHECK(runVersaloon(processor, { protocol::switchPersonality, boot::bootloaderCode }) == Bytes{ protocol::switchAccepted });
+   CHECK(bootloader.isRequested());
+   CHECK_FALSE(personalitySwitch.requested().has_value());
+}
+
+TEST_CASE("SWITCH_PERSONALITY with the bootloader code works in an image with one personality") {
+   boot::BootloaderEntry bootloader;
+   protocol::CommandProcessor processor(versaloonInfo, &bootloader, nullptr);
+
+   CHECK(runVersaloon(processor, { protocol::switchPersonality, boot::bootloaderCode }) == Bytes{ protocol::switchAccepted });
+   CHECK(bootloader.isRequested());
+   // The personality codes stay refused
+   CHECK(runVersaloon(processor, { protocol::switchPersonality, 0x01 }) == Bytes{ protocol::switchRefused });
+}
+
+TEST_CASE("SWITCH_PERSONALITY refuses the bootloader code without a bootloader") {
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   protocol::CommandProcessor processor(versaloonInfo, nullptr, nullptr, &personalitySwitch);
+
+   CHECK(runVersaloon(processor, { protocol::switchPersonality, boot::bootloaderCode }) == Bytes{ protocol::switchRefused });
+   CHECK_FALSE(personalitySwitch.requested().has_value());
+}
+
 TEST_CASE("ID_DAP_Vendor0 requests the personality after its response") {
    PersonalitySwitch personalitySwitch{ Personality::CmsisDap };
    DapBench bench{ "Product", &personalitySwitch };
@@ -147,6 +176,42 @@ TEST_CASE("ID_DAP_Vendor0 is invalid in an image with one personality") {
 
    REQUIRE(bench.write({ cmsisdap::command::vendor0, 0x00 }));
    CHECK(bench.read() == Bytes{ cmsisdap::command::invalid });
+}
+
+TEST_CASE("ID_DAP_Vendor0 with the bootloader code requests the bootloader") {
+   boot::BootloaderEntry bootloader;
+   PersonalitySwitch personalitySwitch{ Personality::CmsisDap };
+   DapBench bench{ "Product", &personalitySwitch, &bootloader };
+   bench.enumerate();
+
+   REQUIRE(bench.write({ cmsisdap::command::vendor0, boot::bootloaderCode }));
+   CHECK(bench.read() == Bytes{ cmsisdap::command::vendor0, 0x00 });
+   CHECK(bootloader.isRequested());
+   CHECK_FALSE(personalitySwitch.requested().has_value());
+}
+
+TEST_CASE("ID_DAP_Vendor0 with a bootloader in an image with one personality") {
+   boot::BootloaderEntry bootloader;
+   DapBench bench{ "Product", nullptr, &bootloader };
+   bench.enumerate();
+
+   // A personality code is refused
+   REQUIRE(bench.write({ cmsisdap::command::vendor0, 0x00 }));
+   CHECK(bench.read() == Bytes{ cmsisdap::command::vendor0, 0xFF });
+   CHECK_FALSE(bootloader.isRequested());
+   REQUIRE(bench.write({ cmsisdap::command::vendor0, boot::bootloaderCode }));
+   CHECK(bench.read() == Bytes{ cmsisdap::command::vendor0, 0x00 });
+   CHECK(bootloader.isRequested());
+}
+
+TEST_CASE("ID_DAP_Vendor0 refuses the bootloader code without a bootloader") {
+   PersonalitySwitch personalitySwitch{ Personality::CmsisDap };
+   DapBench bench{ "Product", &personalitySwitch };
+   bench.enumerate();
+
+   REQUIRE(bench.write({ cmsisdap::command::vendor0, boot::bootloaderCode }));
+   CHECK(bench.read() == Bytes{ cmsisdap::command::vendor0, 0xFF });
+   CHECK_FALSE(personalitySwitch.requested().has_value());
 }
 
 TEST_CASE("The key gesture delay gives three flashes of all LEDs") {

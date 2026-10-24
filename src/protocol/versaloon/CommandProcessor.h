@@ -17,7 +17,9 @@
 // SWITCH_PERSONALITY takes the code of personality/Personality.h:
 // 0 Versaloon, 1 CMSIS-DAP. Status 0 accepts the switch. Status 1 refuses
 // it: an image without the switch (only one personality), or a code that
-// is not a personality.
+// is not a personality. The code boot::bootloaderCode (0xB0) starts the
+// bootloader, as FW_UPDATE: status 1 refuses it in an image without a
+// bootloader.
 //
 // The USB_TO_XXX commands (0x20-0x7F) go to a UsbToXxxHandler. The other
 // commands have no reply.
@@ -75,8 +77,9 @@ class CommandProcessor {
    // the GET_INFO reply into a 256-byte buffer and adds a NUL after it.
    static constexpr std::size_t maxInfoText = 200;
 
-   // bootloader: the bootloader entry of FW_UPDATE, nullptr when the
-   // firmware has no bootloader (it then refuses FW_UPDATE). usbToXxx:
+   // bootloader: the bootloader entry of FW_UPDATE and of SWITCH_PERSONALITY
+   // with boot::bootloaderCode, nullptr when the firmware has no bootloader
+   // (it then refuses both). usbToXxx:
    // nullptr when there is no handler (the commands then have no reply).
    // personalitySwitch: nullptr when the image has one personality (it
    // then refuses SWITCH_PERSONALITY).

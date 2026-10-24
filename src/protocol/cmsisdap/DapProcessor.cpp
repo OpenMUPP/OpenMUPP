@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "boot/BootloaderEntry.h"
 #include "personality/PersonalitySwitch.h"
 
 namespace cmsisdap {
@@ -174,14 +175,16 @@ Processor::Processor(DapSwd &swd,
                      const DeviceInfo &info,
                      protocol::JtagPort *jtag,
                      personality::PersonalitySwitch *personalitySwitch,
-                     DapUart *uart)
+                     DapUart *uart,
+                     boot::BootloaderEntry *bootloader)
    : swd_(swd)
    , jtag_(jtag)
    , gpio_(gpio)
    , platform_(platform)
    , info_(info)
    , personalitySwitch_(personalitySwitch)
-   , uart_(uart) {
+   , uart_(uart)
+   , bootloader_(bootloader) {
    if(jtag_.available()) {
       info_.capabilities = static_cast<uint16_t>(info_.capabilities | capability::jtag);
    }
@@ -366,7 +369,7 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       out.u8(command::invalid);
       return true;
    case command::vendor0:
-      if(personalitySwitch_ != nullptr) {
+      if(personalitySwitch_ != nullptr || bootloader_ != nullptr) {
          return switchPersonality(in, out);
       }
       out.u8(command::invalid);
@@ -410,7 +413,13 @@ bool Processor::switchPersonality(PacketReader &in, PacketWriter &out) {
       return false;
    }
    out.u8(command::vendor0);
-   const auto target = personality::fromCode(code);
+   if(code == boot::bootloaderCode && bootloader_ != nullptr) {
+      // The main loop enters the bootloader after the reply delay
+      bootloader_->request();
+      out.u8(statusOk);
+      return true;
+   }
+   const auto target = personalitySwitch_ != nullptr ? personality::fromCode(code) : std::nullopt;
    if(!target) {
       out.u8(statusError);
       return true;

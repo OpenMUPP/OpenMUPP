@@ -117,9 +117,11 @@ class DapBench {
    cmsisdap::DeviceInfo info_;
 
    public:
-   explicit DapBench(const char *product = "Product", personality::PersonalitySwitch *personalitySwitch = nullptr)
+   explicit DapBench(const char *product = "Product",
+                     personality::PersonalitySwitch *personalitySwitch = nullptr,
+                     boot::BootloaderEntry *bootloader = nullptr)
       : info_(dapTestInfo(product))
-      , processor(swd, gpio, platform, info_, nullptr, personalitySwitch)
+      , processor(swd, gpio, platform, info_, nullptr, personalitySwitch, nullptr, bootloader)
       , function(processor)
       , device_(controller_, descriptors_)
       , cdc_(usb::cdcControlInterface, 2) {

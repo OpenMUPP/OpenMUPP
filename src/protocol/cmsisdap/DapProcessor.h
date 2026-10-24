@@ -62,8 +62,11 @@
 //   the USB personality of a dual image (personality/PersonalitySwitch.h).
 //   The personality is the code of personality/Personality.h: 0 Versaloon,
 //   1 CMSIS-DAP. The status is DAP_OK (0) or DAP_ERROR (0xFF) for a code
-//   that is not a personality. Without a personality switch (an image with one
-//   personality), the command replies ID_DAP_Invalid.
+//   that is not a personality. The code boot::bootloaderCode (0xB0) starts
+//   the bootloader (boot/BootloaderEntry.h): DAP_ERROR in an image without
+//   a bootloader. Without a personality switch (an image with one
+//   personality) and without a bootloader, the command replies
+//   ID_DAP_Invalid.
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -105,6 +108,10 @@
 #include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
 #include "protocol/cmsisdap/DapUart.h"
+
+namespace boot {
+class BootloaderEntry;
+}
 
 namespace personality {
 class PersonalitySwitch;
@@ -221,14 +228,16 @@ class Processor final : private TransferAbort {
    // jtag: nullptr for a board without JTAG. personalitySwitch: nullptr
    // for an image with one personality. uart: nullptr for no DAP_UART_*
    // commands. The constructor only stores the uart pointer, so the object
-   // can be constructed later.
+   // can be constructed later. bootloader: nullptr for an image without a
+   // bootloader.
    Processor(DapSwd &swd,
              protocol::GpioPins &gpio,
              Platform &platform,
              const DeviceInfo &info,
              protocol::JtagPort *jtag = nullptr,
              personality::PersonalitySwitch *personalitySwitch = nullptr,
-             DapUart *uart = nullptr);
+             DapUart *uart = nullptr,
+             boot::BootloaderEntry *bootloader = nullptr);
 
    [[nodiscard]] bool canSubmit() const {
       return requests_ + responses_ < packetCount;
@@ -334,6 +343,7 @@ class Processor final : private TransferAbort {
    DeviceInfo info_;
    personality::PersonalitySwitch *personalitySwitch_;
    DapUart *uart_;
+   boot::BootloaderEntry *bootloader_;
 
    Port port_{ Port::None };
    // Also the idle cycles and the WAIT retries of JTAG
