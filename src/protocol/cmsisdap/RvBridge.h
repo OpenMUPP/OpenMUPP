@@ -8,8 +8,9 @@
 //
 // A switch while the processor uses the port (after init(), before fini())
 // ends the old port with fini() and starts the new one with init(). The
-// bridge off thus releases the pins of the wire. setSpeed() goes to both
-// ports, so the real port has the TCK of the host after the bridge.
+// bridge off thus releases the pins of the wire. setSpeed() always goes to
+// the real port, so it has the TCK of the host after the bridge. The TAP
+// ignores the speed.
 
 #include <cstdint>
 #include <utils/compat/span.h>
