@@ -1,0 +1,84 @@
+diff --git a/cmake/Personalities.cmake b/cmake/Personalities.cmake
+index eb7fc4c..809e9de 100644
+--- a/cmake/Personalities.cmake
++++ b/cmake/Personalities.cmake
+@@ -37,14 +37,14 @@ vsl_personality(versaloon CODE 0 SHORT vsl DEFINE VSL_WITH_VERSALOON SOURCES
+ #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
+ vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE VSL_WITH_CMSIS_DAP SOURCES
+         "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
+-        "src/protocol/cmsisdap/RvDtmTap\\.cpp"
++        "src/protocol/cmsisdap/RvDtmTap\\.cpp" "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp"
+         "src/usb/CmsisDapFunction\\.cpp")
+ #   wch-link   the WCH-Link interface of wlink and minichlink: the dongle
+ #              debugs a WCH RISC-V target (CH32V) over the two-wire or the
+ #              one-wire debug interface. It has no serial port.
+ vsl_personality(wch-link CODE 2 SHORT wch DEFINE VSL_WITH_WCH_LINK SOURCES
+         "src/protocol/wchlink/WchLinkFlash\\.cpp" "src/protocol/wchlink/WchLinkProcessor\\.cpp"
+-        "src/usb/WchLinkFunction\\.cpp" "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp")
++        "src/usb/WchLinkFunction\\.cpp")
+ 
+ # The values of the deprecated VSL_PROTOCOL option
+ set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
+diff --git a/src/main.cpp b/src/main.cpp
+index 5659d16..12c8d1a 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -73,6 +73,8 @@
+ #include <peripherals/Uid.h>
+ 
+ #include "protocol/cmsisdap/BitBangDapSwd.h"
++#include "protocol/cmsisdap/RvDtmTap.h"
++#include "board/BoardRvSwd.h"
+ #include "protocol/cmsisdap/DapProcessor.h"
+ #endif
+ #if defined(VSL_WITH_VERSALOON)
+@@ -219,6 +221,10 @@ class DapPlatform final : public cmsisdap::Platform {
+ };
+ 
+ DapPlatform dapPlatform;
++// TEST IMAGE ONLY: the JTAG port is always the emulated RISC-V DTM TAP.
++board::RvSwdPins dapRvSwdPins;
++wchlink::RvSwdTarget<board::RvSwdPins> dapRvTarget{ dapRvSwdPins };
++cmsisdap::RvDtmTap dapTap{ dapRvTarget };
+ cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
+ cmsisdap::Processor dapProcessor{ dapSwd,
+                                   boardGpio,
+@@ -229,7 +235,7 @@ cmsisdap::Processor dapProcessor{ dapSwd,
+                                   .serialNumber = dapSerialNumber.data(),
+                                   .firmwareVersion = versionString,
+                                   },
+-                                  &boardJtag,
++                                  &dapTap,
+ #if defined(VSL_MULTI_PERSONALITY)
+                                   &personalitySwitch,
+ #else
+diff --git a/src/protocol/cmsisdap/RvDtmTap.cpp b/src/protocol/cmsisdap/RvDtmTap.cpp
+index ec033c4..2e8d0b6 100644
+--- a/src/protocol/cmsisdap/RvDtmTap.cpp
++++ b/src/protocol/cmsisdap/RvDtmTap.cpp
+@@ -133,6 +133,10 @@ void RvDtmTap::dmiAccess() {
+       status = target_.dmiWrite(address_, static_cast<uint32_t>(shift_ >> rvDtm::dataShift));
+    }
+    error_ = status != rvswd::Status::Ok;
++   // TEST IMAGE ONLY: the status of a failed access in the data
++   if(error_) {
++      data_ = 0xBAD00000u | static_cast<uint32_t>(status);
++   }
+ }
+ 
+ void RvDtmTap::hardReset() {
+diff --git a/src/protocol/cmsisdap/RvDtmTap.h b/src/protocol/cmsisdap/RvDtmTap.h
+index 92607e5..727cf86 100644
+--- a/src/protocol/cmsisdap/RvDtmTap.h
++++ b/src/protocol/cmsisdap/RvDtmTap.h
+@@ -102,7 +102,10 @@ class RvDtmTap final : public protocol::JtagPort {
+       : target_(target) {
+    }
+ 
++   // TEST IMAGE ONLY: the connect of the wch-link personality, two wires
+    void init() override {
++      target_.attach(rvswd::Wire::Two);
++      // The captures with the unlock writes also wrote 5aa50400 to 0x7e and 0x7d here.
+    }
+    void fini() override {
+    }
