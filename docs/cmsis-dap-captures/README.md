@@ -1,8 +1,9 @@
 # CMSIS-DAP captures for the RISC-V DTM bridge
 
-This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode, with no target.
-They are the evidence for the TAP emulator of the CMSIS-DAP RISC-V bridge (#103, work item B0 = #104).
-The captures show which DAP commands the emulator must follow.
+This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode for the CMSIS-DAP RISC-V bridge (#103).
+
+- The B0 captures (#104) have no target. They show which DAP commands the TAP emulator must follow.
+- The bridge captures have the emulated TAP and a CH32V208. They show the host tools on the bridge. See [Bridge captures with a CH32V208](#bridge-captures-with-a-ch32v208).
 
 ## Setup
 
@@ -70,7 +71,7 @@ The emulator must follow TMS from both commands.
 | `DAP_Info` | `0xf0`, `0x04`, `0x03`, `0xff`, `0xfe` | `0xff`, `0xfe`, `0xf0` |
 
 Neither tool sent `DAP_Transfer`, `DAP_JTAG_Configure` or `DAP_JTAG_IDCODE`, because both stopped at the empty chain.
-With a TAP on the chain, probe-rs `info` can probe for an ARM DP first. Check this again when the firmware uses the emulator (#107).
+With a TAP on the chain, probe-rs `info` probes for an Arm DP first. The bridge captures show this (see below).
 The packet size is 64 bytes and the packet count is 4 (`DAP_Info` `0xff` and `0xfe`).
 The tools split the scans to fit this size.
 
@@ -109,6 +110,71 @@ Only OpenOCD shifts an IR (`0x7f`, `0x10` and `0x11`). probe-rs shifts no IR.
   OpenOCD reaches them only because it uses the configured chain after the error.
 - The shape of the DMI scans (41 bits), the number of idle cycles in Run-Test/Idle and the polls of the busy status are not visible.
 - Neither tool shows what it sends when it sees a TAP. The list of commands that the tools never sent can change.
-- The host tests (`tests/TestRvDtmTap.cpp`) send these requests to the TAP emulator (#105). The tools do not see its replies, so the gaps stay.
-  Repeat the captures when the firmware uses the emulator (#107) to close these gaps.
+- The host tests (`tests/TestRvDtmTap.cpp`) send these requests to the TAP emulator (#105). The tools do not see its replies.
+  The bridge captures below close most of these gaps.
 - The flash and halt commands of both tools are not in these captures.
+
+## Bridge captures with a CH32V208
+
+Date: 2026-10-24.
+These captures run the host tools on the emulated TAP (#105, #106) and a CH32V208 on two wires.
+The firmware does not use the TAP yet (#107). Thus a test image routes the CMSIS-DAP JTAG port to the TAP all the time.
+[bridge-test-image.patch](bridge-test-image.patch) makes this image from `dev` at `df6009d`. Do not merge it.
+The patch also puts the `rvswd::Status` of a failed DMI access into the DMI data as `0xBAD0000n`, to show the reason in a capture.
+
+| Item | Value |
+|---|---|
+| Probe | Versaloon OtherUse, test image (`otheruse-cmsis-dap`, `app-10k`), USB ID `0403:9b3c` |
+| Target | CH32V208 on two wires (SWDIO, SWCLK) |
+| OpenOCD | `0.12.0+dev-01707-gf7037392b` (local build), `interface/cmsis-dap.cfg` and [ch32v-minimal.cfg](ch32v-minimal.cfg) |
+| probe-rs | 0.32.0 |
+| Decoder | [tools/usb-pcap/dtm.py](../../tools/usb-pcap/dtm.py): the IR, DR and DMI scans, with the TDO bits of the replies |
+
+To list the DTM scans of a capture:
+
+```
+python3 tools/usb-pcap/dtm.py docs/cmsis-dap-captures/<file> <device address>
+```
+
+| File | Device address | Image | Command | Result |
+|---|---|---|---|---|
+| `openocd-ch32v208-attach-at-boot.pcapng` | 38 | `attach()` at boot, IDCODE `0x15653001` | `openocd ... -c init -c halt -c "reg pc" -c "mdw 0x08000000 4" -c resume -c shutdown` | The first DMI read (`dmcontrol`) fails (`op` 2). OpenOCD reads `dmcontrol` again for 5 s and stops. The file has the first 2000 packets only |
+| `openocd-ch32v208.pcapng` | 41 | `attach()` and the unlock writes at `DAP_Connect` | Same | Pass: OpenOCD examines the hart (`XLEN=32`, `misa=0x40901105`), halts, reads `pc` and the flash |
+| `probe-rs-info-ch32v208.pcapng` | 41 | Same | `probe-rs info --protocol jtag` | probe-rs finds the DTM, but cannot find the chip type without `--chip` |
+| `probe-rs-read-ch32v208.pcapng` | 41 | Same | `probe-rs read --chip CH32V208WBU6 --protocol jtag b32 0x08000000 4` | Pass: the same flash words as OpenOCD |
+| `openocd-ch32v208-unplug.pcapng` | 41 | Same | OpenOCD server. SWDIO is disconnected, then connected again | See [Errors](#errors) |
+| `openocd-ch32v208-no-unlock.pcapng` | 43 | `attach()` at `DAP_Connect`, no unlock writes | `openocd ... -c init -c halt -c "mdw 0x08000000 4" -c shutdown`, after a power cycle of the target | Pass |
+
+The other images use IDCODE `0x15653101`.
+
+### Results
+
+- Both tools find the TAP. OpenOCD shows the IDCODE `0x15653101` with the manufacturer `<invalid>`. probe-rs accepts it. probe-rs rejected the first IDCODE, `0x15653001` (see `docs/cmsis-dap.md`, "IDCODE").
+- Both tools read DTMCS (`0x71`). probe-rs writes `dmireset` (`0x10000`) at the start: once in `info`, twice in `read`.
+- Both tools use no idle cycles after a DMI scan (`idle` 0 in DTMCS). No capture has `op` 3.
+- OpenOCD sends many DMI scans after one IR scan. probe-rs sends an IR scan before each DMI scan: 544 IR scans for 544 DMI scans in the read.
+- probe-rs `info` sends `DAP_JTAG_Configure` (one device, IR length 5) and two `DAP_Transfer` commands to probe for an Arm DP. The TAP puts the DPACC instruction in BYPASS, so the probe fails. probe-rs then finds the RISC-V DTM.
+- probe-rs also measures the IR length with IR scans of 8, 16 and 257 bits.
+
+### Connect
+
+The first image calls `attach()` at boot, and its first DMI access fails.
+The second image calls `attach()` and writes `5aa50400` to `0x7e` and `0x7d` at `DAP_Connect`, as the `wch-link` personality does. It passes.
+The last image calls `attach()` at `DAP_Connect`, without the unlock writes, and it passes after a power cycle of the target.
+Thus the time of `attach()` causes the failure, not the unlock writes. The bridge must attach when it switches on (#107).
+The cause in the first image is not known. A probable cause: a command before the first scan changes the shared SWCLK and SWDIO pins.
+
+### Errors
+
+The capture `openocd-ch32v208-unplug.pcapng` shows the DMI error model (`docs/cmsis-dap.md`, "DMI errors") on hardware:
+
+1. With the target connected, `halt` and `mdw` pass.
+2. Without SWDIO, the poll of OpenOCD reads `dmstatus` with `op` 2. OpenOCD takes the data `0xbad00002` (status 2: no target) as the value. It logs "Debugger is not authenticated to target Debug Module" and marks the target as not examined.
+3. With SWDIO connected again, the sticky error stays. OpenOCD sends no `dmireset` in this capture, so each command fails.
+4. `jtag arp_init` (Test-Logic-Reset) clears the error. `arp_examine`, `halt` and `mdw` then pass.
+
+### Open points of these captures
+
+- OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine, and "halted due to undefined" after the recovery. Check these in B5 (#109).
+- The flash commands of both tools are not in these captures.
+- A one-wire target (CH32V003, CH32V006) is not in these captures.

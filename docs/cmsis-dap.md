@@ -346,6 +346,7 @@ A transfer to another device also writes the IR again.
 ## RISC-V DTM bridge
 
 Status: in progress (#103). The host tests run the parts below. The firmware does not use them yet.
+A test image showed OpenOCD and probe-rs on a CH32V208 through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures-with-a-ch32v208)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
 The host sees a CMSIS-DAP adapter in JTAG mode, with one RISC-V Debug Transport Module (DTM) on the chain.
