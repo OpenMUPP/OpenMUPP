@@ -374,6 +374,30 @@ Risk: OpenOCD and probe-rs show "Elpida" as the manufacturer of the bridge.
 A config of an Elpida part with the same IDCODE would accept the bridge.
 In 2026-10, no OpenOCD config (`master` at `cb0c224e9`) and no probe-rs 0.32.0 target used this value or this manufacturer code.
 
+### DMI errors
+
+The bridge follows the debug spec 0.13 (section 6.1.5):
+
+- A failed access gives `op` 2 at the next Capture-DR, and sets a sticky error.
+- While the error is set, the bridge starts no access. DTMCS `dmistat` reads 2.
+- `dmireset`, `dmihardreset` and Test-Logic-Reset clear the error.
+- `op` 3 (busy) never occurs.
+
+probe-rs reports `op` 2 as an error (`DtmOperationFailed`).
+Mainline OpenOCD checks `op` 2 only in its batch memory read, and sends `dmireset` only after `op` 3.
+Thus, with OpenOCD, a failed single access looks like a success.
+After it, the sticky error blocks all accesses until Test-Logic-Reset, and OpenOCD does not log the cause.
+A capture on 2026-10-24 (CH32V208, two wires, a test image) shows this: the first DMI read failed, and OpenOCD then read `dmcontrol` for 5 s.
+
+Planned changes (#103):
+
+- The firmware retries a wire access 2 or 3 times before `op` 2, but only when the target did not run the access. Examples: a two-wire frame without the handshake of the target at bit 11, or a one-wire frame that did not start.
+- A read with a parity error, or a one-wire line that stays low, gives `op` 2 at once. A second access can have side effects, for example on `command`, on `data0` with `abstractauto`, or on `sbdata0`.
+- A patch for mainline OpenOCD makes `dmi_read()` and `dmi_write()` check `op` 2.
+
+The bridge does not report a wire failure as `op` 3.
+OpenOCD would then repeat accesses that the target already ran, and a permanent failure would stay hidden until a timeout.
+
 ## Tests
 
 `tests/TestCmsisDap.cpp` runs the processor on the real SWD bit-bang engine, with the mock SWD target of `tests/MockSwdPins.h`.
