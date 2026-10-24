@@ -107,7 +107,7 @@ A name in quotes is the name in the wlink source code.
 | `0d 01 01` | Probe information | `0d 04 02 13 12 00` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
 | `0d 01 02` | Connect | `0d 05 family chip-id` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
 | `0d 01 03` | Unknown (minichlink sends it first) | `0d 01 03` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
-| `0d 01 04` | Likely: read the split of RAM and flash ("GetChipRomRamSplit", CH32V2 and CH32V3 only). Not confirmed | `0d 01 00` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
+| `0d 01 04` | Likely: read the split of RAM and flash ("GetChipRomRamSplit", only for the CH32V20x, CH32V30x, CH32V317 and CH32V4x7). Not confirmed | `0d 01 00` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
 | `0d 01 05` | Unknown. The tools send the split with a parameter (next row) | `0d 01 05` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
 | `0d 02 05 n` | Set the split of RAM and flash | not known | tools | — |
 | `0d 02 08 chip` | Erase the code flash by the reset pin | not known | tools | — |
@@ -115,7 +115,7 @@ A name in quotes is the name in the wlink source code.
 | `0d 01 09`, `0d 01 0a` | Target power 3.3 V on, off | not known | tools | — |
 | `0d 01 0b`, `0d 01 0c` | Target power 5 V on, off | not known | tools | — |
 | `0d 02 0e 13`, `0d 02 0e 14`, `0d 02 0e 15` | Reset pin low, high, floating (wlink). minichlink sends `0d 01 13` for low | not known | tools | — |
-| `0d 02 ee 00`, `0d 02 ee 01` | SDI print off, on (firmware 2.10 or later) | not known | tools | — |
+| `0d 02 ee 00`, `0d 02 ee 01` | SDI print on, off (firmware 2.10 or later) | not known | tools | — |
 | `0d 01 ff` | Quit | `0d 01 ff` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
 | `0e 01 01` | Disable debug ("DisableDebug") | not known | tools, notes | — |
 | `11 01 05`, `11 01 06` | Chip information | 20 raw bytes, no header | captured | [Chip information](#command-0x11-chip-information) |
@@ -130,7 +130,7 @@ A name in quotes is the name in the wlink source code.
 | `01` | Probe information | `02 13 12 00` |
 | `02` | Connect to the target (RISC-V) | `09 00 30 05 00` (CH32V003), `05 20 80 05 3c` (CH32V208) |
 | `03` | Unknown. minichlink sends it first. wlink does not. | `03` |
-| `04` | Likely: read the split of RAM and flash. wlink names it "GetChipRomRamSplit" and sends it only for the CH32V2 and CH32V3. Not confirmed. In the captures, wlink sends it on the CH32V208 after the first protection query. | `00` |
+| `04` | Likely: read the split of RAM and flash. wlink names it "GetChipRomRamSplit" and sends it only for the CH32V20x, CH32V30x, CH32V317 and CH32V4x7. Not confirmed. In the captures, wlink sends it on the CH32V208 after the first protection query. | `00` |
 | `ff` | Quit. The probe resumes the core and releases the target (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). | `ff` |
 
 - **Probe information.** Byte 0 and byte 1 are the major and minor version of the firmware (2 and 19). This matches `bcdDevice` 2.19. Byte 2 (`0x12`) is the probe type. wlink maps it to `WCH-LinkE-CH32V305`. Byte 3 is `0x00`.
