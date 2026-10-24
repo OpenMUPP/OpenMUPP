@@ -346,7 +346,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is in progress: see [Bridge hardware test](#bridge-hardware-test).
+Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is done: see [Bridge hardware test](#bridge-hardware-test).
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -504,8 +504,8 @@ OpenOCD would then repeat accesses that the target already ran, and a permanent 
 ### Bridge hardware test
 
 The hardware test (#109) has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the OtherUse.
+A last step checks the real JTAG port with an STM32F103 after the bridge was on.
 The Mini has almost the same hardware as the OtherUse, so this test does not include it.
-This section has the results of the steps that are done.
 
 #### CH32V006 on the OtherUse
 
@@ -662,6 +662,39 @@ Rates, with the target at its reset clock:
 | OpenOCD memory read, `dump_image` of 16 KB flash | 1.89 s (8.5 KiB/s) |
 | probe-rs `read` of 16 KB | 2.77 s (5.8 KiB/s), with the attach |
 | probe-rs `download --verify` of 16 KB | 14.5 s |
+
+#### OpenOCD messages at examine
+
+On the three targets, OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine.
+These targets have no vector extension and no AIA.
+OpenOCD prints the messages when a read of the CSR `vlenb`, or of `mtopi` and `mtopei`, succeeds (`src/target/riscv/riscv-013_reg.c`).
+The WCH cores give 0 for these reads, without an exception.
+The `tinfo` read of the CH32V208 (note 1 of the CH32V208) has the same cause.
+The messages have no other effect in this test.
+
+On the CH32V006, the first `halt` after `init` showed "halted due to undefined". The next halts showed "halted due to debug-request".
+OpenOCD sets the debug reason to "undefined" at examine (`examine()` in `src/target/riscv/riscv-013.c`).
+
+#### Real JTAG after the bridge
+
+This step checks that the JTAG port of the board works after the bridge was on.
+The probe and OpenOCD are the same as for the CH32V006.
+The target is the STM32F103 of the [JTAG hardware test](#jtag-hardware-test) (DBGMCU IDCODE `10036414`), with `interface/cmsis-dap.cfg` and `target/stm32f1x.cfg`.
+The flash test uses a random image of 32 KiB, as in the JTAG hardware test. At 9000 kHz, `tools/stm32f1_clock.tcl` sets the target clock to 64 MHz first.
+
+| Test | Result |
+|---|---|
+| `vsl_rv_bridge.py on`, then `off`, then an OpenOCD JTAG session | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`). `reset halt` stops at the reset vector |
+| The same switch before each flash run, then `program ... verify` and `dump_image` at 1000 kHz | Pass. The read-back agrees with the image |
+| The same at 9000 kHz (SPI fast path) | Pass. The read-back agrees with the image |
+| `cmsis-dap cmd 0x81 0x00` in a JTAG session, with the bridge already off | Pass. The next memory read works |
+| `cmsis-dap cmd 0x81 0x01`, then `0x81 0x00`, in a JTAG session, then a memory read | Fail: "Invalid ACK (7) in DAP response". See the note |
+| The same, then `jtag arp_init`, then memory read and write, `step`, a hardware breakpoint and `reset halt` | Pass |
+
+Note: a switch while JTAG is connected starts the new port with an unknown TAP state (see [Bridge switch](#bridge-switch)).
+OpenOCD does not know this. Probably it uses the IR of the target from before the switch. The test did not capture the scans to confirm this.
+`jtag arp_init` resets the TAPs and scans the chain again. After it, OpenOCD and the target agree again.
+The configs in `etc/openocd/` switch the bridge only before the chain scan and at `shutdown`, so they do not have this problem.
 
 ## Tests
 
