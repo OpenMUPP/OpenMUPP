@@ -33,6 +33,12 @@ python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3
 python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3 --scans
 ```
 
+To print the requests of a capture as a trace for the host tests (`tests/replay/dap-*.trace`):
+
+```
+python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3 --trace
+```
+
 The device address is 35 in all captures.
 The `--scans` option runs the TMS bits through the JTAG state machine.
 It prints the IR and DR scans.
