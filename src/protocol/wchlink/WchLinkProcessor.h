@@ -188,6 +188,33 @@ inline constexpr uint16_t csr7c0 = 0x07c0;
 inline constexpr uint32_t csr7c0Value = 0x0000'0300;
 } // namespace wchdm
 
+// The clock setup that the probe does at connect on the family 0x4e
+// (docs/wch-link-protocol.md, "CH32V006"): FLASH_ACTLR, RCC and the flash
+// controller registers. Captured on a CH32V006 only.
+namespace clocksetup {
+inline constexpr uint32_t flashActlr = 0x4002'2000;
+inline constexpr uint32_t flashStatr = 0x4002'200c;
+inline constexpr uint32_t flashCtlr = 0x4002'2010;
+inline constexpr uint32_t rccCtlr = 0x4002'1000;
+inline constexpr uint32_t rccCfgr0 = 0x4002'1004;
+inline constexpr uint32_t rccIntr = 0x4002'1008;
+
+inline constexpr uint32_t flashActlrValue = 0x0000'0002;
+// The reset values of FLASH_CTLR (locked) and FLASH_STATR, with EOP cleared
+inline constexpr uint32_t flashCtlrValue = 0x0000'8080;
+inline constexpr uint32_t flashStatrValue = 0x0000'b020;
+// All the ready and security flags of RCC_INTR
+inline constexpr uint32_t rccIntrClear = 0x009d'0000;
+inline constexpr uint32_t pllOn = 1u << 24;
+inline constexpr uint32_t pllReady = 1u << 25;
+// RCC_CFGR0: SW and SWS select the PLL as the system clock
+inline constexpr uint32_t switchPll = 0x2;
+inline constexpr uint32_t switchStatusMask = 0xc;
+inline constexpr uint32_t switchStatusPll = 0x8;
+// The reads of a poll, as rvswd::pollLimit
+inline constexpr uint32_t pollLimit = rvswd::pollLimit;
+} // namespace clocksetup
+
 // The words of the chip information (command 0x11)
 inline constexpr std::array<uint32_t, 4> chipInfoAddresses{ 0x1fff'f7e0, 0x1fff'f7e8, 0x1fff'f7ec, 0x1fff'f7f0 };
 inline constexpr std::size_t chipInfoSize = 20;
@@ -343,6 +370,8 @@ class Processor {
       Unknown,
    };
    [[nodiscard]] Found connectOn(uint32_t &chipId);
+   // The clock setup of the family 0x4e. False when a target access fails.
+   [[nodiscard]] bool setupClock();
    void quit();
    // Resumes the hart and ends dmactive, as the quit of the probe
    void restore();

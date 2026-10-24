@@ -144,6 +144,13 @@ class MockWchFlash {
 
    private:
    static constexpr uint32_t opMask = 0x00ff'0000u | 0x3fu;
+   // The clock setup of the probe at connect on a CH32V006
+   static constexpr uint32_t rccCtlr = 0x4002'1000;
+   static constexpr uint32_t rccCfgr0 = 0x4002'1004;
+   static constexpr uint32_t pllOn = 1u << 24;
+   static constexpr uint32_t pllReady = 1u << 25;
+   uint32_t rccCtlrValue_{ 0x0050'9c83 };
+   uint32_t rccCfgr0Value_{ 0x20 };
    static constexpr uint16_t csrDcsr = 0x07b0;
    static constexpr uint16_t csrMstatus = 0x0300;
    // An ebreak of the stub
@@ -219,6 +226,13 @@ class MockWchFlash {
          }
          return value;
       }
+      // RCC_CTLR: PLLRDY follows PLLON. RCC_CFGR0: SWS follows SW.
+      if(address == rccCtlr) {
+         return rccCtlrValue_ | (rccCtlrValue_ & pllOn ? pllReady : 0);
+      }
+      if(address == rccCfgr0) {
+         return rccCfgr0Value_ | (rccCfgr0Value_ & 3) << 2;
+      }
       switch(address) {
       case fpec::ctlr:
          return mode | (locked ? fpec::lock : 0) | (flocked ? fpec::flock : 0) | (obwre ? fpec::obwre : 0);
@@ -265,6 +279,10 @@ class MockWchFlash {
       }
       if(inOptions(address)) {
          storeOption(address, value, bytes);
+         return true;
+      }
+      if(address == rccCtlr || address == rccCfgr0) {
+         (address == rccCtlr ? rccCtlrValue_ : rccCfgr0Value_) = value;
          return true;
       }
       if(address < 0x4002'2000 || address >= 0x4002'2030) {
@@ -321,7 +339,11 @@ class MockWchFlash {
    void storeControl(uint32_t value) {
       namespace fpec = wchlink::fpec;
       if(locked) {
-         errors.push_back("CTLR write while locked");
+         // The probe writes the reset value at connect, which only locks
+         // (v006-wlink-status-timing.csv).
+         if(value != (fpec::lock | fpec::flock)) {
+            errors.push_back("CTLR write while locked");
+         }
          return;
       }
       locked = locked || (value & fpec::lock) != 0;
