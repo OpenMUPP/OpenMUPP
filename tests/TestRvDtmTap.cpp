@@ -220,7 +220,7 @@ class ScanLog {
       bool ir;
       Bits tdi;
       Bits tdo;
-      // A bit without the TDO capture flag of DAP_JTAG_Sequence
+      // True when the bit has the TDO capture flag of DAP_JTAG_Sequence
       std::vector<bool> captured;
    };
 
