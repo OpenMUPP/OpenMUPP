@@ -148,7 +148,7 @@ inline constexpr uint8_t dmiRead = 0x01;
 inline constexpr uint8_t dmiWrite = 0x02;
 
 // The chip type of command 0x0c and the family code of the connect
-// response. Captured: 0x09 (CH32V003), 0x05 (CH32V208); the rest match wlink.
+// response. Captured: 0x09 (CH32V003), 0x05 (CH32V208), 0x4e (CH32V006); the rest match wlink.
 inline constexpr uint8_t familyV20x = 0x05;
 inline constexpr uint8_t familyV30x = 0x06;
 inline constexpr uint8_t familyV00x = 0x09;
@@ -199,8 +199,8 @@ struct ChipFamily {
    uint8_t family;
 };
 
-// The known chip series. Captured: CH32V003 (0x003, 0x09) and CH32V208
-// (0x208, 0x05). The other series have the same debug module, ESIG and FPEC
+// The known chip series. Captured: CH32V003 (0x003, 0x09), CH32V208
+// (0x208, 0x05) and CH32V006 (0x006, 0x4e). The other series have the same debug module, ESIG and FPEC
 // registers (reference manuals and wlink).
 inline constexpr std::array<ChipFamily, 20> chipFamilies{ {
 // 1-wire QingKe V2A (64-byte flash page)

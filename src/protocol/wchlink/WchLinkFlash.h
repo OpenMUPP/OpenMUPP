@@ -142,7 +142,9 @@ struct StubLayout {
 
 // CH32V003, CH641: 2 KB RAM, 64-byte pages. The buffer follows the stub.
 inline constexpr StubLayout layoutV00x{ 0x2000'0000, 0x2000'0200, 1024, 64, 0x2000'0800 };
-// CH32V002/4/5/6/7, CH32M007: 4 KB RAM or more, 256-byte pages
+// CH32V002/4/5/6/7, CH32M007: 4 KB RAM or more, 256-byte pages. Checked on
+// a CH32V006: the wlink stub has the buffer at 0x20000200, 1024-byte blocks
+// and 256-byte pages.
 inline constexpr StubLayout layoutV006{ 0x2000'0000, 0x2000'0200, 1024, 256, 0x2000'0800 };
 // CH32V20x, CH32V30x, CH32X035, CH32L103, CH643, CH645: 10 KB RAM or more
 inline constexpr StubLayout layoutV20x{ 0x2000'0000, 0x2000'1000, 4096, 256, 0x2000'2800 };
