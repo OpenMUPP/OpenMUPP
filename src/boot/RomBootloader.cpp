@@ -67,6 +67,8 @@ void boot::startRomBootloaderOnRequest() {
    if(requested) {
       // The next reset starts the firmware again
       TAMP->BKP0R = 0;
+      // The write is posted: read it back before DBP and the clock go off
+      static_cast<void>(TAMP->BKP0R);
    }
    closeBackupRegisters();
    if(requested) {
