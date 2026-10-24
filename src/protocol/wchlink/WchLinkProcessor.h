@@ -179,11 +179,9 @@ inline constexpr uint8_t firmwareMajor = 2;
 inline constexpr uint8_t firmwareMinor = 19;
 inline constexpr uint8_t probeType = 0x12;
 
-// The registers of the probe actions at connect
+// The registers of the probe actions at connect. The unlock registers are
+// in WchLinkTarget.h.
 namespace wchdm {
-inline constexpr uint8_t unlock1 = 0x7e;
-inline constexpr uint8_t unlock2 = 0x7d;
-inline constexpr uint32_t unlockValue = 0x5aa5'0400;
 inline constexpr uint16_t csr7c0 = 0x07c0;
 inline constexpr uint32_t csr7c0Value = 0x0000'0300;
 } // namespace wchdm

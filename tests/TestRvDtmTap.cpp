@@ -107,7 +107,6 @@ struct Dtm {
       , dm(pins)
       , target(pins)
       , tap(target) {
-      target.attach(wire);
    }
 
    vsltest::MockRvSwdTarget pins;
@@ -312,13 +311,118 @@ TEST_CASE("RV DTM TAP: a DMI read gives its data at the next Capture-DR") {
       reset(tap);
       selectIr(tap, cmsisdap::rvDtm::irDmi);
       CHECK(dmi(tap, { chipId, 0, opRead }) == Dmi{ 0, 0, opNop });
-      // The access is done at Update-DR, before the next scan.
-      REQUIRE(d.pins.accesses.size() == 1);
-      CHECK(d.pins.accesses[0].address == chipId);
-      CHECK_FALSE(d.pins.accesses[0].write);
+      // The access is done at Update-DR, before the next scan, after the
+      // connect.
+      REQUIRE(d.pins.accesses.size() == 4);
+      CHECK(d.pins.accesses[3].address == chipId);
+      CHECK_FALSE(d.pins.accesses[3].write);
       CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ chipId, chipIdValue, opNop });
-      CHECK(d.pins.accesses.size() == 1);
+      CHECK(d.pins.accesses.size() == 4);
    }
+}
+
+TEST_CASE("RV DTM TAP: the first DMI access connects on the wire of the target") {
+   for(const rvswd::Wire wire : { rvswd::Wire::One, rvswd::Wire::Two }) {
+      CAPTURE(static_cast<int>(wire));
+      Dtm d(wire);
+      RvDtmTap &tap = d.tap;
+      reset(tap);
+      selectIr(tap, cmsisdap::rvDtm::irDmi);
+      dmi(tap, { chipId, 0, opRead });
+      CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ chipId, chipIdValue, opNop });
+      // The unlock writes and the dmstatus read. No halt: no dmcontrol write.
+      REQUIRE(d.pins.accesses.size() == 4);
+      CHECK(d.pins.accesses[0].address == 0x7e);
+      CHECK(d.pins.accesses[0].write);
+      CHECK(d.pins.accesses[0].data == 0x5aa50400u);
+      CHECK(d.pins.accesses[1].address == 0x7d);
+      CHECK(d.pins.accesses[1].write);
+      CHECK(d.pins.accesses[1].data == 0x5aa50400u);
+      CHECK(d.pins.accesses[2].address == rvswd::dm::dmstatus);
+      CHECK_FALSE(d.pins.accesses[2].write);
+      // One wire first: a two-wire target sees one-wire frames, and the
+      // connect then detaches before two wires.
+      CHECK(d.pins.oneWireFrames > 0);
+      CHECK(d.pins.finis == (wire == rvswd::Wire::Two ? 1 : 0));
+      CHECK(d.pins.contentions == 0);
+      CHECK(d.pins.protocolErrors == 0);
+   }
+}
+
+TEST_CASE("RV DTM TAP: the next access connects again after Test-Logic-Reset, init() and pinsChanged()") {
+   for(const int event : { 0, 1, 2, 3 }) {
+      CAPTURE(event);
+      Dtm d;
+      RvDtmTap &tap = d.tap;
+      reset(tap);
+      selectIr(tap, cmsisdap::rvDtm::irDmi);
+      dmi(tap, { chipId, 0, opRead });
+      REQUIRE(d.pins.accesses.size() == 4);
+      if(event == 1) {
+         reset(tap);
+      } else if(event == 2) {
+         tap.init();
+      } else if(event == 3) {
+         tap.pinsChanged();
+      }
+      selectIr(tap, cmsisdap::rvDtm::irDmi);
+      dmi(tap, { chipId, 0, opRead });
+      // Event 0: no connect between two accesses
+      const std::size_t connect = event == 0 ? 0 : 3;
+      REQUIRE(d.pins.accesses.size() == 5 + connect);
+      CHECK(d.pins.accesses[4].address == (event == 0 ? chipId : 0x7e));
+   }
+}
+
+TEST_CASE("RV DTM TAP: after a connect on two wires, the next connect tries two wires first") {
+   Dtm d(rvswd::Wire::Two);
+   RvDtmTap &tap = d.tap;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   dmi(tap, { chipId, 0, opRead });
+   REQUIRE(d.pins.oneWireFrames > 0);
+   const int frames = d.pins.oneWireFrames;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   dmi(tap, { chipId, 0, opRead });
+   CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ chipId, chipIdValue, opNop });
+   CHECK(d.pins.oneWireFrames == frames);
+   CHECK(d.pins.accesses.size() == 8);
+}
+
+TEST_CASE("RV DTM TAP: a connect without a target fails the access, and the next access tries again") {
+   Dtm d;
+   RvDtmTap &tap = d.tap;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   d.pins.present = false;
+   dmi(tap, { chipId, 0, opRead });
+   CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ chipId, 0, opFailed });
+   const std::size_t failed = d.pins.accesses.size();
+   // The connect released the pins.
+   CHECK(d.pins.finis == 2);
+
+   d.pins.present = true;
+   writeDtmcs(tap, cmsisdap::rvDtm::dmireset);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   dmi(tap, { chipId, 0, opRead });
+   CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ chipId, chipIdValue, opNop });
+   CHECK(d.pins.accesses.size() == failed + 4);
+}
+
+TEST_CASE("RV DTM TAP: fini() releases the pins after a connect") {
+   Dtm d;
+   RvDtmTap &tap = d.tap;
+   tap.fini();
+   CHECK(d.pins.finis == 0);
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   dmi(tap, { chipId, 0, opRead });
+   const int finis = d.pins.finis;
+   tap.fini();
+   CHECK(d.pins.finis == finis + 1);
+   tap.fini();
+   CHECK(d.pins.finis == finis + 1);
 }
 
 TEST_CASE("RV DTM TAP: a DMI write") {

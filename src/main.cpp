@@ -21,7 +21,10 @@
 // serial port of the USB device and the UART bridge, or the debug log.
 // A CMSIS-DAP image runs the CMSIS-DAP processor
 // (protocol/cmsisdap/DapProcessor.h) instead of USB_TO_ALL. Its DAP_UART_*
-// commands can take the UART from the bridge (uart/DapUartChannel.h). A
+// commands can take the UART from the bridge (uart/DapUartChannel.h). With
+// VSL_CMSIS_DAP_RV_BRIDGE, its JTAG port is the RISC-V bridge
+// (protocol/cmsisdap/RvBridge.h): the board JTAG port, or an emulated RISC-V
+// DTM on the debug wire engine of WCH-Link (board/BoardRvSwd.h). A
 // dual image has both: the stored personality (personality/PersonalityStore.h)
 // selects one at the start. A switch command, or a key that is down for 3 s
 // (then the key release), stores the next personality and resets (personality/PersonalitySwitch.h).
@@ -74,6 +77,11 @@
 
 #include "protocol/cmsisdap/BitBangDapSwd.h"
 #include "protocol/cmsisdap/DapProcessor.h"
+#if defined(VSL_CMSIS_DAP_RV_BRIDGE)
+#include "board/BoardRvSwd.h"
+#include "protocol/cmsisdap/RvBridge.h"
+#include "protocol/cmsisdap/RvDtmTap.h"
+#endif
 #endif
 #if defined(VSL_WITH_VERSALOON)
 #include "protocol/versaloon/GpioBlock.h"
@@ -220,6 +228,14 @@ class DapPlatform final : public cmsisdap::Platform {
 
 DapPlatform dapPlatform;
 cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
+#if defined(VSL_CMSIS_DAP_RV_BRIDGE)
+// The RISC-V bridge: ID_DAP_Vendor1 switches the JTAG port from the board
+// to the emulated RISC-V DTM on the debug wire engine.
+board::RvSwdPins dapRvSwdPins;
+wchlink::RvSwdTarget<board::RvSwdPins> dapRvTarget{ dapRvSwdPins, &serialService };
+cmsisdap::RvDtmTap dapRvTap{ dapRvTarget };
+cmsisdap::RvBridge dapRvBridge{ boardJtag, dapRvTap };
+#endif
 cmsisdap::Processor dapProcessor{ dapSwd,
                                   boardGpio,
                                   dapPlatform,
@@ -229,14 +245,23 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   .serialNumber = dapSerialNumber.data(),
                                   .firmwareVersion = versionString,
                                   },
+#if defined(VSL_CMSIS_DAP_RV_BRIDGE)
+                                  &dapRvBridge,
+#else
                                   &boardJtag,
+#endif
 #if defined(VSL_MULTI_PERSONALITY)
                                   &personalitySwitch,
 #else
                                   nullptr,
 #endif
                                   uart::dapUart(),
-                                  bootloader };
+                                  bootloader,
+#if defined(VSL_CMSIS_DAP_RV_BRIDGE)
+                                  &dapRvBridge };
+#else
+                                  nullptr };
+#endif
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
 // string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one

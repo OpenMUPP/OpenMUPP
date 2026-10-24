@@ -169,6 +169,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x22` | `DAP_UART_Control` | Enables, disables and flushes the receiver and the transmitter. |
 | `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
 | `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image other than `app-8k` replies `0xFF` to it. An image with one personality that is not `app-8k` replies `ID_DAP_Invalid` to each code. See [Multi image](usb-device.md#multi-image). |
+| `0x81` | `ID_DAP_Vendor1` | Only in an image with `VSL_CMSIS_DAP_RV_BRIDGE`: switches the RISC-V bridge, `[0x81][on u8]`, `1` on, `0` off. The response is `[0x81][status u8]`: `0` when the switch is done, `0xFF` for another value. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
@@ -345,7 +346,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Status: in progress (#103). The host tests run the parts below. The firmware does not use them yet.
+Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The OpenOCD configs (#108) and the hardware test (#109) are not done yet.
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -360,6 +361,71 @@ It does each DMI access on the WCH wire (one wire or two wires), with the wire e
 | `0x10` | DTMCS | `version` 1 (debug spec 0.13), `abits` 7, `idle` 0, `dmistat` |
 | `0x11` | DMI (41 bits) | `address[40:34]`, `data[33:2]`, `op[1:0]` |
 | Others | BYPASS | 1 bit |
+
+### Build
+
+The CMake option `VSL_CMSIS_DAP_RV_BRIDGE` (default `OFF`) adds the bridge to the `cmsis-dap` personality.
+It needs `VSL_PERSONALITIES=cmsis-dap`: the configure step stops with an error for another set of personalities, also for a multi image.
+It needs an STM32F1 board, because the one-wire engine uses the timers and DMA1 of the STM32F1.
+The image tag ends with `-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-rv-bridge-app-10k-Release-<version>.bin`.
+The presets `mini-cmsis-dap-rv-bridge` and `otheruse-cmsis-dap-rv-bridge` set the option:
+
+```sh
+cmake --preset mini-cmsis-dap-rv-bridge
+cmake --build --preset mini-cmsis-dap-rv-bridge -j
+```
+
+The bridge adds about 6.4 KB to the image: the `app-10k` image of the Mini is 38,240 of 55,296 bytes.
+
+### Bridge switch
+
+The vendor command `ID_DAP_Vendor1` (`0x81`) switches the bridge: `81 01` on, `81 00` off.
+The response is `81 00`.
+
+- The bridge is off at power-up, after a USB reset and after `81 00`.
+  Then the JTAG commands use the JTAG port of the board, as in an image without the bridge.
+- When the bridge is on, `DAP_Connect` to JTAG, `DAP_JTAG_Sequence`, `DAP_SWJ_Sequence` and the JTAG transfers use the emulated TAP.
+  SWD (`DAP_Connect` to SWD) does not change.
+- A switch while JTAG is connected stops the old port and starts the new one at once.
+  The TAP state and the IR of the new port are not known, as after `DAP_SWJ_Pins`.
+- The switch off releases SWCLK and SWDIO, and resets the timer of the one-wire engine.
+  The JTAG fast path uses the same pin (PB4) and DMA1 channel 3.
+  The release goes in both directions: the `fini()` of the JTAG fast path clears the DMA requests of SPI1 and SPI2.
+  The one-wire timer shares DMA1 channel 3 (TIM3) or channel 5 (TIM1) with them.
+- `DAP_SWJ_Clock` sets the TCK of the board port also while the bridge is on. The wire has its own clock: the high speed of the `wch-link` personality.
+
+OpenOCD sends the command with `cmsis-dap cmd 0x81 0x01`.
+probe-rs cannot send a vendor command (#103, decision 7). Send the command with `tools/vsl_rv_bridge.py` before probe-rs starts:
+
+```sh
+python3 tools/vsl_rv_bridge.py on
+probe-rs info --protocol jtag
+python3 tools/vsl_rv_bridge.py off
+```
+
+The bridge stays on until a USB reset, a power cycle or `81 00`.
+Thus probe-rs must not reset the USB device when it opens it. The hardware test (#109) checks this.
+
+### Connect
+
+The first DMI access after one of these events connects to the target:
+
+- `DAP_Connect` to JTAG, or the bridge switch on while JTAG is connected
+- Test-Logic-Reset of the TAP
+- `DAP_SWJ_Pins` with SWCLK or SWDIO selected
+
+The connect finds the wire: one wire first, then two wires, as the connect of the `wch-link` personality.
+After a connect on two wires, the next connect tries two wires first.
+On each wire, it writes `5aa50400` to the DM registers `0x7e` and `0x7d`, and reads `dmstatus`.
+A `dmstatus` with the version of debug spec 0.13 selects the wire.
+The CH32V006 answers on one wire only.
+The connect does not halt the hart, and it does no clock setup (unlike the `wch-link` connect of the CH32V00X).
+OpenOCD and the flash driver own the target state.
+
+The connect is at the first DMI access, not at the switch or at `DAP_Connect`.
+A test image attached at boot, and the first DMI access then failed ([Connect](cmsis-dap-captures/README.md#connect)).
+A connect that fails on both wires gives `op` 2 and the sticky error (see [DMI errors](#dmi-errors)).
+After `dmireset`, the next access tries the connect again.
 
 ### IDCODE
 
@@ -420,7 +486,11 @@ The tests check the TAP state machine and each register.
 They run the DMI accesses on the wire engine with mock pins and the mock DM, on one wire and on two wires: read, write, failure and reset.
 They also send the requests of the OpenOCD and probe-rs captures (`tests/replay/dap-*.trace`) through the processor, with the TAP as its JTAG port.
 The scan chain rules of OpenOCD (`jtag_examine_chain()`, `jtag_validate_ircapture()`) and the DR length of probe-rs must pass on the replies.
-The firmware does not use the TAP yet.
+Other tests check the connect: the wire, the unlock writes, no halt, a connect without a target, and the connect again after each event.
+
+`tests/TestRvBridge.cpp` runs the bridge switch (`src/protocol/cmsisdap/RvBridge.h`) on a fake board port and the TAP.
+The tests check the default port, the switch with and without a connection, the TCK of the board port and the pin release.
+They also run `ID_DAP_Vendor1` through the processor, the switch off at `hostGone()`, and `DAP_SWJ_Pins` on SWCLK and SWDIO.
 
 `tests/TestDapUart.cpp` runs `uart::DapUartChannel` with the real CDC-ACM function, the UART bridge and a fake UART.
 The tests cover the owner switch, the frame formats, the receiver and transmitter control, the status bits and the buffer limits.

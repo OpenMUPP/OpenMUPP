@@ -193,3 +193,13 @@ build-mini-cmsis-dap-wch-link:
     VARIANT: -cmsis-dap-wch-link
     PROTOCOL_TAG: -dap+wch
   artifacts: null
+
+# VSL_PERSONALITIES=cmsis-dap with the RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE,
+# #103). Build and size check only, no artifacts.
+build-mini-cmsis-dap-rv-bridge:
+  extends: .build-board-template
+  variables:
+    BOARD: mini
+    VARIANT: -cmsis-dap-rv-bridge
+    PROTOCOL_TAG: -cmsis-dap-rv-bridge
+  artifacts: null

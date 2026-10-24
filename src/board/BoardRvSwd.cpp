@@ -184,6 +184,15 @@ void RvSwdPins::init() {
    initOneWire();
 }
 
+void RvSwdPins::fini() {
+   // The timer keeps its output and its DMA request enabled after a frame.
+   // The JTAG fast path uses the same pin (PB4, SPI1 MISO) and DMA1
+   // channel 3, so the reset turns both off.
+   stop(timer());
+   resetTimer();
+   SwdPins::fini();
+}
+
 bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t &samples) {
    TIM_TypeDef &tim = timer();
    stop(tim);

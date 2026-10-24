@@ -20,6 +20,8 @@ class RvSwdPins : public SwdPins {
    public:
    // SWCLK output low, SWDIO driven high, the one-wire timer and DMA set up
    void init();
+   // SWCLK and SWDIO inputs, the one-wire timer reset
+   void fini();
 
    // See rvswd/RvSwdEngine.h. Call it with the interrupts locked.
    bool oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t &samples);

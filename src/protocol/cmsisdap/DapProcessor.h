@@ -22,7 +22,7 @@
 //   0x0A DAP_ResetTarget        0x20 DAP_UART_Configure
 //                               0x21 DAP_UART_Transfer
 //   0x80 ID_DAP_Vendor0         0x22 DAP_UART_Control
-//                               0x23 DAP_UART_Status
+//   0x81 ID_DAP_Vendor1         0x23 DAP_UART_Status
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
 // DAP.c): posted AP reads, RDBUFF at the end of a read sequence, a read of
@@ -67,6 +67,13 @@
 //   without a bootloader. Without a personality switch (an image with one
 //   personality) and without a bootloader, the command replies
 //   ID_DAP_Invalid.
+// - ID_DAP_Vendor1 [0x81][on u8] -> [0x81][status u8] switches the RISC-V
+//   bridge (RvBridge.h): 1 on, 0 off. On, DAP_Connect to JTAG and the JTAG
+//   commands use the emulated TAP, and the TAP state and IR are not known.
+//   The status is DAP_OK (0), or DAP_ERROR (0xFF) for another value.
+//   Without a bridge, the command replies ID_DAP_Invalid. hostGone()
+//   switches the bridge off. DAP_SWJ_Pins with SWCLK or SWDIO selected
+//   tells the bridge that the pins changed (Bridge::pinsChanged()).
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -145,6 +152,7 @@ inline constexpr uint8_t uartTransfer = 0x21;
 inline constexpr uint8_t uartControl = 0x22;
 inline constexpr uint8_t uartStatus = 0x23;
 inline constexpr uint8_t vendor0 = 0x80;
+inline constexpr uint8_t vendor1 = 0x81;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
 inline constexpr uint8_t invalid = 0xFF;
@@ -209,6 +217,17 @@ class Platform {
    ~Platform() = default;
 };
 
+// The RISC-V bridge of ID_DAP_Vendor1 (RvBridge.h)
+class Bridge {
+   public:
+   virtual void enable(bool on) = 0;
+   // DAP_SWJ_Pins drove SWCLK or SWDIO.
+   virtual void pinsChanged() = 0;
+
+   protected:
+   ~Bridge() = default;
+};
+
 class PacketReader;
 class PacketWriter;
 
@@ -229,7 +248,8 @@ class Processor final : private TransferAbort {
    // for an image with one personality. uart: nullptr for no DAP_UART_*
    // commands. The constructor only stores the uart pointer, so the object
    // can be constructed later. bootloader: nullptr for an image without a
-   // bootloader.
+   // bootloader. bridge: nullptr for an image without the RISC-V bridge;
+   // else the bridge is also the jtag port.
    Processor(DapSwd &swd,
              protocol::GpioPins &gpio,
              Platform &platform,
@@ -237,7 +257,8 @@ class Processor final : private TransferAbort {
              protocol::JtagPort *jtag = nullptr,
              personality::PersonalitySwitch *personalitySwitch = nullptr,
              DapUart *uart = nullptr,
-             boot::BootloaderEntry *bootloader = nullptr);
+             boot::BootloaderEntry *bootloader = nullptr,
+             Bridge *bridge = nullptr);
 
    [[nodiscard]] bool canSubmit() const {
       return requests_ + responses_ < packetCount;
@@ -323,6 +344,7 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool jtagIdcode(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool executeCommands(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool switchPersonality(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool switchBridge(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartCommand(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
 
@@ -344,6 +366,7 @@ class Processor final : private TransferAbort {
    personality::PersonalitySwitch *personalitySwitch_;
    DapUart *uart_;
    boot::BootloaderEntry *bootloader_;
+   Bridge *bridge_;
 
    Port port_{ Port::None };
    // Also the idle cycles and the WAIT retries of JTAG

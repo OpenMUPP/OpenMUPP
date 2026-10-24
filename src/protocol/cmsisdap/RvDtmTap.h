@@ -18,6 +18,19 @@
 // - All other instructions select BYPASS (1 bit, Capture-DR loads 0).
 // - Test-Logic-Reset selects IDCODE, and resets the DTM as dmihardreset.
 //
+// The connect: the first DMI access after init(), after Test-Logic-Reset
+// and after pinsChanged() first finds the wire. It attaches on one wire,
+// then on two wires, as the connect of the wch-link personality
+// (WchLinkProcessor.h). After a connect on two wires, the next connect
+// tries two wires first. On each wire it writes 5aa50400 to the DM
+// registers 0x7e and 0x7d and reads dmstatus. A dmstatus with the version
+// of debug spec 0.13 selects the wire. The connect does not halt the hart
+// and sets up no clock: the host tool owns the target state. A connect
+// that fails on both wires fails the access (op 2), and the next access
+// tries again. The connect is not at init(): an attach at boot made the
+// first DMI access fail on a CH32V208 (docs/cmsis-dap-captures/README.md,
+// "Connect"), so the attach is as late as possible.
+//
 // The DMI access (debug spec 0.13, 6.1.5): Update-DR with op 1 (read) or 2
 // (write) does the access on the wire at once. The next Capture-DR loads
 // the address, the read data and op 0 (success) or 2 (failed). A failed
@@ -102,9 +115,16 @@ class RvDtmTap final : public protocol::JtagPort {
       : target_(target) {
    }
 
+   // The next DMI access connects first.
    void init() override {
+      attached_ = false;
    }
-   void fini() override {
+   // Releases the pins.
+   void fini() override;
+   // The host changed SWCLK or SWDIO (DAP_SWJ_Pins): the next DMI access
+   // connects first.
+   void pinsChanged() {
+      attached_ = false;
    }
    [[nodiscard]] bool setSpeed(uint32_t) override {
       return true;
@@ -126,6 +146,8 @@ class RvDtmTap final : public protocol::JtagPort {
    void captureDr();
    void updateDr();
    void dmiAccess();
+   // Finds the wire. True when the target answers.
+   bool connect();
    // dmihardreset
    void hardReset();
 
@@ -139,6 +161,10 @@ class RvDtmTap final : public protocol::JtagPort {
    uint8_t address_{ 0 };
    uint32_t data_{ 0 };
    bool error_{ false };
+   // The target is attached on its wire.
+   bool attached_{ false };
+   // The wire that the connect tries first: the wire of the last connect
+   rvswd::Wire wire_{ rvswd::Wire::One };
 };
 
 } // namespace cmsisdap

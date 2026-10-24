@@ -108,6 +108,12 @@ vsl_personality_options()
 # to WCH: use it for personal use only. CI does not publish this image.
 option(VSL_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-link personality, for personal use only" OFF)
 
+# The RISC-V bridge of the CMSIS-DAP personality (docs/cmsis-dap.md, "RISC-V
+# DTM bridge"): ID_DAP_Vendor1 switches the JTAG port to an emulated RISC-V
+# DTM on the WCH debug wire. Only in an image with the single personality
+# cmsis-dap.
+option(VSL_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality (VSL_PERSONALITIES=cmsis-dap only)" OFF)
+
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
 # native (test) build leaves the variables unset.
@@ -175,6 +181,9 @@ if (CMAKE_CROSSCOMPILING)
     # STM32F1. The STM32H5 engine is #98.
     if ("wch-link" IN_LIST VSL_PERSONALITY_SET AND NOT STM32_FAMILY STREQUAL "STM32F1")
         message(FATAL_ERROR "Board ${BOARD}: the wch-link personality needs the one-wire engine, which the ${STM32_FAMILY} does not have yet.")
+    endif ()
+    if (VSL_CMSIS_DAP_RV_BRIDGE AND NOT STM32_FAMILY STREQUAL "STM32F1")
+        message(FATAL_ERROR "Board ${BOARD}: VSL_CMSIS_DAP_RV_BRIDGE needs the one-wire engine, which the ${STM32_FAMILY} does not have yet.")
     endif ()
     if (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32F1")
         set(VSL_SETTINGS_PAGE_SIZE 1024)
@@ -245,7 +254,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", strict size: " ${VSL_STRICT_SIZE} ", LTO: " ${VSL_LTO} ")")
+    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", RISC-V bridge: " ${VSL_CMSIS_DAP_RV_BRIDGE} ", strict size: " ${VSL_STRICT_SIZE} ", LTO: " ${VSL_LTO} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program

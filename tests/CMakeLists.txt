@@ -64,6 +64,7 @@ add_executable(vsl-tests
         TestCmsisDap.cpp
         TestCmsisDapJtag.cpp
         TestRvDtmTap.cpp
+        TestRvBridge.cpp
         TestWchLink.cpp
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
@@ -128,6 +129,12 @@ vsl_personality_test(wch-link "set=wch-link default=wch-link tag=\\[-wch-link\\]
         -DVSL_PERSONALITIES=wch-link)
 vsl_personality_test(wch-link-wch-id "tag=\\[-wch-link-wch-id\\] defines=VSL_WITH_WCH_LINK,VSL_WCH_LINK_WCH_USB_ID\n"
         -DVSL_PERSONALITIES=wch-link -DVSL_WCH_LINK_WCH_USB_ID=ON)
+vsl_personality_test(rv-bridge "tag=\\[-cmsis-dap-rv-bridge\\] defines=VSL_WITH_CMSIS_DAP,VSL_CMSIS_DAP_RV_BRIDGE\n"
+        -DVSL_PERSONALITIES=cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
+vsl_personality_test(rv-bridge-multi "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap"
+        -DVSL_PERSONALITIES=versaloon,cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
+vsl_personality_test(rv-bridge-wch-link "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap"
+        -DVSL_PERSONALITIES=wch-link -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
 # A CMake list, in any order: the result is in canonical order
 vsl_personality_test(list "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0\n"
         "-DVSL_PERSONALITIES=cmsis-dap$<SEMICOLON>versaloon")

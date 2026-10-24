@@ -42,9 +42,12 @@ vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE VSL_WITH_CMSIS_DAP SOURCES
 #   wch-link   the WCH-Link interface of wlink and minichlink: the dongle
 #              debugs a WCH RISC-V target (CH32V) over the two-wire or the
 #              one-wire debug interface. It has no serial port.
+# The RISC-V debug wire engine: the wch-link personality, and the RISC-V
+# bridge of cmsis-dap (VSL_CMSIS_DAP_RV_BRIDGE)
+set(VSL_RV_WIRE_SOURCES "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp")
 vsl_personality(wch-link CODE 2 SHORT wch DEFINE VSL_WITH_WCH_LINK SOURCES
         "src/protocol/wchlink/WchLinkFlash\\.cpp" "src/protocol/wchlink/WchLinkProcessor\\.cpp"
-        "src/usb/WchLinkFunction\\.cpp" "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp")
+        "src/usb/WchLinkFunction\\.cpp" ${VSL_RV_WIRE_SOURCES})
 
 # The values of the deprecated VSL_PROTOCOL option
 set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
@@ -69,6 +72,7 @@ endfunction()
 #   VSL_PROTOCOL, VSL_DEFAULT_PROTOCOL
 #                            deprecated aliases, see below
 #   VSL_WCH_LINK_WCH_USB_ID  the USB ID of WCH for the WCH-Link personality
+#   VSL_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality
 #   VSL_DEBUG_CDC            the debug log on the CDC port
 # Sets these variables in the caller:
 #   VSL_PERSONALITY_SET         the personalities, in canonical order
@@ -158,6 +162,12 @@ function(vsl_resolve_personalities)
     if (VSL_WCH_LINK_WCH_USB_ID AND NOT "wch-link" IN_LIST _personalities)
         message(FATAL_ERROR "VSL_WCH_LINK_WCH_USB_ID needs wch-link in VSL_PERSONALITIES.")
     endif ()
+    # The bridge uses the pins and the timer of the wire engine in the JTAG
+    # port of CMSIS-DAP. A multi image would share them with other
+    # personalities: not supported (#103, decision 4).
+    if (VSL_CMSIS_DAP_RV_BRIDGE AND NOT _personalities STREQUAL "cmsis-dap")
+        message(FATAL_ERROR "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap (VSL_PERSONALITIES=cmsis-dap), not ${_personalities}.")
+    endif ()
     # The log goes to the CDC port. In a multi image the log is silent while
     # the WCH-Link personality is active.
     if (VSL_DEBUG_CDC AND _personalities STREQUAL "wch-link")
@@ -180,6 +190,10 @@ function(vsl_resolve_personalities)
     if (VSL_WCH_LINK_WCH_USB_ID)
         list(APPEND _defines VSL_WCH_LINK_WCH_USB_ID)
     endif ()
+    if (VSL_CMSIS_DAP_RV_BRIDGE)
+        list(APPEND _defines VSL_CMSIS_DAP_RV_BRIDGE)
+        list(REMOVE_ITEM _dropped ${VSL_RV_WIRE_SOURCES})
+    endif ()
 
     # Image tag (#79, decision Q2). A single image: "" for versaloon, else
     # "-<name>". A multi image: "-" and the short names joined by "+", the
@@ -201,6 +215,9 @@ function(vsl_resolve_personalities)
     # The name tells the image apart: it must not be a release artifact
     if (VSL_WCH_LINK_WCH_USB_ID)
         string(APPEND _tag "-wch-id")
+    endif ()
+    if (VSL_CMSIS_DAP_RV_BRIDGE)
+        string(APPEND _tag "-rv-bridge")
     endif ()
 
     set(VSL_PERSONALITY_SET ${_personalities} PARENT_SCOPE)
