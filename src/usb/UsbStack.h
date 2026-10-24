@@ -45,9 +45,7 @@
 #include "personality/Personality.h"
 #include "usb/SerialEventQueue.h"
 #include "usb/SerialPortConfig.h"
-#if defined(VSL_MULTI_PERSONALITY)
 #include "usb/SwitchRequest.h"
-#endif
 #if defined(VSL_WITH_CMSIS_DAP)
 #include "usb/CmsisDapFunction.h"
 #endif
@@ -86,9 +84,6 @@ class UsbStack {
    public:
    // What the Versaloon personality needs
    struct VersaloonDeps {
-      // The bootloader entry of VERSALOON_FW_UPDATE, nullptr when the
-      // firmware has no bootloader
-      boot::BootloaderEntry *bootloader;
       // Runs the USB_TO_XXX commands (see protocol/versaloon/CommandProcessor.h)
       protocol::UsbToXxxHandler *usbToXxx;
    };
@@ -107,6 +102,11 @@ class UsbStack {
       // personality. The CMSIS-DAP processor has its own pointer to it
       // (ID_DAP_Vendor0).
       personality::PersonalitySwitch *personalitySwitch;
+      // Takes VERSALOON_FW_UPDATE and the bootloader code of
+      // SWITCH_PERSONALITY and of the switch request on EP0, nullptr when
+      // the firmware has no bootloader. The CMSIS-DAP processor has its own
+      // pointer to it (ID_DAP_Vendor0).
+      boot::BootloaderEntry *bootloader;
    };
 
    // active: the personality of this start. It must be in the image.
@@ -223,10 +223,8 @@ class UsbStack {
 #if defined(VSL_USB_SERIAL_PORT)
    art::usb::CdcAcmFunction<serialRxSize, serialTxSize> serialPort_;
 #endif
-#if defined(VSL_MULTI_PERSONALITY)
    // The vendor requests to the device in each personality
    SwitchRequestHandler switchRequest_;
-#endif
 };
 
 } // namespace usb

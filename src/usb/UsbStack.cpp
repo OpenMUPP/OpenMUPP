@@ -33,9 +33,7 @@ static_assert(art::usb::CdcAcmFunctionBase::kDataPacketSize == cdcDataPacketSize
 static_assert(hw::Uid::SizeBytes == uidBytes);
 #if defined(VSL_WITH_CMSIS_DAP)
 static_assert(dap::packetMemoryUsed <= hw::UsbDevice::PacketMemorySize);
-#if defined(VSL_MULTI_PERSONALITY)
 static_assert(switchRequestCode != dap::msOs20VendorCode);
-#endif
 // The two personalities share the endpoint numbers, so the OUT endpoint is
 // double-buffered in each.
 static_assert(dap::outEndpoint == versaloonOutEndpoint);
@@ -141,7 +139,6 @@ const art::usb::Descriptors &descriptorsOf([[maybe_unused]] Personality personal
 #endif
 }
 
-#if defined(VSL_MULTI_PERSONALITY)
 // The handler of the other vendor requests to the device in a personality
 // (SwitchRequestHandler)
 art::usb::VendorRequestHandler *nextVendorHandlerOf([[maybe_unused]] Personality personality) {
@@ -152,7 +149,6 @@ art::usb::VendorRequestHandler *nextVendorHandlerOf([[maybe_unused]] Personality
 #endif
    return nullptr;
 }
-#endif
 
 // The highest endpoint number of a personality, plus 1 (hw::UsbDevice)
 uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
@@ -196,7 +192,7 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
    , active_(active)
    , device_(controller_, descriptorsOf(active))
 #if defined(VSL_WITH_VERSALOON)
-   , versaloon_(deviceInfo, functions.versaloon->bootloader, functions.versaloon->usbToXxx, functions.personalitySwitch)
+   , versaloon_(deviceInfo, functions.bootloader, functions.versaloon->usbToXxx, functions.personalitySwitch)
 #endif
 #if defined(VSL_WITH_CMSIS_DAP)
    , dap_(*functions.dap)
@@ -207,10 +203,7 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
 #if defined(VSL_USB_SERIAL_PORT)
    , serialPort_(cdcControlInterface, serialPortEndpoints)
 #endif
-#if defined(VSL_MULTI_PERSONALITY)
-   , switchRequest_(*functions.personalitySwitch, nextVendorHandlerOf(active))
-#endif
-{
+   , switchRequest_(functions.personalitySwitch, functions.bootloader, nextVendorHandlerOf(active)) {
 #if defined(VSL_USB_SERIAL_PORT)
    if(hasSerialPort()) {
       // Both bulk pairs of the WCH-Link personality are single-buffered
@@ -230,9 +223,6 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
    case Personality::CmsisDap:
       // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
       events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
-#if !defined(VSL_MULTI_PERSONALITY)
-      device_.setVendorRequestHandler(&msOs20Handler);
-#endif
       static_cast<void>(device_.addFunction(dap_));
       break;
 #endif
@@ -249,11 +239,10 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
       static_cast<void>(device_.addFunction(serialPort_));
    }
 #endif
-#if defined(VSL_MULTI_PERSONALITY)
    // The switch request, and in the CMSIS-DAP personality the MS OS 2.0
-   // request after it
+   // request after it. Without a personality switch and a bootloader, the
+   // handler stalls each switch request.
    device_.setVendorRequestHandler(&switchRequest_);
-#endif
 }
 
 void UsbStack::start() {

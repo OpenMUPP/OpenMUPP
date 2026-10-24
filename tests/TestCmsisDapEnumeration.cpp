@@ -1,6 +1,8 @@
 // The descriptors and the CMSIS-DAP function on the libArT USB device stack,
 // with the fake controller of libArT as the host.
 
+#include "boot/BootloaderEntry.h"
+
 #include "CmsisDapBench.h"
 #include "SwitchRequestHost.h"
 
@@ -479,6 +481,29 @@ TEST_CASE("DAP_TransferAbort waits at the OUT endpoint when all slots are in use
    const auto block = bench.read();
    REQUIRE(block.has_value());
    CHECK((*block)[1] == 0x02);
+}
+
+TEST_CASE("The switch request with the bootloader code in a CMSIS-DAP image with one personality") {
+   boot::BootloaderEntry bootloader;
+   DapBench bench("Product", nullptr, &bootloader);
+   bench.enumerate();
+   auto &controller = bench.controller();
+
+   SUBCASE("The bootloader code requests the bootloader") {
+      CHECK_FALSE(vsltest::switchRequest(controller, boot::bootloaderCode).stalled);
+      CHECK(bootloader.isRequested());
+   }
+   SUBCASE("A personality code stalls") {
+      CHECK(vsltest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
+      CHECK_FALSE(bootloader.isRequested());
+   }
+   SUBCASE("The MS OS 2.0 request goes to the next handler") {
+      const auto set =
+      controller.controlIn(vsltest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
+                                                static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())));
+      CHECK_FALSE(set.stalled);
+      CHECK(set.data == bytes(usb::dap::msOs20DescriptorSet));
+   }
 }
 
 TEST_CASE("The switch request in the CMSIS-DAP personality") {

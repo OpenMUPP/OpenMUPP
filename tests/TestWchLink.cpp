@@ -3,6 +3,8 @@
 // pins and a mock DM. The request and response bytes come from the
 // WCH-LinkE captures in docs/wch-link-captures (docs/wch-link-protocol.md).
 
+#include "boot/BootloaderEntry.h"
+
 #include "SwitchRequestHost.h"
 #include "WchLinkBench.h"
 
@@ -762,6 +764,16 @@ TEST_CASE("The switch request in the WCH-Link personality") {
 
    CHECK_FALSE(vsltest::switchRequest(bench.controller(), personality::toCode(personality::Personality::CmsisDap)).stalled);
    CHECK(vsltest::switchesTo(personalitySwitch, personality::Personality::CmsisDap));
+}
+
+TEST_CASE("The switch request with the bootloader code in the WCH-Link personality") {
+   boot::BootloaderEntry bootloader;
+   WchLinkBench bench(Wire::Two, nullptr, &bootloader);
+   bench.enumerate();
+
+   CHECK(vsltest::switchRequest(bench.controller(), personality::toCode(personality::Personality::Versaloon)).stalled);
+   CHECK_FALSE(vsltest::switchRequest(bench.controller(), boot::bootloaderCode).stalled);
+   CHECK(bootloader.isRequested());
 }
 
 TEST_CASE("The switch request works before SET_CONFIGURATION") {
