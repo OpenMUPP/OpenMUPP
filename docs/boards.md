@@ -156,7 +156,7 @@ The firmware on the Nucleo has these limits:
 
 - The personalities Versaloon and CMSIS-DAP, alone or in a multi image. A multi image keeps the last 8 KB flash sector of bank 2 for the stored personality (see [Multi image](usb-device.md#multi-image)).
 - No WCH-Link personality. The one-wire engine of the STM32H5 is #98. The build stops with an error for `wch-link`.
-- Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE` refuses the request (see [Firmware update](firmware-update.md)).
+- Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE`, the bootloader code `0xB0` and the key at the reset start the ROM USB DFU (see [STM32H5: ROM USB DFU](firmware-update.md#stm32h5-rom-usb-dfu)).
 - Bit-bang JTAG only. The JTAG fast path is #97.
 - The UART bridge supports 3815 baud to 15.6 Mbaud. USART1 runs from the 250 MHz bus clock, and the firmware does not use the USART prescaler. The bridge refuses a lower baud rate, for example 2400 baud.
 - The timing of the bit-bang engines is not yet measured at 250 MHz (#94).

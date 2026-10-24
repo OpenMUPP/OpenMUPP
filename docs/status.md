@@ -11,6 +11,7 @@ The Versaloon and CMSIS-DAP images have these functions:
   The bridge continues to run during long JTAG and SWD commands.
 - It starts the bootloader when you hold the key.
   The Versaloon personality also starts it on request, in the `app-8k` image.
+  On the NUCLEO-H533RE, the request and the key start the ROM USB DFU of the STM32H5.
 
 The Versaloon personality has the USB identity of the original Versaloon firmware:
 

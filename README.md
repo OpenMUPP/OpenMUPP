@@ -203,7 +203,8 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
         -c "program versaloon-ng-standalone.hex verify reset exit"
 ```
 
-The `standalone` image refuses `VERSALOON_FW_UPDATE`.
+On the STM32F1 boards, the `standalone` image refuses `VERSALOON_FW_UPDATE`.
+On the NUCLEO-H533RE, it starts the ROM USB DFU, and `dfu-util` writes the next firmware (see [STM32H5: ROM USB DFU](docs/firmware-update.md#stm32h5-rom-usb-dfu)).
 
 See [docs/firmware-update.md](docs/firmware-update.md) for the other ways to start the bootloader, and for the flash layout.
 
