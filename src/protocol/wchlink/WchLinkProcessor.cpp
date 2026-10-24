@@ -241,8 +241,13 @@ Processor::Found Processor::connectOn(uint32_t &chipId) {
    if(target_.writeRegister(wchdm::csr7c0, wchdm::csr7c0Value) != rvswd::Status::Ok) {
       return Found::None;
    }
-   if(familyOf(chipId) == familyV006 && !setupClock()) {
-      return Found::None;
+   if(familyOf(chipId) == familyV006) {
+      // The CH32V00X runs no program from the program buffer (cmderr 2), unlike
+      // the CH32V003. The probe uses the abstract memory command.
+      target_.setMemoryAccess(rvswd::MemoryAccess::Abstract);
+      if(!setupClock()) {
+         return Found::None;
+      }
    }
    return Found::Known;
 }

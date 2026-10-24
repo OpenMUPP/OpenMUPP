@@ -10,6 +10,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -323,6 +324,9 @@ TEST_CASE("WCH-Link: connect on one wire does the clock setup of the CH32V006") 
    // The stores of the module (data0, data1) are not in `stores`.
    CHECK(stores == expected);
    CHECK(bench.pins.protocolErrors == 0);
+   // The CH32V00X refuses the program buffer (cmderr 2): the memory commands are abstract.
+   CHECK(std::count(bench.dm.commands.begin(), bench.dm.commands.end(), 0x0004'0000u) == 0);
+   CHECK(std::count(bench.dm.commands.begin(), bench.dm.commands.end(), 0x0221'0000u) == 7);
 }
 
 TEST_CASE("WCH-Link: the connect of a CH32V003 does no clock setup") {
