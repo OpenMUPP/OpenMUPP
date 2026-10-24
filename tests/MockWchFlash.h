@@ -137,6 +137,8 @@ class MockWchFlash {
    };
    std::vector<Call> calls;
 
+   // The reads of abstractcs that the abstract command of the RDPR write stays busy
+   uint32_t autoEraseBusyReads{ 1500 };
    int massErases{ 0 };
    int autoErases{ 0 };
    int optionErases{ 0 };
@@ -412,6 +414,10 @@ class MockWchFlash {
       if(index == fpec::optionRdpr && byte == fpec::rdprUnprotected && readProtected) {
          eraseMain();
          ++autoErases;
+         // The erase of the main flash stalls the bus for about 110 ms (CH32V006, hardware).
+         if(chip_.series == wchlink::Series::V006) {
+            dm_.holdBusy(autoEraseBusyReads);
+         }
       }
       operationDone();
    }

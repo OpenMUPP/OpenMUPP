@@ -219,6 +219,8 @@ class Flash {
    [[nodiscard]] bool write(uint32_t address, uint32_t value);
    [[nodiscard]] bool unlockController();
    [[nodiscard]] bool waitIdle();
+   // Waits until the abstract command ends, after the module gave up on it.
+   [[nodiscard]] bool waitCommand();
    [[nodiscard]] bool lockController();
    // Writes the next word of the image to the buffer.
    [[nodiscard]] bool bufferWord(uint32_t word);

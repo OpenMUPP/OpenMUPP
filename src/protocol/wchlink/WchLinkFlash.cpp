@@ -100,6 +100,20 @@ bool Flash::waitIdle() {
    return write(fpec::statr, fpec::eop | fpec::wrprterr) && (status & fpec::wrprterr) == 0;
 }
 
+bool Flash::waitCommand() {
+   for(uint32_t i = 0; i < pollCount; ++i) {
+      uint32_t abstractcs = 0;
+      if(!ok(target_.dmiRead(dm::abstractcs, abstractcs))) {
+         return false;
+      }
+      if((abstractcs & dm::busy) == 0) {
+         return (abstractcs >> dm::cmderrShift & dm::cmderrMask) == 0;
+      }
+      platform_.delayUs(pollIntervalUs);
+   }
+   return false;
+}
+
 bool Flash::lockController() {
    // A locked controller takes no CTLR write.
    uint32_t control = 0;
@@ -160,8 +174,15 @@ bool Flash::setReadProtection(bool protect, Series series) {
    for(std::size_t i = 0; i < optionBytes && done; ++i) {
       // The CH32V006 takes a half word only after STRT. FTPG, as the manual
       // says, does not set in FLASH_CTLR through the debug module (hardware).
-      done = (series != Series::V006 || write(fpec::ctlr, fpec::obpg | fpec::strt | fpec::obwre)) &&
-             ok(target_.writeMemory(fpec::optionBytes + 2 * i, values[i], rvswd::Width::Half)) && waitIdle();
+      if(series == Series::V006) {
+         done = write(fpec::ctlr, fpec::obpg | fpec::strt | fpec::obwre);
+      }
+      if(done) {
+         // The write of RDPR 0xa5 on a protected chip erases the main flash and stalls the bus for about 110 ms:
+         // the abstract command stays busy longer than the module polls.
+         const rvswd::Status status = target_.writeMemory(fpec::optionBytes + 2 * i, values[i], rvswd::Width::Half);
+         done = (ok(status) || (status == rvswd::Status::Timeout && waitCommand())) && waitIdle();
+      }
    }
    done = write(fpec::ctlr, 0) && lockController() && done;
    // Unprotect: the reset loads FLASH_OBR from the new option bytes. The

@@ -594,6 +594,8 @@ TEST_CASE("WCH-Link flash: CH32V006 uses 256-byte pages and OBPG option half wor
    CHECK(flash.option(2) == 0x12);
    CHECK(flash.option(3) == 0x34);
    CHECK(flash.option(4) == 0xff);
+   // The RDPR write erased the main flash. Its abstract command stayed busy longer than the module polls.
+   CHECK(flash.autoErases == 1);
    CHECK(flash.errors.empty());
 }
 
