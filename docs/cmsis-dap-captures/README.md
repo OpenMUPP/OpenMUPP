@@ -154,7 +154,7 @@ python3 tools/usb-pcap/dtm.py docs/cmsis-dap-captures/<file> <device address>
 | `probe-rs-read-ch32v208.pcapng` | 41 | B | `probe-rs read --chip CH32V208WBU6 --protocol jtag b32 0x08000000 4` | Pass: the same flash words as OpenOCD |
 | `openocd-ch32v208-unplug.pcapng` | 41 | B | OpenOCD server. SWDIO is disconnected, then connected again | See [Errors](#errors) |
 | `openocd-ch32v208-no-unlock.pcapng` | 43 | C | `openocd ... -c init -c halt -c "mdw 0x08000000 4" -c shutdown`, after a power cycle of the target | Pass |
-| `openocd-ch32v006.pcapng` | 55 | D | `openocd ... -c init -c halt -c "reg pc" -c "mww 0x20000000 0x87654321" -c "mdw 0x20000000 1" -c resume -c shutdown` | Pass: OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`, RV32EC), halts, and reads back the RAM word. `pc` is 0, and the flash reads `ffffffff`: probably the flash of this target is empty |
+| `openocd-ch32v006.pcapng` | 55 | D | `openocd ... -c init -c halt -c "reg pc" -c "mww 0x20000000 0x87654321" -c "mdw 0x20000000 1" -c resume -c shutdown` | Pass: OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`: RV32EMC, plus non-standard extensions), halts, and reads back the RAM word. `pc` is 0 |
 
 ### Results
 
@@ -164,24 +164,32 @@ python3 tools/usb-pcap/dtm.py docs/cmsis-dap-captures/<file> <device address>
 - OpenOCD sends many DMI scans after one IR scan. probe-rs sends an IR scan before each DMI scan: 544 IR scans for 544 DMI scans in the read.
 - probe-rs `info` sends `DAP_JTAG_Configure` (one device, IR length 5) and two `DAP_Transfer` commands to probe for an Arm DP. The TAP puts the DPACC instruction in BYPASS, so the probe fails. probe-rs then finds the RISC-V DTM.
 - probe-rs also measures the IR length with IR scans of 8, 16 and 257 bits.
-- probe-rs `info` also probes for other TAP types after the DTM: 3 IR scans of `0x08`, then 200 IR scans of `0x1c`, each with a DR scan of 8 or 32 bits. The TAP puts these instructions in BYPASS. These scans are most of the `info` capture (203 IR scans against 20 DMI scans).
+- probe-rs `info` also probes for other TAP types after the DTM: 3 IR scans of `0x08`, each with a DR scan of 8 bits. Then 200 IR scans of `0x1c`, each with a DR scan of 8 bits and a DR scan of 32 bits. The TAP puts these instructions in BYPASS. These scans are most of the `info` capture (203 IR scans against 20 DMI scans).
 
 ### Connect
 
-The first image calls `attach()` at boot, and its first DMI access fails.
-The second image calls `attach()` and writes `5aa50400` to `0x7e` and `0x7d` at `DAP_Connect`, as the `wch-link` personality does. It passes.
-The last image calls `attach()` at `DAP_Connect`, without the unlock writes, and it passes after a power cycle of the target.
+These results are for two wires (images A, B and C).
+Image A calls `attach()` at boot, and its first DMI access fails.
+Image B calls `attach()` and writes `5aa50400` to `0x7e` and `0x7d` at `DAP_Connect`, as the `wch-link` personality does. It passes.
+Image C calls `attach()` at `DAP_Connect`, without the unlock writes, and it passes after a power cycle of the target.
 Thus the time of `attach()` causes the failure, not the unlock writes. The bridge must attach when it switches on (#107).
-The cause in the first image is not known. A probable cause: a command before the first scan changes the shared SWCLK and SWDIO pins.
+The cause in image A is not known. A probable cause: a command before the first scan changes the shared SWCLK and SWDIO pins.
 
 ### One wire
 
-Image D passes on the CH32V006 after a power cycle of the target. Each DMI access gets an answer (`op` 0).
-Two earlier runs of image D on the same target failed, before a power cycle. In these runs, each DMI read gave `ffffffff` with `op` 0.
+The CH32V006 runs, in order. The target has its own supply, and it stays on unless a step says otherwise.
+Each step other than step 3 runs OpenOCD with `init`, `halt` and memory accesses.
+
+1. Image D without the unlock writes: fail. Each DMI read gives `ffffffff` with `op` 0.
+2. Image D: fail, the same as step 1.
+3. A test image with the `cmsis-dap` and `wch-link` personalities, the same bridge code as image D, and the USB ID of WCH. In the `wch-link` personality, `wlink status` passes on the same wiring.
+4. The same image, switched to the `cmsis-dap` personality: pass.
+5. Power cycle of the target only, then the same image: pass.
+6. Image D again, then a power cycle of the target: pass. The file `openocd-ch32v006.pcapng` is this run.
+
 On one wire, `ffffffff` is a frame without an answer of the target.
-A connect of the `wch-link` personality (`wlink status`) then passed on the same wiring.
-After that, image D passed again, also after a power cycle of the target only. The cause of the earlier failure is not known.
-These failed runs are not in the repository.
+Steps 1 and 2 had no power cycle of the target. Thus these runs do not show if a power cycle alone recovers the target, or if the `wlink status` connect was necessary.
+The cause of the failure in steps 1 and 2 is not known. The runs of steps 1 to 5 are not in the repository.
 
 ### Errors
 
