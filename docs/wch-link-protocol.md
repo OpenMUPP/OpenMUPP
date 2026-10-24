@@ -4,7 +4,7 @@ This document describes the USB protocol of the WCH-LinkE in RISC-V mode, and th
 The `wch-link` personality (epic #63) speaks this protocol. [WCH-Link personality](wch-link.md) describes its design.
 The facts come from USB captures and logic analyzer captures of a real probe. A statement that has no capture behind it says so. No vendor code was copied.
 
-Status: the USB protocol and the wire frames are captured on a CH32V003 (one wire) and on a CH32V208 (two wires).
+Status: the USB protocol and the wire frames are captured on a CH32V003 (one wire), on a CH32V208 (two wires) and on a CH32V006 (one wire).
 A few fields are open (see [Open questions](#open-questions)).
 
 ## Notation
@@ -21,7 +21,7 @@ A few fields are open (see [Open questions](#open-questions)).
 ## Captures
 
 The captures are in [`wch-link-captures/`](wch-link-captures/README.md), with the setup, the file names and the decoders.
-The targets are a CH32V003 (one wire) and a CH32V208 (two wires). The host tools are wlink 0.1.2 and minichlink.
+The targets are a CH32V003 (one wire), a CH32V208 (two wires) and a CH32V006 (one wire). The host tools are wlink 0.1.2 and 0.1.3, and minichlink.
 A file name in parentheses, for example (`v208-wlink-protect.pcapng`), names the capture that shows a fact.
 
 ## USB interface
@@ -128,7 +128,7 @@ A name in quotes is the name in the wlink source code.
 | Sub-command | Meaning | Response payload |
 |---|---|---|
 | `01` | Probe information | `02 13 12 00` |
-| `02` | Connect to the target (RISC-V) | `09 00 30 05 00` (CH32V003), `05 20 80 05 3c` (CH32V208) |
+| `02` | Connect to the target (RISC-V) | `09 00 30 05 00` (CH32V003), `05 20 80 05 3c` (CH32V208), `4e 00 60 06 20` (CH32V006) |
 | `03` | Unknown. minichlink sends it first. wlink does not. | `03` |
 | `04` | Likely: read the split of RAM and flash. wlink names it "GetChipRomRamSplit" and sends it only for the CH32V20x, CH32V30x, CH32V317 and CH32V4x7. Not confirmed. In the captures, wlink sends it on the CH32V208 after the first protection query. | `00` |
 | `ff` | Quit. The probe resumes the core and releases the target (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). | `ff` |
@@ -652,6 +652,45 @@ The cause is not known. A flash program at the three speeds could show a differe
 Not measured on the CH32V003: the wire timing of a flash program, and the slow pattern from 46 to 77 ms.
 
 Not measured on the CH32V208: the wire timing of a flash program.
+
+## CH32V006 (one wire, QingKe V2C)
+
+Source: the `v006-` captures. The target is a CH32V006K8U6 (chip ID `0x00600620`, 62 KB flash). The probe is the same WCH-LinkE (firmware 2.19).
+The USB commands are the same as for the CH32V003 (see the sections above). This section lists the differences.
+The one-wire decoder `tools/wch_link_frames_1wire.py` decodes the wire frames without change.
+The USB captures hold 15 DMI accesses of the host. The one-wire decode of `v006-wlink-status-timing.csv` shows all 15, in the same order, with the same address and data.
+
+| Item | CH32V003 | CH32V006 |
+|---|---|---|
+| Chip family code in the connect response and in `0c 02` | `09` | `4e` |
+| Connect time | 90 ms | 94 ms |
+| Register `0x7c` at connect | `00010403` | `11038403` |
+| Register `0x16` at connect | `08000602` | `08000702` |
+| Memory access of the probe | Program buffer (command `0x00040000`) | Abstract command (`0x02200000` read, `0x02210000` write), as on the CH32V208 |
+| Flash page | 64 bytes | 256 bytes |
+| Data block of a flash program | 1024 bytes | 1024 bytes |
+| Mass erase (`02 01 01`) | 7.6 ms | 113 ms |
+| Protect (`06 01 03`) | 103 ms | 55 ms |
+| Unprotect (`06 01 02`) | 108 ms | 123 ms |
+| Protection query after a protect and a new connect | `02` (not protected) | `01` (protected) |
+| Protected read of flash | `00000300` | `20 b0 00 00`, repeated |
+| Reset (`0b 01 01`) | 15 ms | 6 ms |
+
+Observations:
+
+- **Two-wire attempts.** From 0 to 76 ms, the probe sends two-wire frames on SWCLK and SWDIO. It sends 202 frames of 85 clocks and 20 times the three frames `7e` write, `7d` write and `dmstatus` read. The V006 does not answer: every `dmstatus` read returns `0`.
+  After 76 ms, SWCLK stays high and the probe talks on one wire. The V006 answers at once. The datasheet says that the chip supports one-wire (default) and two-wire SDI, on PD1 (SWDIO) and PB3 (SWCLK). The captures do not show how to select the two-wire mode.
+  MounRiver OpenOCD with the `two_wires` option sends the same USB commands as without it.
+- **Probe actions at connect.** After the chip ID read, the probe writes `abstractcs` with `ffffffff` and does about 30 accesses to `0x40022000` (`FLASH_ACTLR`, written with `00000002`) and to `0x40021000`, `0x40021004` and `0x40021008` (RCC).
+  The last RCC accesses set the PLL on (`0x40021000` goes from `00509c83` to `01509c83` and `03509c83`). The probe also writes `0x00008080` to `0x40022010` and `0x0000b020` to `0x4002200c` (the reset values of `FLASH_CTLR` and `FLASH_STATR`).
+  The CH32V003 shows none of these accesses. The meaning of the RCC values is not checked against the manual.
+- **Chip information.** The words at `0x1ffff7e0`, `0x1ffff7e8`, `0x1ffff7ec` and `0x1ffff7f0` give `ffff003e`, `5f8dabcd`, `c7b7bc5d` and `ffffffff`. The `0x11` answer holds them and the chip ID. The protection query reads `0x4002201c` (`03fffffc`) and `0x40022020` (`ffffffff`).
+- **Flash program (wlink).** The sequence is the same as for the CH32V003. The step 2 packet is `01 08 08000000 00001000` for 4 KB. The stub has 512 bytes and differs from the CH32V003 stub and the CH32V208 stub (`v006-wlink-flash.pcapng`).
+  A disassembly shows the interface of [the stub](#the-stub): fast page erase and fast page program in steps of 256 bytes (64 words), the buffer at `0x20000200`, and the checksum word at `0x20000610`. A block of 1024 bytes needs about 59 ms.
+  The program of 4 KB takes 0.29 s from `02 01 05` to `02 01 08`.
+- **Protect.** After `06 01 03`, wlink quits and connects again. The query then returns `01`. A reset is not needed on the CH32V006.
+- **minichlink.** It uses no stub. A write of 4 KB sends 3591 DMI commands, an erase 1081. Its connect (`0d 01 02`) is often answered by the error frame `81 55 01 02` after about 0.5 s. minichlink then sends `0d 01 13`, quit, a reset and a new connect. The write still works.
+  There is no halt capture, because `minichlink -T` waits for input.
 
 ## Open questions
 

@@ -61,9 +61,9 @@ The analog files have one row for each sample, with the voltages of SWDIO and SW
 | `v003-wlink-dump-low-timing.csv` | `wlink --speed low dump 0x08000000 256` | 500 MS/s | 0: SWIO (PD1) |
 
 The `v006-wlink-*-timing.csv` files use the same format and a 500 MS/s rate.
-Channel 0 is SWDIO, channel 1 is SWCLK, channels 2 and 3 are not connected.
+Channel 0 is SWIO (SWDIO) on PD1 and channel 1 is SWCLK on PB3. Both channels are on the target board, not on the probe. Channels 2 and 3 are not connected.
 The trigger is a falling edge on SWDIO.
-The existing decoders do not decode them yet. The bursts hold 85 and 53 clocks, not 54.
+Until 76 ms, the probe tries two wires and the V006 does not answer. After that, the traffic is on channel 0 only. `wch_link_frames_1wire.py` decodes it from 76 ms: `python3 wch_link_frames_1wire.py v006-wlink-status-timing.csv 76`.
 
 ## Decoders
 
