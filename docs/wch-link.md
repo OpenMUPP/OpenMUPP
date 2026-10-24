@@ -324,7 +324,8 @@ The commands without a stub use the flash controller registers directly, with DM
 - **Mass erase (`02 01 01`).** Reset, unlock, `FLASH_CTLR` `MER`, then `MER` and `STRT`, wait, `FLASH_CTLR` 0, lock (`LOCK` and `FLOCK`).
 - **Protect (`06 01 03`) and unprotect (`06 01 02`).** Reset. Read the old option bytes (see below). Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`).
   - On CH32V003 (`09`, `49`) and the two-wire V4 series: program each option byte with `OBPG` and a 16-bit write, and wait after each byte.
-  - On CH32V00X (`4e`), `FLASH_CTLR` has no `OBPG` bit (CH32V00X reference manual 18.5.2): unlock `FLOCK` via `FLASH_MODEKEYR`, clear the internal page buffer (`FTPG | BUFRST`), load 4 32-bit words (each holding two option bytes and their inverses) into `0x1ffff800`–`0x1ffff80c` with `FTPG | BUFLOAD`, write `0x1ffff800` to `FLASH_ADDR`, and program the page (`FTPG | STRT`).
+  - On CH32V00X (`4e`): the same, but write `FLASH_CTLR` with `OBPG`, `STRT` and `OBWRE` before each 16-bit write. A half word is lost without the `STRT` write.
+    The reference manual (18.5.2) describes fast page programming (`FTPG`, `BUFRST`, `BUFLOAD`) for the option bytes. On a CH32V006, `FTPG` does not set in `FLASH_CTLR` through the debug module, so that method only erases the option bytes. minichlink uses `OBPG` on this chip.
   Then `FLASH_CTLR` 0 and lock.
   Each `FLASH_CTLR` write keeps `OBWRE` 1: a 0 locks the option bytes again.
   - `RDPR` gets `0xa5` (unprotect) or `0x00` (protect). The value `0xcc` is not used, because it is a permanent protection on other chips.

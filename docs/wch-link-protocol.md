@@ -690,6 +690,9 @@ Observations:
   The program of 4 KB takes 0.29 s from `02 01 05` to `02 01 08`.
 - **Quit.** The quit writes `dmcontrol` `40000001`. The following `dmstatus` read gives `004f0382`: the hart is still halted (`v006-wlink-status-timing.csv`). A single write that clears `haltreq` and sets `resumereq` does not resume a CH32V006.
   `wlink resume` clears `haltreq` in a write of its own (`00000001`), then writes `40000001`, and the hart runs (`dmstatus` `004f0c82`). The project firmware sends both writes in a resume. The test used the firmware of this project on the CH32V006 and the host tool `dmi` accesses.
+- **Option bytes.** A write of `FLASH_CTLR` with `FTPG` does not set the bit on a CH32V006 (the register reads back without it), also after the unlock of `FLOCK`. Fast page programming of the option bytes (reference manual 18.5.2) does not work through the debug module.
+  `OBPG` programming works (tested with `minichlink` accesses and with the firmware of this project): `OBER` and `STRT` erase the option bytes, then `FLASH_CTLR` `OBPG | STRT | OBWRE` and a 16-bit write for each option half word. The hardware writes the inverse byte.
+  The write of `RDPR` `0xa5` takes about 110 ms on a protected chip, because the chip erases the main flash first. An erase of the option bytes without a new `RDPR` leaves the chip protected after a reset.
 - **Protect.** After `06 01 03`, wlink quits and connects again. The query then returns `01`. A reset is not needed on the CH32V006.
 - **minichlink.** It uses no stub. A write of 4 KB sends 3591 DMI commands, an erase 1081. Its connect (`0d 01 02`) is often answered by the error frame `81 55 01 02` after about 0.5 s. minichlink then sends `0d 01 13`, quit, a reset and a new connect. The write still works.
   There is no halt capture, because `minichlink -T` waits for input.
