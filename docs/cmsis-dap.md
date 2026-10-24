@@ -383,7 +383,9 @@ probe-rs reports `op` 2 as an error (`DtmOperationFailed`).
 Mainline OpenOCD checks `op` 2 only in its batch memory read, and sends `dmireset` only after `op` 3.
 Thus, with OpenOCD, a failed single access looks like a success.
 After it, the sticky error blocks all accesses until Test-Logic-Reset, and OpenOCD does not log the cause.
-A capture on 2026-10-24 (CH32V208, two wires, a test image) shows this: the first DMI read failed, and OpenOCD then read `dmcontrol` for 5 s.
+A capture on 2026-10-24 (CH32V208, two wires, a test image) shows this: the first DMI read failed, and OpenOCD then read `dmcontrol` for 5 s ([openocd-ch32v208-attach-at-boot.pcapng](cmsis-dap-captures/openocd-ch32v208-attach-at-boot.pcapng)).
+That access failed because the test image called `attach()` at boot, not because of a wire error ([Connect](cmsis-dap-captures/README.md#connect)).
+The [unplug capture](cmsis-dap-captures/README.md#errors) shows the same limit with a real wire error.
 
 Planned changes (#103):
 

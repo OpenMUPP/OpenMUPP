@@ -118,9 +118,18 @@ Only OpenOCD shifts an IR (`0x7f`, `0x10` and `0x11`). probe-rs shifts no IR.
 
 Date: 2026-10-24.
 These captures run the host tools on the emulated TAP (#105, #106) and a CH32V208 on two wires.
-The firmware does not use the TAP yet (#107). Thus a test image routes the CMSIS-DAP JTAG port to the TAP all the time.
-[bridge-test-image.patch](bridge-test-image.patch) makes this image from `dev` at `df6009d`. Do not merge it.
-The patch also puts the `rvswd::Status` of a failed DMI access into the DMI data as `0xBAD0000n`, to show the reason in a capture.
+The firmware does not use the TAP yet (#107). Thus test images route the CMSIS-DAP JTAG port to the TAP all the time.
+Do not merge their changes.
+
+| Image | Base commit | `attach()` | Unlock writes | `0xBAD0000n` marker | Change |
+|---|---|---|---|---|---|
+| A | `4905274` | At boot, in `startDap()` | No | No | The `main.cpp` and `cmake/Personalities.cmake` parts of the patch, without the `RvDtmTap` part. Plus `dapRvTarget.attach(rvswd::Wire::Two);` in `startDap()` |
+| B | `df6009d` | At `DAP_Connect`, in `RvDtmTap::init()` | Yes | Yes | The patch, plus `dmiWrite(0x7e, 0x5aa50400)` and `dmiWrite(0x7d, 0x5aa50400)` after `attach()` in `RvDtmTap::init()` |
+| C | `df6009d` | At `DAP_Connect`, in `RvDtmTap::init()` | No | Yes | [bridge-test-image.patch](bridge-test-image.patch) |
+
+All images use two wires. Image A has IDCODE `0x15653001`, images B and C have `0x15653101`.
+With the marker, a failed DMI access puts its `rvswd::Status` into the DMI data as `0xBAD0000n`, to show the reason in a capture.
+Image A has no marker: its failed accesses show the data of the last good read (`d=00000000`). This data does not give the reason.
 
 | Item | Value |
 |---|---|
@@ -138,14 +147,13 @@ python3 tools/usb-pcap/dtm.py docs/cmsis-dap-captures/<file> <device address>
 
 | File | Device address | Image | Command | Result |
 |---|---|---|---|---|
-| `openocd-ch32v208-attach-at-boot.pcapng` | 38 | `attach()` at boot, IDCODE `0x15653001` | `openocd ... -c init -c halt -c "reg pc" -c "mdw 0x08000000 4" -c resume -c shutdown` | The first DMI read (`dmcontrol`) fails (`op` 2). OpenOCD reads `dmcontrol` again for 5 s and stops. The file has the first 2000 packets only |
-| `openocd-ch32v208.pcapng` | 41 | `attach()` and the unlock writes at `DAP_Connect` | Same | Pass: OpenOCD examines the hart (`XLEN=32`, `misa=0x40901105`), halts, reads `pc` and the flash |
-| `probe-rs-info-ch32v208.pcapng` | 41 | Same | `probe-rs info --protocol jtag` | probe-rs finds the DTM, but cannot find the chip type without `--chip` |
-| `probe-rs-read-ch32v208.pcapng` | 41 | Same | `probe-rs read --chip CH32V208WBU6 --protocol jtag b32 0x08000000 4` | Pass: the same flash words as OpenOCD |
-| `openocd-ch32v208-unplug.pcapng` | 41 | Same | OpenOCD server. SWDIO is disconnected, then connected again | See [Errors](#errors) |
-| `openocd-ch32v208-no-unlock.pcapng` | 43 | `attach()` at `DAP_Connect`, no unlock writes | `openocd ... -c init -c halt -c "mdw 0x08000000 4" -c shutdown`, after a power cycle of the target | Pass |
+| `openocd-ch32v208-attach-at-boot.pcapng` | 38 | A | `openocd ... -c init -c halt -c "reg pc" -c "mdw 0x08000000 4" -c resume -c shutdown` | The first DMI read (`dmcontrol`) fails (`op` 2). OpenOCD reads `dmcontrol` again for 5 s and stops. The file has the first 2000 packets only |
+| `openocd-ch32v208.pcapng` | 41 | B | Same | Pass: OpenOCD examines the hart (`XLEN=32`, `misa=0x40901105`), halts, reads `pc` and the flash |
+| `probe-rs-info-ch32v208.pcapng` | 41 | B | `probe-rs info --protocol jtag` | probe-rs finds the DTM, but cannot find the chip type without `--chip` |
+| `probe-rs-read-ch32v208.pcapng` | 41 | B | `probe-rs read --chip CH32V208WBU6 --protocol jtag b32 0x08000000 4` | Pass: the same flash words as OpenOCD |
+| `openocd-ch32v208-unplug.pcapng` | 41 | B | OpenOCD server. SWDIO is disconnected, then connected again | See [Errors](#errors) |
+| `openocd-ch32v208-no-unlock.pcapng` | 43 | C | `openocd ... -c init -c halt -c "mdw 0x08000000 4" -c shutdown`, after a power cycle of the target | Pass |
 
-The other images use IDCODE `0x15653101`.
 
 ### Results
 
@@ -155,6 +163,7 @@ The other images use IDCODE `0x15653101`.
 - OpenOCD sends many DMI scans after one IR scan. probe-rs sends an IR scan before each DMI scan: 544 IR scans for 544 DMI scans in the read.
 - probe-rs `info` sends `DAP_JTAG_Configure` (one device, IR length 5) and two `DAP_Transfer` commands to probe for an Arm DP. The TAP puts the DPACC instruction in BYPASS, so the probe fails. probe-rs then finds the RISC-V DTM.
 - probe-rs also measures the IR length with IR scans of 8, 16 and 257 bits.
+- probe-rs `info` also probes for other TAP types after the DTM: 3 IR scans of `0x08`, then 200 IR scans of `0x1c`, each with a DR scan of 8 or 32 bits. The TAP puts these instructions in BYPASS. These scans are most of the `info` capture (203 IR scans against 20 DMI scans).
 
 ### Connect
 
