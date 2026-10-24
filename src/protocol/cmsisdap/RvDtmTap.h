@@ -28,7 +28,7 @@
 // Limit: mainline OpenOCD checks op 2 only in its batch memory read, and
 // sends dmireset only after op 3. A failed single access then looks like a
 // success, and the sticky error blocks all accesses until Test-Logic-Reset.
-// The error model is an open question of #103 (open question 4).
+// The planned fix is in docs/cmsis-dap.md, "DMI errors".
 //
 // TDO is the bit 0 of the shift register in Shift-DR and Shift-IR, and high
 // in the other states, as an open TDO line with a pull-up.
@@ -51,9 +51,10 @@ inline constexpr uint8_t irDtmcs = 0x10;
 inline constexpr uint8_t irDmi = 0x11;
 inline constexpr uint8_t irBypass = 0x1F;
 
-// Provisional (#103, open question 1). Manufacturer ID 0 is not a valid
-// JEDEC ID, so no config of a real part expects this value.
-inline constexpr uint32_t idcode = 0x15653001;
+// Version 1, part 0x5653 ("VS"), manufacturer code continuation 1, ID 0.
+// JEP106 assigns no ID 0, so no real part has this code. probe-rs rejects
+// only the manufacturer fields 0 and 0x7F. See docs/cmsis-dap.md, "IDCODE".
+inline constexpr uint32_t idcode = 0x15653101;
 
 // DTMCS fields
 inline constexpr uint32_t dtmcsVersion013 = 1;

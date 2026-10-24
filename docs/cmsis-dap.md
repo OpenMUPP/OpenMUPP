@@ -343,6 +343,56 @@ Each DR scan of a transfer ends with the idle cycles of `DAP_TransferConfigure`.
 These commands make the next transfer write the IR again: `DAP_Connect`, `DAP_JTAG_Configure`, a sequence command and `DAP_SWJ_Pins`.
 A transfer to another device also writes the IR again.
 
+## RISC-V DTM bridge
+
+Status: in progress (#103). The host tests run the parts below. The firmware does not use them yet.
+
+The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
+The host sees a CMSIS-DAP adapter in JTAG mode, with one RISC-V Debug Transport Module (DTM) on the chain.
+`cmsisdap::RvDtmTap` (`src/protocol/cmsisdap/RvDtmTap.h`) is a JTAG port without pins.
+It follows the TMS and TDI bits of `DAP_JTAG_Sequence` and `DAP_SWJ_Sequence`.
+It does each DMI access on the WCH wire (one wire or two wires), with the wire engine of the `wch-link` personality.
+
+| IR (5 bits) | Register | Content |
+|---|---|---|
+| `0x01` | IDCODE | `0x15653101` |
+| `0x10` | DTMCS | `version` 1 (debug spec 0.13), `abits` 7, `idle` 0, `dmistat` |
+| `0x11` | DMI (41 bits) | `address[40:34]`, `data[33:2]`, `op[1:0]` |
+| Others | BYPASS | 1 bit |
+
+### IDCODE
+
+The IDCODE is `0x15653101`: version 1, part `0x5653` ("VS"), and a manufacturer code with continuation code 1 and ID 0.
+
+- JEP106 assigns no ID 0. Thus no real part has this manufacturer code, and no tool shows a manufacturer name for it. OpenOCD shows `<invalid>`.
+- probe-rs 0.32.0 rejects an IDCODE whose 11-bit manufacturer field (bits 11:1) is 0 or `0x7F` (`IdCode::valid()`). The field of this IDCODE is `0x80`. A capture with the first value, `0x15653001` (field 0), showed the rejection.
+- WCH has no JEP106 manufacturer code. The WCH fork of OpenOCD uses `0x00001` for its targets, which probe-rs rejects.
+- OpenOCD accepts each IDCODE. The bridge configs (#108) will give this value with `-expected-id`.
+
+### DMI errors
+
+The bridge follows the debug spec 0.13 (section 6.1.5):
+
+- A failed access gives `op` 2 at the next Capture-DR, and sets a sticky error.
+- While the error is set, the bridge starts no access. DTMCS `dmistat` reads 2.
+- `dmireset`, `dmihardreset` and Test-Logic-Reset clear the error.
+- `op` 3 (busy) never occurs.
+
+probe-rs reports `op` 2 as an error (`DtmOperationFailed`).
+Mainline OpenOCD checks `op` 2 only in its batch memory read, and sends `dmireset` only after `op` 3.
+Thus, with OpenOCD, a failed single access looks like a success.
+After it, the sticky error blocks all accesses until Test-Logic-Reset, and OpenOCD does not log the cause.
+A capture on 2026-10-24 (CH32V208, two wires, a test image) shows this: the first DMI read failed, and OpenOCD then read `dmcontrol` for 5 s.
+
+Planned changes (#103):
+
+- The firmware retries a wire access 2 or 3 times before `op` 2, but only when the target did not run the access. Examples: a two-wire frame without the handshake of the target at bit 11, or a one-wire frame that did not start.
+- A read with a parity error, or a one-wire line that stays low, gives `op` 2 at once. A second access can have side effects, for example on `command`, on `data0` with `abstractauto`, or on `sbdata0`.
+- A patch for mainline OpenOCD makes `dmi_read()` and `dmi_write()` check `op` 2.
+
+The bridge does not report a wire failure as `op` 3.
+OpenOCD would then repeat accesses that the target already ran, and a permanent failure would stay hidden until a timeout.
+
 ## Tests
 
 `tests/TestCmsisDap.cpp` runs the processor on the real SWD bit-bang engine, with the mock SWD target of `tests/MockSwdPins.h`.

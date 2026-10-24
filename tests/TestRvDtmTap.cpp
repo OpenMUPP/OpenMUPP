@@ -130,6 +130,13 @@ TEST_CASE("RV DTM TAP: the DTMCS value") {
    // A valid IDCODE: bit 0 is 1, and it is not the end-of-chain value.
    CHECK((cmsisdap::rvDtm::idcode & 1u) == 1u);
    CHECK(cmsisdap::rvDtm::idcode != 0xFFFFFFFFu);
+   // IdCode::valid() of probe-rs: the 11-bit manufacturer field (bits
+   // 11:1) is not 0 and not 0x7F.
+   const uint32_t manufacturer = (cmsisdap::rvDtm::idcode >> 1) & 0x7FFu;
+   CHECK(manufacturer != 0u);
+   CHECK(manufacturer != 0x7Fu);
+   // ID 0 (bits 7:1): no JEP106 manufacturer has it.
+   CHECK((manufacturer & 0x7Fu) == 0u);
 }
 
 TEST_CASE("RV DTM TAP: five TMS high bits reach Test-Logic-Reset from each state") {
