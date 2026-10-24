@@ -190,6 +190,8 @@ The build option `VSL_PERSONALITIES` with `wch-link` puts the personality into a
 
 ### Commands
 
+The packets use the notation of [Notation](wch-link-protocol.md#notation).
+
 | Command | Behavior |
 |---|---|
 | `0d 01 01` | Replies `02 13 12 00`, the values of the captured WCH-LinkE |
