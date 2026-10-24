@@ -370,7 +370,7 @@ class Processor {
       Unknown,
    };
    [[nodiscard]] Found connectOn(uint32_t &chipId);
-   // The clock setup of the family 0x4e. False when a target access fails.
+   // The clock setup of the family 0x4e. False when an access fails or a poll times out.
    [[nodiscard]] bool setupClock();
    void quit();
    // Resumes the hart and ends dmactive, as the quit of the probe

@@ -338,15 +338,16 @@ TEST_CASE("WCH-Link: the connect of a CH32V003 does no clock setup") {
    CHECK(stores.empty());
 }
 
-TEST_CASE("WCH-Link: connect fails when the PLL of a CH32V006 does not get ready") {
+TEST_CASE("WCH-Link: connect succeeds when the PLL of a CH32V006 does not get ready") {
    WchLinkBench bench(Wire::One);
    bench.pins.registers[dm::chipId] = v006ChipId;
    bench.enumerate();
    std::vector<Store> stores;
    modelClock(bench, stores, false);
-   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectError);
-   CHECK_FALSE(bench.processor.connected());
-   CHECK_FALSE(bench.pins.hostDrives());
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x4e, v006ChipId));
+   CHECK(bench.processor.connected());
+   // The setup stopped at the poll: no write of the flash controller registers.
+   CHECK(stores.back() == Store{ 0x4002'1000, 0x0150'9c83 });
 }
 
 TEST_CASE("WCH-Link: connect with chip type 0x09 finds a CH32V208 on two wires (minichlink)") {

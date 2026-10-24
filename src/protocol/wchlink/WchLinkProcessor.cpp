@@ -245,9 +245,9 @@ Processor::Found Processor::connectOn(uint32_t &chipId) {
       // The CH32V00X runs no program from the program buffer (cmderr 2), unlike
       // the CH32V003. The probe uses the abstract memory command.
       target_.setMemoryAccess(rvswd::MemoryAccess::Abstract);
-      if(!setupClock()) {
-         return Found::None;
-      }
+      // Best effort: a chip whose RCC does not switch to the PLL (seen after an
+      // erase of the option bytes) must stay reachable for the host.
+      static_cast<void>(setupClock());
    }
    return Found::Known;
 }
