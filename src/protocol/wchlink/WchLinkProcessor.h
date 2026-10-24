@@ -211,8 +211,6 @@ inline constexpr uint32_t pllReady = 1u << 25;
 inline constexpr uint32_t switchPll = 0x2;
 inline constexpr uint32_t switchStatusMask = 0xc;
 inline constexpr uint32_t switchStatusPll = 0x8;
-// The reads of a poll, as rvswd::pollLimit
-inline constexpr uint32_t pollLimit = rvswd::pollLimit;
 } // namespace clocksetup
 
 // The words of the chip information (command 0x11)

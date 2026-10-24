@@ -259,7 +259,7 @@ bool Processor::setupClock() {
    };
    // Reads until (value & mask) == expected
    const auto poll = [this](uint32_t address, uint32_t mask, uint32_t expected) {
-      for(uint32_t i = 0; i < cs::pollLimit; ++i) {
+      for(uint32_t i = 0; i < rvswd::pollLimit; ++i) {
          uint32_t value = 0;
          if(target_.readMemory(address, value) != rvswd::Status::Ok) {
             return false;
