@@ -129,7 +129,10 @@ Request payload: `chip-type speed`.
 - wlink sends `01 speed` before the connect command and `family speed` after it. Here `family` is the first byte of the connect response (`09` or `05`).
   With the generic code `01`, the connect command still works on both chips.
   minichlink sends only `09 speed`, before the connect command, also on the CH32V208 (family `05`). The connect command still works.
-- The speed byte: `01` is high (the default), `02` is medium (wlink: 4000 kHz), `03` is low (wlink: 400 kHz). Captures of `wlink --speed low|medium|high` show this.
+- The speed byte: `01` is high (the default), `02` is medium, `03` is low. Captures of `wlink --speed low|medium|high` show this.
+  The wlink help text gives 4000 kHz for medium and 400 kHz for low. The measured two-wire clock does not agree:
+  at low speed, all frames use about 478 kHz. At high and medium speed, a DMI write of the host uses about 907 kHz and a DMI read about 478 kHz (see [Speed setting](#speed-setting)).
+  On one wire, the speed byte has no visible effect (see [Speed setting (CH32V003)](#speed-setting-ch32v003)).
 - The probe answers `01`.
 
 ## Command `0x11`: chip information
@@ -180,7 +183,7 @@ Request payload (6 bytes): `address (u8)`, `data (u32 BE)`, `op (u8)`.
 The response payload has the same layout. The `op` field now holds the status:
 
 - `00`: success. For a read, the data field has the register value, in the same response. The read is not pipelined.
-- `02`: failure (from the notes of epic #63). The captures show no failure.
+- `02`: failure. This value comes from the notes of epic #63. No capture shows a failure, so the value is not confirmed. The personality uses it.
 
 Registers seen (the CH32V003 and the CH32V208 use the same set):
 
