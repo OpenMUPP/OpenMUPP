@@ -44,7 +44,7 @@ class TapTest(unittest.TestCase):
                   seq((1, '11111')))
         self.assertEqual(scans(evs), ['DR scan 4b tdi=0x8'])
 
-    def test_swj_sequence_drives_tdi_high(self):
+    def test_swj_sequence_moves_tap(self):
         tap = dap.Tap()
         dap.tap_events(tap, bytes([0x12, 8, 0xff]))
         dap.tap_events(tap, bytes([0x12, 5, 0b00110]))  # TMS 0,1,1,0,0: RTI, SelDR, SelIR, CapIR, ShIR

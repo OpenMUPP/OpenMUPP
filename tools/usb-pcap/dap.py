@@ -41,6 +41,7 @@ class Tap:
         if self.state in ('SHDR', 'SHIR'):
             self.shift.append(tdi)
         nxt = NEXT[self.state][tms]
+        # Limit: a scan with a Pause state inside is reported as two scans.
         if self.state in ('SHDR', 'SHIR') and nxt.startswith('EX1'):
             v = sum(b << i for i, b in enumerate(self.shift))
             ev = f"{'IR' if self.state == 'SHIR' else 'DR'} scan {len(self.shift)}b tdi={v:#x}"
