@@ -63,8 +63,8 @@
 //   The personality is the code of personality/Personality.h: 0 Versaloon,
 //   1 CMSIS-DAP. The status is DAP_OK (0) or DAP_ERROR (0xFF) for a code
 //   that is not a personality. The code boot::bootloaderCode (0xB0) starts
-//   the bootloader (boot/BootloaderEntry.h): DAP_ERROR in an image without
-//   a bootloader. Without a personality switch (an image with one
+//   the bootloader (boot/BootloaderEntry.h): DAP_ERROR in a multi image
+//   without a bootloader. Without a personality switch (an image with one
 //   personality) and without a bootloader, the command replies
 //   ID_DAP_Invalid.
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
