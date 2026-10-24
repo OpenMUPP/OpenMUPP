@@ -114,9 +114,10 @@ bool isActive(Personality personality) {
 board::BoardPower boardPower;
 
 // The bootloader entry of FW_UPDATE and of the bootloader code of the switch
-// commands, in every personality. Only the app-8k image enters the
-// bootloader, behind versaloon-bootloader. CMake defines
-// VSL_HAS_BOOTLOADER_ENTRY for this file of that image only
+// commands, in every personality. On the STM32F1 only the app-8k image
+// enters the bootloader, behind versaloon-bootloader. On the STM32H5 the
+// standalone image enters the ROM bootloader. CMake defines
+// VSL_HAS_BOOTLOADER_ENTRY for this file of these images only
 // (vsl_add_app_image() in CMakeLists.txt). The other sources are shared by
 // all images and compiled without the define, so the value is here and not
 // in a shared header.
@@ -383,7 +384,7 @@ void startProtocol() {
 }
 
 void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
-   // Only the app-8k image links boot::enterBootloader() (an STM32F1 board)
+   // Only the images with the bootloader entry link boot::enterBootloader()
    if constexpr(hasBootloaderEntry) {
       if(bootloaderEntry.isDue(nowMs)) {
          boot::enterBootloader();

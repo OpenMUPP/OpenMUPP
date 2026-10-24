@@ -1,10 +1,12 @@
 // Board start-up: clocks, the debug port (SWJ) of the dongle MCU and the
 // board pins. The system-stm32 start-up code calls
 // os_startup_initialize_hardware() after the DATA and BSS init, before the
-// static constructors and main().
+// static constructors and main(). On the STM32H5 it first starts the ROM
+// bootloader on request (boot/Bootloader.h).
 #include <startup-hooks.h>
 
 #include <cmsis_device.h>
+#include <delaybusywait.h>
 #include <peripherals/GpioPin.h>
 #include <peripherals/Rcc.h>
 
@@ -12,6 +14,7 @@
 #include "board/Board.h"
 #include "board/BoardPins.h"
 #include "board/Leds.h"
+#include "boot/Bootloader.h"
 
 using hw::GpioPin;
 
@@ -69,6 +72,21 @@ void configurePins() {
    }
 }
 
+#if defined(STM32H5)
+// A key that is down at the reset starts the ROM bootloader, as
+// versaloon-bootloader does on the STM32F1 boards. The request and the
+// reset of enterBootloader() put the clocks back into their reset state
+// for the jump.
+void enterBootloaderOnKey() {
+   if(const auto key = board::current.key) {
+      delayuS(10); // the pull of the key pin settles
+      if(board::isAsserted(*key)) {
+         boot::enterBootloader();
+      }
+   }
+}
+#endif
+
 } // namespace
 
 bool hardware::isClockFromCrystal() {
@@ -76,6 +94,9 @@ bool hardware::isClockFromCrystal() {
 }
 
 void os_startup_initialize_hardware() {
+#if defined(STM32H5)
+   boot::startRomBootloaderOnRequest();
+#endif
    configureClocks();
 
    // Set the debug port before the pins: the JTAG-DP and the SW-DP own
@@ -86,6 +107,9 @@ void os_startup_initialize_hardware() {
 #endif
 
    configurePins();
+#if defined(STM32H5)
+   enterBootloaderOnKey();
+#endif
 
    // versaloon-bootloader jumps to the firmware with PRIMASK set (cpsid i).
    // Nothing else clears it, so without this the SysTick and USB interrupts
