@@ -11,7 +11,8 @@ They are the evidence for [wch-link-protocol.md](../wch-link-protocol.md).
 | Probe type | wlink reports `WCH-Link v2.19(v39) (WCH-LinkE-CH32V305)`. The info response holds `02 13 12 00` (see [Command `0x0d`](../wch-link-protocol.md#command-0x0d-info-connect-quit)). The source of `v39` is open |
 | Target 1 | CH32V003F4P6 (16 KB flash), chip ID `0x00300500`, one-wire interface on PD1 |
 | Target 2 | CH32V208WBU6 (160 KB flash), chip ID `0x2080053c`, two-wire interface on PA13 (SWDIO) and PA14 (SWCLK), external power |
-| Host tools | wlink 0.1.2 and minichlink (a local build, version not recorded) |
+| Host tools | wlink 0.1.2 and minichlink (a local build, version not recorded). The `v006-` captures use wlink 0.1.3 and minichlink from ch32fun commit `a800cbd` |
+| Target 3 (`v006-` files) | CH32V006K8U6 (62 KB flash), chip ID `0x00600620`, QingKe V2C core. The probe is a WCH-LinkE with the same USB ID. wlink reports firmware v3.3(v39), minichlink reports 2.19. The cause of the difference is open |
 | USB capture | Linux `usbmon` on the bus of the probe, filtered to the probe address |
 | Logic analyzer | Saleae Logic Pro |
 
@@ -24,11 +25,17 @@ The file name gives the target, the tool and the command, for example `v003-wlin
 |---|---|
 | `v003-` | Target CH32V003 |
 | `v208-` | Target CH32V208 |
+| `v006-` | Target CH32V006 |
 | `wlink-` | wlink command |
 | `mc-` | minichlink command |
 | `raw-errors` | Packets sent by hand: unknown commands, wrong lengths and unknown sub-commands |
 
 Notes:
+
+- The `v006-` set has no `raw-errors`, `flash-noreset` or `connect-fail` file.
+- `v006-wlink-reset2.pcapng` is the reset that follows `v006-wlink-protect.pcapng`. `v006-wlink-flash.pcapng` flashes 4 KB of random data.
+- `v006-wlink-dump-verify.pcapng` reads the 4 KB back after the flash.
+- There is no minichlink halt and resume capture for the V006. `minichlink -T` waits for input. The resume file showed no command and was dropped. `v006-mc-reboot.pcapng` is the minichlink reboot (`-b`).
 
 - `v003-mc-write-head.pcapng` holds only the first 4000 frames of the minichlink write. The full capture had 13 MB.
 - On the CH32V208, the minichlink write has 4 KB only.
@@ -52,6 +59,11 @@ The analog files have one row for each sample, with the voltages of SWDIO and SW
 | `v003-wlink-status-low-timing.csv` | `wlink --speed low status` | 500 MS/s | 0: SWIO (PD1) |
 | `v003-wlink-dump-timing.csv` | `wlink dump 0x08000000 256` (speed `01`) | 500 MS/s | 0: SWIO (PD1) |
 | `v003-wlink-dump-low-timing.csv` | `wlink --speed low dump 0x08000000 256` | 500 MS/s | 0: SWIO (PD1) |
+
+The `v006-wlink-*-timing.csv` files use the same format and a 500 MS/s rate.
+Channel 0 is SWDIO, channel 1 is SWCLK, channels 2 and 3 are not connected.
+The trigger is a falling edge on SWDIO.
+The existing decoders do not decode them yet. The bursts hold 85 and 53 clocks, not 54.
 
 ## Decoders
 
