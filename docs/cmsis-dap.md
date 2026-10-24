@@ -392,6 +392,8 @@ The response is `81 00`.
   The JTAG fast path uses the same pin (PB4) and DMA1 channel 3.
   The release goes in both directions: the `fini()` of the JTAG fast path clears the DMA requests of SPI1 and SPI2.
   The one-wire timer shares DMA1 channel 3 (TIM3) or channel 5 (TIM1) with them.
+  The `fini()` also removes the SPI1 remap. A disabled SPI1 with the remap still owns PB4 (MISO), and blocks the TIM3_CH1 output of the one-wire engine.
+  A CH32V006 test on 2026-10-24 showed this: with the remap, the one-wire frames sent no bits after the line reset.
 - `DAP_SWJ_Clock` sets the TCK of the board port also while the bridge is on. The wire has its own clock: the high speed of the `wch-link` personality.
 
 OpenOCD sends the command with `cmsis-dap cmd 0x81 0x01`.
