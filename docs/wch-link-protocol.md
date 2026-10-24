@@ -119,8 +119,8 @@ The column "Seen" tells the source: "captured" is a USB capture, "tools" is a re
 - **Connect.** The probe starts the debug interface and does the chip detection. This takes about 90 ms on the CH32V003 and about 59 ms on the CH32V208. A connect after an erase or a protect command takes the same time. Byte 0 is a chip family code (`0x09` for the CH32V003, `0x05` for the CH32V208). Bytes 1 to 4 are the chip ID (u32 BE: `0x00300500`, `0x2080053c`).
 - **Quit.** The host sends this at the end of every session. A session is connect to quit.
 - **Sub-command `03`.** The probe needed about 74 ms to answer in 5 of 7 CH32V003 runs. It needed 1 ms in the other 2. On the CH32V208 it needed 0.9 ms or less. The reason is not known.
-- **Other values.** `0d 01 05` echoes `82 0d 01 05`, but it is not a no-op. The reply took 184 ms (CH32V003) and 97 ms (CH32V208). The next quit took 46 ms and 24 ms, instead of 0.2 ms (`v003-raw-errors.pcapng`, `v208-raw-errors.pcapng`). The effect is not known.
-- **Length check.** A memory read with a wrong length (`81 03 01 00`) gets a normal reply `82 03 01 01`. The probe does not check the length.
+- **Other values.** `0d 01 05` gets the echo `0d 01 05`, but it is not a no-op. The reply took 184 ms (CH32V003) and 97 ms (CH32V208). The next quit took 46 ms and 24 ms, instead of 0.2 ms (`v003-raw-errors.pcapng`, `v208-raw-errors.pcapng`). The effect is not known.
+- **Length check.** A memory read with a wrong length (`03 01 00`) gets a normal reply `03 01 01`. The probe does not check the length.
 
 ## Command `0x0c`: configure
 
