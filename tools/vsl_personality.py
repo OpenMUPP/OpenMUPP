@@ -108,24 +108,29 @@ def switch_request(active, target):
     raise PersonalityError("the %s personality has no switch command" % active)
 
 
+def refusal(target):
+    """The reason why the firmware refuses a switch to target."""
+    if target == BOOTLOADER:
+        return "the image has no bootloader entry (only the app-8k image has one)"
+    return "the image has one personality, or it does not have the %s personality" % target
+
+
 def check_reply(active, reply, target=None):
     """Raises PersonalityError when the reply does not accept the switch."""
     reply = bytes(reply)
-    refusal = "the image has one personality"
-    if target == BOOTLOADER:
-        refusal = "the image has no bootloader entry (only the app-8k image has one)"
     if active == "versaloon":
         if len(reply) != 1:
             raise PersonalityError("unexpected reply %s" % reply.hex())
         if reply[0] != 0:
-            raise PersonalityError("the firmware refused the switch: %s" % refusal)
+            raise PersonalityError("the firmware refused the switch: %s" % refusal(target))
         return
     if reply[:1] == bytes([DAP_INVALID]):
-        raise PersonalityError("the firmware does not know ID_DAP_Vendor0: %s" % refusal)
+        # Only an image with one personality and no bootloader entry
+        raise PersonalityError("the firmware does not know ID_DAP_Vendor0: the image has one personality and no bootloader entry")
     if len(reply) < 2 or reply[0] != DAP_VENDOR0:
         raise PersonalityError("unexpected response %s" % reply.hex())
     if reply[1] != 0:
-        raise PersonalityError("the firmware refused the switch (status %d)" % reply[1])
+        raise PersonalityError("the firmware refused the switch (status %d): %s" % (reply[1], refusal(target)))
 
 
 def is_stall(error):
@@ -258,7 +263,7 @@ def command_switch(usb, args):
     try:
         if not send_ep0_request(usb, device, args.personality):
             if active == "wch-link":
-                print("The firmware refused the switch", file=sys.stderr)
+                print("The firmware refused the switch: %s" % refusal(args.personality), file=sys.stderr)
                 return 1
             # A stall: the firmware refused the switch, or it is from before
             # the EP0 request. The in-protocol command tells which one.
@@ -274,6 +279,9 @@ def command_switch(usb, args):
     print("Switching from %s to %s ..." % (active, args.personality))
     if not wait_for(usb, args.personality, serial, ENUMERATION_TIMEOUT_S):
         print("The dongle did not enumerate as %s" % args.personality, file=sys.stderr)
+        if args.personality == BOOTLOADER:
+            # The tool reads the product string and the serial number, which needs access to the device
+            print("If the bootloader runs, check the access to 0483:5740: etc/70-versaloon-bootloader.rules", file=sys.stderr)
         return 1
     if args.personality == BOOTLOADER:
         print("The dongle runs the bootloader")

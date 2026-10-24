@@ -30,8 +30,9 @@ Send the bootloader code `0xB0` (`boot::bootloaderCode`) instead of a personalit
 The WCH-Link protocol has no switch command, so use the switch request on EP0.
 The commands also work in an image with one personality.
 An image other than `app-8k` refuses the code.
-The switch request on EP0 then stalls, `SWITCH_PERSONALITY` replies status `1`, and `ID_DAP_Vendor0` replies status `0xFF`.
-A CMSIS-DAP image with one personality and no bootloader replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
+The switch request on EP0 then stalls, and `SWITCH_PERSONALITY` replies status `1`.
+A multi image replies status `0xFF` to `ID_DAP_Vendor0`.
+A CMSIS-DAP image with one personality replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
 After the reply, the firmware does the same steps as for `VERSALOON_FW_UPDATE` (see [Reply and steps](#reply-and-steps)).
 
 `tools/vsl_personality.py` sends the bootloader code from the host:
@@ -47,6 +48,13 @@ After the request, the tool waits 10 s for `versaloon-bootloader`.
 It finds the bootloader by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
 Other devices use the ID `0483:5740` too, so the tool also compares the product string.
 `python3 tools/vsl_personality.py show` also lists a dongle that runs the bootloader.
+
+The tool must open the bootloader to read its strings.
+On Linux, a udev rule gives a normal user this access.
+Copy `etc/70-versaloon-bootloader.rules` to `/etc/udev/rules.d/`.
+Then reload the rules with `udevadm control --reload`, and start the bootloader again.
+Without access, the tool does not find the bootloader.
+It then stops after 10 s with an error and a hint, also when the bootloader runs.
 
 ### Stored personality
 

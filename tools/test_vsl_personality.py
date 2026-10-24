@@ -67,15 +67,15 @@ class CheckReplyTest(unittest.TestCase):
     def test_bootloader_refused(self):
         with self.assertRaisesRegex(vp.PersonalityError, "no bootloader entry"):
             vp.check_reply("versaloon", [0x01], "bootloader")
-        with self.assertRaisesRegex(vp.PersonalityError, "no bootloader entry"):
-            vp.check_reply("cmsis-dap", [0xFF], "bootloader")
+        with self.assertRaisesRegex(vp.PersonalityError, "status 255.*no bootloader entry"):
+            vp.check_reply("cmsis-dap", [0x80, 0xFF], "bootloader")
 
     def test_cmsis_dap_accepted(self):
         vp.check_reply("cmsis-dap", [0x80, 0x00])
 
     def test_cmsis_dap_refused(self):
-        with self.assertRaisesRegex(vp.PersonalityError, "refused"):
-            vp.check_reply("cmsis-dap", [0x80, 0xFF])
+        with self.assertRaisesRegex(vp.PersonalityError, "refused .*status 255.*one personality.*wch-link"):
+            vp.check_reply("cmsis-dap", [0x80, 0xFF], "wch-link")
 
     def test_cmsis_dap_invalid(self):
         with self.assertRaisesRegex(vp.PersonalityError, "one personality"):
@@ -197,8 +197,11 @@ class CommandSwitchTest(unittest.TestCase):
 
     def switch(self, device, target):
         args = argparse.Namespace(serial=None, personality=target)
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            return vp.command_switch(fake_usb([device]), args)
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr):
+            result = vp.command_switch(fake_usb([device]), args)
+        self.stderr = stderr.getvalue()
+        return result
 
     def test_ep0_request(self):
         device = FakeDevice(0x0483, 0xA038)
@@ -245,6 +248,14 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(self.switch(device, "versaloon"), 1)
         self.assertEqual(device.writes, [])
         self.assertEqual(self.waited, [])
+        self.assertIn("does not have the versaloon personality", self.stderr)
+        self.assertEqual(self.switch(device, "bootloader"), 1)
+        self.assertIn("no bootloader entry", self.stderr)
+
+    def test_bootloader_not_found_gives_the_udev_hint(self):
+        self.wait_result = False
+        self.assertEqual(self.switch(FakeDevice(0x0483, 0xA038), "bootloader"), 1)
+        self.assertIn("70-versaloon-bootloader.rules", self.stderr)
 
     def test_fallback_versaloon(self):
         device = FakeDevice(0x0483, 0xA038, ctrl_error=stall(), reply=[0x00])
