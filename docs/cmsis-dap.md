@@ -397,7 +397,8 @@ openocd -c "set WORKAREASIZE 0x2000" -f etc/openocd/ch32v00x-cmsis-dap.cfg
 
 The common file replaces the `jtag_init` proc of OpenOCD. The proc sends `cmsis-dap cmd 0x81 0x01` before the chain scan.
 A TAP `setup` event is too late: OpenOCD sends it after the chain scan.
-An image without the bridge replies `ID_DAP_Invalid`. Then `init` stops with "The probe has no RISC-V bridge", followed by the OpenOCD error.
+An image without the bridge replies `ID_DAP_Invalid`. OpenOCD logs the cause of the failure.
+Then `init` stops with "The probe has no RISC-V bridge".
 The proc also adds `cmsis-dap cmd 0x81 0x00` to `pre_shutdown_commands`. Thus `shutdown` switches the bridge off before OpenOCD closes the adapter.
 A signal (for example Ctrl-C) does not run `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
 Switch the bridge off with `python3 tools/vsl_rv_bridge.py off`, or replug the probe.
