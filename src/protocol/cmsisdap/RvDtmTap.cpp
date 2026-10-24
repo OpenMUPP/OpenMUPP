@@ -144,13 +144,16 @@ void RvDtmTap::dmiAccess() {
 }
 
 bool RvDtmTap::connect() {
-   // One wire first, as in wchlink::Processor::connect()
-   for(const auto wire : { rvswd::Wire::One, rvswd::Wire::Two }) {
+   // One wire first, as in wchlink::Processor::connect(). After a connect on
+   // two wires, two wires first: the target is a two-wire target.
+   const rvswd::Wire other = wire_ == rvswd::Wire::One ? rvswd::Wire::Two : rvswd::Wire::One;
+   for(const auto wire : { wire_, other }) {
       target_.attach(wire);
       uint32_t status = 0;
       if(target_.dmiWrite(wchlink::wchdm::unlock1, wchlink::wchdm::unlockValue) == rvswd::Status::Ok &&
          target_.dmiWrite(wchlink::wchdm::unlock2, wchlink::wchdm::unlockValue) == rvswd::Status::Ok &&
          target_.readDmstatus(status) == rvswd::Status::Ok) {
+         wire_ = wire;
          return true;
       }
       target_.detach();

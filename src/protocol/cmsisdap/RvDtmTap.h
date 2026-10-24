@@ -21,7 +21,8 @@
 // The connect: the first DMI access after init(), after Test-Logic-Reset
 // and after pinsChanged() first finds the wire. It attaches on one wire,
 // then on two wires, as the connect of the wch-link personality
-// (WchLinkProcessor.h). On each wire it writes 5aa50400 to the DM
+// (WchLinkProcessor.h). After a connect on two wires, the next connect
+// tries two wires first. On each wire it writes 5aa50400 to the DM
 // registers 0x7e and 0x7d and reads dmstatus. A dmstatus with the version
 // of debug spec 0.13 selects the wire. The connect does not halt the hart
 // and sets up no clock: the host tool owns the target state. A connect
@@ -162,6 +163,8 @@ class RvDtmTap final : public protocol::JtagPort {
    bool error_{ false };
    // The target is attached on its wire.
    bool attached_{ false };
+   // The wire that the connect tries first: the wire of the last connect
+   rvswd::Wire wire_{ rvswd::Wire::One };
 };
 
 } // namespace cmsisdap

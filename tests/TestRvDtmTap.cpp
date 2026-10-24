@@ -374,6 +374,22 @@ TEST_CASE("RV DTM TAP: the next access connects again after Test-Logic-Reset, in
    }
 }
 
+TEST_CASE("RV DTM TAP: after a connect on two wires, the next connect tries two wires first") {
+   Dtm d(rvswd::Wire::Two);
+   RvDtmTap &tap = d.tap;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   dmi(tap, { chipId, 0, opRead });
+   REQUIRE(d.pins.oneWireFrames > 0);
+   const int frames = d.pins.oneWireFrames;
+   reset(tap);
+   selectIr(tap, cmsisdap::rvDtm::irDmi);
+   dmi(tap, { chipId, 0, opRead });
+   CHECK(dmi(tap, { 0, 0, opNop }) == Dmi{ chipId, chipIdValue, opNop });
+   CHECK(d.pins.oneWireFrames == frames);
+   CHECK(d.pins.accesses.size() == 8);
+}
+
 TEST_CASE("RV DTM TAP: a connect without a target fails the access, and the next access tries again") {
    Dtm d;
    RvDtmTap &tap = d.tap;

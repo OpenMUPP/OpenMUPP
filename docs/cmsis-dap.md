@@ -415,6 +415,7 @@ The first DMI access after one of these events connects to the target:
 - `DAP_SWJ_Pins` with SWCLK or SWDIO selected
 
 The connect finds the wire: one wire first, then two wires, as the connect of the `wch-link` personality.
+After a connect on two wires, the next connect tries two wires first.
 On each wire, it writes `5aa50400` to the DM registers `0x7e` and `0x7d`, and reads `dmstatus`.
 A `dmstatus` with the version of debug spec 0.13 selects the wire.
 The CH32V006 answers on one wire only.
