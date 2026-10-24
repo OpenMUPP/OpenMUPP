@@ -393,8 +393,16 @@ The response is `81 00`.
 - `DAP_SWJ_Clock` sets the TCK of the board port also while the bridge is on. The wire has its own clock: the high speed of the `wch-link` personality.
 
 OpenOCD sends the command with `cmsis-dap cmd 0x81 0x01`.
-probe-rs cannot send a vendor command (#103, decision 7). Send the command with a host tool before probe-rs starts.
+probe-rs cannot send a vendor command (#103, decision 7). Send the command with `tools/vsl_rv_bridge.py` before probe-rs starts:
+
+```sh
+python3 tools/vsl_rv_bridge.py on
+probe-rs info --protocol jtag
+python3 tools/vsl_rv_bridge.py off
+```
+
 The bridge stays on until a USB reset, a power cycle or `81 00`.
+Thus probe-rs must not reset the USB device when it opens it. The hardware test (#109) checks this.
 
 ### Connect
 
