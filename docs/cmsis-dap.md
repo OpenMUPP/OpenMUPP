@@ -409,7 +409,7 @@ The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (
 
 Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, OtherUse with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
 The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
-The CH32V003 and CH32V20x configs are not tested on hardware.
+The [bridge hardware test](#bridge-hardware-test) has the CH32V003 results. The CH32V20x config is not tested on hardware.
 
 ### Bridge switch
 
@@ -503,7 +503,8 @@ OpenOCD would then repeat accesses that the target already ran, and a permanent 
 
 ### Bridge hardware test
 
-The hardware test (#109) has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the OtherUse and on the Mini.
+The hardware test (#109) has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the OtherUse.
+The Mini has almost the same hardware as the OtherUse, so this test does not include it.
 This section has the results of the steps that are done.
 
 #### CH32V006 on the OtherUse
@@ -563,7 +564,54 @@ The USB capture shows that the host sends the next packet a few µs after the re
 The probe takes about 1.1 ms for a packet with 3 DMI scans, and about 0.2 ms for a packet with only TMS moves.
 Thus the firmware takes about 300 µs for each DMI scan, and the wire uses only about 50 µs of it.
 `adapter speed` (100 kHz to 10 MHz) does not change the rate.
-The cause of the remaining time in the firmware is not measured.
+The cause of the remaining time in the firmware is not measured (#114).
+
+#### CH32V003 on the OtherUse
+
+The probe, OpenOCD, GDB and probe-rs are the same as for the CH32V006.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-24 |
+| Target | CH32V003 on one wire, with its own supply. probe-rs uses `--chip CH32V003F4P6` |
+| OpenOCD config | `ch32v003-cmsis-dap.cfg`, default `WORKAREASIZE` (`0x800`) |
+| Test programs | The counter loops of the CH32V006 test, with the counter at `0x20000400` (2 KB RAM). The flash program has 8 KB of random data |
+
+| Test | Tool | Result |
+|---|---|---|
+| Examine | OpenOCD | Pass. IDCODE `0x15653101`, `XLEN=32`, `misa=0x40800014` (RV32EC and X). Chip ID at `0x1ffff7c4`: `00300500` |
+| `halt`, `resume` | OpenOCD | Pass. The counter increases after `resume` |
+| `step` | OpenOCD, GDB `stepi` | Pass |
+| `reg` | OpenOCD, GDB | Pass: `pc`, `a0`, `a1`, `x15`, `misa`, `dcsr` |
+| `mdw`, `mww` | OpenOCD, GDB | Pass on a halted hart. OpenOCD uses the program buffer |
+| Software breakpoint in RAM | OpenOCD `bp`, GDB `break` | Pass |
+| Hardware breakpoint | OpenOCD `bp ... hw` | Not available: no triggers |
+| `load_image` to RAM | OpenOCD, GDB `load` | Pass, with `verify_image` |
+| Reset by `ndmreset` | OpenOCD `reset halt`, `reset run` | Pass. `reset halt` stops at `pc` 0. Unlike the CH32V006, `dmstatus` does not show `allhavereset` after the reset |
+| WCH registers `0x7c` to `0x7f` | OpenOCD `riscv dmi_read` | Pass: `00010403`, `5aa50401`, `5aa50401`, `00300500` |
+| `shutdown` | OpenOCD | Pass. The bridge is off after it |
+| `info` | probe-rs | probe-rs finds the DTM, but it cannot identify the chip. The same result as on the CH32V006 |
+| `read` | probe-rs | Pass. 8 KB of flash agree with the image |
+| `download --verify` | probe-rs, built-in flash algorithm | Pass. 8 KB in 20.1 s, with the verify. After `probe-rs reset`, the program runs |
+| `gdb` | probe-rs | Fail, in probe-rs: the same `x16` read as on the CH32V006 (note 2 above) |
+
+After a GDB `monitor reset halt`, OpenOCD shows "Register fp is dirty!" and "Register s1 is dirty!".
+OpenOCD uses `s0` and `s1` as scratch registers for the program buffer, and it discards their values at the reset.
+
+Rates, with the target at its reset clock:
+
+| Measurement | Result |
+|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.87 ms for each read |
+| OpenOCD memory read, `dump_image` of 2 KB RAM | 0.27 s (7.3 KiB/s) |
+| OpenOCD memory read, `dump_image` of 8 KB flash | 1.03 s (7.8 KiB/s) |
+| OpenOCD memory write, `load_image` of 2 KB RAM | 0.25 s (8.0 KiB/s) |
+| probe-rs `read` of 8 KB | 2.23 s (3.6 KiB/s), with the attach |
+| probe-rs `download --verify` of 8 KB | 20.1 s |
+
+OpenOCD is about 4 times faster on the CH32V003 than on the CH32V006.
+On the CH32V003, it uses the program buffer. This test did not capture the USB packets of the CH32V003.
+The CH32V006 refuses the program buffer, so OpenOCD uses the abstract command there (see [OpenOCD configs](#openocd-configs)).
 
 ## Tests
 
