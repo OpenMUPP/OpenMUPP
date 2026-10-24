@@ -26,6 +26,11 @@ inline constexpr uint32_t pollCount = Flash::operationTimeoutUs / Flash::pollInt
 // The padding of a block: erased flash
 inline constexpr uint32_t erasedWord = 0xffff'ffffu;
 
+// The option half word with its inverse byte
+constexpr uint32_t halfWithInverse(uint8_t value) {
+   return value | static_cast<uint32_t>(static_cast<uint8_t>(~value)) << 8;
+}
+
 constexpr uint32_t roundUp(uint32_t value, uint32_t multiple) {
    return (value + multiple - 1) / multiple * multiple;
 }
@@ -180,7 +185,10 @@ bool Flash::setReadProtection(bool protect, Series series) {
       if(done) {
          // The write of RDPR 0xa5 on a protected chip erases the main flash and stalls the bus for about 110 ms:
          // the abstract command stays busy longer than the module polls.
-         const rvswd::Status status = target_.writeMemory(fpec::optionBytes + 2 * i, values[i], rvswd::Width::Half);
+         // The CH32V006 leaves a half word unprogrammed when the byte is 0xff and the hardware adds the inverse:
+         // USER reads 0xffff. The half word goes out with its inverse.
+         const uint32_t half = series == Series::V006 ? halfWithInverse(values[i]) : values[i];
+         const rvswd::Status status = target_.writeMemory(fpec::optionBytes + 2 * i, half, rvswd::Width::Half);
          done = (ok(status) || (status == rvswd::Status::Timeout && waitCommand())) && waitIdle();
       }
    }

@@ -405,6 +405,10 @@ class MockWchFlash {
             errors.push_back("V006 option half word without STRT");
          }
          strtArmed_ = false;
+         // A byte of 0xff with a hardware inverse stays unprogrammed on the chip: the half word needs its inverse.
+         if(((value ^ value >> 8) & 0xff) != 0xff) {
+            errors.push_back("V006 option half word without its inverse");
+         }
       }
       if(options[index] != erasedOption()) {
          errors.push_back("option byte write without erase");
