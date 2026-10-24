@@ -261,8 +261,8 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/debug-log.md](docs/debug-log.md): the debug log over the serial port in a `Debug` build.
 - [docs/cmsis-dap.md](docs/cmsis-dap.md): the CMSIS-DAP personality and its command processor for SWD and JTAG.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
-- [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule and size.
-- [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures (`docs/wch-link-captures/`).
+- [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule, size, implementation and hardware test.
+- [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures ([docs/wch-link-captures/](docs/wch-link-captures/README.md)).
 - [docs/development.md](docs/development.md): build outputs, unit tests, the flash speed benchmark, code format, version, CI and branches.
 - [docs/status.md](docs/status.md): the functions of the firmware and the hardware test status.
 - [docs/plan.md](docs/plan.md): the plan and the work items.

@@ -7,7 +7,7 @@
 // with mock pins and a mock DM (tests/MockDebugModule.h).
 //
 // The sequences come from the WCH-LinkE captures (docs/wch-link-protocol.md,
-// "Probe actions" and "Debug module layer"):
+// "Probe actions", and docs/wch-link.md, "Debug module layer"):
 //
 // - DM reset: dmcontrol 0, then dmactive (wlink halt).
 // - Halt: dmcontrol haltreq twice, then dmstatus until allhalted (the
