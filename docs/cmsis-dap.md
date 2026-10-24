@@ -355,24 +355,19 @@ It does each DMI access on the WCH wire (one wire or two wires), with the wire e
 
 | IR (5 bits) | Register | Content |
 |---|---|---|
-| `0x01` | IDCODE | `0x156532FD` |
+| `0x01` | IDCODE | `0x15653101` |
 | `0x10` | DTMCS | `version` 1 (debug spec 0.13), `abits` 7, `idle` 0, `dmistat` |
 | `0x11` | DMI (41 bits) | `address[40:34]`, `data[33:2]`, `op[1:0]` |
 | Others | BYPASS | 1 bit |
 
 ### IDCODE
 
-The IDCODE is `0x156532FD`: version 1, part `0x5653` ("VS"), and the JEP106 manufacturer code of Elpida (bank 3, ID `0x7E`).
+The IDCODE is `0x15653101`: version 1, part `0x5653` ("VS"), and a manufacturer code with continuation code 1 and ID 0.
 
-- probe-rs 0.32.0 rejects an IDCODE with a manufacturer identity of 0 or 127 (`IdCode::valid()`). A capture with the first value, `0x15653001`, showed this.
+- JEP106 assigns no ID 0. Thus no real part has this manufacturer code, and no tool shows a manufacturer name for it. OpenOCD shows `<invalid>`.
+- probe-rs 0.32.0 rejects an IDCODE whose 11-bit manufacturer field (bits 11:1) is 0 or `0x7F` (`IdCode::valid()`). The field of this IDCODE is `0x80`. A capture with the first value, `0x15653001` (field 0), showed the rejection.
 - WCH has no JEP106 manufacturer code. The WCH fork of OpenOCD uses `0x00001` for its targets, which probe-rs rejects.
-- An IDCODE holds 4 bits of the continuation code, so it can only name banks 1 to 16. All IDs of these banks are assigned. Thus each valid IDCODE names an existing manufacturer.
-- Elpida is a DRAM maker that Micron bought in 2013. It ships no new parts.
-- OpenOCD accepts each value. The bridge configs give it with `-expected-id`.
-
-Risk: OpenOCD and probe-rs show "Elpida" as the manufacturer of the bridge.
-A config of an Elpida part with the same IDCODE would accept the bridge.
-In 2026-10, no OpenOCD config (`master` at `cb0c224e9`) and no probe-rs 0.32.0 target used this value or this manufacturer code.
+- OpenOCD accepts each IDCODE. The bridge configs (#108) will give this value with `-expected-id`.
 
 ### DMI errors
 
