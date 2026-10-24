@@ -177,14 +177,31 @@ class FindDevicesTest(unittest.TestCase):
         other = FakeDevice(0x0483, 0x5740, "STM32 Virtual ComPort")
         self.assertEqual(vp.find_devices(fake_usb([ours, other])), [("bootloader", ours)])
 
-    def test_rom_dfu_needs_no_product_string_and_no_serial(self):
+    def test_rom_dfu_needs_no_product_string(self):
         dfu = FakeDevice(0x0483, 0xDF11, "DFU in FS Mode", serial="ROM")
-        self.assertEqual(vp.find_devices(fake_usb([dfu]), "SN1"), [("bootloader", dfu)])
+        self.assertEqual(vp.find_devices(fake_usb([dfu])), [("bootloader", dfu)])
+
+    def test_rom_dfu_has_a_strict_serial_check(self):
+        # Another STM32 board in ROM DFU mode does not hide the selected dongle
+        ours = FakeDevice(0x0483, 0xA038, serial="SN1")
+        dfu = FakeDevice(0x0483, 0xDF11, serial="ROM")
+        self.assertEqual(vp.find_devices(fake_usb([ours, dfu]), "SN1"), [("versaloon", ours)])
+        self.assertEqual(vp.find_devices(fake_usb([ours, dfu]), "SN1", vp.NO_SERIAL_IDS), [("versaloon", ours), ("bootloader", dfu)])
 
     def test_serial(self):
         a = FakeDevice(0x0483, 0xA038, serial="A")
         b = FakeDevice(0x0403, 0x9B3C, serial="B")
         self.assertEqual(vp.find_devices(fake_usb([a, b]), "B"), [("cmsis-dap", b)])
+
+
+class WaitForTest(unittest.TestCase):
+    def test_bootloader_wait_skips_the_serial_of_the_rom_dfu(self):
+        dfu = FakeDevice(0x0483, 0xDF11, serial="ROM")
+        self.assertTrue(vp.wait_for(fake_usb([dfu]), "bootloader", "SN1", 1.0))
+
+    def test_other_waits_check_the_serial(self):
+        device = FakeDevice(0x0483, 0xA038, serial="ROM")
+        self.assertFalse(vp.wait_for(fake_usb([device]), "versaloon", "SN1", 0.0))
 
 
 class CommandSwitchTest(unittest.TestCase):

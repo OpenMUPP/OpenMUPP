@@ -67,8 +67,8 @@ PRODUCT_STRINGS = {
 }
 
 # The ROM DFU has its own serial number, not the chip UID of the firmware,
-# so the serial check skips it. Limit: with more than one STM32H5 dongle in
-# DFU mode, --serial cannot select one.
+# so the wait for the bootloader skips the serial check for it. Limit: any
+# STM32 in ROM DFU mode ends the wait, also another board.
 NO_SERIAL_IDS = {(0x0483, 0xDF11)}
 
 SWITCH_REQUEST_TYPE = 0x40  # vendor, host to device, recipient device
@@ -169,8 +169,11 @@ def get_string(usb, device, index):
         return None
 
 
-def find_devices(usb, serial=None):
-    """(personality, device) for each dongle, optionally with one serial number."""
+def find_devices(usb, serial=None, any_serial_ids=()):
+    """(personality, device) for each dongle, optionally with one serial number.
+
+    The devices with an ID in any_serial_ids match each serial number.
+    """
     result = []
     for name, (_code, ids) in PERSONALITIES.items():
         for vid, pid in ids:
@@ -178,7 +181,7 @@ def find_devices(usb, serial=None):
                 product = PRODUCT_STRINGS.get((vid, pid))
                 if product is not None and get_string(usb, device, device.iProduct) != product:
                     continue
-                if serial is not None and (vid, pid) not in NO_SERIAL_IDS and get_string(usb, device, device.iSerialNumber) != serial:
+                if serial is not None and (vid, pid) not in any_serial_ids and get_string(usb, device, device.iSerialNumber) != serial:
                     continue
                 result.append((name, device))
     return result
@@ -187,7 +190,8 @@ def find_devices(usb, serial=None):
 def wait_for(usb, target, serial, timeout_s):
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        if any(name == target for name, _ in find_devices(usb, serial)):
+        any_serial_ids = NO_SERIAL_IDS if target == BOOTLOADER else ()
+        if any(name == target for name, _ in find_devices(usb, serial, any_serial_ids)):
             return True
         time.sleep(0.2)
     return False

@@ -53,8 +53,9 @@ After the request, the tool waits 10 s for the bootloader.
 It finds `versaloon-bootloader` by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
 Other devices use the ID `0483:5740` too, so the tool also compares the product string.
 It finds the ROM USB DFU of the STM32H5 by the ID `0483:df11` only.
-The ROM DFU has its own serial number, so the tool does not compare it.
-Thus, with more than one STM32H5 dongle in DFU mode, `--serial` cannot select one of them.
+The ROM DFU has its own serial number, so the wait for the bootloader does not compare it.
+Thus any STM32 device in ROM DFU mode ends the wait, also a different board.
+The other commands compare the serial number of the ROM DFU, so `--serial` does not select a device in ROM DFU mode.
 `python3 tools/vsl_personality.py show` also lists a dongle that runs the bootloader.
 
 The tool must open the bootloader to read its strings.
