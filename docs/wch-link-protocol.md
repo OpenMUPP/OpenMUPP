@@ -176,6 +176,11 @@ The probe does not change the value of a register on the way.
 A DMI round trip takes about 0.1 ms on the USB bus.
 On the wire, one host access takes 120 to 200 µs, with the USB round trip (see [Wire timing](#wire-timing-ch32v208-two-wires)).
 
+## Reset (`0x0b`)
+
+`0b 01 01` resets the target and lets it run. The response comes after about 15 ms (CH32V003) and 10 ms (CH32V208).
+The `wlink reset` command waits 300 ms and then quits.
+
 ## Memory read (`0x03`)
 
 wlink uses this path for `dump`. The sequence:
@@ -186,6 +191,14 @@ wlink uses this path for `dump`. The sequence:
 
 A read of the whole 16 KB flash needs 256 packets. It takes about 0.2 s.
 The command ends after `len` bytes. No end marker follows.
+
+### Byte order
+
+Memory read data on endpoint `0x82` holds each 32-bit word with the most significant byte first.
+The host reverses each group of 4 bytes to get the little-endian memory content.
+Example: the word at `0x08000000` is `6f 00 20 12` in memory and arrives as `12 20 00 6f`. On the CH32V208, `6f 20 e0 42` arrives as `42 e0 20 6f`.
+The words in the `0x11` answer also have the most significant byte first.
+Flash write data does not use this reversal. The image goes out in file order.
 
 ## Flash program (wlink)
 
@@ -261,26 +274,11 @@ No stub code is copied into this repository.
 
 The captures do not show which operation bits the probe uses for each command. The wire timing of a flash program is not captured.
 
-## Erase (`wlink erase`)
+### Erase (`wlink erase`)
 
 `06 01 01`, `06 01 04`, then `02 01 01` (response `02 01 01` after 7.6 ms on the CH32V003 and 138 ms on the CH32V208), then a new connect (`0d 01 02`, 90 ms and 59 ms), then quit.
 The whole command took 0.19 s (CH32V003) and 0.26 s (CH32V208).
 The erase command needs no data transfer and no stub.
-
-## Reset (`0x0b`)
-
-`0b 01 01` resets the target and lets it run. The response comes after about 15 ms (CH32V003) and 10 ms (CH32V208).
-The `wlink reset` command waits 300 ms and then quits.
-
-## Halt and resume
-
-wlink and minichlink do both through DMI. No special command exists.
-
-- **Halt.** The core is already halted when the host reads `dmstatus` after the connect command, because the connect command halts the core (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)).
-  In `v003-wlink-halt.pcapng` the host writes `dmcontrol` `00000000` and `00000001`. It reads `dmcontrol` and `dmstatus`, writes `00000001`, and reads `dmstatus`.
-  A halt request for a running core is not in the captures.
-- **Resume.** In `v003-wlink-resume.pcapng` the host reads `dmcontrol`, writes `a0000001` and reads `dmstatus`.
-  Then it writes `80000001` twice (`haltreq`), `00000001` and `40000001` (`resumereq`, bit 30). Then it reads `dmstatus` twice.
 
 ## Probe actions at connect, at chip information and at quit
 
@@ -342,6 +340,16 @@ The probe writes `dmcontrol` `40000001` (`resumereq`), reads `dmstatus` (`0x0003
 The USB capture shows no host command for this. Both wire captures show the same three accesses at the end (CH32V208: 62.7 to 62.9 ms. CH32V003: 92.96 to 93.07 ms).
 So quit resumes the core. This is why a halted core runs again after `wlink status`.
 
+## Halt and resume
+
+wlink and minichlink do both through DMI. No special command exists.
+
+- **Halt.** The core is already halted when the host reads `dmstatus` after the connect command, because the connect command halts the core (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)).
+  In `v003-wlink-halt.pcapng` the host writes `dmcontrol` `00000000` and `00000001`. It reads `dmcontrol` and `dmstatus`, writes `00000001`, and reads `dmstatus`.
+  A halt request for a running core is not in the captures.
+- **Resume.** In `v003-wlink-resume.pcapng` the host reads `dmcontrol`, writes `a0000001` and reads `dmstatus`.
+  Then it writes `80000001` twice (`haltreq`), `00000001` and `40000001` (`resumereq`, bit 30). Then it reads `dmstatus` twice.
+
 ## minichlink path
 
 On the CH32V003, minichlink uses only commands `0x0d`, `0x0c`, `0x11`, `0x06` (query) and `0x08` (DMI).
@@ -369,14 +377,6 @@ Observations:
 - `minichlink -r file 0x08000000 16384` fails with "Exception executing abstract command". Reads of 4096, 8192 and 16000 bytes work. This is a minichlink or chip problem, not a probe problem. The capture `v003-mc-read.pcapng` uses 4096 bytes.
 - minichlink sends `0d 03` before it does anything else.
 
-## Byte order
-
-Memory read data on endpoint `0x82` holds each 32-bit word with the most significant byte first.
-The host reverses each group of 4 bytes to get the little-endian memory content.
-Example: the word at `0x08000000` is `6f 00 20 12` in memory and arrives as `12 20 00 6f`. On the CH32V208, `6f 20 e0 42` arrives as `42 e0 20 6f`.
-The words in the `0x11` answer also have the most significant byte first.
-Flash write data does not use this reversal. The image goes out in file order.
-
 ## Timing seen on USB
 
 | Operation | Time |
@@ -388,6 +388,130 @@ Flash write data does not use this reversal. The image goes out in file order.
 | Program of 160 KB (wlink, CH32V208) | 15.2 s |
 | Erase (wlink) | 0.19 s (CH32V003), 0.26 s (CH32V208) |
 | Protect, unprotect | CH32V003: 103 ms, 108 ms. CH32V208: 59 ms, 210 ms |
+
+## Wire frame format
+
+The two-wire captures show one frame format on the wire, after the 85-clock frames. A frame has 54 clocks. SWDIO is stable at the rising edge of SWCLK. Bit 0 is the first clock.
+The decoder is `tools/wch_link_frames_2wire.py`. It works on the CSV files of the CH32V208. It skips the 85-clock frames and counts them.
+The format was checked against the 15 DMI accesses that the USB capture of the same run shows. The address and the data of every access match, and the order matches.
+The decoder decodes 147 frames of the status run, and the parity is right in all of them.
+It skips bursts that are not a multiple of 54 clocks (the 85-clock frames and a few short bursts) and counts them.
+
+| Bits | Content | Driven by |
+|---|---|---|
+| 0 | The rising edge of SWCLK from the idle level, with SWDIO high. After this edge, SWDIO falls while SWCLK is high: the start condition. | Probe |
+| 1 to 7 | DM register address, MSB first | Probe |
+| 8 | Write bit: `1` for a write, `0` for a read | Probe |
+| 9 | Parity of bits 1 to 8: `1` if the number of ones is odd | Probe |
+| 10 | The level of bit 9. SWDIO changes direction after the rising edge. | Probe |
+| 11 to 14 | Handshake: bit 11 low, bit 12 released, bit 13 low, bit 14 released | Bit 11: target. Bit 13: probe. Bits 12 and 14: nobody. |
+| 15 to 46 | Data, MSB first | Probe (write), target (read) |
+| 47 | Parity of the 32 data bits: `1` if the number of ones is odd | Probe (write), target (read) |
+| 48 | The level of bit 47. SWDIO changes direction after the rising edge (write). | Probe (write), target (read) |
+| 49 to 52 | Handshake: bit 49 low, bit 50 released, bit 51 high, bit 52 released | Bit 49: target. Bit 51: probe. Bits 50 and 52: nobody. |
+| 53 | Always `0`. After this edge, SWDIO rises while SWCLK is high: the stop condition. | Probe |
+
+The frame is a start condition, 53 clocks and a stop condition. The start and the stop condition are the same as on an I2C bus.
+The table numbers the bits as the decoder does: bit 0 is the clock before the start condition.
+Bits 1 to 53 are the clocks between the start and the stop condition.
+The rules for bits 9, 10, 47, 48 and 53 hold in all 440 frames of the three status captures (default, medium and low speed).
+
+Observations:
+
+- **Operation field (bits 8 and 9).** Bit 8 tells a write from a read. Bit 9 is a parity bit over the address and bit 8. This explains the values `11`, `10`, `01` and `00` of the earlier decoder output.
+- **Handshake bits (11 to 14 and 49 to 52).** The analog capture of the WCH-LinkE shows the driver of each bit (see [Who drives a bit](#who-drives-a-bit-analog-capture)).
+  The target pulls bit 11 and bit 49 low. The probe drives bit 13 low and bit 51 high. Nobody drives bits 12, 14, 50 and 52.
+  In the released bits, SWDIO rises slowly from the low level. Thus the logic analyzer shows `0` or `1` there, by chance.
+  This explains the values `0000`, `0100`, `0011` and `0111` of the decoder. A probe must drive bit 13 and bit 51.
+  When the probe released bit 13, the CH32V208 drove bit 11 only, and then no more bits of the frame. It did not do the write.
+- **Parity (bits 47 and 48).** Bit 47 is the parity. Bit 48 keeps the level of bit 47 for one more clock, as bit 10 keeps the level of bit 9.
+- **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 4 to 14 ns after the falling edge.
+  Bits 1 to 9, 13, 51 and 53 follow the probe pattern. Bits 11 and 49 follow the target pattern. Bits 15 to 47 follow the probe pattern in a write and the target pattern in a read.
+  SWDIO changes while SWCLK is high in bits 10 and 14, and in bit 48 of a write: the line changes direction there.
+- **Longer low phases.** The low phase before bits 1, 15 and 53 is about two half periods: 2.1 to 2.2 µs at the 2.09 µs clock. SWDIO changes direction before bits 15 and 53.
+- **Idle.** Between frames, SWCLK is low and SWDIO is high. The probe keeps SWCLK high for about 1 to 5 µs after the stop condition.
+  Before the start condition, SWCLK rises and stays high for about 1 to 8 µs.
+- **Before the first frame.** After the 85-clock frames, the probe sends 9 clocks with SWDIO high, one clock with SWDIO low, and 90 clocks with SWDIO high. Then the first frame starts. This can be a line reset. This is **not confirmed**.
+- **Clock for each access.** At the default speed, a write uses 1.10 µs for each bit (about 907 kHz). A read uses 2.09 µs (about 478 kHz). At low speed, all accesses use 2.09 µs.
+- **Fast triples.** The long bursts at about 120 ns for each bit (default speed) hold frames in the order `data1` write, `command` write, `data0` read. These are the target reads for `0x11`, `06 01` and `0d 04`. The values of the first four reads match the `0x11` answer byte for byte.
+
+### Who drives a bit (analog capture)
+
+Source: an analog capture of `wlink status` on the CH32V208, at 12.5 MS/s.
+Two parts of it are in the repository: `v208-wlink-status-analog-connect.csv` (the first five connect frames) and `v208-wlink-status-analog-frames.csv` (the first frames of 54 clocks).
+
+The voltage of SWDIO in the high phase of SWCLK tells the driver:
+
+| Level | Driver |
+|---|---|
+| 0.00 to 0.02 V | Probe, low |
+| 3.29 to 3.31 V | Probe, high |
+| -0.07 to -0.14 V | Target, low |
+| 1.5 to 1.9 V, rising | Nobody: the line rises from low through a pull-up |
+| 3.35 to 3.55 V | Nobody: the line stays high through a pull-up |
+
+Seven frames of 54 clocks (writes and reads) show the same handshake bits, as the frame table gives.
+
+### Connect frames
+
+The 85-clock frames of the connect phase are `dmstatus` reads (address `0x11`), with 32 more clocks:
+
+1. A start condition and bits 1 to 52 of a read of `dmstatus`. The handshake bits are not the same as in the frame format above (see below).
+2. 32 clocks with SWDIO released (high).
+3. SWDIO falls while SWCLK is high: a start condition.
+4. One clock with SWDIO low, then the stop condition.
+
+In the first frame, the target answers `0x00000c82` (version 2, authenticated, hart running). The parity is right.
+In this frame, the probe drives bits 12, 13 and 14 low, and nobody drives bit 51.
+
+In the next frames, the target does not answer with data (`v208-wlink-status-analog-connect.csv`):
+
+- The target pulls bit 10 and bit 48 low: one bit earlier than bits 11 and 49 of the frame format.
+- The probe drives bits 11 to 40 low and bit 41 high. Nobody drives bits 42 to 47.
+
+The cause of the shift by one bit is not known.
+The probe uses these frames to wait for a target. A probe without them connects too: the personality sends no connect frames (see [Hardware test](wch-link.md#hardware-test)).
+
+## One-wire frame format (CH32V003)
+
+The one-wire line (SWIO) does not carry the 54-bit frame of the two-wire interface. It carries a shorter frame of 41 bits.
+Each bit is one low pulse followed by a high level. The width of the low pulse gives the value:
+
+| Bit | Low pulse | High level after it | Bit time |
+|---|---|---|---|
+| 1 | about 250 ns | about 370 ns | about 0.62 µs |
+| 0 | about 860 ns | about 370 ns | about 1.23 µs |
+
+A frame lasts 27 to 48 µs (median 45 µs). A frame of only 1 bits is the shortest. Inside the burst of target reads, the next frame starts 4 to 12 µs after the end of a frame (median 7 µs).
+Between host accesses, the gap is 51 to 106 µs (median 61 µs). The connect phase has other pulse patterns (see above).
+The decoder is `tools/wch_link_frames_1wire.py`. It checks the start bit of each frame. A low pulse longer than 1.5 µs is a break, not a bit.
+It decodes the host phase of the status runs. It does not decode all frames of the `dump` captures.
+The first burst decodes 12 frames (`abstractauto`, `data1`, `progbuf0` to `progbuf7`, `command`, `data0`). Each later burst decodes 4 frames (`abstractauto`, `data1`, `command`, `data0`). Then the frames fall out of step. The decoder reports the pulses it could not decode.
+The cause is open. The frame length may differ for some access types.
+
+| Bits | Content |
+|---|---|
+| 0 | Start, always `1` |
+| 1 to 7 | DM register address, MSB first |
+| 8 | Operation: `1` is a write, `0` is a read |
+| 9 to 40 | Data, MSB first |
+
+The frame has no handshake bits and no parity. The two-wire frame has 13 more bits: the address parity, its repeat, 4 handshake bits, the data parity, its repeat, 4 handshake bits and the stop bit.
+The one-wire line may carry them in another way, or the probe may not send them. This is open.
+
+The format was checked against the USB capture of the same type of run. The 15 accesses of the host match in order and in address.
+The values match, except for `dmstatus`. It reads `0x004f0382` on the wire and `0x004c0382` in the USB capture of an earlier run. The bits 16 to 19 change between runs.
+The wire capture has three more accesses at the end. They are the resume that the probe does at quit (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)).
+
+Pulse widths are the same for the speeds `01`, `02` and `03`. The nominal widths are the same for reads and writes.
+
+More pulse details (`v003-wlink-status-timing.csv`, from 78.8 ms):
+
+- In a read, the high level after bit 8 is about 750 ns, not 370 ns. The line changes direction there.
+- In the data bits of a read, the widths spread more: a low pulse of 246 to 374 ns for a 1, 824 to 868 ns for a 0, and a high level of 262 to 538 ns. In the data bits of a write, the widths are constant (248 ns, 864 ns and 368 ns).
+  The spread shows that the target sets the length of the low pulses in a read. The logic analyzer cannot show which device pulls the line low at the start of a bit.
+- The shortest gap between two frames is 3.7 µs.
+- The line is low for 1.98 ms just before the first frame. Before that low level, the line is high for 0.99 ms. The `dump` capture shows the same. This can be a reset of the debug interface. This is **not confirmed**.
 
 ## Wire timing (CH32V208, two wires)
 
@@ -478,130 +602,6 @@ The cause is not known. A flash program at the three speeds could show a differe
 Not measured on the CH32V003: the wire timing of a flash program, and the slow pattern from 46 to 77 ms.
 
 Not measured on the CH32V208: the wire timing of a flash program.
-
-## Wire frame format
-
-The two-wire captures show one frame format on the wire, after the 85-clock frames. A frame has 54 clocks. SWDIO is stable at the rising edge of SWCLK. Bit 0 is the first clock.
-The decoder is `tools/wch_link_frames_2wire.py`. It works on the CSV files of the CH32V208. It skips the 85-clock frames and counts them.
-The format was checked against the 15 DMI accesses that the USB capture of the same run shows. The address and the data of every access match, and the order matches.
-The decoder decodes 147 frames of the status run, and the parity is right in all of them.
-It skips bursts that are not a multiple of 54 clocks (the 85-clock frames and a few short bursts) and counts them.
-
-| Bits | Content | Driven by |
-|---|---|---|
-| 0 | The rising edge of SWCLK from the idle level, with SWDIO high. After this edge, SWDIO falls while SWCLK is high: the start condition. | Probe |
-| 1 to 7 | DM register address, MSB first | Probe |
-| 8 | Write bit: `1` for a write, `0` for a read | Probe |
-| 9 | Parity of bits 1 to 8: `1` if the number of ones is odd | Probe |
-| 10 | The level of bit 9. SWDIO changes direction after the rising edge. | Probe |
-| 11 to 14 | Handshake: bit 11 low, bit 12 released, bit 13 low, bit 14 released | Bit 11: target. Bit 13: probe. Bits 12 and 14: nobody. |
-| 15 to 46 | Data, MSB first | Probe (write), target (read) |
-| 47 | Parity of the 32 data bits: `1` if the number of ones is odd | Probe (write), target (read) |
-| 48 | The level of bit 47. SWDIO changes direction after the rising edge (write). | Probe (write), target (read) |
-| 49 to 52 | Handshake: bit 49 low, bit 50 released, bit 51 high, bit 52 released | Bit 49: target. Bit 51: probe. Bits 50 and 52: nobody. |
-| 53 | Always `0`. After this edge, SWDIO rises while SWCLK is high: the stop condition. | Probe |
-
-The frame is a start condition, 53 clocks and a stop condition. The start and the stop condition are the same as on an I2C bus.
-The table numbers the bits as the decoder does: bit 0 is the clock before the start condition.
-Bits 1 to 53 are the clocks between the start and the stop condition.
-The rules for bits 9, 10, 47, 48 and 53 hold in all 440 frames of the three status captures (default, medium and low speed).
-
-Observations:
-
-- **Operation field (bits 8 and 9).** Bit 8 tells a write from a read. Bit 9 is a parity bit over the address and bit 8. This explains the values `11`, `10`, `01` and `00` of the earlier decoder output.
-- **Handshake bits (11 to 14 and 49 to 52).** The analog capture of the WCH-LinkE shows the driver of each bit (see [Who drives a bit](#who-drives-a-bit-analog-capture)).
-  The target pulls bit 11 and bit 49 low. The probe drives bit 13 low and bit 51 high. Nobody drives bits 12, 14, 50 and 52.
-  In the released bits, SWDIO rises slowly from the low level. Thus the logic analyzer shows `0` or `1` there, by chance.
-  This explains the values `0000`, `0100`, `0011` and `0111` of the decoder. A probe must drive bit 13 and bit 51.
-  When the probe released bit 13, the CH32V208 drove bit 11 only, and then no more bits of the frame. It did not do the write.
-- **Parity (bits 47 and 48).** Bit 47 is the parity. Bit 48 keeps the level of bit 47 for one more clock, as bit 10 keeps the level of bit 9.
-- **Who drives a bit.** The probe changes SWDIO about 70 to 90 ns after the falling edge of SWCLK. The target changes SWDIO about 4 to 14 ns after the falling edge.
-  Bits 1 to 9, 13, 51 and 53 follow the probe pattern. Bits 11 and 49 follow the target pattern. Bits 15 to 47 follow the probe pattern in a write and the target pattern in a read.
-  SWDIO changes while SWCLK is high in bits 10 and 14, and in bit 48 of a write: the line changes direction there.
-- **Longer low phases.** The low phase before bits 1, 15 and 53 is about two half periods: 2.1 to 2.2 µs at the 2.09 µs clock. SWDIO changes direction before bits 15 and 53.
-- **Idle.** Between frames, SWCLK is low and SWDIO is high. The probe keeps SWCLK high for about 1 to 5 µs after the stop condition.
-  Before the start condition, SWCLK rises and stays high for about 1 to 8 µs.
-- **Before the first frame.** After the 85-clock frames, the probe sends 9 clocks with SWDIO high, one clock with SWDIO low, and 90 clocks with SWDIO high. Then the first frame starts. This can be a line reset. This is **not confirmed**.
-- **Clock for each access.** At the default speed, a write uses 1.10 µs for each bit (about 907 kHz). A read uses 2.09 µs (about 478 kHz). At low speed, all accesses use 2.09 µs.
-- **Fast triples.** The long bursts at about 120 ns for each bit (default speed) hold frames in the order `data1` write, `command` write, `data0` read. These are the target reads for `0x11`, `06 01` and `0d 04`. The values of the first four reads match the `0x11` answer byte for byte.
-
-### Who drives a bit (analog capture)
-
-Source: an analog capture of `wlink status` on the CH32V208, at 12.5 MS/s.
-Two parts of it are in the repository: `v208-wlink-status-analog-connect.csv` (the first five connect frames) and `v208-wlink-status-analog-frames.csv` (the first frames of 54 clocks).
-
-The voltage of SWDIO in the high phase of SWCLK tells the driver:
-
-| Level | Driver |
-|---|---|
-| 0.00 to 0.02 V | Probe, low |
-| 3.29 to 3.31 V | Probe, high |
-| -0.07 to -0.14 V | Target, low |
-| 1.5 to 1.9 V, rising | Nobody: the line rises from low through a pull-up |
-| 3.35 to 3.55 V | Nobody: the line stays high through a pull-up |
-
-Seven frames of 54 clocks (writes and reads) show the same handshake bits, as the frame table gives.
-
-### Connect frames
-
-The 85-clock frames of the connect phase are `dmstatus` reads (address `0x11`), with 32 more clocks:
-
-1. A start condition and bits 1 to 52 of a read of `dmstatus`. The handshake bits are not the same as in the frame format above (see below).
-2. 32 clocks with SWDIO released (high).
-3. SWDIO falls while SWCLK is high: a start condition.
-4. One clock with SWDIO low, then the stop condition.
-
-In the first frame, the target answers `0x00000c82` (version 2, authenticated, hart running). The parity is right.
-In this frame, the probe drives bits 12, 13 and 14 low, and nobody drives bit 51.
-
-In the next frames, the target does not answer with data (`v208-wlink-status-analog-connect.csv`):
-
-- The target pulls bit 10 and bit 48 low: one bit earlier than bits 11 and 49 of the frame format.
-- The probe drives bits 11 to 40 low and bit 41 high. Nobody drives bits 42 to 47.
-
-The cause of the shift by one bit is not known.
-The probe uses these frames to wait for a target. A probe without them connects too: the personality sends no connect frames (see [Hardware test](wch-link.md#hardware-test)).
-
-### One-wire frame format (CH32V003)
-
-The one-wire line (SWIO) does not carry the 54-bit frame of the two-wire interface. It carries a shorter frame of 41 bits.
-Each bit is one low pulse followed by a high level. The width of the low pulse gives the value:
-
-| Bit | Low pulse | High level after it | Bit time |
-|---|---|---|---|
-| 1 | about 250 ns | about 370 ns | about 0.62 µs |
-| 0 | about 860 ns | about 370 ns | about 1.23 µs |
-
-A frame lasts 27 to 48 µs (median 45 µs). A frame of only 1 bits is the shortest. Inside the burst of target reads, the next frame starts 4 to 12 µs after the end of a frame (median 7 µs).
-Between host accesses, the gap is 51 to 106 µs (median 61 µs). The connect phase has other pulse patterns (see above).
-The decoder is `tools/wch_link_frames_1wire.py`. It checks the start bit of each frame. A low pulse longer than 1.5 µs is a break, not a bit.
-It decodes the host phase of the status runs. It does not decode all frames of the `dump` captures.
-The first burst decodes 12 frames (`abstractauto`, `data1`, `progbuf0` to `progbuf7`, `command`, `data0`). Each later burst decodes 4 frames (`abstractauto`, `data1`, `command`, `data0`). Then the frames fall out of step. The decoder reports the pulses it could not decode.
-The cause is open. The frame length may differ for some access types.
-
-| Bits | Content |
-|---|---|
-| 0 | Start, always `1` |
-| 1 to 7 | DM register address, MSB first |
-| 8 | Operation: `1` is a write, `0` is a read |
-| 9 to 40 | Data, MSB first |
-
-The frame has no handshake bits and no parity. The two-wire frame has 13 more bits: the address parity, its repeat, 4 handshake bits, the data parity, its repeat, 4 handshake bits and the stop bit.
-The one-wire line may carry them in another way, or the probe may not send them. This is open.
-
-The format was checked against the USB capture of the same type of run. The 15 accesses of the host match in order and in address.
-The values match, except for `dmstatus`. It reads `0x004f0382` on the wire and `0x004c0382` in the USB capture of an earlier run. The bits 16 to 19 change between runs.
-The wire capture has three more accesses at the end. They are the resume that the probe does at quit (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)).
-
-Pulse widths are the same for the speeds `01`, `02` and `03`. The nominal widths are the same for reads and writes.
-
-More pulse details (`v003-wlink-status-timing.csv`, from 78.8 ms):
-
-- In a read, the high level after bit 8 is about 750 ns, not 370 ns. The line changes direction there.
-- In the data bits of a read, the widths spread more: a low pulse of 246 to 374 ns for a 1, 824 to 868 ns for a 0, and a high level of 262 to 538 ns. In the data bits of a write, the widths are constant (248 ns, 864 ns and 368 ns).
-  The spread shows that the target sets the length of the low pulses in a read. The logic analyzer cannot show which device pulls the line low at the start of a bit.
-- The shortest gap between two frames is 3.7 µs.
-- The line is low for 1.98 ms just before the first frame. Before that low level, the line is high for 0.99 ms. The `dump` capture shows the same. This can be a reset of the debug interface. This is **not confirmed**.
 
 ## Open questions
 
