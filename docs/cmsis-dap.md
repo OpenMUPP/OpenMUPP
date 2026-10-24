@@ -343,6 +343,37 @@ Each DR scan of a transfer ends with the idle cycles of `DAP_TransferConfigure`.
 These commands make the next transfer write the IR again: `DAP_Connect`, `DAP_JTAG_Configure`, a sequence command and `DAP_SWJ_Pins`.
 A transfer to another device also writes the IR again.
 
+## RISC-V DTM bridge
+
+Status: in progress (#103). The host tests run the parts below. The firmware does not use them yet.
+
+The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
+The host sees a CMSIS-DAP adapter in JTAG mode, with one RISC-V Debug Transport Module (DTM) on the chain.
+`cmsisdap::RvDtmTap` (`src/protocol/cmsisdap/RvDtmTap.h`) is a JTAG port without pins.
+It follows the TMS and TDI bits of `DAP_JTAG_Sequence` and `DAP_SWJ_Sequence`.
+It does each DMI access on the WCH wire (one wire or two wires), with the wire engine of the `wch-link` personality.
+
+| IR (5 bits) | Register | Content |
+|---|---|---|
+| `0x01` | IDCODE | `0x156532FD` |
+| `0x10` | DTMCS | `version` 1 (debug spec 0.13), `abits` 7, `idle` 0, `dmistat` |
+| `0x11` | DMI (41 bits) | `address[40:34]`, `data[33:2]`, `op[1:0]` |
+| Others | BYPASS | 1 bit |
+
+### IDCODE
+
+The IDCODE is `0x156532FD`: version 1, part `0x5653` ("VS"), and the JEP106 manufacturer code of Elpida (bank 3, ID `0x7E`).
+
+- probe-rs 0.32.0 rejects an IDCODE with a manufacturer identity of 0 or 127 (`IdCode::valid()`). A capture with the first value, `0x15653001`, showed this.
+- WCH has no JEP106 manufacturer code. The WCH fork of OpenOCD uses `0x00001` for its targets, which probe-rs rejects.
+- An IDCODE holds 4 bits of the continuation code, so it can only name banks 1 to 16. All IDs of these banks are assigned. Thus each valid IDCODE names an existing manufacturer.
+- Elpida is a DRAM maker that Micron bought in 2013. It ships no new parts.
+- OpenOCD accepts each value. The bridge configs give it with `-expected-id`.
+
+Risk: OpenOCD and probe-rs show "Elpida" as the manufacturer of the bridge.
+A config of an Elpida part with the same IDCODE would accept the bridge.
+In 2026-10, no OpenOCD config (`master` at `cb0c224e9`) and no probe-rs 0.32.0 target used this value or this manufacturer code.
+
 ## Tests
 
 `tests/TestCmsisDap.cpp` runs the processor on the real SWD bit-bang engine, with the mock SWD target of `tests/MockSwdPins.h`.

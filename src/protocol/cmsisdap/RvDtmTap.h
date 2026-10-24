@@ -51,9 +51,12 @@ inline constexpr uint8_t irDtmcs = 0x10;
 inline constexpr uint8_t irDmi = 0x11;
 inline constexpr uint8_t irBypass = 0x1F;
 
-// Provisional (#103, open question 1). Manufacturer ID 0 is not a valid
-// JEDEC ID, so no config of a real part expects this value.
-inline constexpr uint32_t idcode = 0x15653001;
+// Version 1, part 0x5653 ("VS"), manufacturer Elpida (JEP106 bank 3, ID
+// 0x7E). probe-rs rejects a manufacturer identity of 0 or 127, WCH has no
+// JEP106 code, and each code that an IDCODE can hold is assigned. Elpida
+// is a defunct DRAM maker, so a part with this IDCODE is unlikely. See
+// docs/cmsis-dap.md, "IDCODE".
+inline constexpr uint32_t idcode = 0x156532FD;
 
 // DTMCS fields
 inline constexpr uint32_t dtmcsVersion013 = 1;
