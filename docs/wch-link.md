@@ -245,7 +245,7 @@ On each wire, the processor does these probe actions:
    Set `PLLON` in `RCC_CTLR` and wait for `PLLRDY`. Write `RCC_CFGR0` with `2` and wait for `SWS` to show the PLL.
    Write `FLASH_CTLR` with `00008080` and `FLASH_STATR` with `0000b020`.
    The accesses use the abstract memory command, as the WCH-LinkE does. The program buffer fails on this family (`cmderr` 2).
-   A failed access or a poll without result gives the error frame.
+   A failed access or a poll without result ends the setup. The connect still succeeds: the host must reach a chip whose RCC does not switch (seen after an erase of the option bytes).
 
 The family code of the response comes from a table of chip ID prefixes (the top 12 bits). wlink selects the chip settings from this code.
 
