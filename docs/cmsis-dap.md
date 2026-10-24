@@ -390,6 +390,8 @@ The response is `81 00`.
   The TAP state and the IR of the new port are not known, as after `DAP_SWJ_Pins`.
 - The switch off releases SWCLK and SWDIO, and resets the timer of the one-wire engine.
   The JTAG fast path uses the same pin (PB4) and DMA1 channel 3.
+  The release goes in both directions: the `fini()` of the JTAG fast path clears the DMA requests of SPI1 and SPI2.
+  The one-wire timer shares DMA1 channel 3 (TIM3) or channel 5 (TIM1) with them.
 - `DAP_SWJ_Clock` sets the TCK of the board port also while the bridge is on. The wire has its own clock: the high speed of the `wch-link` personality.
 
 OpenOCD sends the command with `cmsis-dap cmd 0x81 0x01`.

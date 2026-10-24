@@ -130,6 +130,11 @@ void JtagSpi::fini() {
    }
    spiSlave().disable();
    spiMaster().disable();
+   // A disabled SPI with TXDMAEN still requests DMA (TXE is set). The
+   // one-wire timer of the RISC-V bridge shares DMA1 channel 3 (TIM3_UP)
+   // or 5 (TIM1_UP) with SPI1 TX and SPI2 TX.
+   SPI1->CR2 = 0;
+   SPI2->CR2 = 0;
 }
 
 void JtagSpi::setShift(uint8_t shift) {
