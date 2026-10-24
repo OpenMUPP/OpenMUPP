@@ -400,7 +400,8 @@ A TAP `setup` event is too late: OpenOCD sends it after the chain scan.
 An image without the bridge replies `ID_DAP_Invalid`. OpenOCD logs the cause of the failure.
 Then `init` stops with "The probe has no RISC-V bridge".
 The proc also adds `cmsis-dap cmd 0x81 0x00` to `pre_shutdown_commands`. Thus `shutdown` switches the bridge off before OpenOCD closes the adapter.
-A signal (for example Ctrl-C) does not run `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
+Ctrl-C and SIGTERM also run `shutdown`.
+An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
 Switch the bridge off with `python3 tools/vsl_rv_bridge.py off`, or replug the probe.
 The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
@@ -437,7 +438,7 @@ python3 tools/vsl_rv_bridge.py off
 ```
 
 The bridge stays on until a USB reset, a power cycle or `81 00`.
-The OpenOCD configs send `81 00` at `shutdown`, but not after a signal (Ctrl-C).
+The OpenOCD configs send `81 00` at `shutdown` and after Ctrl-C, but not after an error in a `-c` command.
 Thus probe-rs must not reset the USB device when it opens it. The hardware test (#109) checks this.
 
 ### Connect
