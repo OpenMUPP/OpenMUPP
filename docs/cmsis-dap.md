@@ -355,6 +355,14 @@ The tests cover the JTAG commands, IDCODE, DPACC and APACC reads and writes, pos
 Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.
 One test sends the abort during the WAIT retries of one SWD transfer, from the serial service of the engine.
 
+`tests/TestRvDtmTap.cpp` runs the emulated TAP of the RISC-V bridge (`src/protocol/cmsisdap/RvDtmTap.h`, #103).
+The TAP is a JTAG port without pins: it follows TMS and TDI and gives TDO.
+It has a 5-bit IR, IDCODE, DTMCS (`version` 1, `abits` 7) and BYPASS.
+The tests check the TAP state machine and each register.
+They also send the requests of the OpenOCD and probe-rs captures (`tests/replay/dap-*.trace`) through the processor, with the TAP as its JTAG port.
+The scan chain rules of OpenOCD (`jtag_examine_chain()`, `jtag_validate_ircapture()`) and the DR length of probe-rs must pass on the replies.
+The firmware does not use the TAP yet.
+
 `tests/TestDapUart.cpp` runs `uart::DapUartChannel` with the real CDC-ACM function, the UART bridge and a fake UART.
 The tests cover the owner switch, the frame formats, the receiver and transmitter control, the status bits and the buffer limits.
 They also run the `DAP_UART_*` commands and `DAP_Info` through the processor.

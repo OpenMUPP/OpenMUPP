@@ -1,0 +1,29 @@
+# CMSIS-DAP requests of OpenOCD (interface/cmsis-dap.cfg, ch32v-minimal.cfg, init and shutdown), with no target.
+# From docs/cmsis-dap-captures/openocd-jtag-no-target.pcapng:
+#   python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/openocd-jtag-no-target.pcapng 35 3 --trace
+# Requests only: the replies of the capture are those of an empty chain.
+
+> 00f0
+> 0004
+> 0003
+> 0202
+> 00ff
+> 00fe
+> 10000000000000
+> 1140420f00
+> 040040000000
+> 010001
+> 010101
+> 1140420f00
+> 10a0a000000000
+> 1208ff
+> 140c410041004100010041000100010080ffffffffffffffff80ffffffffffffffff80ffffffffffffffff80ffffffffffffffff80ffffffffffffffff
+> 140880ffffffffffffffff80ffffffffffffffff80ffffffffffffffff80ffffffffffffffff80ffffffffffffffff9fffffffffc1ff01ff
+> 1208ff
+> 140d410041000100410041000100010086ffc1ff01ff410041000100
+> 1208ff
+> 141c410041000100410041000100010004f041ff01ff4100410001004100010001009f00000080c1fe01fe410041000100410041000100010004f141ff
+> 14040101410041000100
+> 03
+> 010100
+> 010000

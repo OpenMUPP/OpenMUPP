@@ -1,9 +1,10 @@
 """Decode the CMSIS-DAP request stream (bulk OUT) of a usbmon pcapng.
 
-Usage: dap.py FILE.pcapng DEV [EP_OUT] [--scans]
+Usage: dap.py FILE.pcapng DEV [EP_OUT] [--scans | --trace]
 Prints one line per command. TMS and TDI bit strings are in time order, first bit first.
 With --scans, it runs the TMS bits through the JTAG TAP state machine and prints
 the TLR entries and the IR and DR scans (bit count and TDI value, first bit = LSB).
+With --trace, it prints each request as "> hex", for the host tests (tests/replay).
 """
 import sys
 from pcap import usb
@@ -92,13 +93,16 @@ def decode(b):
 
 if __name__ == '__main__':
     scans = '--scans' in sys.argv
+    trace = '--trace' in sys.argv
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     dev = int(args[1]); ep = int(args[2], 0) if len(args) > 2 else 3
     t0, tap = None, Tap()
     for p in usb(args[0]):
         if p['dev'] != dev or p['ep'] != ep or p['type'] != 'S' or not p['data']: continue
         t0 = t0 or p['ts']
-        if scans:
+        if trace:
+            print(f"> {p['data'].hex()}")
+        elif scans:
             for e in tap_events(tap, p['data']): print(f"{p['ts'] - t0:9.6f} {e}")
         else:
             print(f"{p['ts'] - t0:9.6f} {decode(p['data'])}")

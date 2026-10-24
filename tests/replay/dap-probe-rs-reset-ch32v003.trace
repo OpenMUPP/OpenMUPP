@@ -1,0 +1,20 @@
+# CMSIS-DAP requests of probe-rs reset --chip CH32V003F4P6 --protocol jtag, with no target.
+# From docs/cmsis-dap-captures/probe-rs-reset-ch32v003-jtag-no-target.pcapng:
+#   python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/probe-rs-reset-ch32v003-jtag-no-target.pcapng 35 3 --trace
+# Requests only: the replies of the capture are those of an empty chain.
+
+> 00ff
+> 00fe
+> 00f0
+> 0202
+> 10202000000000
+> 1140420f00
+> 0400ffff0000
+> 010001
+> 1402451f0101
+> 14084100020080ffffffffffffffff80ffffffffffffffff80ffffffffffffffffbfffffffffffffff7fc1014100
+> 1402451f0101
+> 14084100020080ffffffffffffffff80ffffffffffffffff80ffffffffffffffffbfffffffffffffff7fc1014100
+> 1402451f0101
+> 03
+> 010000
