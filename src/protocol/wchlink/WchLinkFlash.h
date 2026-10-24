@@ -4,7 +4,7 @@
 // the flash controller (FPEC) of the CH32V00x and the CH32V20x. The two
 // controllers have the same registers for these operations (CH32V003 and
 // CH32FV2x_V3x reference manuals, chapter "Flash Memory and User Option
-// Bytes"). docs/wch-link-protocol.md, "Flash", has the sequences.
+// Bytes"). docs/wch-link.md, "Flash", has the sequences.
 //
 // Two kinds of operations:
 //

@@ -61,7 +61,7 @@
 // address, 1 for a write or 0 for a read, and 32 data bits. A bit is a low
 // pulse and a high level. A short low pulse is a 1, a long low pulse is a
 // 0. Idle is SWDIO driven high: a pull-up is too slow for the high level
-// of 370 ns (docs/wch-link-protocol.md, "Pins and USB ID").
+// of 370 ns (docs/wch-link.md, "One-wire timer").
 //
 // The width of a low pulse is the bit value, so code timing cannot make
 // the bits: on a dongle, waits on the cycle counter gave low pulses of
