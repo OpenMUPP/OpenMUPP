@@ -666,7 +666,7 @@ The USB captures hold 15 DMI accesses of the host. The one-wire decode of `v006-
 | Connect time | 90 ms | 94 ms |
 | Register `0x7c` at connect | `00010403` | `11038403` |
 | Register `0x16` at connect | `08000602` | `08000702` |
-| Memory access of the probe | Program buffer (command `0x00040000`) | Abstract command (`0x02200000` read, `0x02210000` write), as on the CH32V208 |
+| Memory access of the probe | Program buffer (command `0x00040000`) | Abstract command (`0x02200000` read, `0x02210000` write), as on the CH32V208. A program in the program buffer ends with `cmderr` 2 on the CH32V006 (tested with the firmware of this project). |
 | Flash page | 64 bytes | 256 bytes |
 | Data block of a flash program | 1024 bytes | 1024 bytes |
 | Mass erase (`02 01 01`) | 7.6 ms | 113 ms |

@@ -244,7 +244,7 @@ On each wire, the processor does these probe actions:
    Write `FLASH_ACTLR` with `2`, `RCC_CFGR0` with `0` and `RCC_INTR` with `009d0000`.
    Set `PLLON` in `RCC_CTLR` and wait for `PLLRDY`. Write `RCC_CFGR0` with `2` and wait for `SWS` to show the PLL.
    Write `FLASH_CTLR` with `00008080` and `FLASH_STATR` with `0000b020`.
-   The processor uses the memory access method of the wire, not the abstract command of the probe.
+   The accesses use the abstract memory command, as the WCH-LinkE does. The program buffer fails on this family (`cmderr` 2).
    A failed access or a poll without result gives the error frame.
 
 The family code of the response comes from a table of chip ID prefixes (the top 12 bits). wlink selects the chip settings from this code.
@@ -412,7 +412,7 @@ Resume and quit:
 The layer refuses a misaligned address before it sends a frame (status `Misaligned`). A word address must be a multiple of 4, and a half-word address a multiple of 2.
 The CH32V003 gets an exception on a misaligned word access.
 
-The layer selects the memory access method from the wire. One wire (CH32V00x) uses the program buffer. Two wires (CH32V20x, CH32V30x) use the abstract memory access.
+The layer selects the memory access method from the wire. One wire (CH32V003) uses the program buffer. Two wires (CH32V20x, CH32V30x) use the abstract memory access. The connect switches the family code `4e` (CH32V00X) to the abstract memory access: the program buffer gives `cmderr` 2 on a CH32V006.
 The program buffer method has 32-bit reads, and 32-bit and 16-bit writes.
 
 #### Program buffer programs
