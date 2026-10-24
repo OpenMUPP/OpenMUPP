@@ -1,47 +1,3 @@
-// versaloon-NG firmware. os_startup_initialize_hardware()
-// (src/initialize_hardware.cpp) sets up the clocks and the board pins
-// before main() runs. The main loop wakes up on each 1 ms SysTick and on
-// each USB interrupt. It runs the USB device, the UART bridge
-// (uart/SerialBridge.h) or, in a VSL_DEBUG_CDC build, the debug log
-// (debug/DebugLog.h), and drives the LEDs: the target power on the power
-// LED, the command activity on the state LED (the probe error pattern
-// after a JTAG or SWD error, the clock fault pattern when the crystal
-// fails) and the USB state on the USB LED. After VERSALOON_FW_UPDATE, or a
-// switch command with the bootloader code, it enters versaloon-bootloader
-// (boot/BootloaderEntry.h). The USB_TO_XXX
-// commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/versaloon/UsbToAll.h),
-// with the GPIO block (protocol/versaloon/GpioBlock.h) on the debug connector pins
-// the JTAG_RAW block (protocol/versaloon/JtagRawBlock.h) on the JTAG port of the
-// board (board/BoardJtag.h: SPI fast path or bit-bang), and the SWD block (protocol/versaloon/SwdBlock.h) on the
-// bit-bang SWD engine (swd/SwdBitBang.h). The POWER block
-// (protocol/versaloon/PowerBlock.h) switches the target supply, and its poll() in the
-// main loop switches it off when the rail drops. GET_TVCC replies the
-// voltage of its Vref sense. During a long JTAG or SWD command, the
-// engines call the serial service (protocol/Background.h): it runs the
-// serial port of the USB device and the UART bridge, or the debug log.
-// A CMSIS-DAP image runs the CMSIS-DAP processor
-// (protocol/cmsisdap/DapProcessor.h) instead of USB_TO_ALL. Its DAP_UART_*
-// commands can take the UART from the bridge (uart/DapUartChannel.h). With
-// VSL_CMSIS_DAP_RV_BRIDGE, its JTAG port is the RISC-V bridge
-// (protocol/cmsisdap/RvBridge.h): the board JTAG port, or an emulated RISC-V
-// DTM on the debug wire engine of WCH-Link (board/BoardRvSwd.h). A
-// dual image has both: the stored personality (personality/PersonalityStore.h)
-// selects one at the start. A switch command, or a key that is down for 3 s
-// (then the key release), stores the next personality and resets (personality/PersonalitySwitch.h).
-// A wch-link image runs the WCH-Link processor (protocol/wchlink/WchLinkProcessor.h)
-// on the RISC-V debug wire engine (board/BoardRvSwd.h). It has no serial
-// port: no UART bridge and no debug log.
-//
-// Each personality has one group below, inside its VSL_WITH_<P> define:
-// its objects, its start, its work before and after the USB poll, and
-// its probe error count. Only the group of the active personality runs.
-// The constructors only keep references, so no group touches the hardware
-// before main(). The active USB function alone gets commands, so only the
-// active personality configures its pins, timers and DMA channels: the
-// SWD and JTAG pins and the JTAG fast path (DMA1 channels 3 to 5) for
-// Versaloon and CMSIS-DAP, the RISC-V debug wire with the one-wire timer
-// and two DMA1 channels (board::oneWireTimerOf()) for WCH-Link. A
-// personality switch resets the MCU, so nothing is set back.
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -145,6 +101,10 @@ constexpr Personality activePersonality = personality::all[0];
 
 // True when the personality runs in this start. In an image with one
 // personality it is a constant, so the compiler drops the other groups.
+// The constructors only keep references, so no group touches the hardware
+// before main(). Only the active personality configures its pins, timers
+// and DMA channels. A personality switch resets the MCU, so nothing is set
+// back.
 bool isActive(Personality personality) {
    return activePersonality == personality;
 }
@@ -326,6 +286,7 @@ void startVersaloon() {
    usbToAll.setTargetVoltage(&powerBlock);
 }
 
+// Switches the target supply off when the rail drops
 void afterUsbPollVersaloon(uint64_t nowMs) {
    powerBlock.poll(nowMs);
 }
@@ -489,6 +450,8 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
 } // namespace
 
 int main() {
+   // os_startup_initialize_hardware() (initialize_hardware.cpp) set up the
+   // clocks and the board pins before main().
    const bool clockFromCrystal = hardware::isClockFromCrystal();
 
    debug::startLog();
@@ -518,6 +481,7 @@ int main() {
       }
       afterUsbPoll(nowMs);
       updateLeds(nowMs, clockFromCrystal);
+      // The SysTick and the USB interrupt end the WFI.
       // Sleep only when no USB event waits. An event that came after the
       // USB poll has no pending interrupt to end the WFI: the interrupt
       // handler already ran, or the main loop queued the event itself (the
