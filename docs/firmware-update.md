@@ -9,22 +9,61 @@ It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can wr
 
 To start `versaloon-bootloader`, use one of these methods:
 
-- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the `app-8k` image has this command.
+- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the Versaloon personality has this command.
+- Send a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)). Each personality has a switch command.
 - Hold the key (PB9) down and reset the board.
 
+Only the `app-8k` image accepts the commands.
 To start the legacy bootloader, hold the key (PB9) down while you connect the board to USB.
 
-A firmware image built with `VSL_PERSONALITIES=cmsis-dap` has no Versaloon interface.
-It has no `VERSALOON_FW_UPDATE` command.
-Use the key to start the bootloader.
-A firmware image built with `VSL_PERSONALITIES=wch-link` has no `VERSALOON_FW_UPDATE` command either. Use the key.
-A multi image in the CMSIS-DAP or the WCH-Link personality has no `VERSALOON_FW_UPDATE` command either.
-Change it to the Versaloon personality first, or use the key (see [Multi image](usb-device.md#multi-image)).
+### Bootloader code
+
+The switch commands of the personalities also start the bootloader.
+Send the bootloader code `0xB0` (`boot::bootloaderCode`) instead of a personality code:
+
+| Personality | Command | Reply when the firmware accepts |
+|---|---|---|
+| Each | Switch request on EP0: `bmRequestType` `0x40`, `bRequest` `0x0E`, `wValue` `0xB0` (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)) | Status stage (ACK) |
+| Versaloon | `SWITCH_PERSONALITY`: `[0x0E][0xB0]` | `[0x00]` |
+| CMSIS-DAP | `ID_DAP_Vendor0`: `[0x80][0xB0]` | `[0x80][0x00]` |
+
+The WCH-Link protocol has no switch command, so use the switch request on EP0.
+The commands also work in an image with one personality.
+An image other than `app-8k` refuses the code.
+The switch request on EP0 then stalls, and `SWITCH_PERSONALITY` replies status `1`.
+A multi image replies status `0xFF` to `ID_DAP_Vendor0`.
+A CMSIS-DAP image with one personality replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
+After the reply, the firmware does the same steps as for `VERSALOON_FW_UPDATE` (see [Reply and steps](#reply-and-steps)).
+
+`tools/vsl_personality.py` sends the bootloader code from the host:
+
+```sh
+python3 tools/vsl_personality.py switch bootloader
+```
+
+The tool sends the switch request on EP0 with the code `0xB0`.
+A firmware from before the bootloader code stalls the request.
+Then the tool sends `VERSALOON_FW_UPDATE` in the Versaloon personality, and `ID_DAP_Vendor0` with `0xB0` in the CMSIS-DAP personality.
+After the request, the tool waits 10 s for `versaloon-bootloader`.
+It finds the bootloader by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
+Other devices use the ID `0483:5740` too, so the tool also compares the product string.
+`python3 tools/vsl_personality.py show` also lists a dongle that runs the bootloader.
+
+The tool must open the bootloader to read its strings.
+On Linux, a udev rule gives a normal user this access.
+Copy `etc/70-versaloon-bootloader.rules` to `/etc/udev/rules.d/`.
+Then reload the rules with `udevadm control --reload`, and start the bootloader again.
+Without access, the tool does not find the bootloader.
+It then stops after 10 s with an error and a hint, also when the bootloader runs.
+
+### Stored personality
 
 A multi image stores its personality in the flash page at `0x0800FC00`.
 `stm32flash -w` erases only the pages of the image, so an update keeps the stored personality.
 A mass erase of the flash also erases this page.
 The firmware then starts with its default personality.
+
+### Reply and steps
 
 The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 

@@ -6,8 +6,9 @@
 // (debug/DebugLog.h), and drives the LEDs: the target power on the power
 // LED, the command activity on the state LED (the probe error pattern
 // after a JTAG or SWD error, the clock fault pattern when the crystal
-// fails) and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
-// enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
+// fails) and the USB state on the USB LED. After VERSALOON_FW_UPDATE, or a
+// switch command with the bootloader code, it enters versaloon-bootloader
+// (boot/BootloaderEntry.h). The USB_TO_XXX
 // commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/versaloon/UsbToAll.h),
 // with the GPIO block (protocol/versaloon/GpioBlock.h) on the debug connector pins
 // the JTAG_RAW block (protocol/versaloon/JtagRawBlock.h) on the JTAG port of the
@@ -57,6 +58,8 @@
 #include "board/BoardPower.h"
 #include "board/BoardSwd.h"
 #include "board/Leds.h"
+#include "boot/Bootloader.h"
+#include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
 #include "protocol/Background.h"
 #include "uart/SerialBridge.h"
@@ -73,8 +76,6 @@
 #include "protocol/cmsisdap/DapProcessor.h"
 #endif
 #if defined(VSL_WITH_VERSALOON)
-#include "boot/Bootloader.h"
-#include "boot/BootloaderEntry.h"
 #include "protocol/versaloon/GpioBlock.h"
 #include "protocol/versaloon/JtagRawBlock.h"
 #include "protocol/versaloon/PowerBlock.h"
@@ -143,6 +144,21 @@ bool isActive(Personality personality) {
 // The Vref sense and the target switch. The target power LED reads the
 // sense in every personality.
 board::BoardPower boardPower;
+
+// The bootloader entry of FW_UPDATE and of the bootloader code of the switch
+// commands, in every personality. Only the app-8k image enters the
+// bootloader, behind versaloon-bootloader. CMake defines
+// VSL_HAS_BOOTLOADER_ENTRY for this file of that image only
+// (vsl_add_app_image() in CMakeLists.txt). The other sources are shared by
+// all images and compiled without the define, so the value is here and not
+// in a shared header.
+#if defined(VSL_HAS_BOOTLOADER_ENTRY)
+constexpr bool hasBootloaderEntry = true;
+#else
+constexpr bool hasBootloaderEntry = false;
+#endif
+boot::BootloaderEntry bootloaderEntry;
+boot::BootloaderEntry *const bootloader = hasBootloaderEntry ? &bootloaderEntry : nullptr;
 
 #if defined(VSL_WITH_WCH_LINK)
 
@@ -219,7 +235,8 @@ cmsisdap::Processor dapProcessor{ dapSwd,
 #else
                                   nullptr,
 #endif
-                                  uart::dapUart() };
+                                  uart::dapUart(),
+                                  bootloader };
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
 // string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one
@@ -263,21 +280,7 @@ protocol::GpioBlock gpioBlock{ boardGpio };
 protocol::JtagRawBlock jtagRawBlock{ boardJtag };
 protocol::SwdBlock swdBlock{ boardSwd };
 protocol::PowerBlock powerBlock{ boardPower, busyWaitDelay };
-boot::BootloaderEntry bootloaderEntry;
-
-// FW_UPDATE enters the bootloader only in the app-8k image, behind
-// versaloon-bootloader. CMake defines VSL_HAS_BOOTLOADER_ENTRY for this file
-// of that image only (vsl_add_app_image() in CMakeLists.txt). The other
-// sources are shared by all images and compiled without the define, so the
-// value is here and not in a shared header.
-#if defined(VSL_HAS_BOOTLOADER_ENTRY)
-constexpr bool hasBootloaderEntry = true;
-#else
-constexpr bool hasBootloaderEntry = false;
-#endif
-
 const usb::UsbStack::VersaloonDeps versaloonDeps{
-   .bootloader = hasBootloaderEntry ? &bootloaderEntry : nullptr,
    .usbToXxx = &usbToAll,
 };
 
@@ -296,15 +299,6 @@ void startVersaloon() {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the POWER block");
    }
    usbToAll.setTargetVoltage(&powerBlock);
-}
-
-void beforeUsbPollVersaloon(uint64_t nowMs) {
-   // Only the app-8k image links boot::enterBootloader() (an STM32F1 board)
-   if constexpr(hasBootloaderEntry) {
-      if(bootloaderEntry.isDue(nowMs)) {
-         boot::enterBootloader();
-      }
-   }
 }
 
 void afterUsbPollVersaloon(uint64_t nowMs) {
@@ -334,6 +328,7 @@ usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
 #else
                                            .personalitySwitch = nullptr,
 #endif
+                                           .bootloader = bootloader,
                                            } };
 
 #if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
@@ -402,11 +397,12 @@ void startProtocol() {
 }
 
 void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
-#if defined(VSL_WITH_VERSALOON)
-   if(isActive(Personality::Versaloon)) {
-      beforeUsbPollVersaloon(nowMs);
+   // Only the app-8k image links boot::enterBootloader() (an STM32F1 board)
+   if constexpr(hasBootloaderEntry) {
+      if(bootloaderEntry.isDue(nowMs)) {
+         boot::enterBootloader();
+      }
    }
-#endif
 #if defined(VSL_MULTI_PERSONALITY)
    pollPersonality(nowMs);
 #endif

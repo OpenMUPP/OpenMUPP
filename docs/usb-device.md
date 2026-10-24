@@ -147,7 +147,7 @@ In a multi image, the serial port is not there while the WCH-Link personality is
 The CMSIS-DAP image differs from the Versaloon image in these points:
 
 - It has no `VERSALOON_FW_UPDATE` command.
-  Start the bootloader with the key (see [Firmware update](firmware-update.md)).
+  Start the bootloader with `ID_DAP_Vendor0`, the switch request on EP0 or the key (see [Firmware update](firmware-update.md#bootloader-code)).
 - It has no target power switch and no `GET_TVCC`.
 - JTAG uses the CMSIS-DAP JTAG commands instead of the `JTAG_RAW` block (see [JTAG](cmsis-dap.md#jtag)).
 
@@ -200,7 +200,10 @@ python3 tools/vsl_personality.py show
 python3 tools/vsl_personality.py switch cmsis-dap
 python3 tools/vsl_personality.py switch wch-link
 python3 tools/vsl_personality.py switch versaloon
+python3 tools/vsl_personality.py switch bootloader
 ```
+
+`switch bootloader` starts `versaloon-bootloader` (see [Bootloader code](firmware-update.md#bootloader-code)).
 
 The tool finds the dongle by the VID:PID of each personality.
 For the WCH-Link personality, it also compares the product string with `Versaloon WCH-Link`.
@@ -288,7 +291,7 @@ The request has no data stage:
 |---|---|
 | `bmRequestType` | `0x40`: vendor request, host to device, recipient device |
 | `bRequest` | `0x0E` (`usb::switchRequestCode`, the same code as `SWITCH_PERSONALITY`) |
-| `wValue` | The personality code |
+| `wValue` | The personality code, or the bootloader code `0xB0` (see [Bootloader code](firmware-update.md#bootloader-code)) |
 | `wIndex` | `0` |
 | `wLength` | `0` |
 
@@ -296,11 +299,13 @@ The firmware sends the status stage (ACK), and then waits 10 ms, as for the othe
 The firmware stalls the request in these conditions:
 
 - The code is not a personality of the image.
+- The code is the bootloader code, and the image is not `app-8k`.
 - `wIndex` or `wLength` is not `0`, or the direction is device to host.
 
 A stall means that the firmware does not switch.
 The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
-An image with one personality stalls the request.
+An image with one personality stalls the request for each personality code.
+It accepts the bootloader code, when it is an `app-8k` image.
 
 With libusb, the call is:
 
@@ -331,7 +336,7 @@ The key gesture has these rules:
 - The ST-Link/V2 has no key. Use the commands.
 
 The Versaloon personality of a multi image has `VERSALOON_FW_UPDATE`, as the Versaloon image.
-The CMSIS-DAP and the WCH-Link personalities have no command to start the bootloader: use the key at reset, or change to the Versaloon personality first.
+In each personality, the switch commands with the bootloader code `0xB0` start the bootloader (see [Bootloader code](firmware-update.md#bootloader-code)).
 
 A multi image links the objects of all its personalities.
 When the image has the Versaloon personality, the Versaloon command and reply buffers (2 x 4096 bytes) are always in RAM.
@@ -363,15 +368,16 @@ The common commands are:
 | `GET_INFO` | `[0x00]` | `[buffer size u16][version text][0x00]` |
 | `GET_TVCC` | `[0x01]` | `[target voltage in mV u16]`, from the Vref sense (see [POWER block](#power-block)). The value is 0 when the board has no sense or the measurement fails. |
 | `GET_HARDWARE` | `[0x02]` | `[hardware ID u8]`, from the board definition (see [Boards](boards.md)). |
-| `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is the code of a personality in the image (see [Multi image](#multi-image)). Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
+| `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is the code of a personality in the image (see [Multi image](#multi-image)), or the bootloader code `0xB0`. Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
 The version text has the form `versaloon-ng <version>, board <board>`.
 
 `SWITCH_PERSONALITY` changes the USB personality of a multi image (see [Multi image](#multi-image)).
 The firmware sends the reply, stores the personality and resets.
-An image with one personality refuses the command.
+An image with one personality refuses the command for each personality code.
 The firmware also refuses the code of a personality that is not in the image.
+The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)).
 A switch to the active personality gets status `0`, and the firmware does not reset.
 Other common commands have no reply.
 The `USB_TO_XXX` commands go to the `USB_TO_ALL` dispatcher (see [USB_TO_ALL](#usb_to_all)).

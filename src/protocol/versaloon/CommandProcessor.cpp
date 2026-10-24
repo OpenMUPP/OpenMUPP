@@ -91,6 +91,15 @@ std::size_t CommandProcessor::firmwareUpdate(art::span<const uint8_t> command, a
 }
 
 std::size_t CommandProcessor::personalitySwitch(art::span<const uint8_t> command, art::span<uint8_t> reply) {
+   if(command.size() >= 2 && command[1] == boot::bootloaderCode) {
+      const bool accept = bootloader_ != nullptr;
+      reply[0] = accept ? switchAccepted : switchRefused;
+      if(accept) {
+         // As FW_UPDATE: the main loop resets after the reply delay
+         bootloader_->request();
+      }
+      return 1;
+   }
    const auto target = command.size() >= 2 ? personality::fromCode(command[1]) : std::nullopt;
    const bool accept = personalitySwitch_ != nullptr && target.has_value();
    reply[0] = accept ? switchAccepted : switchRefused;

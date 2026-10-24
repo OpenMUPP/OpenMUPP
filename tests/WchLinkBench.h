@@ -44,8 +44,11 @@ class WchLinkBench {
 
    // wire: the wire of the target. The pins see the frames of the other
    // wire as noise. personalitySwitch: the switch request on EP0, nullptr
-   // for an image with one personality.
-   explicit WchLinkBench(rvswd::Wire wire = rvswd::Wire::Two, personality::PersonalitySwitch *personalitySwitch = nullptr)
+   // for an image with one personality. bootloader: the bootloader code of
+   // the switch request on EP0, nullptr for an image without a bootloader.
+   explicit WchLinkBench(rvswd::Wire wire = rvswd::Wire::Two,
+                         personality::PersonalitySwitch *personalitySwitch = nullptr,
+                         boot::BootloaderEntry *bootloader = nullptr)
       : pins(wire)
       , dm(pins)
       , target(pins)
@@ -55,8 +58,8 @@ class WchLinkBench {
       const std::array<uint8_t, usb::uidBytes> uid{ 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
                                                     0xDE, 0xF0, 0x01, 0x02, 0x03, 0x04 };
       serial_.set(uid);
-      if(personalitySwitch != nullptr) {
-         switchRequest_.emplace(*personalitySwitch);
+      if(personalitySwitch != nullptr || bootloader != nullptr) {
+         switchRequest_.emplace(personalitySwitch, bootloader);
          device_.setVendorRequestHandler(&*switchRequest_);
       }
       REQUIRE(device_.addFunction(function));

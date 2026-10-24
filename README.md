@@ -182,7 +182,7 @@ To write a new bootloader over it, remove the write protection first (see [Insta
 
 To write the firmware through the bootloader, do these steps:
 
-1. Start the bootloader. Hold the key (PB9) down and reset the board, or send `VERSALOON_FW_UPDATE`.
+1. Start the bootloader. Hold the key (PB9) down and reset the board, or send `VERSALOON_FW_UPDATE` or a switch command with the bootloader code `0xB0` (see [Bootloader code](docs/firmware-update.md#bootloader-code)).
    A new serial port with the ID `0483:5740` shows, for example `/dev/ttyACM0`.
 2. Write the `.bin` file of the `app-8k` image with `stm32flash`, and start it:
 

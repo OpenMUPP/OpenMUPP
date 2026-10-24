@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Shows and switches the USB personality of a multi image (VSL_PERSONALITIES).
+"""Shows and switches the USB personality of a multi image (VSL_PERSONALITIES),
+and starts versaloon-bootloader.
 
 The script finds the dongle by its VID:PID and sends the switch request on
 EP0, the control endpoint (bmRequestType 0x40, bRequest 0x0E, wValue code,
@@ -21,11 +22,19 @@ WCH-Link. After the request, the dongle resets and enumerates as the target
 device. The script then waits for the target device. See docs/usb-device.md,
 "Multi image".
 
+"switch bootloader" sends the bootloader code 0xB0 instead of a personality
+code. Each personality of an app-8k image accepts it, also in an image with
+one personality. After a stall, the Versaloon personality gets
+VERSALOON_FW_UPDATE [0x0F][0xAA], which older firmware also knows. The script
+then waits for versaloon-bootloader (0483:5740, product "Bootloader"). See
+docs/firmware-update.md, "Bootloader code".
+
 Usage:
     python3 vsl_personality.py show
     python3 vsl_personality.py switch cmsis-dap
     python3 vsl_personality.py switch wch-link
     python3 vsl_personality.py switch versaloon --serial 0123456789AB
+    python3 vsl_personality.py switch bootloader
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
 The unit tests in test_vsl_personality.py need no pyusb and no hardware.
@@ -36,17 +45,22 @@ import errno
 import sys
 import time
 
-# Personality name -> (code, ((VID, PID), ...))
+# Personality name -> (code, ((VID, PID), ...)). "bootloader" is not a
+# personality: its code starts versaloon-bootloader, and it has no switch
+# command.
+BOOTLOADER = "bootloader"
 PERSONALITIES = {
     "versaloon": (0, ((0x0483, 0xA038),)),
     "cmsis-dap": (1, ((0x0403, 0x9B3C),)),
     "wch-link": (2, ((0x1209, 0x0001), (0x1A86, 0x8010))),
+    BOOTLOADER: (0xB0, ((0x0483, 0x5740),)),
 }
 
 # Other devices use these USB IDs too (the pid.codes test ID, the real
-# WCH-LinkE), so the product string must also match.
+# WCH-LinkE, the ST virtual COM port), so the product string must also match.
 PRODUCT_STRINGS = {
     "wch-link": "Versaloon WCH-Link",
+    BOOTLOADER: "Bootloader",
 }
 
 SWITCH_REQUEST_TYPE = 0x40  # vendor, host to device, recipient device
@@ -54,6 +68,8 @@ SWITCH_REQUEST = 0x0E
 OUT_ENDPOINT = 0x03
 IN_ENDPOINT = 0x82
 SWITCH_PERSONALITY = 0x0E
+FW_UPDATE = 0x0F
+FW_UPDATE_KEY = 0xAA
 DAP_VENDOR0 = 0x80
 DAP_INVALID = 0xFF
 LIBUSB_ERROR_PIPE = -9
@@ -84,27 +100,37 @@ def switch_request(active, target):
     """The in-protocol command that switches from the active personality to target."""
     code = PERSONALITIES[target][0]
     if active == "versaloon":
+        if target == BOOTLOADER:
+            return bytes([FW_UPDATE, FW_UPDATE_KEY])
         return bytes([SWITCH_PERSONALITY, code])
     if active == "cmsis-dap":
         return bytes([DAP_VENDOR0, code])
     raise PersonalityError("the %s personality has no switch command" % active)
 
 
-def check_reply(active, reply):
+def refusal(target):
+    """The reason why the firmware refuses a switch to target."""
+    if target == BOOTLOADER:
+        return "the image has no bootloader entry (only the app-8k image has one)"
+    return "the image has one personality, or it does not have the %s personality" % target
+
+
+def check_reply(active, reply, target=None):
     """Raises PersonalityError when the reply does not accept the switch."""
     reply = bytes(reply)
     if active == "versaloon":
         if len(reply) != 1:
             raise PersonalityError("unexpected reply %s" % reply.hex())
         if reply[0] != 0:
-            raise PersonalityError("the firmware refused the switch: the image has one personality")
+            raise PersonalityError("the firmware refused the switch: %s" % refusal(target))
         return
     if reply[:1] == bytes([DAP_INVALID]):
-        raise PersonalityError("the firmware does not know ID_DAP_Vendor0: the image has one personality")
+        # Only an image with one personality and no bootloader entry
+        raise PersonalityError("the firmware does not know ID_DAP_Vendor0: the image has one personality and no bootloader entry")
     if len(reply) < 2 or reply[0] != DAP_VENDOR0:
         raise PersonalityError("unexpected response %s" % reply.hex())
     if reply[1] != 0:
-        raise PersonalityError("the firmware refused the switch (status %d)" % reply[1])
+        raise PersonalityError("the firmware refused the switch (status %d): %s" % (reply[1], refusal(target)))
 
 
 def is_stall(error):
@@ -195,7 +221,7 @@ def send_command(usb, device, active, target):
         usb.util.claim_interface(device, 0)
         device.write(OUT_ENDPOINT, request, TIMEOUT_MS)
         try:
-            check_reply(active, device.read(IN_ENDPOINT, 64, TIMEOUT_MS))
+            check_reply(active, device.read(IN_ENDPOINT, 64, TIMEOUT_MS), target)
         except usb.core.USBError as error:
             # The command went out, so the switch can be in progress: wait
             # for the target device.
@@ -230,11 +256,14 @@ def command_switch(usb, args):
     if active == args.personality:
         print("The dongle has the %s personality already" % active)
         return 0
+    if active == BOOTLOADER:
+        print("The dongle runs the bootloader: reset it to start the firmware", file=sys.stderr)
+        return 1
     serial = get_string(usb, device, device.iSerialNumber)
     try:
         if not send_ep0_request(usb, device, args.personality):
             if active == "wch-link":
-                print("The firmware refused the switch", file=sys.stderr)
+                print("The firmware refused the switch: %s" % refusal(args.personality), file=sys.stderr)
                 return 1
             # A stall: the firmware refused the switch, or it is from before
             # the EP0 request. The in-protocol command tells which one.
@@ -250,8 +279,14 @@ def command_switch(usb, args):
     print("Switching from %s to %s ..." % (active, args.personality))
     if not wait_for(usb, args.personality, serial, ENUMERATION_TIMEOUT_S):
         print("The dongle did not enumerate as %s" % args.personality, file=sys.stderr)
+        if args.personality == BOOTLOADER:
+            # The tool reads the product string and the serial number, which needs access to the device
+            print("If the bootloader runs, check the access to 0483:5740: etc/70-versaloon-bootloader.rules", file=sys.stderr)
         return 1
-    print("The dongle has the %s personality" % args.personality)
+    if args.personality == BOOTLOADER:
+        print("The dongle runs the bootloader")
+    else:
+        print("The dongle has the %s personality" % args.personality)
     return 0
 
 

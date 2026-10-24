@@ -47,7 +47,8 @@ class Bench {
    // bootloader: the bootloader entry of FW_UPDATE, nullptr for none.
    // usbToXxx: the USB_TO_XXX handler, nullptr for none.
    // personalitySwitch: SWITCH_PERSONALITY and the switch request on EP0,
-   // nullptr for an image with one personality.
+   // nullptr for an image with one personality. The bench has the switch
+   // request on EP0 when it has a personality switch or a bootloader.
    explicit Bench(boot::BootloaderEntry *bootloader = nullptr,
                   protocol::UsbToXxxHandler *usbToXxx = nullptr,
                   personality::PersonalitySwitch *personalitySwitch = nullptr)
@@ -57,8 +58,8 @@ class Bench {
       const std::array<uint8_t, usb::uidBytes> uid{ 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
                                                     0xDE, 0xF0, 0x01, 0x02, 0x03, 0x04 };
       serial_.set(uid);
-      if(personalitySwitch != nullptr) {
-         switchRequest_.emplace(*personalitySwitch);
+      if(personalitySwitch != nullptr || bootloader != nullptr) {
+         switchRequest_.emplace(personalitySwitch, bootloader);
          device_.setVendorRequestHandler(&*switchRequest_);
       }
       REQUIRE(device_.addFunction(versaloon));

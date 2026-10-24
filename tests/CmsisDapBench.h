@@ -117,17 +117,19 @@ class DapBench {
    cmsisdap::DeviceInfo info_;
 
    public:
-   explicit DapBench(const char *product = "Product", personality::PersonalitySwitch *personalitySwitch = nullptr)
+   explicit DapBench(const char *product = "Product",
+                     personality::PersonalitySwitch *personalitySwitch = nullptr,
+                     boot::BootloaderEntry *bootloader = nullptr)
       : info_(dapTestInfo(product))
-      , processor(swd, gpio, platform, info_, nullptr, personalitySwitch)
+      , processor(swd, gpio, platform, info_, nullptr, personalitySwitch, nullptr, bootloader)
       , function(processor)
       , device_(controller_, descriptors_)
       , cdc_(usb::cdcControlInterface, 2) {
       const std::array<uint8_t, usb::uidBytes> uid{ 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC,
                                                     0xDE, 0xF0, 0x01, 0x02, 0x03, 0x04 };
       serial_.set(uid);
-      if(personalitySwitch != nullptr) {
-         switchRequest_.emplace(*personalitySwitch, &msOs20Handler_);
+      if(personalitySwitch != nullptr || bootloader != nullptr) {
+         switchRequest_.emplace(personalitySwitch, bootloader, &msOs20Handler_);
          device_.setVendorRequestHandler(&*switchRequest_);
       } else {
          device_.setVendorRequestHandler(&msOs20Handler_);

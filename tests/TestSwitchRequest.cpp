@@ -3,6 +3,7 @@
 // The tests in the other personalities are in TestCmsisDapEnumeration.cpp
 // and TestWchLink.cpp.
 
+#include "boot/BootloaderEntry.h"
 #include "personality/Personality.h"
 #include "personality/PersonalitySwitch.h"
 #include "protocol/versaloon/Versaloon.h"
@@ -99,7 +100,8 @@ TEST_CASE("The switch request stalls for a personality that is not in the image"
    // An image with Versaloon and WCH-Link only
    static constexpr std::array<Personality, 2> image{ Personality::Versaloon, Personality::WchLink };
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
-   usb::SwitchRequestHandler handler(personalitySwitch, nullptr, art::span<const Personality>(image.data(), image.size()));
+   usb::SwitchRequestHandler handler(&personalitySwitch, nullptr, nullptr,
+                                     art::span<const Personality>(image.data(), image.size()));
    art::usb::SetupPacket setup{ .bmRequestType = usb::switchRequestType,
                                 .bRequest = usb::switchRequestCode,
                                 .wValue = personality::toCode(Personality::CmsisDap) };
@@ -110,6 +112,42 @@ TEST_CASE("The switch request stalls for a personality that is not in the image"
    setup.wValue = personality::toCode(Personality::WchLink);
    CHECK(handler.vendorRequest(setup, {}).has_value());
    CHECK(personalitySwitch.requested() == Personality::WchLink);
+}
+
+TEST_CASE("The switch request with the bootloader code requests the bootloader") {
+   boot::BootloaderEntry bootloader;
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   vsltest::Bench bench(&bootloader, nullptr, &personalitySwitch);
+   bench.enumerate();
+
+   CHECK_FALSE(switchRequest(bench.controller(), boot::bootloaderCode).stalled);
+   CHECK(bootloader.isRequested());
+   CHECK_FALSE(personalitySwitch.requested().has_value());
+   CHECK_FALSE(bootloader.isDue(0));
+   CHECK(bootloader.isDue(boot::BootloaderEntry::replyDelayMs));
+}
+
+TEST_CASE("An image with one personality and a bootloader takes only the bootloader code") {
+   boot::BootloaderEntry bootloader;
+   vsltest::Bench bench(&bootloader);
+   bench.enumerate();
+   auto &controller = bench.controller();
+
+   CHECK(switchRequest(controller, personality::toCode(Personality::Versaloon)).stalled);
+   CHECK(switchRequest(controller, personality::toCode(Personality::CmsisDap)).stalled);
+   CHECK(switchRequest(controller, 0x0100 | boot::bootloaderCode).stalled);
+   CHECK_FALSE(bootloader.isRequested());
+   CHECK_FALSE(switchRequest(controller, boot::bootloaderCode).stalled);
+   CHECK(bootloader.isRequested());
+}
+
+TEST_CASE("The bootloader code stalls without a bootloader") {
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   vsltest::Bench bench(nullptr, nullptr, &personalitySwitch);
+   bench.enumerate();
+
+   CHECK(switchRequest(bench.controller(), boot::bootloaderCode).stalled);
+   CHECK_FALSE(personalitySwitch.requested().has_value());
 }
 
 TEST_CASE("Without a next handler, another vendor request stalls") {

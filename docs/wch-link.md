@@ -27,7 +27,7 @@ The `wch-link` image has these properties:
   A `Debug` build of this image needs `-DVSL_DEBUG_CDC=OFF`, and it has no debug log. CMake stops with an error when `VSL_DEBUG_CDC` is on.
 - The image does not link the Versaloon and CMSIS-DAP code. The SWD and JTAG engines of these personalities are not used.
 - The LEDs show the target power, the command activity and the USB state. They show no probe error pattern.
-- The image has no `VERSALOON_FW_UPDATE` command. Use the key to start the bootloader (see [Firmware update](firmware-update.md)).
+- The image has no `VERSALOON_FW_UPDATE` command. To start the bootloader, send the switch request on EP0 with the bootloader code `0xB0`, or use the key (see [Bootloader code](firmware-update.md#bootloader-code)).
 - A multi image can have this personality with others, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
   The switch commands of the other personalities (code `2`), the switch request on EP0 and the key switch to it.
   The WCH-Link protocol has no command that switches the personality.
