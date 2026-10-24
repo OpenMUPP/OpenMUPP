@@ -41,6 +41,8 @@ class Target {
    virtual rvswd::Status writeRegister(uint16_t regno, uint32_t value) = 0;
    virtual rvswd::Status readMemory(uint32_t address, uint32_t &value) = 0;
    virtual rvswd::Status writeMemory(uint32_t address, uint32_t value, rvswd::Width width) = 0;
+   // The method after attach() is the method of the wire. A target can need the other one.
+   virtual void setMemoryAccess(rvswd::MemoryAccess access) = 0;
 
    protected:
    ~Target() = default;
@@ -108,6 +110,9 @@ class RvSwdTarget final : public Target {
    }
    rvswd::Status writeMemory(uint32_t address, uint32_t value, rvswd::Width width) override {
       return module_.writeMemory(address, value, width);
+   }
+   void setMemoryAccess(rvswd::MemoryAccess access) override {
+      module_.setMemoryAccess(access);
    }
 
    private:

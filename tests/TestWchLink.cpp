@@ -10,6 +10,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -27,6 +28,7 @@ namespace dm = rvswd::dm;
 
 constexpr uint32_t v208ChipId = 0x2080'053c;
 constexpr uint32_t v003ChipId = 0x0030'0500;
+constexpr uint32_t v006ChipId = 0x0060'0620;
 
 Bytes bytes(const auto &descriptor) {
    return { descriptor.begin(), descriptor.end() };
@@ -263,6 +265,89 @@ TEST_CASE("WCH-Link: connect on one wire with chip type 0x09 (CH32V003)") {
    CHECK(bench.pins.unlockedChanges == 0);
    CHECK(bench.pins.contentions == 0);
    CHECK(bench.dm.halted);
+}
+
+namespace {
+
+struct Store {
+   uint32_t address;
+   uint32_t value;
+
+   bool operator==(const Store &other) const {
+      return address == other.address && value == other.value;
+   }
+};
+
+// Memory-mapped RCC of a CH32V006: PLLRDY follows PLLON, SWS follows SW.
+// pllRuns false: the PLL never gets ready. The stores go to `stores`.
+void modelClock(WchLinkBench &bench, std::vector<Store> &stores, bool pllRuns = true) {
+   namespace cs = wchlink::clocksetup;
+   const auto set = [&bench](uint32_t address, uint32_t value) {
+      for(uint32_t i = 0; i < 4; ++i) {
+         bench.dm.memory[address + i] = static_cast<uint8_t>(value >> (8 * i));
+      }
+   };
+   set(cs::rccCtlr, 0x0050'9c83);
+   set(cs::rccCfgr0, 0x20);
+   bench.dm.onStore = [&bench, &stores, set, pllRuns](uint32_t address, uint32_t value, uint32_t) {
+      stores.push_back({ address, value });
+      if(address == cs::rccCtlr) {
+         set(address, value | (pllRuns && value & cs::pllOn ? cs::pllReady : 0));
+         return true;
+      }
+      if(address == cs::rccCfgr0) {
+         set(address, value | (value & 3) << 2);
+         return true;
+      }
+      return false;
+   };
+}
+
+} // namespace
+
+TEST_CASE("WCH-Link: connect on one wire does the clock setup of the CH32V006") {
+   WchLinkBench bench(Wire::One);
+   bench.pins.registers[dm::chipId] = v006ChipId;
+   bench.enumerate();
+   std::vector<Store> stores;
+   modelClock(bench, stores);
+   // v006-wlink-status-timing.csv, from 89.9 ms
+   CHECK(bench.transact(request(0x0c, { 0x01, 0x01 })) == Bytes{ 0x82, 0x0c, 0x01, 0x01 });
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x4e, v006ChipId));
+   CHECK(bench.processor.connected());
+   // The PLL turns on, RCC_CFGR0 selects it, then the flash controller is back at its reset state.
+   const std::vector<Store> expected{
+      { 0x4002'2000, 0x0000'0002 }, { 0x4002'1004, 0 }, { 0x4002'1008, 0x009d'0000 },
+      { 0x4002'1000, 0x0150'9c83 }, { 0x4002'1004, 2 }, { 0x4002'2010, 0x0000'8080 },
+      { 0x4002'200c, 0x0000'b020 },
+   };
+   // The stores of the module (data0, data1) are not in `stores`.
+   CHECK(stores == expected);
+   CHECK(bench.pins.protocolErrors == 0);
+   // The CH32V00X refuses the program buffer (cmderr 2): the memory commands are abstract.
+   CHECK(std::count(bench.dm.commands.begin(), bench.dm.commands.end(), 0x0004'0000u) == 0);
+   CHECK(std::count(bench.dm.commands.begin(), bench.dm.commands.end(), 0x0221'0000u) == 7);
+}
+
+TEST_CASE("WCH-Link: the connect of a CH32V003 does no clock setup") {
+   WchLinkBench bench(Wire::One);
+   bench.enumerate();
+   std::vector<Store> stores;
+   modelClock(bench, stores);
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x09, v003ChipId));
+   CHECK(stores.empty());
+}
+
+TEST_CASE("WCH-Link: connect succeeds when the PLL of a CH32V006 does not get ready") {
+   WchLinkBench bench(Wire::One);
+   bench.pins.registers[dm::chipId] = v006ChipId;
+   bench.enumerate();
+   std::vector<Store> stores;
+   modelClock(bench, stores, false);
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x4e, v006ChipId));
+   CHECK(bench.processor.connected());
+   // The setup stopped at the poll: no write of the flash controller registers.
+   CHECK(stores.back() == Store{ 0x4002'1000, 0x0150'9c83 });
 }
 
 TEST_CASE("WCH-Link: connect with chip type 0x09 finds a CH32V208 on two wires (minichlink)") {
@@ -613,8 +698,9 @@ TEST_CASE("WCH-Link: quit resumes the hart, ends dmactive and releases the pins"
    connect(bench);
    REQUIRE(bench.dm.halted);
    CHECK(bench.transact(request(0x0d, { 0xff })) == Bytes{ 0x82, 0x0d, 0x01, 0xff });
-   // The quit of the probe (v208-wlink-status-timing.csv)
+   // The quit of the probe (v208-wlink-status-timing.csv), with the haltreq clear that wlink resume sends
    const std::vector<Access> expected{
+      W(dm::dmcontrol, 0x0000'0001),
       W(dm::dmcontrol, 0x4000'0001),
       R(dm::dmstatus, 0x0003'0c82),
       W(dm::dmcontrol, 0x4000'0000),

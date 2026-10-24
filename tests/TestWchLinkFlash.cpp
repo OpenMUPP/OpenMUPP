@@ -560,7 +560,7 @@ TEST_CASE("WCH-Link flash: a bus reset drops the program sequence") {
    CHECK_FALSE(fb.bench.processor.wantsData());
 }
 
-TEST_CASE("WCH-Link flash: CH32V006 uses 256-byte pages and fast-page option byte programming") {
+TEST_CASE("WCH-Link flash: CH32V006 uses 256-byte pages and OBPG option half words with STRT") {
    WchLinkBench bench(Wire::One);
    MockWchFlash flash(bench.dm, MockWchFlash::v006);
    bench.pins.registers[dm::chipId] = 0x0060'0700;
@@ -579,7 +579,7 @@ TEST_CASE("WCH-Link flash: CH32V006 uses 256-byte pages and fast-page option byt
    CHECK(bench.transact(request(0x02, { 0x07 })) == reply(0x02, 0x07));
    CHECK(bench.transact(request(0x02, { 0x02 })) == errorFrame);
 
-   // Protect and unprotect with FTPG option-byte programming and hidden option bytes
+   // Protect and unprotect with OBPG half words (STRT before each) and hidden option bytes
    flash.setOption(1, 0xe7);
    flash.setOption(2, 0x12);
    flash.setOption(3, 0x34);
@@ -594,6 +594,8 @@ TEST_CASE("WCH-Link flash: CH32V006 uses 256-byte pages and fast-page option byt
    CHECK(flash.option(2) == 0x12);
    CHECK(flash.option(3) == 0x34);
    CHECK(flash.option(4) == 0xff);
+   // The RDPR write erased the main flash. Its abstract command stayed busy longer than the module polls.
+   CHECK(flash.autoErases == 1);
    CHECK(flash.errors.empty());
 }
 

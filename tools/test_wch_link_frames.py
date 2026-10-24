@@ -99,5 +99,21 @@ class OneWire(unittest.TestCase):
         self.assertEqual(left[0][1], 544)
 
 
+class OneWireV006(unittest.TestCase):
+    def frames(self):
+        return [one.decode(f) for _, f in one.frames(capture('v006-wlink-status-timing.csv'), 76)]
+
+    def test_connect_phase_after_the_two_wire_attempts(self):
+        got = [(d['addr'], d['write'], d['data']) for d in self.frames()]
+        self.assertEqual(got[:3], [(0x7e, True, 0x5aa50400), (0x7d, True, 0x5aa50400),
+                                   (0x7c, False, 0x11038403)])
+        self.assertIn((0x7f, False, 0x00600620), got)
+
+    def test_protection_registers_are_read_with_the_abstract_command(self):
+        got = [(d['addr'], d['write'], d['data']) for d in self.frames()]
+        i = got.index((0x05, True, 0x4002201c))
+        self.assertEqual(got[i + 1:i + 3], [(0x17, True, 0x02200000), (0x04, False, 0x03fffffc)])
+
+
 if __name__ == '__main__':
     unittest.main()

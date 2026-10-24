@@ -124,6 +124,13 @@ class MockDebugModule {
       }
    }
 
+   // The running abstract command stays busy for this many abstractcs reads
+   // (a store that starts a long flash operation, for example).
+   void holdBusy(uint32_t reads) {
+      busy_ = reads;
+      update();
+   }
+
    [[nodiscard]] bool active() const {
       return active_;
    }

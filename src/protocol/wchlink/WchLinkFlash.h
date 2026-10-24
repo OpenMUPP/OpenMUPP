@@ -67,9 +67,6 @@ inline constexpr uint32_t strt = 1u << 6;
 inline constexpr uint32_t lock = 1u << 7;
 inline constexpr uint32_t obwre = 1u << 9;
 inline constexpr uint32_t flock = 1u << 15;
-inline constexpr uint32_t ftpg = 1u << 16;
-inline constexpr uint32_t bufload = 1u << 18;
-inline constexpr uint32_t bufrst = 1u << 19;
 
 // The user option bytes: half words with the value in the low byte and its
 // inverse in the high byte. RDPR, USER, DATA0, DATA1, WRPR0-WRPR3. The
@@ -89,7 +86,7 @@ inline constexpr std::size_t optionBytesV20x = 8;
 enum class Series : uint8_t {
    // CH32V003, CH641: 6 option half words, programmed with OBPG
    V00x,
-   // CH32V002/4/5/6/7, CH32M007: 8 option half words, programmed with FTPG
+   // CH32V002/4/5/6/7, CH32M007: 8 option half words, programmed with OBPG half words, each with STRT and its inverse
    V006,
    // CH32V20x, CH32V30x, CH32X035, CH32L103, CH643, CH645: 8 option half
    // words, programmed with OBPG
@@ -142,7 +139,9 @@ struct StubLayout {
 
 // CH32V003, CH641: 2 KB RAM, 64-byte pages. The buffer follows the stub.
 inline constexpr StubLayout layoutV00x{ 0x2000'0000, 0x2000'0200, 1024, 64, 0x2000'0800 };
-// CH32V002/4/5/6/7, CH32M007: 4 KB RAM or more, 256-byte pages
+// CH32V002/4/5/6/7, CH32M007: 4 KB RAM or more, 256-byte pages. Checked on
+// a CH32V006: the wlink stub has the buffer at 0x20000200, 1024-byte blocks
+// and 256-byte pages.
 inline constexpr StubLayout layoutV006{ 0x2000'0000, 0x2000'0200, 1024, 256, 0x2000'0800 };
 // CH32V20x, CH32V30x, CH32X035, CH32L103, CH643, CH645: 10 KB RAM or more
 inline constexpr StubLayout layoutV20x{ 0x2000'0000, 0x2000'1000, 4096, 256, 0x2000'2800 };
@@ -217,6 +216,8 @@ class Flash {
    [[nodiscard]] bool write(uint32_t address, uint32_t value);
    [[nodiscard]] bool unlockController();
    [[nodiscard]] bool waitIdle();
+   // Waits until the abstract command ends, after the module gave up on it.
+   [[nodiscard]] bool waitCommand();
    [[nodiscard]] bool lockController();
    // Writes the next word of the image to the buffer.
    [[nodiscard]] bool bufferWord(uint32_t word);

@@ -197,7 +197,7 @@ The packets use the notation of [Notation](wch-link-protocol.md#notation).
 | `0d 01 01` | Replies `02 13 12 00`, the values of the captured WCH-LinkE |
 | `0d 01 02` | Connects (see below) |
 | `0d 01 03`, `0d 01 04` | Reply `03` and `00`. No target access. |
-| `0d 01 ff` | Quit: `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
+| `0d 01 ff` | Quit: `dmcontrol` `00000001`, `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
 | Other `0d` values | The unknown-command reply (see below) |
 | `0c` | Ignores the chip type, and sets the speed. Replies `01`. |
 | `08` | DMI access. `op` `00` does no access. A failure, or an access before a connect, gives the status `02`. |
@@ -240,6 +240,12 @@ On each wire, the processor does these probe actions:
 3. Halt the hart: `dmcontrol` `80000001` two times, then the `dmstatus` poll.
 4. Read the chip ID at `0x7f`. The values `00000000` and `ffffffff` tell that no target is present.
 5. Write CSR `0x7c0` with `0x00000300`.
+6. Family code `4e` only (CH32V00X): set up the clock, as the WCH-LinkE does (see [CH32V006](wch-link-protocol.md#ch32v006-one-wire-qingke-v2c)).
+   Write `FLASH_ACTLR` with `2`, `RCC_CFGR0` with `0` and `RCC_INTR` with `009d0000`.
+   Set `PLLON` in `RCC_CTLR` and wait for `PLLRDY`. Write `RCC_CFGR0` with `2` and wait for `SWS` to show the PLL.
+   Write `FLASH_CTLR` with `00008080` and `FLASH_STATR` with `0000b020`.
+   The accesses use the abstract memory command, as the WCH-LinkE does. The program buffer fails on this family (`cmderr` 2).
+   A failed access or a poll without result ends the setup. The connect still succeeds: the host must reach a chip whose RCC does not switch (seen after an erase of the option bytes).
 
 The family code of the response comes from a table of chip ID prefixes (the top 12 bits). wlink selects the chip settings from this code.
 
@@ -264,10 +270,11 @@ The processor does not do these probe actions:
 
 - The 85-clock connect frames (see [Connect frames](wch-link-protocol.md#connect-frames)). The CH32V208 connects without them.
 - The writes to the clock registers of the CH32V208 at connect.
+- The repeated reads and writes back of the same value in the clock setup of the CH32V00X, and the `abstractcs` clear before it.
 - The read of `0x1ffff7c4` of the CH32V003 at connect.
 - The read of `0x1ffff802` for `0d 01 04`.
 
-Their meaning is not known. The flash operations do not need the clock setup: each flash operation starts with a reset (see [Flash](#flash)).
+Their meaning is not known. The flash operations do not need the clock setup (the reset undoes the clock setup of the CH32V00X): each flash operation starts with a reset (see [Flash](#flash)).
 
 ### Memory read
 
@@ -317,7 +324,9 @@ The commands without a stub use the flash controller registers directly, with DM
 - **Mass erase (`02 01 01`).** Reset, unlock, `FLASH_CTLR` `MER`, then `MER` and `STRT`, wait, `FLASH_CTLR` 0, lock (`LOCK` and `FLOCK`).
 - **Protect (`06 01 03`) and unprotect (`06 01 02`).** Reset. Read the old option bytes (see below). Unlock, then write `KEY1` and `KEY2` to `FLASH_OBKEYR`. Erase the option bytes (`OBER`, `STRT`).
   - On CH32V003 (`09`, `49`) and the two-wire V4 series: program each option byte with `OBPG` and a 16-bit write, and wait after each byte.
-  - On CH32V00X (`4e`), `FLASH_CTLR` has no `OBPG` bit (CH32V00X reference manual 18.5.2): unlock `FLOCK` via `FLASH_MODEKEYR`, clear the internal page buffer (`FTPG | BUFRST`), load 4 32-bit words (each holding two option bytes and their inverses) into `0x1ffff800`–`0x1ffff80c` with `FTPG | BUFLOAD`, write `0x1ffff800` to `FLASH_ADDR`, and program the page (`FTPG | STRT`).
+  - On CH32V00X (`4e`): the same, but write `FLASH_CTLR` with `OBPG`, `STRT` and `OBWRE` before each 16-bit write. A half word is lost without the `STRT` write.
+    The 16-bit write holds the byte and its inverse. With the byte `ff` alone, the half word stays unprogrammed and the option byte is not valid.
+    The reference manual (18.5.2) describes fast page programming (`FTPG`, `BUFRST`, `BUFLOAD`) for the option bytes. On a CH32V006, `FTPG` does not set in `FLASH_CTLR` through the debug module, so that method only erases the option bytes. minichlink uses `OBPG` on this chip.
   Then `FLASH_CTLR` 0 and lock.
   Each `FLASH_CTLR` write keeps `OBWRE` 1: a 0 locks the option bytes again.
   - `RDPR` gets `0xa5` (unprotect) or `0x00` (protect). The value `0xcc` is not used, because it is a permanent protection on other chips.
@@ -384,7 +393,7 @@ The host tests are in `tests/TestDebugModule.cpp`. They use a mock DM (`tests/Mo
 |---|---|---|
 | DM reset | Write `dmcontrol` `00000000`, then `00000001`. Read `dmcontrol` until `dmactive` is 1. Read `dmstatus`. | `v003-wlink-halt.pcapng` |
 | Halt | Write `dmcontrol` `80000001` two times. Read `dmstatus` until `allhalted` (bit 9) is 1. `haltreq` stays set. | Connect of the probe |
-| Resume | Write `dmcontrol` `40000001`. Read `dmstatus` until `allresumeack` (bit 17) or `allrunning` (bit 11) is 1. | The first two accesses of the quit of the probe |
+| Resume | Write `dmcontrol` `00000001` (clears `haltreq`). Write `dmcontrol` `40000001`. Read `dmstatus` until `allresumeack` (bit 17) or `allrunning` (bit 11) is 1. | `wlink resume` (all chips). The quit of the probe has the second write and the poll only. |
 | Register read | Write `command` `0022xxxx` (`xxxx` is the register number). Read `abstractcs`. Read `data0`. | Chip information reads |
 | Register write | Write `data0`. Write `command` `0023xxxx`. Read `abstractcs`. | Connect (CSR `0x7c0`) |
 | Memory read, abstract | Write `data1` (address). Write `command` `02200000` (word) or `02000000` (byte). Read `abstractcs`. Read `data0`. | CH32V208 |
@@ -400,12 +409,12 @@ It does this again after a DM reset and after each DMI write of the host.
 Resume and quit:
 
 - The quit command of the probe also writes `dmcontrol` `40000000` (`dmactive` 0) after the `dmstatus` read. The resume of the layer does not do this write. The quit command of the personality must add it, else the DM stays active.
-- A `resumereq` write to a running hart clears `allresumeack` and does not set it again (debug spec 0.13). Thus `allrunning` also ends the poll. For a halted hart, the access sequence stays the sequence of the probe.
+- A `resumereq` write to a running hart clears `allresumeack` and does not set it again (debug spec 0.13). Thus `allrunning` also ends the poll. The first write is not in the quit of the probe. A CH32V006 does not resume when one write clears `haltreq` and sets `resumereq`: `dmcontrol` then reads `00000001` and `dmstatus` stays halted. Two writes resume it. The CH32V003 and the CH32V208 resume with one write.
 
 The layer refuses a misaligned address before it sends a frame (status `Misaligned`). A word address must be a multiple of 4, and a half-word address a multiple of 2.
 The CH32V003 gets an exception on a misaligned word access.
 
-The layer selects the memory access method from the wire. One wire (CH32V00x) uses the program buffer. Two wires (CH32V20x, CH32V30x) use the abstract memory access.
+The layer selects the memory access method from the wire. One wire (CH32V003) uses the program buffer. Two wires (CH32V20x, CH32V30x) use the abstract memory access. The connect switches the family code `4e` (CH32V00X) to the abstract memory access: the program buffer gives `cmderr` 2 on a CH32V006.
 The program buffer method has 32-bit reads, and 32-bit and 16-bit writes.
 
 #### Program buffer programs

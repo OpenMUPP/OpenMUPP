@@ -13,9 +13,9 @@
 // - Halt: dmcontrol haltreq twice, then dmstatus until allhalted (the
 //   connect command of the probe). haltreq stays set, as on the probe:
 //   the host tools read dmcontrol 80000001 after a connect.
-// - Resume: dmcontrol resumereq, then dmstatus until allresumeack or
-//   allrunning (the first two accesses of the quit command of the probe).
-//   The write also clears haltreq. A resumereq to a running hart clears
+// - Resume: dmcontrol dmactive (clears haltreq), dmcontrol resumereq, then
+//   dmstatus until allresumeack or allrunning (wlink resume). The CH32V006
+//   ignores a resumereq in the write that clears haltreq. A resumereq to a running hart clears
 //   allresumeack and sets nothing (debug spec), so allrunning also ends
 //   the poll. The quit of the probe also writes dmcontrol 40000000
 //   (dmactive 0) after the poll. resume() does not do that write.
@@ -285,7 +285,12 @@ class DebugModule {
    }
 
    Status resume() {
-      const Status status = write(dm::dmcontrol, dm::resumereq | dm::dmactive);
+      // haltreq goes first: the CH32V006 ignores a resumereq in the write that clears haltreq
+      // (wlink resume sends the same two writes on all chips).
+      Status status = write(dm::dmcontrol, dm::dmactive);
+      if(status == Status::Ok) {
+         status = write(dm::dmcontrol, dm::resumereq | dm::dmactive);
+      }
       if(status != Status::Ok) {
          return status;
       }

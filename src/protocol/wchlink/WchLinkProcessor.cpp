@@ -238,7 +238,44 @@ Processor::Found Processor::connectOn(uint32_t &chipId) {
    if(familyOf(chipId) == 0) {
       return Found::Unknown;
    }
-   return target_.writeRegister(wchdm::csr7c0, wchdm::csr7c0Value) == rvswd::Status::Ok ? Found::Known : Found::None;
+   if(target_.writeRegister(wchdm::csr7c0, wchdm::csr7c0Value) != rvswd::Status::Ok) {
+      return Found::None;
+   }
+   if(familyOf(chipId) == familyV006) {
+      // The CH32V00X runs no program from the program buffer (cmderr 2), unlike
+      // the CH32V003. The probe uses the abstract memory command.
+      target_.setMemoryAccess(rvswd::MemoryAccess::Abstract);
+      // Best effort: a chip whose RCC does not switch to the PLL (seen after an
+      // erase of the option bytes) must stay reachable for the host.
+      static_cast<void>(setupClock());
+   }
+   return Found::Known;
+}
+
+bool Processor::setupClock() {
+   namespace cs = clocksetup;
+   const auto write = [this](uint32_t address, uint32_t value) {
+      return target_.writeMemory(address, value, rvswd::Width::Word) == rvswd::Status::Ok;
+   };
+   // Reads until (value & mask) == expected
+   const auto poll = [this](uint32_t address, uint32_t mask, uint32_t expected) {
+      for(uint32_t i = 0; i < rvswd::pollLimit; ++i) {
+         uint32_t value = 0;
+         if(target_.readMemory(address, value) != rvswd::Status::Ok) {
+            return false;
+         }
+         if((value & mask) == expected) {
+            return true;
+         }
+      }
+      return false;
+   };
+   uint32_t control = 0;
+   return write(cs::flashActlr, cs::flashActlrValue) && write(cs::rccCfgr0, 0) &&
+          write(cs::rccIntr, cs::rccIntrClear) && target_.readMemory(cs::rccCtlr, control) == rvswd::Status::Ok &&
+          write(cs::rccCtlr, control | cs::pllOn) && poll(cs::rccCtlr, cs::pllReady, cs::pllReady) &&
+          write(cs::rccCfgr0, cs::switchPll) && poll(cs::rccCfgr0, cs::switchStatusMask, cs::switchStatusPll) &&
+          write(cs::flashCtlr, cs::flashCtlrValue) && write(cs::flashStatr, cs::flashStatrValue);
 }
 
 void Processor::quit() {
