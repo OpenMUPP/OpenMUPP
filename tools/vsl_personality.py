@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Shows and switches the USB personality of a multi image (VSL_PERSONALITIES),
-and starts versaloon-bootloader.
+and starts the bootloader: versaloon-bootloader on the STM32F1 boards, the
+ROM USB DFU on the STM32H5 boards.
 
 The script finds the dongle by its VID:PID and sends the switch request on
 EP0, the control endpoint (bmRequestType 0x40, bRequest 0x0E, wValue code,
@@ -23,10 +24,11 @@ device. The script then waits for the target device. See docs/usb-device.md,
 "Multi image".
 
 "switch bootloader" sends the bootloader code 0xB0 instead of a personality
-code. Each personality of an app-8k image accepts it, also in an image with
-one personality. After a stall, the Versaloon personality gets
-VERSALOON_FW_UPDATE [0x0F][0xAA], which older firmware also knows. The script
-then waits for versaloon-bootloader (0483:5740, product "Bootloader"). See
+code. Each personality of an app-8k image or of an STM32H5 image accepts it,
+also in an image with one personality. After a stall, the Versaloon
+personality gets VERSALOON_FW_UPDATE [0x0F][0xAA], which older firmware also
+knows. The script then waits for versaloon-bootloader (0483:5740, product
+"Bootloader") or for the ROM DFU of the STM32H5 (0483:df11). See
 docs/firmware-update.md, "Bootloader code".
 
 Usage:
@@ -46,22 +48,28 @@ import sys
 import time
 
 # Personality name -> (code, ((VID, PID), ...)). "bootloader" is not a
-# personality: its code starts versaloon-bootloader, and it has no switch
-# command.
+# personality: its code starts versaloon-bootloader (0483:5740) or the ROM
+# DFU of the STM32H5 (0483:df11), and it has no switch command.
 BOOTLOADER = "bootloader"
 PERSONALITIES = {
     "versaloon": (0, ((0x0483, 0xA038),)),
     "cmsis-dap": (1, ((0x0403, 0x9B3C),)),
     "wch-link": (2, ((0x1209, 0x0001), (0x1A86, 0x8010))),
-    BOOTLOADER: (0xB0, ((0x0483, 0x5740),)),
+    BOOTLOADER: (0xB0, ((0x0483, 0x5740), (0x0483, 0xDF11))),
 }
 
 # Other devices use these USB IDs too (the pid.codes test ID, the real
 # WCH-LinkE, the ST virtual COM port), so the product string must also match.
 PRODUCT_STRINGS = {
-    "wch-link": "Versaloon WCH-Link",
-    BOOTLOADER: "Bootloader",
+    (0x1209, 0x0001): "Versaloon WCH-Link",
+    (0x1A86, 0x8010): "Versaloon WCH-Link",
+    (0x0483, 0x5740): "Bootloader",
 }
+
+# The ROM DFU has its own serial number, not the chip UID of the firmware,
+# so the serial check skips it. Limit: with more than one STM32H5 dongle in
+# DFU mode, --serial cannot select one.
+NO_SERIAL_IDS = {(0x0483, 0xDF11)}
 
 SWITCH_REQUEST_TYPE = 0x40  # vendor, host to device, recipient device
 SWITCH_REQUEST = 0x0E
@@ -111,7 +119,7 @@ def switch_request(active, target):
 def refusal(target):
     """The reason why the firmware refuses a switch to target."""
     if target == BOOTLOADER:
-        return "the image has no bootloader entry (only the app-8k image has one)"
+        return "the image has no bootloader entry (only the app-8k image and the STM32H5 images have one)"
     return "the image has one personality, or it does not have the %s personality" % target
 
 
@@ -167,10 +175,10 @@ def find_devices(usb, serial=None):
     for name, (_code, ids) in PERSONALITIES.items():
         for vid, pid in ids:
             for device in usb.core.find(find_all=True, idVendor=vid, idProduct=pid):
-                product = PRODUCT_STRINGS.get(name)
+                product = PRODUCT_STRINGS.get((vid, pid))
                 if product is not None and get_string(usb, device, device.iProduct) != product:
                     continue
-                if serial is not None and get_string(usb, device, device.iSerialNumber) != serial:
+                if serial is not None and (vid, pid) not in NO_SERIAL_IDS and get_string(usb, device, device.iSerialNumber) != serial:
                     continue
                 result.append((name, device))
     return result

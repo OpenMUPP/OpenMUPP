@@ -25,6 +25,7 @@ class PersonalityOfTest(unittest.TestCase):
 
     def test_bootloader_id(self):
         self.assertEqual(vp.personality_of(0x0483, 0x5740), "bootloader")
+        self.assertEqual(vp.personality_of(0x0483, 0xDF11), "bootloader")
 
     def test_unknown_id(self):
         self.assertIsNone(vp.personality_of(0x0483, 0x5741))
@@ -175,6 +176,10 @@ class FindDevicesTest(unittest.TestCase):
         ours = FakeDevice(0x0483, 0x5740, "Bootloader")
         other = FakeDevice(0x0483, 0x5740, "STM32 Virtual ComPort")
         self.assertEqual(vp.find_devices(fake_usb([ours, other])), [("bootloader", ours)])
+
+    def test_rom_dfu_needs_no_product_string_and_no_serial(self):
+        dfu = FakeDevice(0x0483, 0xDF11, "DFU in FS Mode", serial="ROM")
+        self.assertEqual(vp.find_devices(fake_usb([dfu]), "SN1"), [("bootloader", dfu)])
 
     def test_serial(self):
         a = FakeDevice(0x0483, 0xA038, serial="A")

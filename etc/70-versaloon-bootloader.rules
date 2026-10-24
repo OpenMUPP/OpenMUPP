@@ -1,6 +1,8 @@
-# udev rule for versaloon-bootloader (docs/firmware-update.md). It gives a
-# normal user access to the bootloader, so tools/vsl_personality.py can read
-# its product string and serial number. Copy this file to
+# udev rules for versaloon-bootloader and the ROM USB DFU of the STM32H5
+# (docs/firmware-update.md). They give a normal user access to the
+# bootloader, so tools/vsl_personality.py can read the product string and
+# the serial number of versaloon-bootloader, and dfu-util can write the
+# firmware through the ROM DFU. Copy this file to
 # /etc/udev/rules.d/, run "udevadm control --reload", and start the
 # bootloader again.
 
@@ -8,3 +10,5 @@
 # The ST virtual COM port uses the same ID, so the rule also checks the
 # product string.
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", ATTRS{product}=="Bootloader", MODE="0660", TAG+="uaccess"
+# The ROM USB DFU of the STM32 devices
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="df11", MODE="0660", TAG+="uaccess"
