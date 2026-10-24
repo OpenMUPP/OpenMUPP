@@ -398,6 +398,9 @@ openocd -c "set WORKAREASIZE 0x2000" -f etc/openocd/ch32v00x-cmsis-dap.cfg
 The common file replaces the `jtag_init` proc of OpenOCD. The proc sends `cmsis-dap cmd 0x81 0x01` before the chain scan.
 A TAP `setup` event is too late: OpenOCD sends it after the chain scan.
 An image without the bridge replies `ID_DAP_Invalid`. Then `init` stops with "The probe has no RISC-V bridge", followed by the OpenOCD error.
+The proc also adds `cmsis-dap cmd 0x81 0x00` to `pre_shutdown_commands`. Thus `shutdown` switches the bridge off before OpenOCD closes the adapter.
+A signal (for example Ctrl-C) does not run `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
+Switch the bridge off with `python3 tools/vsl_rv_bridge.py off`, or replug the probe.
 The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
 The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (#110).
@@ -433,6 +436,7 @@ python3 tools/vsl_rv_bridge.py off
 ```
 
 The bridge stays on until a USB reset, a power cycle or `81 00`.
+The OpenOCD configs send `81 00` at `shutdown`, but not after a signal (Ctrl-C).
 Thus probe-rs must not reset the USB device when it opens it. The hardware test (#109) checks this.
 
 ### Connect
