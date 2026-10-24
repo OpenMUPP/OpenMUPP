@@ -688,6 +688,8 @@ Observations:
 - **Flash program (wlink).** The sequence is the same as for the CH32V003. The step 2 packet is `01 08 08000000 00001000` for 4 KB. The stub has 512 bytes and differs from the CH32V003 stub and the CH32V208 stub (`v006-wlink-flash.pcapng`).
   A disassembly shows the interface of [the stub](#the-stub): fast page erase and fast page program in steps of 256 bytes (64 words), the buffer at `0x20000200`, and the checksum word at `0x20000610`. A block of 1024 bytes needs about 59 ms.
   The program of 4 KB takes 0.29 s from `02 01 05` to `02 01 08`.
+- **Quit.** The quit writes `dmcontrol` `40000001`. The following `dmstatus` read gives `004f0382`: the hart is still halted (`v006-wlink-status-timing.csv`). A single write that clears `haltreq` and sets `resumereq` does not resume a CH32V006.
+  `wlink resume` clears `haltreq` in a write of its own (`00000001`), then writes `40000001`, and the hart runs (`dmstatus` `004f0c82`). The project firmware sends both writes in a resume. The test used the firmware of this project on the CH32V006 and the host tool `dmi` accesses.
 - **Protect.** After `06 01 03`, wlink quits and connects again. The query then returns `01`. A reset is not needed on the CH32V006.
 - **minichlink.** It uses no stub. A write of 4 KB sends 3591 DMI commands, an erase 1081. Its connect (`0d 01 02`) is often answered by the error frame `81 55 01 02` after about 0.5 s. minichlink then sends `0d 01 13`, quit, a reset and a new connect. The write still works.
   There is no halt capture, because `minichlink -T` waits for input.

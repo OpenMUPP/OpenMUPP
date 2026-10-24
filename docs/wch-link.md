@@ -197,7 +197,7 @@ The packets use the notation of [Notation](wch-link-protocol.md#notation).
 | `0d 01 01` | Replies `02 13 12 00`, the values of the captured WCH-LinkE |
 | `0d 01 02` | Connects (see below) |
 | `0d 01 03`, `0d 01 04` | Reply `03` and `00`. No target access. |
-| `0d 01 ff` | Quit: `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
+| `0d 01 ff` | Quit: `dmcontrol` `00000001`, `resumereq`, the `dmstatus` poll, `dmcontrol` `40000000`. Then the pins are released. |
 | Other `0d` values | The unknown-command reply (see below) |
 | `0c` | Ignores the chip type, and sets the speed. Replies `01`. |
 | `08` | DMI access. `op` `00` does no access. A failure, or an access before a connect, gives the status `02`. |
@@ -391,7 +391,7 @@ The host tests are in `tests/TestDebugModule.cpp`. They use a mock DM (`tests/Mo
 |---|---|---|
 | DM reset | Write `dmcontrol` `00000000`, then `00000001`. Read `dmcontrol` until `dmactive` is 1. Read `dmstatus`. | `v003-wlink-halt.pcapng` |
 | Halt | Write `dmcontrol` `80000001` two times. Read `dmstatus` until `allhalted` (bit 9) is 1. `haltreq` stays set. | Connect of the probe |
-| Resume | Write `dmcontrol` `40000001`. Read `dmstatus` until `allresumeack` (bit 17) or `allrunning` (bit 11) is 1. | The first two accesses of the quit of the probe |
+| Resume | Write `dmcontrol` `00000001` (clears `haltreq`). Write `dmcontrol` `40000001`. Read `dmstatus` until `allresumeack` (bit 17) or `allrunning` (bit 11) is 1. | `wlink resume` (all chips). The quit of the probe has the second write and the poll only. |
 | Register read | Write `command` `0022xxxx` (`xxxx` is the register number). Read `abstractcs`. Read `data0`. | Chip information reads |
 | Register write | Write `data0`. Write `command` `0023xxxx`. Read `abstractcs`. | Connect (CSR `0x7c0`) |
 | Memory read, abstract | Write `data1` (address). Write `command` `02200000` (word) or `02000000` (byte). Read `abstractcs`. Read `data0`. | CH32V208 |
@@ -407,7 +407,7 @@ It does this again after a DM reset and after each DMI write of the host.
 Resume and quit:
 
 - The quit command of the probe also writes `dmcontrol` `40000000` (`dmactive` 0) after the `dmstatus` read. The resume of the layer does not do this write. The quit command of the personality must add it, else the DM stays active.
-- A `resumereq` write to a running hart clears `allresumeack` and does not set it again (debug spec 0.13). Thus `allrunning` also ends the poll. For a halted hart, the access sequence stays the sequence of the probe.
+- A `resumereq` write to a running hart clears `allresumeack` and does not set it again (debug spec 0.13). Thus `allrunning` also ends the poll. The first write is not in the quit of the probe. A CH32V006 does not resume when one write clears `haltreq` and sets `resumereq`: `dmcontrol` then reads `00000001` and `dmstatus` stays halted. Two writes resume it. The CH32V003 and the CH32V208 resume with one write.
 
 The layer refuses a misaligned address before it sends a frame (status `Misaligned`). A word address must be a multiple of 4, and a half-word address a multiple of 2.
 The CH32V003 gets an exception on a misaligned word access.
