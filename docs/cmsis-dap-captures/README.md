@@ -70,7 +70,7 @@ The emulator must follow TMS from both commands.
 | `DAP_Info` | `0xf0`, `0x04`, `0x03`, `0xff`, `0xfe` | `0xff`, `0xfe`, `0xf0` |
 
 Neither tool sent `DAP_Transfer`, `DAP_JTAG_Configure` or `DAP_JTAG_IDCODE`, because both stopped at the empty chain.
-With a TAP on the chain, probe-rs `info` can probe for an ARM DP first. Check this again with the emulator (#105).
+With a TAP on the chain, probe-rs `info` can probe for an ARM DP first. Check this again when the firmware uses the emulator (#107).
 The packet size is 64 bytes and the packet count is 4 (`DAP_Info` `0xff` and `0xfe`).
 The tools split the scans to fit this size.
 
@@ -109,5 +109,6 @@ Only OpenOCD shifts an IR (`0x7f`, `0x10` and `0x11`). probe-rs shifts no IR.
   OpenOCD reaches them only because it uses the configured chain after the error.
 - The shape of the DMI scans (41 bits), the number of idle cycles in Run-Test/Idle and the polls of the busy status are not visible.
 - Neither tool shows what it sends when it sees a TAP. The list of commands that the tools never sent can change.
-- Repeat the captures with the TAP emulator (#105) to close these gaps.
+- The host tests (`tests/TestRvDtmTap.cpp`) send these requests to the TAP emulator (#105). The tools do not see its replies, so the gaps stay.
+  Repeat the captures when the firmware uses the emulator (#107) to close these gaps.
 - The flash and halt commands of both tools are not in these captures.

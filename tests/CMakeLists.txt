@@ -63,6 +63,7 @@ add_executable(vsl-tests
         TestDebugModule.cpp
         TestCmsisDap.cpp
         TestCmsisDapJtag.cpp
+        TestRvDtmTap.cpp
         TestWchLink.cpp
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
@@ -70,6 +71,7 @@ add_executable(vsl-tests
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
         ../src/protocol/cmsisdap/DapProcessor.cpp
+        ../src/protocol/cmsisdap/RvDtmTap.cpp
         ../src/protocol/wchlink/WchLinkFlash.cpp
         ../src/protocol/wchlink/WchLinkProcessor.cpp
         ../src/protocol/versaloon/GpioBlock.cpp

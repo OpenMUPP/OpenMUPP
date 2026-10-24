@@ -37,6 +37,7 @@ vsl_personality(versaloon CODE 0 SHORT vsl DEFINE VSL_WITH_VERSALOON SOURCES
 #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
 vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE VSL_WITH_CMSIS_DAP SOURCES
         "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
+        "src/protocol/cmsisdap/RvDtmTap\\.cpp"
         "src/usb/CmsisDapFunction\\.cpp")
 #   wch-link   the WCH-Link interface of wlink and minichlink: the dongle
 #              debugs a WCH RISC-V target (CH32V) over the two-wire or the
