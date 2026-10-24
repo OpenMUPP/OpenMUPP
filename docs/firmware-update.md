@@ -34,6 +34,20 @@ The switch request on EP0 then stalls, `SWITCH_PERSONALITY` replies status `1`, 
 A CMSIS-DAP image with one personality and no bootloader replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
 After the reply, the firmware does the same steps as for `VERSALOON_FW_UPDATE` (see [Reply and steps](#reply-and-steps)).
 
+`tools/vsl_personality.py` sends the bootloader code from the host:
+
+```sh
+python3 tools/vsl_personality.py switch bootloader
+```
+
+The tool sends the switch request on EP0 with the code `0xB0`.
+A firmware from before the bootloader code stalls the request.
+Then the tool sends `VERSALOON_FW_UPDATE` in the Versaloon personality, and `ID_DAP_Vendor0` with `0xB0` in the CMSIS-DAP personality.
+After the request, the tool waits 10 s for `versaloon-bootloader`.
+It finds the bootloader by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
+Other devices use the ID `0483:5740` too, so the tool also compares the product string.
+`python3 tools/vsl_personality.py show` also lists a dongle that runs the bootloader.
+
 ### Stored personality
 
 A multi image stores its personality in the flash page at `0x0800FC00`.

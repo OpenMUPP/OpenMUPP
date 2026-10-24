@@ -23,8 +23,11 @@ class PersonalityOfTest(unittest.TestCase):
         self.assertEqual(vp.personality_of(0x1209, 0x0001), "wch-link")
         self.assertEqual(vp.personality_of(0x1A86, 0x8010), "wch-link")
 
+    def test_bootloader_id(self):
+        self.assertEqual(vp.personality_of(0x0483, 0x5740), "bootloader")
+
     def test_unknown_id(self):
-        self.assertIsNone(vp.personality_of(0x0483, 0x5740))
+        self.assertIsNone(vp.personality_of(0x0483, 0x5741))
 
 
 class SwitchRequestTest(unittest.TestCase):
@@ -37,6 +40,12 @@ class SwitchRequestTest(unittest.TestCase):
     def test_code_of_wch_link(self):
         self.assertEqual(vp.switch_request("versaloon", "wch-link"), bytes([0x0E, 0x02]))
         self.assertEqual(vp.switch_request("cmsis-dap", "wch-link"), bytes([0x80, 0x02]))
+
+    def test_bootloader_code(self):
+        self.assertEqual(vp.switch_request("cmsis-dap", "bootloader"), bytes([0x80, 0xB0]))
+
+    def test_versaloon_sends_fw_update_for_the_bootloader(self):
+        self.assertEqual(vp.switch_request("versaloon", "bootloader"), bytes([0x0F, 0xAA]))
 
     def test_wch_link_has_no_command(self):
         with self.assertRaises(vp.PersonalityError):
@@ -54,6 +63,12 @@ class CheckReplyTest(unittest.TestCase):
     def test_versaloon_wrong_size(self):
         with self.assertRaises(vp.PersonalityError):
             vp.check_reply("versaloon", [])
+
+    def test_bootloader_refused(self):
+        with self.assertRaisesRegex(vp.PersonalityError, "no bootloader entry"):
+            vp.check_reply("versaloon", [0x01], "bootloader")
+        with self.assertRaisesRegex(vp.PersonalityError, "no bootloader entry"):
+            vp.check_reply("cmsis-dap", [0xFF], "bootloader")
 
     def test_cmsis_dap_accepted(self):
         vp.check_reply("cmsis-dap", [0x80, 0x00])
@@ -156,6 +171,11 @@ class FindDevicesTest(unittest.TestCase):
         self.assertEqual(vp.find_devices(fake_usb([device])), [("versaloon", device)])
         self.assertEqual(vp.find_devices(fake_usb([device]), "A"), [])
 
+    def test_bootloader_needs_the_product_string(self):
+        ours = FakeDevice(0x0483, 0x5740, "Bootloader")
+        other = FakeDevice(0x0483, 0x5740, "STM32 Virtual ComPort")
+        self.assertEqual(vp.find_devices(fake_usb([ours, other])), [("bootloader", ours)])
+
     def test_serial(self):
         a = FakeDevice(0x0483, 0xA038, serial="A")
         b = FakeDevice(0x0403, 0x9B3C, serial="B")
@@ -251,6 +271,33 @@ class CommandSwitchTest(unittest.TestCase):
         device = FakeDevice(0x0403, 0x9B3C, ctrl_error=stall(), reply=None)
         self.assertEqual(self.switch(device, "versaloon"), 0)
         self.assertEqual(self.waited, [("versaloon", "SN1")])
+
+    def test_bootloader_ep0_request(self):
+        for vid, pid, product in ((0x0483, 0xA038, ""), (0x0403, 0x9B3C, ""), (0x1209, 0x0001, "Versaloon WCH-Link")):
+            self.waited = []
+            device = FakeDevice(vid, pid, product)
+            self.assertEqual(self.switch(device, "bootloader"), 0)
+            self.assertEqual(device.ctrl_transfers, [(0x40, 0x0E, 0xB0, 0, None, vp.TIMEOUT_MS)])
+            self.assertEqual(device.writes, [])
+            self.assertEqual(self.waited, [("bootloader", "SN1")])
+
+    def test_bootloader_fallback_versaloon_sends_fw_update(self):
+        device = FakeDevice(0x0483, 0xA038, ctrl_error=stall(), reply=[0x00])
+        self.assertEqual(self.switch(device, "bootloader"), 0)
+        self.assertEqual(device.writes, [(vp.OUT_ENDPOINT, bytes([0x0F, 0xAA]))])
+        self.assertEqual(self.waited, [("bootloader", "SN1")])
+
+    def test_bootloader_fallback_cmsis_dap_refused(self):
+        device = FakeDevice(0x0403, 0x9B3C, ctrl_error=stall(), reply=[0xFF])
+        self.assertEqual(self.switch(device, "bootloader"), 1)
+        self.assertEqual(device.writes, [(vp.OUT_ENDPOINT, bytes([0x80, 0xB0]))])
+        self.assertEqual(self.waited, [])
+
+    def test_no_switch_from_the_bootloader(self):
+        device = FakeDevice(0x0483, 0x5740, "Bootloader")
+        self.assertEqual(self.switch(device, "versaloon"), 1)
+        self.assertEqual(device.ctrl_transfers, [])
+        self.assertEqual(self.switch(device, "bootloader"), 0)
 
     def test_no_enumeration(self):
         self.wait_result = False

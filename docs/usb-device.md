@@ -200,7 +200,10 @@ python3 tools/vsl_personality.py show
 python3 tools/vsl_personality.py switch cmsis-dap
 python3 tools/vsl_personality.py switch wch-link
 python3 tools/vsl_personality.py switch versaloon
+python3 tools/vsl_personality.py switch bootloader
 ```
+
+`switch bootloader` starts `versaloon-bootloader` (see [Bootloader code](firmware-update.md#bootloader-code)).
 
 The tool finds the dongle by the VID:PID of each personality.
 For the WCH-Link personality, it also compares the product string with `Versaloon WCH-Link`.
