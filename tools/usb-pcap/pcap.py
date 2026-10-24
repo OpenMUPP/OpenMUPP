@@ -1,6 +1,8 @@
 import struct, sys
 def blocks(path):
-    f=open(path,'rb').read(); off=0; le='<'; ifaces=[]
+    # Limit: timestamps assume the default if_tsresol (microseconds), as usbmon captures have.
+    with open(path,'rb') as fh: f=fh.read()
+    off=0; le='<'; ifaces=[]
     while off+12<=len(f):
         bt,bl=struct.unpack_from(le+'II',f,off)
         if bt==0x0A0D0D0A:

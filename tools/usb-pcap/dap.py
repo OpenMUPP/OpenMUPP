@@ -29,7 +29,7 @@ NEXT = {
     'UPDR': ('RTI', 'SELDR'),
     'SELIR': ('CAPIR', 'TLR'), 'CAPIR': ('SHIR', 'EX1IR'), 'SHIR': ('SHIR', 'EX1IR'),
     'EX1IR': ('PAIR', 'UPIR'), 'PAIR': ('PAIR', 'EX2IR'), 'EX2IR': ('SHIR', 'UPIR'),
-    'UPIR': ('RTI', 'SELIR'),
+    'UPIR': ('RTI', 'SELDR'),
 }
 
 class Tap:
@@ -90,10 +90,11 @@ def decode(b):
     return f"cmd {c:#04x} {b.hex()}"
 
 if __name__ == '__main__':
-    dev = int(sys.argv[2]); ep = int(sys.argv[3], 0) if len(sys.argv) > 3 else 3
     scans = '--scans' in sys.argv
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    dev = int(args[1]); ep = int(args[2], 0) if len(args) > 2 else 3
     t0, tap = None, Tap()
-    for p in usb(sys.argv[1]):
+    for p in usb(args[0]):
         if p['dev'] != dev or p['ep'] != ep or p['type'] != 'S' or not p['data']: continue
         t0 = t0 or p['ts']
         if scans:
