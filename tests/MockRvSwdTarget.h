@@ -25,9 +25,10 @@
 // reset. The host must change the line in a frame only with the
 // interrupts locked.
 //
-// SWDIO has a pull-up: it reads 1 when nobody drives it. The mock counts
-// the times that the host and the target drive SWDIO at the same time, and
-// the bits that the target samples while the host does not drive.
+// SWDIO has a strong pull-up: it reads 1 when nobody drives it, and it
+// rises at once after a release. The mock counts the times that the host
+// and the target drive SWDIO to different levels, and the bits that the
+// target samples while the host does not drive.
 //
 // onRead and onWrite connect a DM model (tests/MockDebugModule.h) to the
 // registers.
@@ -110,12 +111,9 @@ class MockRvSwdTarget {
       hostAction();
       const bool before = line();
       hostDrives_ = false;
-      lineChanged();
-      // One wire: the target sees the line rise also from the pull-up.
-      // Two wires: a release is no start or stop condition.
-      if(wire_ == rvswd::Wire::One && before != line()) {
-         oneWireEdge(line());
-      }
+      // The pull-up raises the line at once, as a 2.2 kOhm pull-up does:
+      // on two wires, a rise while SWCLK is high is a stop condition.
+      hostChanged(before);
    }
    void swdioWrite(bool level) {
       REQUIRE(hostDrives_);
@@ -274,10 +272,10 @@ class MockRvSwdTarget {
       return true;
    }
 
-   // Two wires: each overlap of the drivers. One wire: the host drives
-   // high while the target holds the line low (both low is no fight).
+   // The host and the target drive different levels (both low is no
+   // fight).
    void lineChanged() {
-      if(hostDrives_ && targetDrives_ && (wire_ == rvswd::Wire::Two || hostLevel_ != targetLevel_)) {
+      if(hostDrives_ && targetDrives_ && hostLevel_ != targetLevel_) {
          ++contentions;
       }
       const bool level = line();

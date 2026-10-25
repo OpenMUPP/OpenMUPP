@@ -378,7 +378,7 @@ class RvSwdEngine {
       halfPeriod();
       writeBits(request << 1 | (parity(request) ? 1u : 0u), 9);
       // Bit 10: the level of bit 9, then the target drives.
-      holdAndRelease();
+      holdAndRelease(parity(request));
       head_ = handshake(false);
       uint8_t flags = 0;
       // Bits 15-48: the data phase, with a longer low phase before bit 15
@@ -387,7 +387,7 @@ class RvSwdEngine {
          pins_.swdioDrive((data & 0x8000'0000u) != 0);
          writeBits(data, 32);
          writeBit(parity(data));
-         holdAndRelease();
+         holdAndRelease(parity(data));
       } else {
          data = readBits(32);
          if(readBit() != parity(data)) {
@@ -457,14 +457,22 @@ class RvSwdEngine {
       return static_cast<uint8_t>(value);
    }
 
-   // A clock with SWDIO unchanged, then SWDIO released after the rising
-   // edge
-   void holdAndRelease() {
+   // A clock with SWDIO unchanged at the level, then SWDIO released. A
+   // high level is released after the rising edge, as on the WCH-LinkE. A
+   // low level is released after the falling edge: a strong pull-up
+   // (2.2 kOhm) raises the line at once, and a rise while SWCLK is high is
+   // a stop condition. The target drives the next bit low.
+   void holdAndRelease(bool level) {
       waitHalfPeriod();
       swclk(true);
-      pins_.swdioRelease();
+      if(level) {
+         pins_.swdioRelease();
+      }
       waitHalfPeriod();
       swclk(false);
+      if(!level) {
+         pins_.swdioRelease();
+      }
    }
 
    // MSB first

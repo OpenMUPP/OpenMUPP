@@ -555,6 +555,10 @@ On the WeAct STM32H523 with a CH32V006, nothing on the target side drives the li
 With only the internal pull-ups (PA6 and PB12, about 40 kΩ each), the line is at about 1.1 V 420 ns after a release. The input does not see a high level in time, and no read bit is correct.
 An external pull-up of 2.2 kΩ to 3.3 V fixes this. A read bit of a 1 needs the line high about 150 ns after the target releases it, so the time constant must be about 160 ns or less.
 
+On two wires, the same pull-up raises a released SWDIO at once. The WCH-LinkE releases SWDIO after the rising edge of SWCLK in bits 10 and 48 (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
+When SWDIO is low there, the rise comes while SWCLK is high, and the target sees a stop condition (CH32V208 on the WeAct STM32H523).
+Thus the engine releases a low SWDIO after the falling edge of SWCLK. The target then drives bit 11 or bit 49 low, and the line stays low. A high SWDIO is still released after the rising edge.
+
 ## Hardware test
 
 Work item #71 tests the personality on real hardware.
