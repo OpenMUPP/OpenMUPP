@@ -107,7 +107,7 @@ For example, 235 kHz gives 154 cycles for each half period: 4277.8 ns.
 
 ### Results
 
-The rate is the mean over the runs. "Shortest" is the shortest single period in the runs.
+The rate is the mean over the runs. The percentage is against the nominal period, not against the request. "Shortest" is the shortest single period in the runs.
 
 | Engine | Request | Nominal period | Before | After | Shortest before | Shortest after |
 |---|---|---|---|---|---|---|
@@ -159,7 +159,7 @@ The STM32F103 permits TCK up to F_CPU / 6 (1.33 MHz at 8 MHz), so the JTAG reads
 
 The nominal period is two half periods, each rounded up to full core cycles (4 ns).
 
-| Engine | Request | Nominal period | Rate (mean of the runs) | Median of all periods | Shortest |
+| Engine | Request | Nominal period | Rate (mean of the runs, against the nominal period) | Median of all periods | Shortest |
 |---|---|---|---|---|---|
 | SWD | 100 kHz | 10000 ns | 100.0 kHz (−0.01 %) | 10000 ns | 9972 ns |
 | SWD | 235 kHz | 4256 ns | 234.7 kHz (−0.09 %) | 4260 ns | 4228 ns |
@@ -178,7 +178,8 @@ The JTAG row at 1000 kHz is +0.02 %: this is in the resolution of the analyzer (
 
 Findings:
 
-- Up to 4 MHz, SWD is within 0.7 % of the request, and never faster.
+- Up to 4 MHz, the mean SWD rate is within 0.7 % of the nominal period, and never faster than the request.
+  The rounding to full core cycles makes the nominal rate lower than the request: 2.3 % below at 4 MHz (3906 kHz), 0.8 % below at 1800 kHz (1786 kHz).
   Up to 1 MHz, JTAG is within 0.15 % of the request.
 - The code of a timed SWD half period is about 22 cycles: a request of 12 MHz gives 5.6 MHz.
 - The untimed SWD engine of the first test gave 13 MHz (median period 76 ns) at a request of 4 MHz.
