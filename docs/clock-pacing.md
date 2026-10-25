@@ -95,6 +95,7 @@ Thus single periods are up to about 12 % shorter or longer than requested at 1 M
 `tools/clock_rate.py` calculates the rate from a raw CSV export of Logic 2.
 It counts only runs of 30 or more consecutive bits with periods below 1.3 times the nominal period.
 Thus the gaps between transfers, and the longer phases of an RVSWD frame, are not part of the rate.
+It also prints the median and the shortest of all periods (gaps included), also when there is no run.
 
 ```sh
 python3 tools/clock_rate.py digital.csv 1 1000
@@ -120,7 +121,7 @@ The rate is the mean over the runs. "Shortest" is the shortest single period in 
 | RVSWD | low (478 kHz) | 2111.1 ns | 478.2 kHz (+0.94 %) | 472.6 kHz (−0.24 %) | 2020 ns | 2000 ns |
 | RVSWD | high (907 kHz) | 1111.1 ns | 943.4 kHz (+4.83 %) | 897.5 kHz (−0.28 %) | 970 ns | 1050 ns |
 
-"Median" is the median period: before this change, JTAG at 500 and 1000 kHz had no period below 1.3 times the nominal period. SWD at 1800 kHz after this change is limited by the code (see [Limits](#limits)).
+"Median" is the median of all periods, and "Shortest" in these rows is the shortest of all periods: before this change, JTAG at 500 and 1000 kHz had no period below 1.3 times the nominal period. SWD at 1800 kHz after this change is limited by the code (see [Limits](#limits)).
 The untimed SWD engine gave a median period of 400 ns (2.50 MHz) before, and 370 ns (2.70 MHz) after this change.
 
 Findings:

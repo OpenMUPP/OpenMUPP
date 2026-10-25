@@ -44,6 +44,14 @@ class ClockRateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             clock_rate.measure([i * 2e-6 for i in range(100)], 1e-6)
 
+    def test_median_includes_the_gaps(self):
+        edges = [0.0, 1e-6, 2e-6, 3e-6, 50e-6]
+        self.assertAlmostEqual(clock_rate.median_period(edges), 1e-6)
+
+    def test_median_needs_two_edges(self):
+        with self.assertRaises(ValueError):
+            clock_rate.median_period([1.0])
+
     def test_edges_from_rows(self):
         # Two edges per period of 1 us: high and low for 0.5 us each
         data = rows([i * 0.5e-6 for i in range(100)])

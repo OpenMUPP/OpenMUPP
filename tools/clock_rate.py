@@ -10,10 +10,14 @@ of the clock channel among the channel columns (0 is the first channel).
 The rate counts only runs of consecutive bits: at least MIN_RUN periods
 that are each shorter than RUN_LIMIT times the nominal period. The gaps
 between transfers and the longer phases of a frame are then not part of the
-rate. See docs/clock-pacing.md.
+rate. It also prints the median and the shortest of all periods, also
+when there is no run
+(for example when the code makes each period longer than RUN_LIMIT times
+the nominal period). See docs/clock-pacing.md.
 """
 
 import csv
+import statistics
 import sys
 
 MIN_RUN = 30
@@ -58,6 +62,13 @@ def measure(edges, nominal):
     return total / len(periods), min(periods), max(periods), len(periods)
 
 
+def median_period(edges):
+    """The median of all periods between rising edges, gaps included."""
+    if len(edges) < 2:
+        raise ValueError("fewer than two rising edges")
+    return statistics.median(b - a for a, b in zip(edges, edges[1:]))
+
+
 def main(argv):
     if len(argv) != 4:
         sys.exit(__doc__)
@@ -66,6 +77,12 @@ def main(argv):
         reader = csv.reader(f)
         next(reader)
         edges = rising_edges(reader, int(argv[2]))
+    try:
+        median = median_period(edges)
+    except ValueError as error:
+        sys.exit(str(error))
+    shortest_all = min(b - a for a, b in zip(edges, edges[1:]))
+    print("all periods: median %.1f ns = %.1f kHz, shortest %.0f ns" % (median * 1e9, 1e-3 / median, shortest_all * 1e9))
     try:
         mean, shortest, longest, bits = measure(edges, nominal)
     except ValueError as error:
