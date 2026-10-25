@@ -145,10 +145,12 @@ The default is `/usr`.
 | `nucleoh533` | NUCLEO-H533RE | `versaloon` | Release |
 | `nucleoh533-cmsis-dap` | NUCLEO-H533RE | `cmsis-dap` | Release |
 | `nucleoh533-dual` | NUCLEO-H533RE | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
+| `nucleoh533-wch-link` | NUCLEO-H533RE | `wch-link` | Release |
 | `nucleoh533-debug` | NUCLEO-H533RE | `versaloon` | Debug |
 | `weacth523` | WeAct STM32H523 core board | `versaloon` | Release |
 | `weacth523-cmsis-dap` | WeAct STM32H523 core board | `cmsis-dap` | Release |
 | `weacth523-dual` | WeAct STM32H523 core board | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
+| `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
 | `weacth523-debug` | WeAct STM32H523 core board | `versaloon` | Debug |
 | `host-tests` | Host | - | Debug |
 

@@ -356,6 +356,14 @@
       ]
     },
     {
+      "name": "nucleoh533-wch-link",
+      "displayName": "NUCLEO-H533RE, WCH-Link",
+      "inherits": [
+        "board-nucleoh533",
+        "personalities-wch-link"
+      ]
+    },
+    {
       "name": "nucleoh533-debug",
       "displayName": "NUCLEO-H533RE, Debug",
       "inherits": [
@@ -384,6 +392,14 @@
       "inherits": [
         "board-weacth523",
         "personalities-dual"
+      ]
+    },
+    {
+      "name": "weacth523-wch-link",
+      "displayName": "WeAct STM32H523, WCH-Link",
+      "inherits": [
+        "board-weacth523",
+        "personalities-wch-link"
       ]
     },
     {
@@ -502,6 +518,10 @@
       "configurePreset": "nucleoh533-dual"
     },
     {
+      "name": "nucleoh533-wch-link",
+      "configurePreset": "nucleoh533-wch-link"
+    },
+    {
       "name": "nucleoh533-debug",
       "configurePreset": "nucleoh533-debug"
     },
@@ -516,6 +536,10 @@
     {
       "name": "weacth523-dual",
       "configurePreset": "weacth523-dual"
+    },
+    {
+      "name": "weacth523-wch-link",
+      "configurePreset": "weacth523-wch-link"
     },
     {
       "name": "weacth523-debug",

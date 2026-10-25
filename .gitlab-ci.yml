@@ -181,6 +181,9 @@ build-nucleoh533:
         VARIANT: -dual
         PROTOCOL_TAG: -vsl+dap
       - BOARD: nucleoh533
+        VARIANT: -wch-link
+        PROTOCOL_TAG: -wch-link
+      - BOARD: nucleoh533
         VARIANT: -debug
         BUILD_TYPE: Debug
 
@@ -203,6 +206,9 @@ build-weacth523:
       - BOARD: weacth523
         VARIANT: -dual
         PROTOCOL_TAG: -vsl+dap
+      - BOARD: weacth523
+        VARIANT: -wch-link
+        PROTOCOL_TAG: -wch-link
       - BOARD: weacth523
         VARIANT: -debug
         BUILD_TYPE: Debug
