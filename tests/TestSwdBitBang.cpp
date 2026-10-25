@@ -311,9 +311,9 @@ TEST_CASE("SWD bit-bang: IN releases SWDIO and reads the bits") {
    CHECK(bench.pins.risingEdges.size() == 12);
 }
 
-TEST_CASE("SWD bit-bang: each half period waits the half period without the loop code") {
+TEST_CASE("SWD bit-bang: each half period is the half period") {
    Bench bench(1, 0, 1);
-   const uint32_t waitCycles = 154 - swd::loopOverheadCycles;
+   const uint32_t waitCycles = 154;
    const uint32_t start = bench.pins.time;
    uint32_t data = 0;
    CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
@@ -323,6 +323,26 @@ TEST_CASE("SWD bit-bang: each half period waits the half period without the loop
    for(std::size_t i = 1; i < bench.pins.edges.size(); ++i) {
       CHECK(bench.pins.edges[i] - bench.pins.edges[i - 1] >= waitCycles);
       CHECK(bench.pins.edges[i] - bench.pins.edges[i - 1] <= waitCycles + 2);
+   }
+}
+
+TEST_CASE("SWD bit-bang: the code before each edge does not change the half period") {
+   // The edge comes 20 cycles after the end of the wait. Waits that start
+   // after the edge (the engine before #78) make each half period longer
+   // or shorter by this code.
+   Bench bench(1, 0, 1);
+   bench.pins.edgeDelayCycles = 20;
+   uint32_t data = 0;
+   CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
+   const auto &edges = bench.pins.edges;
+   REQUIRE(edges.size() == 2 * transferEdges(1));
+   // The first edge is late (the transfer starts after a pause), so the
+   // deadlines start again after it: its next half period also has the code.
+   CHECK(edges[1] - edges[0] <= 154 + 20 + 2);
+   for(std::size_t i = 2; i < edges.size(); ++i) {
+      CAPTURE(i);
+      CHECK(edges[i] - edges[i - 1] >= 154);
+      CHECK(edges[i] - edges[i - 1] <= 156);
    }
 }
 
@@ -347,7 +367,7 @@ TEST_CASE("SWD bit-bang: after a late edge, the half periods do not get shorter 
    CHECK(edges[10] - edges[9] >= 500);
    for(std::size_t i = 1; i < edges.size(); ++i) {
       CAPTURE(i);
-      CHECK(edges[i] - edges[i - 1] >= 154 - swd::loopOverheadCycles);
+      CHECK(edges[i] - edges[i - 1] >= 154);
    }
 }
 
@@ -830,8 +850,8 @@ TEST_CASE("SWD bit-bang: transfers at a clock in Hz") {
    REQUIRE(edges.size() == 2 * (transferEdges(1) - swd::defaultIdleCycles));
    for(std::size_t i = 1; i < edges.size(); ++i) {
       CAPTURE(i);
-      CHECK(edges[i] - edges[i - 1] >= 36 - swd::loopOverheadCycles);
-      CHECK(edges[i] - edges[i - 1] <= 36 - swd::loopOverheadCycles + 2);
+      CHECK(edges[i] - edges[i - 1] >= 36);
+      CHECK(edges[i] - edges[i - 1] <= 36 + 2);
    }
    bench.checkIdle();
 }

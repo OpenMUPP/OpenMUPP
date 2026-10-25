@@ -585,7 +585,7 @@ The write time is the same (2.55 s and 2.54 s).
 The read time with E6 is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon personality (91 and 79 KiB/s).
 Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
 
-Maximum SWD clock: 1.85 MHz (the untimed engine, `maxClockHz` in `src/swd/SwdBitBang.h`).
+Maximum SWD clock: the untimed engine from 1.85 MHz (`maxClockHz` in `src/swd/SwdBitBang.h`). Its real rate depends on the code (2.7 MHz on the OtherUse, see [Clock pacing](clock-pacing.md)).
 All runs passed up to this clock with the wiring of this test.
 A request above 1.85 MHz gives the same clock.
 

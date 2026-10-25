@@ -89,7 +89,6 @@ class MockRvSwdTarget {
          return;
       }
       updateHold();
-      time += swclkEdgeCycles;
       swclk_ = level;
       if(level) {
          risingEdges.push_back(time);
@@ -98,6 +97,7 @@ class MockRvSwdTarget {
          falling();
       }
       lineChanged();
+      edgeCodePending_ = true;
    }
    void swdioDrive(bool level) {
       hostAction();
@@ -132,7 +132,14 @@ class MockRvSwdTarget {
 
    // Each call is one time step.
    uint32_t now() {
-      return time++;
+      const uint32_t t = time++;
+      // The loop code after an edge starts after the first read of the
+      // counter: the read of the pacer (ClockPacer.h).
+      if(edgeCodePending_) {
+         edgeCodePending_ = false;
+         time += swclkEdgeCycles;
+      }
+      return t;
    }
    [[nodiscard]] uint32_t coreHz() const {
       return 72'000'000;
@@ -235,8 +242,8 @@ class MockRvSwdTarget {
    int finis{ 0 };
    int begins{ 0 };
    int locks{ 0 };
-   // The loop code of the engine: time added at each SWCLK edge, and at
-   // each SWDIO write
+   // The loop code of the engine: time added after each SWCLK edge (after
+   // the next read of the counter), and before each SWDIO write
    uint32_t swclkEdgeCycles{ 0 };
    uint32_t swdioWriteCycles{ 0 };
    // One wire: frames run with oneWireFrame()
@@ -560,6 +567,7 @@ class MockRvSwdTarget {
 
    rvswd::Wire wire_;
    bool swclk_{ false };
+   bool edgeCodePending_{ false };
    bool hostDrives_{ false };
    bool hostLevel_{ false };
    bool targetDrives_{ false };

@@ -549,7 +549,7 @@ Each call sends one IN packet of up to 64 bytes: 64 bytes per ms.
 At 115200 baud, the UART receives 11.5 bytes per ms.
 
 The call makes one clock phase longer by the time of the service, some microseconds.
-The clock does not get faster: each half period waits from its clock edge.
+The clock does not get faster: after a late edge, the next half period is complete (see [Clock pacing](clock-pacing.md)).
 For JTAG in timed mode, the low half period starts again after the call.
 Thus TDI and TMS change a full half period before the next rising edge, as for all other bits.
 For SWD, each bit waits a full half period after the SWDIO write, so SWDIO also keeps its setup time.
@@ -711,23 +711,14 @@ A separate SWDIO input pin gets a pull-up, so an open SWDIO reads 1.
 | SWCLK | 1.85 MHz | 235 kHz | 130 kHz | 102 kHz | 85 kHz | 72 kHz | 500000 / (`delay` + 1) Hz |
 
 The firmware rounds the half period up to full core clock cycles (72 MHz).
-Each half period waits from its SWCLK edge, so an interrupt makes a period longer, but not shorter.
-The wait subtracts an estimate of the cycles of the loop code (`swd::loopOverheadCycles`).
-A smaller value makes SWCLK slower, so the value is a lower bound: SWCLK is not faster than the table at `delay` 1 (measured).
-The engines are compiled with `-O2`. The value 24 gives 232 kHz at `delay` 1, measured with a logic analyzer on the Versaloon Mini.
-With `-O2`, the value 8 gave 210 kHz.
-With `-Os`, the value 21 gave 230 kHz.
-`delay` 2 and more are not measured. The margin there is small.
-Measure SWCLK again after a change of the engine code.
-The measurement is from before link-time optimisation (LTO, #75).
-With LTO, each bit loop has the same instructions or one instruction more, so SWCLK is not faster.
-A new measurement with LTO is open.
-The ST-Link/V2 board has other SWD pins and is not measured.
+Each SWCLK edge comes at a deadline of the core cycle counter.
+Thus the loop code does not change the SWCLK rate (see [Clock pacing](clock-pacing.md)).
+An interrupt makes a period longer, but not shorter.
 
 At `delay` 0, the firmware runs untimed, without the cycle counter.
 Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`).
 The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
-SWCLK is then 1.845 MHz (66 % duty), measured with a logic analyzer on the Versaloon Mini.
+Thus the SWCLK rate depends on the code. A logic analyzer measured 2.7 MHz (62 % duty) on the OtherUse, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md), #118).
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 

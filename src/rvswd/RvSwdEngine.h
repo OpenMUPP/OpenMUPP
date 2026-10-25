@@ -53,9 +53,10 @@
 // high drops the frame: it drives no more bits (CH32V208). head() and
 // tail() give the line levels of the handshake bits.
 //
-// Each half period waits from its SWCLK edge, as in the SWD engine: an
-// interrupt makes a half period longer, never shorter. The interrupts stay
-// on.
+// Each SWCLK edge and each SWDIO change of a condition comes at a deadline
+// of a ClockPacer (ClockPacer.h), as in the SWD engine: the loop code does
+// not change the rate, and an interrupt makes a half period longer, never
+// shorter. The interrupts stay on.
 //
 // One wire: a frame is 41 bits, MSB first: a start bit 1, the 7-bit
 // address, 1 for a write or 0 for a read, and 32 data bits. A bit is a low
@@ -112,6 +113,7 @@
 #include <bit>
 #include <cstdint>
 
+#include "ClockPacer.h"
 #include "IntDiv.h"
 
 #include "protocol/Background.h"
@@ -150,10 +152,6 @@ inline constexpr uint32_t defaultClockHz = lowClockHz;
 inline constexpr uint32_t lineResetHighClocks = 9;
 inline constexpr uint32_t lineResetTailClocks = 90;
 inline constexpr uint32_t lineResetClocks = lineResetHighClocks + 1 + lineResetTailClocks;
-
-// Two wires: the core cycles of the loop code in one half period. The
-// value of the SWD engine (swd/SwdBitBang.h). Not measured for this engine.
-inline constexpr uint32_t loopOverheadCycles = 24;
 
 // One wire: the times of the WCH-LinkE (docs/wch-link-protocol.md)
 inline constexpr uint32_t oneWireShortLowNs = 250;
@@ -286,7 +284,7 @@ class RvSwdEngine {
    void setClockHz(uint32_t hz) {
       clockHz_ = hz;
       halfCycles_ = halfPeriodCycles(pins_.coreHz(), hz);
-      waitCycles_ = halfCycles_ > loopOverheadCycles ? halfCycles_ - loopOverheadCycles : 0;
+      pacer_.setHalfCycles(halfCycles_);
    }
 
    [[nodiscard]] uint32_t halfCycles() const {
@@ -301,12 +299,12 @@ class RvSwdEngine {
          for(uint32_t i = 0; i < lineResetClocks; ++i) {
             pins_.swdioWrite(i != lineResetHighClocks);
             waitHalfPeriod();
-            pins_.swclk(true);
+            swclk(true);
             waitHalfPeriod();
-            pins_.swclk(false);
+            swclk(false);
          }
          pins_.swdioWrite(true);
-         waitHalfPeriod();
+         halfPeriod();
       } else {
          // Driving low is safe also when the target holds the line low.
          pins_.swdioDrive(false);
@@ -365,21 +363,26 @@ class RvSwdEngine {
 
    // Two wires
 
+   // Each bit ends with SWCLK low: a wait before each edge, and the loop
+   // code after it.
    uint8_t frameTwo(uint32_t request, bool write, uint32_t &data) {
       // Start condition, from idle (SWCLK low, SWDIO high)
-      pins_.swclk(true);
-      waitFullHalfPeriod();
+      waitHalfPeriod();
+      swclk(true);
+      waitHalfPeriod();
       pins_.swdioWrite(false);
-      waitFullHalfPeriod();
+      pacer_.edge(pins_);
+      waitHalfPeriod();
+      swclk(false);
       // Bits 1-9: a longer low phase before bit 1
-      lowPhase();
+      halfPeriod();
       writeBits(request << 1 | (parity(request) ? 1u : 0u), 9);
       // Bit 10: the level of bit 9, then the target drives.
       holdAndRelease();
       head_ = handshake(false);
       uint8_t flags = 0;
       // Bits 15-48: the data phase, with a longer low phase before bit 15
-      lowPhase();
+      halfPeriod();
       if(write) {
          pins_.swdioDrive((data & 0x8000'0000u) != 0);
          writeBits(data, 32);
@@ -394,51 +397,50 @@ class RvSwdEngine {
       }
       tail_ = handshake(true);
       // Bit 53 and the stop condition, with a longer low phase before bit 53
-      lowPhase();
+      halfPeriod();
       pins_.swdioDrive(false);
-      waitFullHalfPeriod();
-      pins_.swclk(true);
-      waitFullHalfPeriod();
+      waitHalfPeriod();
+      swclk(true);
+      waitHalfPeriod();
       pins_.swdioWrite(true);
-      waitFullHalfPeriod();
-      pins_.swclk(false);
+      pacer_.edge(pins_);
+      waitHalfPeriod();
+      swclk(false);
       return flags;
    }
 
-   // Waits for the rest of the half period after an edge. Unsigned
-   // difference: correct across the wrap of the counter.
+   // Waits for the end of the half period. An edge must follow.
    [[gnu::always_inline]] void waitHalfPeriod() {
-      const uint32_t edge = pins_.now();
-      while(pins_.now() - edge < waitCycles_) {
-      }
+      pacer_.wait(pins_);
    }
 
-   // The half periods of the start and the stop condition and of
-   // lowPhase() have no loop code: they wait for the full half period.
-   void waitFullHalfPeriod() {
-      waitFrom(pins_.now(), halfCycles_);
+   // The SWCLK edge after waitHalfPeriod()
+   [[gnu::always_inline]] void swclk(bool level) {
+      pins_.swclk(level);
+      pacer_.edge(pins_);
    }
 
-   // SWCLK low for an extra half period, before the bit that follows
-   void lowPhase() {
-      pins_.swclk(false);
-      waitFullHalfPeriod();
+   // A half period without an edge: the longer low phases
+   void halfPeriod() {
+      waitHalfPeriod();
+      pacer_.edge(pins_);
    }
 
+   // SWCLK is low before each bit.
    [[gnu::always_inline]] void writeBit(bool level) {
-      pins_.swclk(false);
       pins_.swdioWrite(level);
       waitHalfPeriod();
-      pins_.swclk(true);
+      swclk(true);
       waitHalfPeriod();
+      swclk(false);
    }
 
    [[gnu::always_inline]] bool readBit() {
-      pins_.swclk(false);
       waitHalfPeriod();
       const bool level = pins_.swdio();
-      pins_.swclk(true);
+      swclk(true);
       waitHalfPeriod();
+      swclk(false);
       return level;
    }
 
@@ -448,29 +450,21 @@ class RvSwdEngine {
    // of the WCH-LinkE). Returns the line levels, the first bit in bit 3.
    uint8_t handshake(bool probeLevel) {
       uint32_t value = readBits(2);
-      pins_.swclk(false);
       pins_.swdioDrive(probeLevel);
-      waitHalfPeriod();
-      value = value << 1 | (pins_.swdio() ? 1u : 0u);
-      pins_.swclk(true);
-      waitHalfPeriod();
-      pins_.swclk(false);
+      value = value << 1 | (readBit() ? 1u : 0u);
       pins_.swdioRelease();
-      waitHalfPeriod();
-      value = value << 1 | (pins_.swdio() ? 1u : 0u);
-      pins_.swclk(true);
-      waitHalfPeriod();
+      value = value << 1 | (readBit() ? 1u : 0u);
       return static_cast<uint8_t>(value);
    }
 
    // A clock with SWDIO unchanged, then SWDIO released after the rising
    // edge
    void holdAndRelease() {
-      pins_.swclk(false);
       waitHalfPeriod();
-      pins_.swclk(true);
+      swclk(true);
       pins_.swdioRelease();
       waitHalfPeriod();
+      swclk(false);
    }
 
    // MSB first
@@ -545,8 +539,7 @@ class RvSwdEngine {
    Wire wire_{ Wire::Two };
    uint32_t clockHz_{ defaultClockHz };
    uint32_t halfCycles_{ 0 };
-   // halfCycles_ without the loop code
-   uint32_t waitCycles_{ 0 };
+   pacing::ClockPacer pacer_;
    // One wire, in core cycles
    uint32_t releaseTimeout_{ 0 };
    uint32_t frameGap_{ 0 };
