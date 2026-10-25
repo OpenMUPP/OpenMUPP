@@ -672,6 +672,33 @@ Results:
 | `wlink erase` | Passed. The flash then reads `0xff`. |
 | `minichlink -i`, `-r`, `-w` | Passed. A read after a write of 2 KB is the same as the image. |
 
+### CH32V208 on the WeAct STM32H523 (two wires)
+
+| Item | Value |
+|---|---|
+| Probe | WeAct STM32H523, `weacth523-wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` |
+| Target | CH32V208WBU6 board, external power. SWDIO on PA13, SWCLK on PA14. |
+| Pull-up | 2.2 kΩ from SWDIO to 3.3 V (the pull-up of the one-wire test) |
+| Host | Linux, wlink 0.1.3, minichlink |
+| Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 4, SWCLK on channel 5 |
+
+The first tests failed for two reasons:
+
+- **The release in bit 10.** Each read with a request parity bit of 0 failed. The pull-up raised SWDIO while SWCLK was high, and the target saw a stop condition (see [One-wire timer](#one-wire-timer)). The engine now releases a low SWDIO after the falling edge.
+- **The cable.** SWDIO and SWCLK were next to each other in a flat cable of about 20 cm, with one GND wire. Each SWDIO edge put a pulse of 4 to 6 ns on SWCLK, and about one read in 1000 failed. GND conductors between the signals in the flat cable fixed this.
+
+Results after the two fixes:
+
+| Item | Result |
+|---|---|
+| `wlink status` | Passed, 20 of 20 runs. wlink shows the chip ID `0x2080053c` and 160 KB flash. |
+| `wlink dump` | Passed. Three dumps of the full flash take 10.4 s each, and they are the same. |
+| `wlink halt`, `regs`, `resume`, `reset` | Passed. |
+| `wlink erase` | Passed, 0.16 s. The flash then reads `0xe339e339`. |
+| `wlink flash` | Passed. A program of 160 KB takes 24.3 s, and a dump after it is the same as the image. |
+| `wlink protect`, `wlink unprotect` | Passed. A protected dump reads `0xff`. After the unprotect, the flash is erased, and the option bytes are the same as in the first test. |
+| `minichlink -i`, `-r`, `-w` | Passed. A write of 160 KB takes 26.6 s. A read of 160 KB takes 5.4 s, and it is the same as the image. Three wlink dumps after the write are the same as the image. |
+
 Open items:
 
 - The minichlink read of the full CH32V003 flash with a WCH-LinkE.
