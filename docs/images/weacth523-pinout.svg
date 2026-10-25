@@ -122,9 +122,10 @@
 <text x="902.6" y="761.5" transform="rotate(-90 902.6 761.5)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
 <rect x="926.3" y="732.5" width="34" height="58" rx="6" fill="#c62828" stroke="#c62828" stroke-width="1.2"/>
 <text x="943.3" y="761.5" transform="rotate(-90 943.3 761.5)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">3V3</text>
-<rect x="128.0" y="510.2" width="60" height="92" rx="12" fill="#b0bec5" stroke="#78909c" stroke-width="2"/>
-<text x="110.0" y="556.2" transform="rotate(-90 110.0 556.2)" font-size="14" font-weight="bold" fill="#455a64" text-anchor="middle">USB-C</text>
 <rect x="150.0" y="390.0" width="845.0" height="332.5" rx="10" fill="#1f3b73" stroke="#0d2350" stroke-width="3"/>
+<rect x="142.0" y="484.2" width="112.0" height="144.0" rx="8" fill="#cfd8dc" stroke="#78909c" stroke-width="2"/>
+<rect x="152.0" y="508.2" width="82.0" height="96.0" rx="10" fill="#90a4ae" stroke="#607d8b" stroke-width="1.5"/>
+<text x="193.0" y="556.2" transform="rotate(-90 193.0 556.2)" font-size="14" font-weight="bold" fill="#263238" text-anchor="middle" dominant-baseline="central">USB-C</text>
 <circle cx="171.1" cy="433.2" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
 <circle cx="171.1" cy="433.2" r="5" fill="#2b2b2b"/>
 <circle cx="211.8" cy="433.2" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
@@ -212,15 +213,15 @@
 <rect x="434.0" y="488.2" width="136.0" height="136.0" transform="rotate(45 502.0 556.2)" fill="#212121" stroke="#9e9e9e" stroke-width="1.5"/>
 <text x="502.0" y="552.2" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">STM32</text>
 <text x="502.0" y="569.2" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">H523CC</text>
-<rect x="263.0" y="463.8" width="30" height="22" rx="3" fill="#cfd8dc" stroke="#607d8b"/>
-<circle cx="278.0" cy="474.8" r="6" fill="#37474f"/>
-<text x="300.0" y="479.8" font-size="13" font-weight="bold" fill="#ffffff">NRST</text>
-<rect x="263.0" y="624.4" width="30" height="22" rx="3" fill="#cfd8dc" stroke="#607d8b"/>
-<circle cx="278.0" cy="635.4" r="6" fill="#37474f"/>
-<text x="300.0" y="640.4" font-size="13" font-weight="bold" fill="#ffffff">BOOT0</text>
-<rect x="735.0" y="561.2" width="30" height="22" rx="3" fill="#cfd8dc" stroke="#607d8b"/>
-<circle cx="750.0" cy="572.2" r="6" fill="#37474f"/>
-<text x="772.0" y="577.2" font-size="13" font-weight="bold" fill="#ffffff">KEY (PA0)</text>
+<rect x="286.0" y="462.6" width="48" height="34" rx="5" fill="#cfd8dc" stroke="#607d8b" stroke-width="1.5"/>
+<circle cx="310.0" cy="479.6" r="10" fill="#37474f"/>
+<text x="342.0" y="484.6" font-size="14" font-weight="bold" fill="#ffffff">NRST</text>
+<rect x="286.0" y="613.6" width="48" height="34" rx="5" fill="#cfd8dc" stroke="#607d8b" stroke-width="1.5"/>
+<circle cx="310.0" cy="630.6" r="10" fill="#37474f"/>
+<text x="342.0" y="635.6" font-size="14" font-weight="bold" fill="#ffffff">BOOT0</text>
+<rect x="726.0" y="555.2" width="48" height="34" rx="5" fill="#cfd8dc" stroke="#607d8b" stroke-width="1.5"/>
+<circle cx="750.0" cy="572.2" r="10" fill="#37474f"/>
+<text x="782.0" y="577.2" font-size="14" font-weight="bold" fill="#ffffff">KEY (PA0)</text>
 <rect x="741.0" y="468.8" width="18" height="12" rx="2" fill="#42a5f5" stroke="#bbdefb"/>
 <text x="766.0" y="479.8" font-size="13" font-weight="bold" fill="#ffffff">LED (PC13)</text>
 <rect x="875.2" y="484.3" width="22" height="22" fill="#d4af37" stroke="#8d6e1f"/>
