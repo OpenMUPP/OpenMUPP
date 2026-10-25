@@ -66,13 +66,12 @@ constexpr Dma::Config updateConfig{ .direction = Dma::Direction::MemoryToPeriphe
                                     .destinationSize = Dma::DataSize::Size16Bits,
                                     .sourceIncrement = true };
 // The requests of TIM3_CH1 to TIM3_CH4 follow each other (RM0481 table 142)
-constexpr Dma::Config sampleConfig{
-   .direction = Dma::Direction::PeripheralToMemory,
-   .request = static_cast<Dma::Request>(static_cast<uint8_t>(Dma::Request::tim3_cc1) + oneWire.sampleChannel - 1),
-   .sourceSize = Dma::DataSize::Size32Bits,
-   .destinationSize = Dma::DataSize::Size32Bits,
-   .destinationIncrement = true
-};
+constexpr Dma::Config sampleConfig{ .direction = Dma::Direction::PeripheralToMemory,
+                                    .request = static_cast<Dma::Request>(static_cast<uint8_t>(Dma::Request::tim3_cc1) +
+                                                                         oneWire.sampleChannel - 1),
+                                    .sourceSize = Dma::DataSize::Size32Bits,
+                                    .destinationSize = Dma::DataSize::Size32Bits,
+                                    .destinationIncrement = true };
 
 constexpr uint32_t sampleRequest = TIM_DIER_CC1DE << (oneWire.sampleChannel - 1);
 constexpr uint32_t sampleFlag = TIM_SR_CC1IF << (oneWire.sampleChannel - 1);
