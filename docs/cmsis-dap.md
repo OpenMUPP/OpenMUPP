@@ -564,7 +564,8 @@ The USB capture shows that the host sends the next packet a few µs after the re
 The probe takes about 1.1 ms for a packet with 3 DMI scans, and about 0.2 ms for a packet with only TMS moves.
 Thus the firmware takes about 300 µs for each DMI scan, and the wire uses only about 50 µs of it.
 `adapter speed` (100 kHz to 10 MHz) does not change the rate.
-The cause of the remaining time in the firmware is not measured (#114).
+The [CH32V006 rates on the WeAct STM32H523](#ch32v006-rates-on-the-weact-stm32h523) show the cause (#114).
+The fix was not measured on the OtherUse.
 
 #### CH32V003 on the OtherUse
 
@@ -662,6 +663,50 @@ Rates, with the target at its reset clock:
 | OpenOCD memory read, `dump_image` of 16 KB flash | 1.89 s (8.5 KiB/s) |
 | probe-rs `read` of 16 KB | 2.77 s (5.8 KiB/s), with the attach |
 | probe-rs `download --verify` of 16 KB | 14.5 s |
+
+#### CH32V006 rates on the WeAct STM32H523
+
+This test looked for the firmware time of #114 on an STM32H5 board.
+It measured rates only, not the full test list of the OtherUse.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-25 |
+| Probe | WeAct STM32H523, `weacth523-cmsis-dap` with `-DVSL_CMSIS_DAP_RV_BRIDGE=ON`, standalone image. Before the fix: `v0.12.0-60-gd7f95ac` |
+| Target | CH32V006K8U6 on one wire, on the wiring of the [WeAct one-wire test](wch-link.md#ch32v006-on-the-weact-stm32h523-one-wire) |
+| OpenOCD | The same as for the CH32V006 on the OtherUse, `adapter serial` of the WeAct |
+| Profile | An OtherUse in CMSIS-DAP mode on the SWD port of the WeAct. pyOCD read `DWT_PCSR` (the PC sample register) during the OpenOCD run, without a halt of the core |
+
+The profile before the fix:
+
+- 41% of the samples were in the main loop: the firmware waited for the next USB packet.
+- 18% were in the one-wire frame (`oneWireFrame()`), mostly the wait for the wire.
+- 14% were in `memset`, called from `JtagDp::start()`.
+
+OpenOCD sends about 10 sequences in `DAP_JTAG_Sequence` for each DMI scan, and 9 of them have 1 bit.
+`JtagDp::start()` cleared the three scan buffers (38 bytes each) for each sequence.
+`JtagDp::sequence()` then copied the TDI bits one at a time into the buffer.
+The fix clears only the bytes of the scan, and gives the bytes of a sequence to the port as they are.
+
+| Measurement | Before | After |
+|---|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.284 ms for each read | 0.221 ms for each read |
+| OpenOCD memory read, `dump_image` of 8 KB | 1.56 s (5.1 KiB/s) | 1.28 s (6.3 KiB/s) |
+| OpenOCD memory write, `load_image` of 4 KB to RAM | not measured | 0.62 s (6.5 KiB/s), `verify_image` passes |
+| One-wire DMI frame, Saleae on SWDIO | 50 µs | 50 µs |
+| Time between two DMI frames in one USB packet | 50 µs to 75 µs | 25 µs to 50 µs |
+| Time between two DMI frames in two USB packets | 225 µs to 300 µs | 175 µs to 275 µs |
+
+After the fix, timestamps of the cycle counter in `Processor::execute()` and `Processor::jtagSequence()` (a test image) showed this:
+
+- A sequence of 1 bit takes 1.0 µs. A sequence with a DMI frame takes 63 µs to 67 µs.
+- The firmware time outside the sequences is 16 µs to 21 µs for each packet.
+- The host sends the next packet 72 µs to 111 µs after the end of the last one. This time includes the USB transfer of the reply and of the request.
+
+Thus the wire and USB now use most of the time.
+The remaining firmware time is spread over the TAP emulation and the packet code.
+A build with `-O2` for `DapJtag.cpp` and `RvDtmTap.cpp` did not make the sequences faster.
+The instruction cache misses are below 1%.
 
 #### OpenOCD messages at examine
 
