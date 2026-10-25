@@ -346,7 +346,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is not done yet.
+Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is done: see [Bridge hardware test](#bridge-hardware-test).
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -409,7 +409,7 @@ The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (
 
 Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, OtherUse with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
 The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
-The CH32V003 and CH32V20x configs are not tested on hardware.
+The [bridge hardware test](#bridge-hardware-test) has the results of the three configs.
 
 ### Bridge switch
 
@@ -441,7 +441,7 @@ python3 tools/vsl_rv_bridge.py off
 
 The bridge stays on until a USB reset, a power cycle or `81 00`.
 The OpenOCD configs send `81 00` at `shutdown` and after Ctrl-C, but not after an error in a `-c` command.
-Thus probe-rs must not reset the USB device when it opens it. The hardware test (#109) checks this.
+Thus probe-rs must not reset the USB device when it opens it. probe-rs 0.32.0 does not reset it ([Bridge hardware test](#bridge-hardware-test)).
 
 ### Connect
 
@@ -500,6 +500,201 @@ Planned changes (#103):
 
 The bridge does not report a wire failure as `op` 3.
 OpenOCD would then repeat accesses that the target already ran, and a permanent failure would stay hidden until a timeout.
+
+### Bridge hardware test
+
+The hardware test (#109) has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the OtherUse.
+A last step checks the real JTAG port with an STM32F103 after the bridge was on.
+The Mini has almost the same hardware as the OtherUse, so this test does not include it.
+
+#### CH32V006 on the OtherUse
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-24 |
+| Probe | OtherUse, legacy bootloader, `otheruse-cmsis-dap-rv-bridge` `app-10k` image, `v0.11.0-130-g6487129` |
+| Target | CH32V006K8U6 on one wire, with its own supply |
+| OpenOCD | `0.12.0+dev-01355-gcba596a3e`, `ch32v00x-cmsis-dap.cfg` with `WORKAREASIZE` `0x2000` |
+| GDB | `riscv-none-elf-gdb` (xPack GCC 15.2.0-1) |
+| probe-rs | 0.32.0, `--chip CH32V006K8U6 --protocol jtag`, after `tools/vsl_rv_bridge.py on` |
+| Test programs | A counter loop of 14 bytes in RAM at `0x20000000`. The same loop in flash at `0x00000000`, with 16 KB of random data after it. Each loop writes its counter to `0x20001000` |
+
+| Test | Tool | Result |
+|---|---|---|
+| Examine | OpenOCD | Pass. IDCODE `0x15653101`, `XLEN=32`, `misa=0x40801014` (RV32EMC and X) |
+| `halt`, `resume` | OpenOCD | Pass. One OpenOCD `resume` resumes the hart: `dmstatus` shows `allrunning`, and the counter increases. The CH32V006 needs two `dmcontrol` writes (see [Debug module layer](wch-link.md#debug-module-layer)), and OpenOCD resumes it |
+| `step` | OpenOCD, GDB `stepi` | Pass. See note 1 |
+| `reg` | OpenOCD, GDB | Pass: `pc`, `a0`, `a1`, `misa`, `dcsr` |
+| `mdw`, `mww` | OpenOCD, GDB | Pass on a halted hart. On a running hart, OpenOCD `mdw` fails with "Failed to read priv register" |
+| Software breakpoint in RAM | OpenOCD `bp`, GDB `break` | Pass. The hart stops at each pass of the loop, and `rbp` puts the original instruction back |
+| Hardware breakpoint | OpenOCD `bp ... hw`, GDB `hbreak` | Not available: the CH32V006 has no triggers ("Found 0 triggers") |
+| `load_image` to RAM | OpenOCD, GDB `load` | Pass, with `verify_image` |
+| Reset by `ndmreset` | OpenOCD `reset halt`, `reset run` | Pass. `reset halt` stops at `pc` 0. After `reset run`, `dmstatus` shows `allhavereset` and `allrunning` |
+| WCH registers `0x7c` to `0x7f` | OpenOCD `riscv dmi_read` | Pass: `11038403`, `5aa58401`, `00000400`, `00600620` |
+| `shutdown` | OpenOCD | Pass. The bridge is off after it: a plain JTAG session finds no TAP |
+| `info` | probe-rs | probe-rs finds the DTM, but it cannot identify the chip. It ignores `--chip`. The same result as on the CH32V208 ([captures](cmsis-dap-captures/README.md#results)) |
+| `read` | probe-rs | Pass. 16 KB of flash agree with the image |
+| `download --verify` | probe-rs, built-in flash algorithm | Pass. 16 KB in 15.7 s, with the verify. After `probe-rs reset`, the program runs |
+| `gdb` | probe-rs | Fail, in probe-rs. See note 2 |
+| Bridge on after `vsl_rv_bridge.py on` | probe-rs | Pass. probe-rs does not reset the USB device when it opens it |
+| Fast path first, then bridge on, in one USB session | Python script, then OpenOCD | Pass. See note 3 |
+
+Notes:
+
+1. One time, the first `step` did not change `pc`. The flash was erased at that time, and the hart reset again and again. With a program in flash, every `step` passed: after `reset halt`, after a `pc` write, and after `halt`.
+2. When GDB connects, probe-rs reads all 32 general registers. The CH32V006 is RV32E and has only `x0` to `x15`. The abstract command for `x16` (regno `0x1010`) gives `cmderr` 3 (exception), and probe-rs ends the session with "A RISC-V specific error occurred". probe-rs does not use the E extension of `misa` here. The bridge sends the correct result of the target. An original WCH-LinkE (firmware 2.19) with the probe-rs `wlink` driver gives the same failure on the same CH32V006.
+3. The script sends `81 00`, `DAP_Connect` to JTAG and `DAP_SWJ_Clock` 9 MHz. Then it sends 20 DR scans of 128 bits with TDO capture. These scans use the SPI fast path: a TCK of 9 MHz is above the fast path limit of 1125 kHz. The test did not measure the pins. Then the script sends `81 01` and reads the IDCODE `0x15653101` from the emulated TAP. OpenOCD then examines the hart, halts it and reads RAM and flash.
+
+Rates, with the target at its reset clock:
+
+| Measurement | Result |
+|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.87 ms for each read. Each read is one USB round trip |
+| OpenOCD memory read, `dump_image` of 8 KB | 4.64 s (1.72 KiB/s) |
+| OpenOCD memory write, `load_image` of 8 KB | 4.62 s (1.73 KiB/s) |
+| probe-rs `read` of 16 KB | 4.28 s (3.7 KiB/s), with the attach |
+| probe-rs `download --verify` of 16 KB | 15.7 s |
+| One-wire DMI frame, Saleae on SWDIO | 44 µs to 52 µs |
+| Time between two DMI frames in one USB packet | 334 µs minimum |
+
+OpenOCD reads memory with the abstract command, one word at a time.
+For each word, it sends 3 USB packets with 7 DMI scans, and the wire carries about 3 DMI frames.
+OpenOCD does not use `aampostincrement` on this target.
+The USB capture shows that the host sends the next packet a few µs after the reply.
+The probe takes about 1.1 ms for a packet with 3 DMI scans, and about 0.2 ms for a packet with only TMS moves.
+Thus the firmware takes about 300 µs for each DMI scan, and the wire uses only about 50 µs of it.
+`adapter speed` (100 kHz to 10 MHz) does not change the rate.
+The cause of the remaining time in the firmware is not measured (#114).
+
+#### CH32V003 on the OtherUse
+
+The probe, OpenOCD, GDB and probe-rs are the same as for the CH32V006.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-24 |
+| Target | CH32V003 on one wire, with its own supply. probe-rs uses `--chip CH32V003F4P6` |
+| OpenOCD config | `ch32v003-cmsis-dap.cfg`, default `WORKAREASIZE` (`0x800`) |
+| Test programs | The counter loops of the CH32V006 test, with the counter at `0x20000400` (2 KB RAM). The flash program has 8 KB of random data |
+
+| Test | Tool | Result |
+|---|---|---|
+| Examine | OpenOCD | Pass. IDCODE `0x15653101`, `XLEN=32`, `misa=0x40800014` (RV32EC and X). Chip ID at `0x1ffff7c4`: `00300500` |
+| `halt`, `resume` | OpenOCD | Pass. The counter increases after `resume` |
+| `step` | OpenOCD, GDB `stepi` | Pass |
+| `reg` | OpenOCD, GDB | Pass: `pc`, `a0`, `a1`, `x15`, `misa`, `dcsr` |
+| `mdw`, `mww` | OpenOCD, GDB | Pass on a halted hart. OpenOCD uses the program buffer |
+| Software breakpoint in RAM | OpenOCD `bp`, GDB `break` | Pass |
+| Hardware breakpoint | OpenOCD `bp ... hw` | Not available: no triggers |
+| `load_image` to RAM | OpenOCD, GDB `load` | Pass, with `verify_image` |
+| Reset by `ndmreset` | OpenOCD `reset halt`, `reset run` | Pass. `reset halt` stops at `pc` 0. Unlike the CH32V006, `dmstatus` does not show `allhavereset` after the reset |
+| WCH registers `0x7c` to `0x7f` | OpenOCD `riscv dmi_read` | Pass: `00010403`, `5aa50401`, `5aa50401`, `00300500` |
+| `shutdown` | OpenOCD | Pass. The bridge is off after it |
+| `info` | probe-rs | probe-rs finds the DTM, but it cannot identify the chip. The same result as on the CH32V006 |
+| `read` | probe-rs | Pass. 8 KB of flash agree with the image |
+| `download --verify` | probe-rs, built-in flash algorithm | Pass. 8 KB in 20.1 s, with the verify. After `probe-rs reset`, the program runs |
+| `gdb` | probe-rs | Fail, in probe-rs: the same `x16` read as on the CH32V006 (note 2 above) |
+
+After a GDB `monitor reset halt`, OpenOCD shows "Register fp is dirty!" and "Register s1 is dirty!".
+OpenOCD uses `s0` and `s1` as scratch registers for the program buffer, and it discards their values at the reset.
+
+Rates, with the target at its reset clock:
+
+| Measurement | Result |
+|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.87 ms for each read |
+| OpenOCD memory read, `dump_image` of 2 KB RAM | 0.27 s (7.4 KiB/s) |
+| OpenOCD memory read, `dump_image` of 8 KB flash | 1.03 s (7.8 KiB/s) |
+| OpenOCD memory write, `load_image` of 2 KB RAM | 0.25 s (8.0 KiB/s) |
+| probe-rs `read` of 8 KB | 2.23 s (3.6 KiB/s), with the attach |
+| probe-rs `download --verify` of 8 KB | 20.1 s |
+
+OpenOCD is about 4 times faster on the CH32V003 than on the CH32V006.
+On the CH32V003, it uses the program buffer. This test did not capture the USB packets of the CH32V003.
+The CH32V006 refuses the program buffer, so OpenOCD uses the abstract command there (see [OpenOCD configs](#openocd-configs)).
+
+#### CH32V208 on the OtherUse
+
+The probe, OpenOCD, GDB and probe-rs are the same as for the CH32V006.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-24 |
+| Target | CH32V208WBU6 on two wires (SWDIO, SWCLK), with its own supply. BOOT0 is tied low. probe-rs uses `--chip CH32V208WBU6` |
+| OpenOCD config | `ch32v20x-cmsis-dap.cfg`, default `WORKAREASIZE` (`0x2800`) |
+| Test programs | The counter loops of the CH32V006 test (counter at `0x20001000`, 16 KB flash program) |
+
+| Test | Tool | Result |
+|---|---|---|
+| Examine | OpenOCD | Pass. IDCODE `0x15653101`, `XLEN=32`, `misa=0x40901105` (RV32IMAC, U and X) |
+| `halt`, `resume` | OpenOCD | Pass |
+| `step` | OpenOCD, GDB `stepi` | Pass |
+| `reg` | OpenOCD, GDB | Pass: `pc`, `a0`, `a1`, `x31`, `dcsr` |
+| `mdw`, `mww` | OpenOCD, GDB | Pass on a halted hart |
+| Software breakpoint in RAM | OpenOCD `bp`, GDB `break` | Pass |
+| Hardware breakpoint | OpenOCD `bp ... hw` | Fail, in OpenOCD: "Found 0 triggers". See note 1 |
+| Hardware breakpoint | probe-rs `gdb`, GDB `hbreak` | Pass in flash. probe-rs finds 4 `mcontrol` triggers |
+| `load_image` to RAM | OpenOCD, GDB `load` | Pass, with `verify_image` |
+| Reset by `ndmreset` | OpenOCD `reset run` | Pass |
+| Reset by `ndmreset` | OpenOCD `reset halt` | Fail, "timed out while waiting for target halted". With BOOT0 low, 8 of 8 runs failed. Before that, 1 of 6 runs passed. See note 2 |
+| WCH registers `0x7c` to `0x7f` | OpenOCD `riscv dmi_read` | `00000000`, `00000000`, `00000000`, `2080053c` |
+| `shutdown` | OpenOCD | Pass. The bridge is off after it |
+| `info` | probe-rs | probe-rs finds the DTM, but it cannot identify the chip. The same result as on the CH32V006 |
+| `read` | probe-rs | Pass. 16 KB of flash agree with the image |
+| `download --verify` | probe-rs, built-in flash algorithm | Pass in 4 of 4 runs with BOOT0 low. 16 KB in 14.5 s, with the verify. After `probe-rs reset`, the program runs. See note 3 |
+| `gdb` | probe-rs, GDB | Pass: connect, `stepi`, registers up to `x31`, memory read and write, `hbreak` |
+| Wrong wiring | OpenOCD | See note 4 |
+
+Notes:
+
+1. On the CH32V208, the `tinfo` CSR (`0x7a4`) reads 0, without an exception. OpenOCD takes `tinfo` 0 as "no trigger" (`get_trigger_types()` in `src/target/riscv/riscv.c`), and stops the count. It does not look at the type in `tdata1`. `tdata1` of trigger 0 reads `20000000` (type 2, `mcontrol`). probe-rs uses the type in `tdata1`, and finds 4 triggers.
+2. After a reset with `haltreq`, the CH32V208 sets `allhavereset` before it halts. A poll of `dmstatus` after the reset reads `allrunning` and `allhavereset` first, and `allhalted` about 0.8 ms later. OpenOCD waits only for `allhavereset` (`deassert_reset()` in `src/target/riscv/riscv-013.c`). Then it writes `ackhavereset`, and this write also clears `haltreq`. When `haltreq` goes to 0 before the hart halts, the hart continues to run. OpenOCD then halts the hart to set `dcsr.ebreak*`, resumes it, and waits for a halt until the timeout. The debug spec 0.13 expects the hart to halt when `haltreq` stays set during the reset. In a manual sequence with `riscv dmi_write`, the `ackhavereset` write came 5 ms after the reset. Then the hart halted in 10 of 10 tries. The CH32V006 and the CH32V003 halt in time.
+3. In a first run, BOOT0 was not connected. Then address `0x00000000` showed the system bootloader (the same words as `0x1fff8000`) after some resets, and the user flash after others. The test image is linked at `0x00000000`, so probe-rs compared against the bootloader, and the verify failed in 3 of 6 runs. The user flash at `0x08000000` was correct each time. With BOOT0 low, address `0x00000000` showed the user flash after 10 of 10 resets.
+4. SWCLK was not connected in a first run. OpenOCD waited 5 s, and stopped with "Debug Module did not become active". DTMCS read `0x871`: `dmistat` 2, the sticky DMI error. OpenOCD does not show this error (see [DMI errors](#dmi-errors)).
+
+Rates, with the target at its reset clock:
+
+| Measurement | Result |
+|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.83 ms for each read |
+| OpenOCD memory read, `dump_image` of 8 KB RAM | 0.95 s (8.4 KiB/s) |
+| OpenOCD memory write, `load_image` of 8 KB RAM | 0.90 s (8.9 KiB/s) |
+| OpenOCD memory read, `dump_image` of 16 KB flash | 1.89 s (8.5 KiB/s) |
+| probe-rs `read` of 16 KB | 2.77 s (5.8 KiB/s), with the attach |
+| probe-rs `download --verify` of 16 KB | 14.5 s |
+
+#### OpenOCD messages at examine
+
+On the three targets, OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine.
+These targets have no vector extension and no AIA.
+OpenOCD prints the messages when a read of the CSR `vlenb`, or of `mtopi` and `mtopei`, succeeds (`src/target/riscv/riscv-013_reg.c`).
+The WCH cores give 0 for these reads, without an exception.
+The `tinfo` read of the CH32V208 (note 1 of the CH32V208) has the same cause.
+The messages have no other effect in this test.
+
+On the CH32V006, the first `halt` after `init` showed "halted due to undefined". The next halts showed "halted due to debug-request".
+OpenOCD sets the debug reason to "undefined" at examine (`examine()` in `src/target/riscv/riscv-013.c`).
+
+#### Real JTAG after the bridge
+
+This step checks that the JTAG port of the board works after the bridge was on.
+The probe and OpenOCD are the same as for the CH32V006.
+The target is the STM32F103 of the [JTAG hardware test](#jtag-hardware-test) (DBGMCU IDCODE `10036414`), with `interface/cmsis-dap.cfg` and `target/stm32f1x.cfg`.
+The flash test uses a random image of 32 KiB, as in the JTAG hardware test. At 9000 kHz, `tools/stm32f1_clock.tcl` sets the target clock to 64 MHz first.
+
+| Test | Result |
+|---|---|
+| `vsl_rv_bridge.py on`, then `off`, then an OpenOCD JTAG session | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`). `reset halt` stops at the reset vector |
+| The same switch before each flash run, then `program ... verify` and `dump_image` at 1000 kHz | Pass. The read-back agrees with the image |
+| The same at 9000 kHz (SPI fast path) | Pass. The read-back agrees with the image |
+| `cmsis-dap cmd 0x81 0x00` in a JTAG session, with the bridge already off | Pass. The next memory read works |
+| `cmsis-dap cmd 0x81 0x01`, then `0x81 0x00`, in a JTAG session, then a memory read | Fail: "Invalid ACK (7) in DAP response". See the note |
+| The same, then `jtag arp_init`, then memory read and write, `step`, a hardware breakpoint and `reset halt` | Pass |
+
+Note: a switch while JTAG is connected starts the new port with an unknown TAP state (see [Bridge switch](#bridge-switch)).
+OpenOCD does not know this. Probably it uses the IR of the target from before the switch. The test did not capture the scans to confirm this.
+`jtag arp_init` resets the TAPs and scans the chain again. After it, OpenOCD and the target agree again.
+The configs in `etc/openocd/` switch the bridge only before the chain scan and at `shutdown`, so they do not have this problem.
 
 ## Tests
 

@@ -202,7 +202,7 @@ The capture `openocd-ch32v208-unplug.pcapng` shows the DMI error model (`docs/cm
 
 ### Open points of these captures
 
-- OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine, and "halted due to undefined" after the recovery. Check these in B5 (#109).
+- OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine, and "halted due to undefined" after the recovery. The hardware test (#109) explains these messages: see [OpenOCD messages at examine](../cmsis-dap.md#openocd-messages-at-examine).
 - The flash commands of both tools are not in these captures.
 - probe-rs on a one-wire target is not in these captures.
 - The one-wire captures have no run of image C (without the unlock writes).
