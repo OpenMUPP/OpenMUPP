@@ -366,7 +366,7 @@ It does each DMI access on the WCH wire (one wire or two wires), with the wire e
 
 The CMake option `VSL_CMSIS_DAP_RV_BRIDGE` (default `OFF`) adds the bridge to the `cmsis-dap` personality.
 It needs `VSL_PERSONALITIES=cmsis-dap`: the configure step stops with an error for another set of personalities, also for a multi image.
-It needs an STM32F1 board, because the one-wire engine uses the timers and DMA1 of the STM32F1.
+The STM32H5 boards also build the bridge. The bridge is not tested on them.
 The image tag ends with `-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-rv-bridge-app-10k-Release-<version>.bin`.
 The presets `mini-cmsis-dap-rv-bridge` and `otheruse-cmsis-dap-rv-bridge` set the option:
 

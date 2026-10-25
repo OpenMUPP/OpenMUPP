@@ -52,7 +52,7 @@ Some functions come from the pin map and the family, not from a separate field:
 - `board::adcChannelOf()` gives the ADC channel of the Vref pin.
   The channels of the STM32F103 come from RM0008. The channels of the STM32H523/H533 come from DS14539.
 - `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
-  The STM32H5 has no one-wire engine yet, so this function gives no timer for it.
+  On the STM32H5, only PA6 (TIM3_CH1) has a timer.
 - `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
   The crystal pins are PD0 and PD1 on the STM32F103, and PH0 and PH1 on the STM32H5.
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
@@ -154,8 +154,8 @@ The Nucleo and the target must have a common ground.
 
 The firmware on the Nucleo has these limits:
 
-- The personalities Versaloon and CMSIS-DAP, alone or in a multi image. A multi image keeps the last 8 KB flash sector of bank 2 for the stored personality (see [Multi image](usb-device.md#multi-image)).
-- No WCH-Link personality. The one-wire engine of the STM32H5 is #98. The build stops with an error for `wch-link`.
+- The personalities Versaloon, CMSIS-DAP and WCH-Link, alone or in a multi image. A multi image keeps the last 8 KB flash sector of bank 2 for the stored personality (see [Multi image](usb-device.md#multi-image)).
+- A one-wire target (WCH-Link, CH32V00x) needs an external pull-up of 2.2 kΩ from SWDIO to 3.3 V. The internal pull-ups are too slow for the read bits (see [One-wire timer](wch-link.md#one-wire-timer)).
 - Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE`, the bootloader code `0xB0` and the key at the reset start the ROM USB DFU (see [STM32H5: ROM USB DFU](firmware-update.md#stm32h5-rom-usb-dfu)).
 - The JTAG fast path needs a wire from PB13 (CN10 pin 30) to PB3 (CN10 pin 31, D3). The fast path is not tested on the Nucleo.
 - The UART bridge supports 3815 baud to 15.6 Mbaud. USART1 runs from the 250 MHz bus clock, and the firmware does not use the USART prescaler. The bridge refuses a lower baud rate, for example 2400 baud.
@@ -169,7 +169,7 @@ Some pins are also on the ARDUINO connectors.
 | Signal | Pin | Connector | Note |
 |---|---|---|---|
 | TCK, SWCLK | PB13 | CN10 pin 30 | |
-| TMS, SWDIO (output) | PA6 | CN10 pin 13 (D12) | Connect a wire from PA6 to PA7. Connect the target to one of the two pins. |
+| TMS, SWDIO (output) | PA6 | CN10 pin 13 (D12) | Connect a wire from PA6 to PA7. Connect the target to one of the two pins. For a one-wire target, add a 2.2 kΩ pull-up to 3.3 V. |
 | TMS, SWDIO (input) | PA7 | CN10 pin 15 (D11) | |
 | TDI | PB15 | CN10 pin 26 | |
 | TDO | PB14 | CN10 pin 28 | |
@@ -238,7 +238,7 @@ Thus PC13 is good for the LED, but do not use it for a target signal.
 
 | Signal | Pin | Header | Note |
 |---|---|---|---|
-| TMS, SWDIO (input) | PB12 | P2 pin 1 | Connect the target here. |
+| TMS, SWDIO (input) | PB12 | P2 pin 1 | Connect the target here. For a one-wire target, add a 2.2 kΩ pull-up to 3.3 V. |
 | TCK, SWCLK | PB13 | P2 pin 2 | |
 | TDO | PB14 | P2 pin 3 | |
 | TDI | PB15 | P2 pin 4 | |

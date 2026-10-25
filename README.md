@@ -36,7 +36,7 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB.
 The NUCLEO-H533RE uses an STM32H533RE.
 The WeAct STM32H523 core board uses an STM32H523CC.
-The two STM32H5 boards have no WCH-Link personality yet.
+On the two STM32H5 boards, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [NUCLEO-H533RE](docs/boards.md#nucleo-h533re) and [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for their limits and the wiring to the target.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
 

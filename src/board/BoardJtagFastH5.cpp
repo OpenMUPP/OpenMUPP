@@ -39,7 +39,7 @@ Spi spiSlave() {
    return Spi{ SPI1 };
 }
 
-// GPDMA1 channels 0 to 2: no other code of the firmware uses GPDMA1.
+// GPDMA1 channels 0 to 2. The one-wire engine (BoardRvSwdH5.cpp) uses 3 and 4.
 Dma::Channel tmsChannel() {
    return { GPDMA1, 0 };
 }

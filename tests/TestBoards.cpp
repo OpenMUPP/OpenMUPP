@@ -277,10 +277,18 @@ TEST_CASE("adcChannelOf gives the STM32H5 ADC channel of a pin") {
    CHECK_FALSE(board::adcChannelOf(H5, { Port::H, 0 }));
 }
 
-TEST_CASE("The STM32H5 has no one-wire timer yet") {
+TEST_CASE("The STM32H5 one-wire timer is TIM3_CH1 on PA6") {
    CHECK(board::oneWireTimerOf(F1, { Port::B, 4 }));
    CHECK_FALSE(board::oneWireTimerOf(H5, { Port::B, 4 }));
-   CHECK_FALSE(board::oneWireTimerOf(H5, h5Board.debug.tmsOut));
+   const auto timer = board::oneWireTimerOf(H5, h5Board.debug.tmsOut);
+   REQUIRE(timer);
+   CHECK(timer->timer == 3);
+   CHECK(timer->channel == 1);
+   CHECK(timer->sampleChannel == 3);
+   // The JTAG fast path uses GPDMA1 channels 0 to 2
+   CHECK(timer->updateDma >= 3);
+   CHECK(timer->sampleDma >= 3);
+   CHECK(timer->updateDma != timer->sampleDma);
 }
 
 TEST_CASE("The reserved crystal pins depend on the family") {
