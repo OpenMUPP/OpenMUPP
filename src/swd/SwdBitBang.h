@@ -21,17 +21,16 @@
 //
 // SWCLK is high between bits. One bit (ADIv5, B4.2):
 //
-//   1. SWCLK low. The host writes SWDIO. Wait for the low half period.
-//   2. The host reads SWDIO. The target changed it after the last rising
-//      edge.
-//   3. SWCLK high: the target samples SWDIO, or drives its next bit. Wait
-//      for the high half period.
+//   1. Wait for the end of the high half period. SWCLK low. The host
+//      writes SWDIO.
+//   2. Wait for the end of the low half period. The host reads SWDIO. The
+//      target changed it after the last rising edge.
+//   3. SWCLK high: the target samples SWDIO, or drives its next bit.
 //
-// Each half period waits from its SWCLK edge, as in the JTAG engine
-// (jtag/JtagBitBang.h): an interrupt makes a half period longer, never
-// shorter. The wait is halfCycles minus loopOverheadCycles, the cycles of
-// the loop code in each half period. Thus SWCLK is not faster than the
-// OpenOCD table. Only delay 1 is measured. At delay 0, the engine is untimed.
+// Each SWCLK edge comes at a deadline of a ClockPacer (ClockPacer.h): the
+// loop code runs inside the half period, so SWCLK has the rate of the
+// OpenOCD table on each board and build. An interrupt makes a half period
+// longer, never shorter.
 //
 // At delay 0 (1.85 MHz), the engine runs untimed: it does not read the
 // cycle counter, and each half period is the loop code and untimedPadNops NOP
@@ -107,6 +106,7 @@
 #include <array>
 #include <cstdint>
 
+#include "ClockPacer.h"
 #include "IntDiv.h"
 
 #include "protocol/Background.h"
@@ -130,20 +130,6 @@ using protocol::swd::retryOutFlag;
 // vsllink_swd_frequency()). Above 5, the frequency is 500000 / (delay + 1)
 // Hz: a period of 2 * (delay + 1) us.
 inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'000, 102'000, 85'000, 72'000 };
-
-// The core cycles of the loop code in one half period (Release build,
-// STM32F103 at 72 MHz with 2 flash wait states). SWCLK must never be
-// faster than the table: too small makes SWCLK slower than the table, too
-// large makes it faster.
-//
-// A logic analyzer on the Versaloon Mini gave 21 with the engine at -Os
-// (230 kHz at 235 kHz). With -O2 and a value of 8, it gave 210 kHz (53 %
-// duty): the loop code is about 25 cycles per half period on average (the
-// two halves differ), not fewer than at -Os. 24 gives 232 kHz, below the table (measured). Delays 2 and more
-// are not measured: the margin there is small. Measure SWCLK again after a
-// change of the engine code. The ST-Link/V2 board
-// has other SWD pins and is not measured.
-inline constexpr uint32_t loopOverheadCycles = 24;
 
 // Untimed (delay 0): NOP instructions in each half period. They keep a
 // minimum low half period, so SWDIO has a setup time before the rising
@@ -202,8 +188,6 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
    // Half a period is (delay + 1) us.
    return intdiv::mulDivCeil(coreHz, delay + 1u, 1'000'000u);
 }
-
-static_assert(loopOverheadCycles < halfPeriodCycles(72'000'000, 1), "The wait at delay 1 would be 0");
 
 // The fastest SWCLK: the untimed engine (delay 0)
 inline constexpr uint32_t maxClockHz = fixedClockHz[0];
@@ -355,7 +339,6 @@ class BitBangPort final : public protocol::SwdPort {
 
    void setHalfCycles(uint32_t halfCycles, bool timed) {
       halfCycles_ = halfCycles;
-      waitCycles_ = halfCycles_ > loopOverheadCycles ? halfCycles_ - loopOverheadCycles : 0;
       timed_ = timed;
    }
 
@@ -408,36 +391,42 @@ class BitBangPort final : public protocol::SwdPort {
       return result;
    }
 
-   // Waits for the rest of the half period after an edge. Unsigned
-   // difference: correct across the wrap of the counter.
+   // Waits for the end of the half period. The SWCLK edge must follow.
    template <bool Timed>
    [[gnu::always_inline]] void waitHalfPeriod() {
       if constexpr(Timed) {
-         const uint32_t edge = pins_.now();
-         while(pins_.now() - edge < waitCycles_) {
-         }
+         pacer_.wait(pins_, halfCycles_);
       } else {
          static_assert(untimedPadNops == 6, "Change the NOP count below too");
          asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop");
       }
    }
 
+   // The SWCLK edge after waitHalfPeriod()
+   template <bool Timed>
+   [[gnu::always_inline]] void swclk(bool level) {
+      pins_.swclk(level);
+      if constexpr(Timed) {
+         pacer_.edge(pins_);
+      }
+   }
+
    template <bool Timed>
    [[gnu::always_inline]] void writeBit(bool level) {
-      pins_.swclk(false);
+      waitHalfPeriod<Timed>();
+      swclk<Timed>(false);
       pins_.swdioWrite(level);
       waitHalfPeriod<Timed>();
-      pins_.swclk(true);
-      waitHalfPeriod<Timed>();
+      swclk<Timed>(true);
    }
 
    template <bool Timed>
    [[gnu::always_inline]] bool readBit() {
-      pins_.swclk(false);
+      waitHalfPeriod<Timed>();
+      swclk<Timed>(false);
       waitHalfPeriod<Timed>();
       const bool level = pins_.swdio();
-      pins_.swclk(true);
-      waitHalfPeriod<Timed>();
+      swclk<Timed>(true);
       return level;
    }
 
@@ -474,8 +463,7 @@ class BitBangPort final : public protocol::SwdPort {
    TransferRules rules_;
    RetryStop *stop_{ nullptr };
    uint32_t halfCycles_{ 0 };
-   // halfCycles_ without the loop code
-   uint32_t waitCycles_{ 0 };
+   pacing::ClockPacer pacer_;
    bool timed_{ true };
 };
 
