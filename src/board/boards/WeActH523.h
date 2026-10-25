@@ -5,10 +5,10 @@
 namespace board {
 
 // WeAct Studio STM32H523 core board (V1.0, "Black Pill" form): STM32H523CCU6
-// or STM32H523CCT6, 8 MHz crystal. The pin map of the NUCLEO-H533RE (#89),
-// with these changes for the board and its headers:
+// or STM32H523CCT6, 8 MHz crystal. The pin map follows the board and its
+// headers:
 // - The on-board LED (PC13) and key (PA0) are active low.
-// - RTCK moves from PA0 (the key) to PA8.
+// - RTCK is PA8, because PA0 is the key.
 // - SWDIO in is PB12 and SRST is PB5, so header P2 has SWDIO, SWCLK, TDO,
 //   TDI, RTCK, TX, RX on pins 1 to 7. docs/boards.md has the wiring.
 //

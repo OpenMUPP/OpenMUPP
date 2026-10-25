@@ -160,42 +160,17 @@ build:
         VARIANT: -triple
         PROTOCOL_TAG: -vsl+dap+wch
 
-# NUCLEO-H533RE (STM32H5, #89): all presets of the board, on every
-# pipeline. The board has the standalone image only. The dual image keeps
-# the last 8 KB flash sector for the stored personality. Its own cache key: the H5 builds fetch the CMSIS packages
-# of the H5 and the Cortex-M33.
-build-nucleoh533:
-  extends: .build-board-template
-  cache:
-    <<: *fetchcontent-cache
-    key: fetchcontent-firmware-h5
-    policy: pull-push
-  parallel:
-    matrix:
-      - BOARD: nucleoh533
-        VARIANT: ""
-      - BOARD: nucleoh533
-        VARIANT: -cmsis-dap
-        PROTOCOL_TAG: -cmsis-dap
-      - BOARD: nucleoh533
-        VARIANT: -dual
-        PROTOCOL_TAG: -vsl+dap
-      - BOARD: nucleoh533
-        VARIANT: -wch-link
-        PROTOCOL_TAG: -wch-link
-      - BOARD: nucleoh533
-        VARIANT: -debug
-        BUILD_TYPE: Debug
-
-# WeAct STM32H523 core board (STM32H523CC, 256 KB flash): the same presets
-# as the NUCLEO-H533RE. It reads the H5 cache of build-nucleoh533, and only
-# build-nucleoh533 writes it.
+# WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash): all
+# presets of the board, on every pipeline. The board has the standalone link
+# image only. The dual-personality image keeps the last 8 KB flash sector for
+# the stored personality. Its own cache key: the H5 builds fetch the CMSIS packages of
+# the H5 and the Cortex-M33.
 build-weacth523:
   extends: .build-board-template
   cache:
     <<: *fetchcontent-cache
     key: fetchcontent-firmware-h5
-    policy: pull
+    policy: pull-push
   parallel:
     matrix:
       - BOARD: weacth523

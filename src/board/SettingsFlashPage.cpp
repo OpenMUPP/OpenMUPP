@@ -84,7 +84,7 @@ bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
 
 #include "personality/FlashWordSlot.h"
 
-// The start of the sector (ldscripts/mem-h533.ld)
+// The start of the sector (ldscripts/mem-h523xc.ld)
 extern "C" const personality::FlashWord __vsl_settings_start[];
 
 namespace board {

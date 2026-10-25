@@ -11,7 +11,7 @@ The Versaloon and CMSIS-DAP images have these functions:
   The bridge continues to run during long JTAG and SWD commands.
 - It starts the bootloader when you hold the key.
   The Versaloon personality also starts it on request, in the `app-8k` image.
-  On the NUCLEO-H533RE, the request and the key start the ROM USB DFU of the STM32H5.
+  On the WeAct STM32H523 core board, the request and the key start the ROM USB DFU of the STM32H5.
 
 The Versaloon personality has the USB identity of the original Versaloon firmware:
 
@@ -46,4 +46,4 @@ Hardware test status:
 - The dual image `versaloon,cmsis-dap` on the WeAct STM32H523 core board passed the same test on Linux, with an STM32F103ZE target (see [boards.md](boards.md#hardware-test)).
   The key switch passed in both directions on this board.
   One earlier run had read errors on OpenOCD JTAG with the `vsllink` driver. Five later runs passed. The cause is not known.
-- Windows (also the driverless WinUSB binding), the key switch on the STM32F1 boards and the NUCLEO-H533RE, and the WCH-Link personality of the multi image need a test on the hardware.
+- Windows (also the driverless WinUSB binding), the key switch on the STM32F1 boards, and the WCH-Link personality of the multi image need a test on the hardware.

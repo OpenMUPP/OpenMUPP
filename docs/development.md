@@ -142,11 +142,6 @@ The default is `/usr`.
 | `mini-triple`, `otheruse-triple`, `stlinkv2-triple` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
 | `mini-cmsis-dap-wch-link` | Mini | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
-| `nucleoh533` | NUCLEO-H533RE | `versaloon` | Release |
-| `nucleoh533-cmsis-dap` | NUCLEO-H533RE | `cmsis-dap` | Release |
-| `nucleoh533-dual` | NUCLEO-H533RE | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
-| `nucleoh533-wch-link` | NUCLEO-H533RE | `wch-link` | Release |
-| `nucleoh533-debug` | NUCLEO-H533RE | `versaloon` | Debug |
 | `weacth523` | WeAct STM32H523 core board | `versaloon` | Release |
 | `weacth523-cmsis-dap` | WeAct STM32H523 core board | `cmsis-dap` | Release |
 | `weacth523-dual` | WeAct STM32H523 core board | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
@@ -361,19 +356,17 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   This job keeps no artifacts.
 - `build-mini-cmsis-dap-rv-bridge`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=ON`, plus the size check.
   This job keeps no artifacts.
-- `build-nucleoh533`: a `parallel:matrix` job with the presets `nucleoh533`, `nucleoh533-cmsis-dap`, `nucleoh533-dual` and `nucleoh533-debug`, plus the size check.
+- `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug`, plus the size check.
   The limit of the dual image is 8 KB smaller, because the last flash sector holds the stored personality.
-- `build-weacth523`: the same `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`.
 
-The build jobs of the Mini, the NUCLEO-H533RE and the WeAct STM32H523 core board run in each pipeline.
+The build jobs of the Mini and the WeAct STM32H523 core board run in each pipeline.
 The build jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
 The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
-`build-mini`, `build-nucleoh533` and `run-unit-tests` update the cache, and the other jobs only read it.
-`build-nucleoh533` has its own cache key, because the STM32H5 needs other CMSIS packages.
-`build-weacth523` reads the cache of `build-nucleoh533`.
+`build-mini`, `build-weacth523` and `run-unit-tests` update the cache, and the other jobs only read it.
+`build-weacth523` has its own cache key, because the STM32H5 needs other CMSIS packages.
 In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
 Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.
