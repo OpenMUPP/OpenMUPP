@@ -74,6 +74,7 @@ class MockSwdPins {
          return;
       }
       swclk_ = level;
+      time += edgeDelayCycles;
       if(edges.size() == stallEdge) {
          time += stallCycles;
       }
@@ -152,6 +153,9 @@ class MockSwdPins {
    int inits{ 0 };
    int finis{ 0 };
    int begins{ 0 };
+   // The engine code between the end of a wait and the edge (the pin read
+   // and write on the probe): time added before each SWCLK edge
+   uint32_t edgeDelayCycles{ 0 };
    // An interrupt: the time jumps by stallCycles at SWCLK edge stallEdge.
    std::size_t stallEdge{ SIZE_MAX };
    uint32_t stallCycles{ 0 };
