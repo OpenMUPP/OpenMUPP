@@ -233,6 +233,8 @@ If the flash write fails, the firmware starts again with the old personality.
 
 `tools/probe_hw_test.py` tests the Versaloon and the CMSIS-DAP personalities of a multi image on an STM32F1 target.
 Connect the target on SWD and JTAG, and connect the UART TX pin to the UART RX pin.
+The script runs SWD before JTAG with each tool.
+On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, and passed with them (see [Hardware test](boards.md#hardware-test)).
 The script switches to the Versaloon personality and runs the serial loopback test and OpenOCD with the `vsllink` driver.
 It then switches to the CMSIS-DAP personality and runs the serial and `DAP_UART_*` loopback tests, OpenOCD, pyOCD and probe-rs.
 Each tool runs on SWD and JTAG, at each speed of `--swd-speeds` and `--jtag-speeds`.

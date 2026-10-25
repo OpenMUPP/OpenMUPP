@@ -42,4 +42,7 @@ Hardware test status:
 - The multi image `versaloon,cmsis-dap,wch-link` passed the test on Linux (see [usb-device.md](usb-device.md#multi-image-hardware-test)).
   The Versaloon personality passed with OpenOCD on SWD and JTAG.
   The CMSIS-DAP personality passed with OpenOCD, pyOCD and probe-rs on SWD and JTAG. probe-rs ran on JTAG only at 1000 kHz.
-- Windows (also the driverless WinUSB binding), the key switch and the WCH-Link personality of the multi image need a test on the hardware.
+- The dual image `versaloon,cmsis-dap` on the WeAct STM32H523 core board passed the same test on Linux, with an STM32F103ZE target (see [boards.md](boards.md#hardware-test)).
+  The key switch passed in both directions on this board.
+  One earlier run had read errors on OpenOCD JTAG with the `vsllink` driver. Five later runs passed. The cause is not known.
+- Windows (also the driverless WinUSB binding), the key switch on the STM32F1 boards and the NUCLEO-H533RE, and the WCH-Link personality of the multi image need a test on the hardware.
