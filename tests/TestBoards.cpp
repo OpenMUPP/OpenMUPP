@@ -1,6 +1,5 @@
 #include "board/VrefScale.h"
 #include "board/boards/Mini.h"
-#include "board/boards/NucleoH533.h"
 #include "board/boards/OtherUse.h"
 #include "board/boards/StLinkV2.h"
 #include "board/boards/WeActH523.h"
@@ -19,9 +18,8 @@ namespace {
 constexpr Family F1 = Family::Stm32F1;
 constexpr Family H5 = Family::Stm32H5;
 
-// An STM32H5 board with the pin map of the NUCLEO-H533RE port (#89). It
-// tests the STM32H5 rules until the first STM32H5 board is in
-// src/board/boards/.
+// An STM32H5 test board with a 24 MHz crystal and the TCK link on PB3. It
+// tests the STM32H5 rules apart from the board definitions.
 constexpr Definition h5Board{
    .name = "h5-test",
    .hseFrequency = 24'000'000,
@@ -119,36 +117,6 @@ TEST_CASE("ST-Link/V2 has an 8 MHz crystal and no JTAG fast path") {
    CHECK_FALSE(stLink.usbPullUp);
 }
 
-TEST_CASE("NUCLEO-H533RE has the pin map of the H5 probe board") {
-   const Definition &nucleo = board::nucleoH533;
-
-   CHECK(nucleo.name == "nucleoh533");
-   CHECK(nucleo.family == board::Family::Stm32H5);
-   CHECK(nucleo.hseFrequency == 24'000'000);
-   CHECK(nucleo.debug.tck == Pin{ Port::B, 13 });
-   CHECK(nucleo.debug.tdi == Pin{ Port::B, 15 });
-   CHECK(nucleo.debug.tdo == Pin{ Port::B, 14 });
-   CHECK(nucleo.debug.tmsOut == Pin{ Port::A, 6 });
-   CHECK(nucleo.debug.tmsIn == Pin{ Port::A, 7 });
-   CHECK(nucleo.debug.trst == Pin{ Port::B, 4 });
-   CHECK(nucleo.debug.srst == Pin{ Port::B, 10 });
-   CHECK(nucleo.debug.rtck == Pin{ Port::A, 0 });
-   CHECK(nucleo.uart == board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } });
-   CHECK(nucleo.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 1 });
-   // LD2 and B1. PA5 is LD2, so the TCK link of the fast path is PB3.
-   CHECK(nucleo.leds.state == Signal{ { Port::A, 5 }, Active::High });
-   CHECK_FALSE(nucleo.leds.power);
-   CHECK_FALSE(nucleo.leds.usb);
-   CHECK(nucleo.key == Signal{ { Port::C, 13 }, Active::High });
-   REQUIRE(nucleo.hasJtagFastPath());
-   CHECK(nucleo.jtagFastPath->tckLink == Pin{ Port::B, 3 });
-   CHECK_FALSE(nucleo.powerSwitch);
-   CHECK_FALSE(nucleo.usbPullUp);
-   // PB4 (NJTRST) is TRST: the debug port keeps SWD for the on-board ST-LINK
-   CHECK(board::swjConfig(nucleo) == board::SwjConfig::NoJtag);
-   CHECK(board::withSwd(nucleo) == nucleo);
-}
-
 TEST_CASE("WeAct H523 has SWDIO next to SWCLK and the on-board LED and key") {
    const Definition &weAct = board::weActH523;
 
@@ -183,7 +151,6 @@ TEST_CASE("All boards are valid") {
    CHECK(board::isValid(board::mini));
    CHECK(board::isValid(board::otherUse));
    CHECK(board::isValid(board::stLinkV2));
-   CHECK(board::isValid(board::nucleoH533));
    CHECK(board::isValid(board::weActH523));
 }
 

@@ -40,7 +40,7 @@ void configureClocks() {
    SysTick_Config(SystemCoreClock / 1000); // 1 ms tick
 
    // The STM32F1 boards have a 48-pin package: ports A to C. Port D has
-   // only the crystal pins. The NUCLEO-H533RE uses ports A to C too.
+   // only the crystal pins. The WeAct STM32H523 uses ports A to C too.
    Rcc::enableGPIOAClock();
    Rcc::enableGPIOBClock();
    Rcc::enableGPIOCClock();

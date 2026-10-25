@@ -5,7 +5,7 @@ See [Install the bootloader](#install-the-bootloader).
 `versaloon-bootloader` is a USB CDC serial port with the ID `0483:5740`.
 It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
 
-The NUCLEO-H533RE (STM32H5) has no bootloader in flash.
+The WeAct STM32H523 core board (STM32H5) has no bootloader in flash.
 The firmware starts the USB DFU (Device Firmware Upgrade) of the ROM bootloader in system memory.
 See [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu).
 
@@ -81,7 +81,7 @@ The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 | `0x00` | Accepted. The firmware starts the bootloader. |
 | `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. On the STM32F1, the `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The ST-Link/V2 has only the `standalone` image. The firmware continues to run. |
 
-The `standalone` image of the NUCLEO-H533RE accepts the command and starts the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
+The `standalone` image of the WeAct STM32H523 core board accepts the command and starts the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
 
 On the STM32F1, after the reply, the firmware does these steps:
 
@@ -98,7 +98,7 @@ The next reset starts the firmware again.
 
 The STM32H5 has a bootloader in system memory (ST AN2606, section 56).
 On the STM32H523 and the STM32H533, it starts at `0x0BF97000`.
-It has a USB DFU interface on PA11 and PA12 (the user USB connector CN3 of the Nucleo), with the ID `0483:df11`.
+It has a USB DFU interface on PA11 and PA12 (the USB connector of the WeAct board), with the ID `0483:df11`.
 The DFU uses the HSI48 clock, so it needs no crystal.
 
 ### Start the ROM DFU
@@ -108,7 +108,7 @@ To start the ROM DFU, use one of these methods:
 
 - Send `VERSALOON_FW_UPDATE` or a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)).
   `python3 tools/vsl_personality.py switch bootloader` does this and waits for `0483:df11`.
-- Hold the key (B1, PC13 on the Nucleo) down and reset the board.
+- Hold the key (KEY, PA0 on the WeAct board) down and reset the board.
 
 The firmware does not jump to the ROM bootloader from the running firmware.
 After the reply to the command, the firmware does these steps:
@@ -129,7 +129,7 @@ A key that is down at the reset gives the same boot request and reset.
 `src/boot/RomBootloader.cpp` and `src/initialize_hardware.cpp` have the code.
 
 The jump skips the secure firmware (SFSP) of the boot model Boot_V3_2 (AN2606 section 4.10).
-This is correct only with TrustZone disabled (`TZEN` off), the default of the NUCLEO-H533RE.
+This is correct only with TrustZone disabled (`TZEN` off), the default of a new STM32H5.
 If the jump fails on a board, set the boot address in the option bytes instead.
 
 ### Write the firmware with dfu-util
@@ -154,7 +154,7 @@ On Linux, `dfu-util` needs access to the device.
 `etc/70-versaloon-bootloader.rules` has a udev rule for `0483:df11` (see [Bootloader code](#bootloader-code)).
 
 The write erases only the sectors of the image.
-Thus a multi image keeps the stored personality in the last sector of bank 2, at `0x0807E000`.
+Thus a multi image keeps the stored personality in the last sector of bank 2, at `0x0803E000` on the STM32H523CC.
 
 ## Install the bootloader
 

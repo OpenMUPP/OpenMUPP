@@ -77,7 +77,7 @@ Thus single periods are up to about 12 % shorter or longer than requested at 1 M
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
 - The OtherUse and the WeAct STM32H523 are measured. The Mini has the same MCU, core clock and pins as the OtherUse.
-  The ST-Link/V2 and the NUCLEO-H533RE are not measured. The NUCLEO-H533RE has the same core and core clock as the WeAct STM32H523.
+  The ST-Link/V2 is not measured.
 
 ## Measurements
 

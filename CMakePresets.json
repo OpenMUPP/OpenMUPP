@@ -58,17 +58,6 @@
       }
     },
     {
-      "name": "board-nucleoh533",
-      "description": "Board nucleoh533",
-      "hidden": true,
-      "inherits": [
-        "base"
-      ],
-      "cacheVariables": {
-        "BOARD": "nucleoh533"
-      }
-    },
-    {
       "name": "board-weacth523",
       "description": "Board weacth523",
       "hidden": true,
@@ -333,45 +322,6 @@
       ]
     },
     {
-      "name": "nucleoh533",
-      "displayName": "NUCLEO-H533RE",
-      "inherits": [
-        "board-nucleoh533"
-      ]
-    },
-    {
-      "name": "nucleoh533-cmsis-dap",
-      "displayName": "NUCLEO-H533RE, CMSIS-DAP",
-      "inherits": [
-        "board-nucleoh533",
-        "personalities-cmsis-dap"
-      ]
-    },
-    {
-      "name": "nucleoh533-dual",
-      "displayName": "NUCLEO-H533RE, dual image",
-      "inherits": [
-        "board-nucleoh533",
-        "personalities-dual"
-      ]
-    },
-    {
-      "name": "nucleoh533-wch-link",
-      "displayName": "NUCLEO-H533RE, WCH-Link",
-      "inherits": [
-        "board-nucleoh533",
-        "personalities-wch-link"
-      ]
-    },
-    {
-      "name": "nucleoh533-debug",
-      "displayName": "NUCLEO-H533RE, Debug",
-      "inherits": [
-        "debug",
-        "board-nucleoh533"
-      ]
-    },
-    {
       "name": "weacth523",
       "displayName": "WeAct STM32H523",
       "inherits": [
@@ -504,26 +454,6 @@
     {
       "name": "stlinkv2-triple",
       "configurePreset": "stlinkv2-triple"
-    },
-    {
-      "name": "nucleoh533",
-      "configurePreset": "nucleoh533"
-    },
-    {
-      "name": "nucleoh533-cmsis-dap",
-      "configurePreset": "nucleoh533-cmsis-dap"
-    },
-    {
-      "name": "nucleoh533-dual",
-      "configurePreset": "nucleoh533-dual"
-    },
-    {
-      "name": "nucleoh533-wch-link",
-      "configurePreset": "nucleoh533-wch-link"
-    },
-    {
-      "name": "nucleoh533-debug",
-      "configurePreset": "nucleoh533-debug"
     },
     {
       "name": "weacth523",

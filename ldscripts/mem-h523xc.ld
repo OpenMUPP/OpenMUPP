@@ -1,6 +1,5 @@
 /*
  * Memory Spaces Definitions for STM32H523xC (WeAct STM32H523 core board).
- * As mem-h533.ld, with half the flash.
  *
  * The board has only the standalone image (CMakeLists.txt): no bootloader,
  * __vsl_app_offset is 0. __vsl_flash_slack and __vsl_settings_size work as
