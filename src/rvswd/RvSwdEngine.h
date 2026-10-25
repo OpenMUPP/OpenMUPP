@@ -284,6 +284,7 @@ class RvSwdEngine {
    void setClockHz(uint32_t hz) {
       clockHz_ = hz;
       halfCycles_ = halfPeriodCycles(pins_.coreHz(), hz);
+      pacer_.setHalfCycles(halfCycles_);
    }
 
    [[nodiscard]] uint32_t halfCycles() const {
@@ -410,7 +411,7 @@ class RvSwdEngine {
 
    // Waits for the end of the half period. An edge must follow.
    [[gnu::always_inline]] void waitHalfPeriod() {
-      pacer_.wait(pins_, halfCycles_);
+      pacer_.wait(pins_);
    }
 
    // The SWCLK edge after waitHalfPeriod()

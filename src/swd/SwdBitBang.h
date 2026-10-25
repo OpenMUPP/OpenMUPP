@@ -339,6 +339,7 @@ class BitBangPort final : public protocol::SwdPort {
 
    void setHalfCycles(uint32_t halfCycles, bool timed) {
       halfCycles_ = halfCycles;
+      pacer_.setHalfCycles(halfCycles);
       timed_ = timed;
    }
 
@@ -395,7 +396,7 @@ class BitBangPort final : public protocol::SwdPort {
    template <bool Timed>
    [[gnu::always_inline]] void waitHalfPeriod() {
       if constexpr(Timed) {
-         pacer_.wait(pins_, halfCycles_);
+         pacer_.wait(pins_);
       } else {
          static_assert(untimedPadNops == 6, "Change the NOP count below too");
          asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop");

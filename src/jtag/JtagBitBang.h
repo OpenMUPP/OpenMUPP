@@ -116,6 +116,7 @@ bool shiftBits(Pins &pins,
    // TCK is at its idle level since the end of the last shift.
    pacing::ClockPacer pacer;
    if constexpr(C == Clocking::Timed) {
+      pacer.setHalfCycles(timing.halfCycles);
       pacer.start(pins);
    }
    for(uint32_t done = 0; done < bitCount; done += 8) {
@@ -133,7 +134,7 @@ bool shiftBits(Pins &pins,
       for(uint32_t bit = 0; bit < bits; ++bit) {
          if constexpr(Idle == TckIdle::High) {
             if constexpr(C == Clocking::Timed) {
-               pacer.wait(pins, timing.halfCycles);
+               pacer.wait(pins);
             }
             pins.tck(false);
             if constexpr(C == Clocking::Timed) {
@@ -149,7 +150,7 @@ bool shiftBits(Pins &pins,
          tdiByte >>= 1;
          tmsByte >>= 1;
          if constexpr(C == Clocking::Timed) {
-            pacer.wait(pins, timing.halfCycles);
+            pacer.wait(pins);
          }
          tdoByte |= static_cast<uint32_t>(pins.tdo()) << bit;
          pins.tck(true);
@@ -165,7 +166,7 @@ bool shiftBits(Pins &pins,
          }
          if constexpr(Idle == TckIdle::Low) {
             if constexpr(C == Clocking::Timed) {
-               pacer.wait(pins, timing.halfCycles);
+               pacer.wait(pins);
             }
             pins.tck(false);
             if constexpr(C == Clocking::Timed) {
