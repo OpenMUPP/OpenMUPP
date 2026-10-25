@@ -32,10 +32,10 @@ bool JtagDp::select(uint8_t index) {
    return true;
 }
 
+// put() and run() clear only the bytes of the scan: a clear of all buffers
+// for each sequence took as long as the DMI frame of the RISC-V bridge
+// (#114).
 void JtagDp::start() {
-   tdi_.fill(0);
-   tms_.fill(0);
-   tdo_.fill(0);
    bits_ = 0;
 }
 
@@ -44,6 +44,10 @@ void JtagDp::put(uint32_t value, uint32_t count, bool tms) {
    for(uint32_t i = 0; i < count && bits_ < maxScanBits; ++i) {
       const std::size_t byte = bits_ / 8;
       const auto mask = static_cast<uint8_t>(1u << (bits_ % 8));
+      if(mask == 1u) {
+         tdi_[byte] = 0;
+         tms_[byte] = 0;
+      }
       if(i < 32 && ((value >> i) & 1u) != 0) {
          tdi_[byte] = static_cast<uint8_t>(tdi_[byte] | mask);
       }
@@ -65,6 +69,7 @@ void JtagDp::putOnes(uint32_t count, bool tms) {
 
 bool JtagDp::run() {
    const std::size_t bytes = protocol::jtagRaw::byteCount(bits_);
+   std::fill_n(tdo_.begin(), bytes, 0);
    return port_->shift(bits_, { tdi_.data(), bytes }, { tms_.data(), bytes }, { tdo_.data(), bytes });
 }
 
