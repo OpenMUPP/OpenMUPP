@@ -1,5 +1,6 @@
 #include "board/VrefScale.h"
 #include "board/boards/Mini.h"
+#include "board/boards/NucleoH533.h"
 #include "board/boards/OtherUse.h"
 #include "board/boards/StLinkV2.h"
 
@@ -7,14 +8,55 @@
 
 using board::Active;
 using board::Definition;
+using board::Family;
 using board::Pin;
 using board::Port;
 using board::Signal;
+
+namespace {
+
+constexpr Family F1 = Family::Stm32F1;
+constexpr Family H5 = Family::Stm32H5;
+
+// An STM32H5 board with the pin map of the NUCLEO-H533RE port (#89). It
+// tests the STM32H5 rules until the first STM32H5 board is in
+// src/board/boards/.
+constexpr Definition h5Board{
+   .name = "h5-test",
+   .hseFrequency = 24'000'000,
+   .family = H5,
+   .hardwareId = 0,
+   .debug{
+   .tck{ Port::B, 13 },
+   .tmsOut{ Port::A, 6 },
+   .tmsIn{ Port::A, 7 },
+   .tdi{ Port::B, 15 },
+   .tdo{ Port::B, 14 },
+   .trst = Pin{ Port::B, 4 },
+   .srst{ Port::B, 10 },
+   .rtck = Pin{ Port::A, 0 },
+   },
+   .jtagFastPath = board::JtagFastPath{ .tckLink{ Port::B, 3 } },
+   .uart = board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } },
+   .vref = board::VrefSense{ .pin{ Port::B, 0 }, .divider = 2 },
+   .powerSwitch = std::nullopt,
+   .leds{
+   .power = std::nullopt,
+   .state = Signal{ { Port::A, 5 }, Active::High },
+   .usb = std::nullopt,
+   },
+   .key = Signal{ { Port::C, 13 }, Active::High },
+   .usbPullUp = std::nullopt,
+};
+static_assert(board::isValid(h5Board));
+
+} // namespace
 
 TEST_CASE("Versaloon Mini board definition has the documented pins") {
    const Definition &mini = board::mini;
 
    CHECK(mini.name == "mini");
+   CHECK(mini.family == F1);
    CHECK(mini.hseFrequency == 12'000'000);
    CHECK(mini.hardwareId == 0x15);
 
@@ -37,7 +79,7 @@ TEST_CASE("Versaloon Mini board definition has the documented pins") {
 
    REQUIRE(mini.vref);
    CHECK(mini.vref->pin == Pin{ Port::B, 0 });
-   CHECK(board::adcChannelOf(mini.vref->pin) == 8);
+   CHECK(board::adcChannelOf(mini.family, mini.vref->pin) == 8);
    CHECK(mini.vref->divider == 2);
 
    REQUIRE(mini.powerSwitch);
@@ -67,6 +109,7 @@ TEST_CASE("ST-Link/V2 has an 8 MHz crystal and no JTAG fast path") {
    const Definition &stLink = board::stLinkV2;
 
    CHECK(stLink.name == "stlinkv2");
+   CHECK(stLink.family == F1);
    CHECK(stLink.hseFrequency == 8'000'000);
    CHECK(stLink.hardwareId == 0x38);
    CHECK_FALSE(stLink.hasJtagFastPath());
@@ -75,10 +118,40 @@ TEST_CASE("ST-Link/V2 has an 8 MHz crystal and no JTAG fast path") {
    CHECK_FALSE(stLink.usbPullUp);
 }
 
+TEST_CASE("NUCLEO-H533RE has the pin map of the H5 probe board") {
+   const Definition &nucleo = board::nucleoH533;
+
+   CHECK(nucleo.name == "nucleoh533");
+   CHECK(nucleo.family == board::Family::Stm32H5);
+   CHECK(nucleo.hseFrequency == 24'000'000);
+   CHECK(nucleo.debug.tck == Pin{ Port::B, 13 });
+   CHECK(nucleo.debug.tdi == Pin{ Port::B, 15 });
+   CHECK(nucleo.debug.tdo == Pin{ Port::B, 14 });
+   CHECK(nucleo.debug.tmsOut == Pin{ Port::A, 6 });
+   CHECK(nucleo.debug.tmsIn == Pin{ Port::A, 7 });
+   CHECK(nucleo.debug.trst == Pin{ Port::B, 4 });
+   CHECK(nucleo.debug.srst == Pin{ Port::B, 10 });
+   CHECK(nucleo.debug.rtck == Pin{ Port::A, 0 });
+   CHECK(nucleo.uart == board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } });
+   CHECK(nucleo.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 1 });
+   // LD2 and B1. PA5 is LD2, so the TCK link of the fast path is PB3.
+   CHECK(nucleo.leds.state == Signal{ { Port::A, 5 }, Active::High });
+   CHECK_FALSE(nucleo.leds.power);
+   CHECK_FALSE(nucleo.leds.usb);
+   CHECK(nucleo.key == Signal{ { Port::C, 13 }, Active::High });
+   CHECK_FALSE(nucleo.hasJtagFastPath());
+   CHECK_FALSE(nucleo.powerSwitch);
+   CHECK_FALSE(nucleo.usbPullUp);
+   // PB4 (NJTRST) is TRST: the debug port keeps SWD for the on-board ST-LINK
+   CHECK(board::swjConfig(nucleo) == board::SwjConfig::NoJtag);
+   CHECK(board::withSwd(nucleo) == nucleo);
+}
+
 TEST_CASE("All boards are valid") {
    CHECK(board::isValid(board::mini));
    CHECK(board::isValid(board::otherUse));
    CHECK(board::isValid(board::stLinkV2));
+   CHECK(board::isValid(board::nucleoH533));
 }
 
 TEST_CASE("isValid rejects pin conflicts") {
@@ -123,16 +196,107 @@ TEST_CASE("isValid checks the JTAG fast path pins") {
 }
 
 TEST_CASE("adcChannelOf gives the STM32F103 ADC channel of a pin") {
-   CHECK(board::adcChannelOf({ Port::A, 0 }) == 0);
-   CHECK(board::adcChannelOf({ Port::A, 7 }) == 7);
-   CHECK(board::adcChannelOf({ Port::B, 0 }) == 8);
-   CHECK(board::adcChannelOf({ Port::B, 1 }) == 9);
-   CHECK(board::adcChannelOf({ Port::C, 0 }) == 10);
-   CHECK(board::adcChannelOf({ Port::C, 5 }) == 15);
-   CHECK_FALSE(board::adcChannelOf({ Port::A, 8 }));
-   CHECK_FALSE(board::adcChannelOf({ Port::B, 2 }));
-   CHECK_FALSE(board::adcChannelOf({ Port::C, 6 }));
-   CHECK_FALSE(board::adcChannelOf({ Port::D, 0 }));
+   CHECK(board::adcChannelOf(F1, { Port::A, 0 }) == 0);
+   CHECK(board::adcChannelOf(F1, { Port::A, 7 }) == 7);
+   CHECK(board::adcChannelOf(F1, { Port::B, 0 }) == 8);
+   CHECK(board::adcChannelOf(F1, { Port::B, 1 }) == 9);
+   CHECK(board::adcChannelOf(F1, { Port::C, 0 }) == 10);
+   CHECK(board::adcChannelOf(F1, { Port::C, 5 }) == 15);
+   CHECK_FALSE(board::adcChannelOf(F1, { Port::A, 8 }));
+   CHECK_FALSE(board::adcChannelOf(F1, { Port::B, 2 }));
+   CHECK_FALSE(board::adcChannelOf(F1, { Port::C, 6 }));
+   CHECK_FALSE(board::adcChannelOf(F1, { Port::D, 0 }));
+}
+
+TEST_CASE("oneWireTimerOf gives a timer channel on the SWDIO output of each board") {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2 }) {
+      CAPTURE(def.name);
+      const auto timer = board::oneWireTimerOf(def.family, def.debug.tmsOut);
+      REQUIRE(timer);
+      CHECK(timer->channel != timer->sampleChannel);
+      CHECK(timer->updateDma != timer->sampleDma);
+   }
+   CHECK(board::oneWireTimerOf(F1, board::mini.debug.tmsOut)->timer == 3);
+   CHECK(board::oneWireTimerOf(F1, board::stLinkV2.debug.tmsOut)->complementary);
+   CHECK_FALSE(board::oneWireTimerOf(F1, { Port::A, 0 }));
+}
+
+TEST_CASE("adcChannelOf gives the STM32H5 ADC channel of a pin") {
+   // DS14539 table 14: all ADC pins of the 64-pin package
+   struct Expected {
+      Pin pin;
+      uint8_t channel;
+   };
+   constexpr Expected table[] = {
+      { { Port::A, 0 }, 0 },  { { Port::A, 1 }, 1 },  { { Port::A, 2 }, 14 }, { { Port::A, 3 }, 15 },
+      { { Port::A, 4 }, 18 }, { { Port::A, 5 }, 19 }, { { Port::A, 6 }, 3 },  { { Port::A, 7 }, 7 },
+      { { Port::B, 0 }, 9 },  { { Port::B, 1 }, 5 },  { { Port::C, 0 }, 10 }, { { Port::C, 1 }, 11 },
+      { { Port::C, 2 }, 12 }, { { Port::C, 3 }, 13 }, { { Port::C, 4 }, 4 },  { { Port::C, 5 }, 8 },
+   };
+   for(const auto &e : table) {
+      CAPTURE(static_cast<int>(e.pin.port));
+      CAPTURE(static_cast<int>(e.pin.number));
+      CHECK(board::adcChannelOf(H5, e.pin) == e.channel);
+   }
+   CHECK_FALSE(board::adcChannelOf(H5, { Port::A, 8 }));
+   CHECK_FALSE(board::adcChannelOf(H5, { Port::B, 2 }));
+   CHECK_FALSE(board::adcChannelOf(H5, { Port::C, 6 }));
+   CHECK_FALSE(board::adcChannelOf(H5, { Port::H, 0 }));
+}
+
+TEST_CASE("The STM32H5 has no one-wire timer yet") {
+   CHECK(board::oneWireTimerOf(F1, { Port::B, 4 }));
+   CHECK_FALSE(board::oneWireTimerOf(H5, { Port::B, 4 }));
+   CHECK_FALSE(board::oneWireTimerOf(H5, h5Board.debug.tmsOut));
+}
+
+TEST_CASE("The reserved crystal pins depend on the family") {
+   Definition def = board::stLinkV2;
+   def.key = Signal{ { Port::D, 0 }, Active::Low };
+   CHECK_FALSE(board::isValid(def));
+
+   def = h5Board;
+   def.key = Signal{ { Port::H, 1 }, Active::Low };
+   CHECK_FALSE(board::isValid(def));
+   // PD0 is a normal pin on the STM32H5
+   def.key = Signal{ { Port::D, 0 }, Active::Low };
+   CHECK(board::isValid(def));
+}
+
+TEST_CASE("isValid checks the STM32H5 rules") {
+   CHECK(board::isValid(h5Board));
+   Definition def = h5Board;
+
+   SUBCASE("JTAG fast path TMS on SPI1 MISO of the STM32H5 (PA6)") {
+      def.debug.tmsOut = Pin{ Port::B, 4 };
+      def.debug.trst = Pin{ Port::A, 6 };
+      CHECK_FALSE(board::isValid(def));
+      def.jtagFastPath.reset();
+      CHECK(board::isValid(def));
+   }
+   SUBCASE("crystal up to 50 MHz") {
+      def.hseFrequency = 50'000'000;
+      CHECK(board::isValid(def));
+      def.hseFrequency = 50'000'001;
+      CHECK_FALSE(board::isValid(def));
+   }
+   SUBCASE("no crystal") {
+      def.hseFrequency = 0;
+      CHECK(board::isValid(def));
+   }
+   SUBCASE("Vref pin with an ADC channel") {
+      // PC4 is ADC channel 4, PA8 has no ADC input.
+      def.vref->pin = Pin{ Port::C, 4 };
+      CHECK(board::isValid(def));
+      def.vref->pin = Pin{ Port::A, 8 };
+      CHECK_FALSE(board::isValid(def));
+   }
+}
+
+TEST_CASE("swjConfig is the same on the STM32H5") {
+   // PB3 (TCK link) and PB4 (TRST) are JTAG-DP pins: SWD stays on.
+   CHECK(board::swjConfig(h5Board) == board::SwjConfig::NoJtag);
+   CHECK(board::withSwd(h5Board) == h5Board);
 }
 
 TEST_CASE("isValid checks the crystal and the Vref pin") {
@@ -140,6 +304,9 @@ TEST_CASE("isValid checks the crystal and the Vref pin") {
 
    SUBCASE("crystal too fast") {
       def.hseFrequency = 25'000'000;
+   }
+   SUBCASE("no crystal on an STM32F103") {
+      def.hseFrequency = 0;
    }
    SUBCASE("Vref pin without an ADC channel") {
       def.vref->pin = Pin{ Port::A, 8 };

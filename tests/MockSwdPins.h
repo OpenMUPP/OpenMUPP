@@ -29,7 +29,7 @@
 #include <deque>
 #include <vector>
 
-#include "protocol/SwdBlock.h"
+#include "protocol/SwdPort.h"
 
 namespace vsltest {
 

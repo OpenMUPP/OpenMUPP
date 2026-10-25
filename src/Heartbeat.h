@@ -8,10 +8,13 @@
 
 #include <cstdint>
 
+#include "IntDiv.h"
+
 class Heartbeat {
    public:
    struct Pattern {
-      uint32_t periodMs;
+      // 16 bits: intdiv::mod() needs no 64-bit division
+      uint16_t periodMs;
       uint32_t onMs;
    };
 
@@ -25,7 +28,7 @@ class Heartbeat {
 
    // True when the LED is on at the uptime nowMs.
    [[nodiscard]] constexpr bool isOn(uint64_t nowMs) const {
-      return nowMs % pattern.periodMs < pattern.onMs;
+      return intdiv::mod(nowMs, pattern.periodMs) < pattern.onMs;
    }
 
    private:

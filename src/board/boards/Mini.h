@@ -9,6 +9,7 @@ namespace board {
 inline constexpr Definition mini{
    .name = "mini",
    .hseFrequency = 12'000'000,
+   .family = Family::Stm32F1,
    // MiniRelease1 in the original Versaloon firmware
    .hardwareId = 0x15,
    .debug{

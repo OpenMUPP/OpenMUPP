@@ -4,7 +4,8 @@
 // (rvswd/RvSwdEngine.h). Target only. The pins of the SWD engine
 // (board/BoardSwd.h): SWCLK is the TCK pin, SWDIO the TMS pins. The
 // one-wire interface of the CH32V00x uses SWDIO only. The idle level of
-// SWCLK is low, and the interrupt lock is PRIMASK.
+// SWCLK is low, and the interrupt lock is PRIMASK. A one-wire frame runs
+// on the timer of board::oneWireTimerOf() with two DMA1 channels.
 
 #include <cmsis_device.h>
 #include <cstdint>
@@ -17,8 +18,13 @@ namespace board {
 
 class RvSwdPins : public SwdPins {
    public:
-   // SWCLK output low, SWDIO driven high
+   // SWCLK output low, SWDIO driven high, the one-wire timer and DMA set up
    void init();
+   // SWCLK and SWDIO inputs, the one-wire timer reset
+   void fini();
+
+   // See rvswd/RvSwdEngine.h. Call it with the interrupts locked.
+   bool oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t &samples);
 
    [[gnu::always_inline]] uint32_t lockIrq() {
       const uint32_t primask = __get_PRIMASK();

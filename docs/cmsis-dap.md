@@ -4,7 +4,7 @@ This document describes the CMSIS-DAP v2.1 command processor for SWD and JTAG.
 The code is in `src/protocol/cmsisdap/`.
 `usb::CmsisDapFunction` (`src/usb/CmsisDapFunction.h`) moves the packets over USB.
 See the [CMSIS-DAP personality](usb-device.md#cmsis-dap-personality).
-The build option `VSL_PROTOCOL=cmsis-dap` puts the function and the processor into the firmware image (see [Build](#build)).
+The build option `VSL_PERSONALITIES` with `cmsis-dap` puts the function and the processor into the firmware image (see [Build](#build)).
 
 ## Build
 
@@ -15,10 +15,10 @@ cmake --preset mini-cmsis-dap
 cmake --build --preset mini-cmsis-dap -j
 ```
 
-Or set the CMake option `VSL_PROTOCOL` to `cmsis-dap`:
+Or set the CMake option `VSL_PERSONALITIES` to `cmsis-dap`:
 
 ```sh
-cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DVSL_PROTOCOL=cmsis-dap
+cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DVSL_PERSONALITIES=cmsis-dap
 cmake --build build/mini-dap -j
 ```
 
@@ -26,7 +26,7 @@ The default value is `versaloon`.
 The default image does not change.
 The build then writes `versaloon-ng-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
-All boards build with both values.
+All boards build with this value.
 
 The `cmsis-dap` image has these properties:
 
@@ -37,8 +37,9 @@ The `cmsis-dap` image has these properties:
   On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
 
 A `cmsis-dap` image has only this personality.
-A `dual` image (`VSL_PROTOCOL=dual`) has both personalities.
-Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, or with the key (see [Dual image](usb-device.md#dual-image)).
+A multi image has `cmsis-dap` and other personalities, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
+Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, with the switch request on EP0, or with the key (see [Multi image](usb-device.md#multi-image)).
+The switch request on EP0 and the request of the MS OS 2.0 descriptor set use the same handler (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
 
 ## Limits
 
@@ -48,13 +49,15 @@ Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Ve
   Else the next scan has an extra TCK edge or a missing TCK edge.
   The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
-- No SWO and no `DAP_UART_*` commands. Use the CDC-ACM serial port for the UART.
+- No SWO.
+- The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
+- A `VSL_DEBUG_CDC` build has no UART bridge and no `DAP_UART_*` commands.
 - On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
 - No target power switch and no Vref sense in this personality.
 - The LEDs show the target power, the command activity, the probe errors and the USB state. `DAP_HostStatus` does not change them. See [boards.md](boards.md#start-up-and-leds).
-- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs on JTAG, Windows (also the driverless WinUSB binding), the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
+- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs passed on JTAG at 1000 kHz in the multi image test (see [usb-device.md](usb-device.md#multi-image-hardware-test)). Windows (also the driverless WinUSB binding), the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
 
 ## Use the probe
 
@@ -103,15 +106,18 @@ Use `probe-rs list` and then `probe-rs info`.
 | `DapSwd.h` | The interface of the SWD engine, as the processor needs it. |
 | `BitBangDapSwd.h` | The adapter from `DapSwd` to the SWD bit-bang engine (`swd::BitBangPort`). |
 | `DapJtag.h`, `DapJtag.cpp` | The JTAG-DP: the device chain, the IR and DR scans, and the transfers on a JTAG port. |
+| `DapUart.h` | The interface of the UART, as the `DAP_UART_*` commands need it. |
+| `src/uart/DapUartChannel.h` | The `DapUart` on the UART of the UART bridge, and the owner switch between the serial port and the DAP commands. |
 
 The processor has no CMSIS header and no hardware header.
 It uses these objects:
 
 - A `DapSwd` for the SWD transfers and sequences.
 - A `protocol::JtagPort` (`src/protocol/JtagPort.h`, on target `board::BoardJtag`) for JTAG. It is optional.
-- A `protocol::GpioPins` (on target `board::BoardGpio`) for `DAP_SWJ_Pins` and `DAP_ResetTarget`.
+- A `protocol::GpioPins` (`src/protocol/GpioPins.h`, on target `board::BoardGpio`) for `DAP_SWJ_Pins` and `DAP_ResetTarget`.
 - A `Platform` for the microsecond time, the delay and the LEDs.
 - A `DeviceInfo` with the strings and the capabilities of `DAP_Info`.
+- A `DapUart` (`DapUart.h`, on target `uart::DapUartChannel`) for the `DAP_UART_*` commands. It is optional.
 
 ## Transport
 
@@ -123,7 +129,7 @@ Between two packets, `UsbStack::poll()` delivers the USB events again.
 Thus the InComplete event of the last response frees the IN endpoint, and the next response goes out while the next packet runs.
 This loop has no limit. It ends only when no packet is stored after an event delivery.
 A host that sends packets in a pipeline (pyOCD, OpenOCD) keeps a packet stored during a long memory read or a flash download.
-During that time, the rest of the main loop does not run: the LEDs do not change, the key gesture of the dual image waits, and the debug log waits.
+During that time, the rest of the main loop does not run: the LEDs do not change, the key gesture of a multi image waits, and the debug log waits.
 The serial service still runs during the commands, so the UART bridge loses no data.
 Before E6, the commands ran inside the event delivery, with the same effect.
 Thus the OUT endpoint stays armed while a command runs, if a slot is free.
@@ -157,7 +163,13 @@ Each packet without a response takes one of the 4 slots.
 | `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
 | `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
 | `0x1D` | `DAP_SWD_Sequence` | Replies an error when SWD is not connected. |
-| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a dual image: `[0x80][personality u8]`. The personality is `0` (Versaloon) or `1` (CMSIS-DAP). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for another personality code. The firmware then stores the personality and resets. An image with one personality replies `ID_DAP_Invalid`. See [Dual image](usb-device.md#dual-image). |
+| `0x1F` | `DAP_UART_Transport` | `0` none, `1` USB COM port (the default), `2` DAP commands. See [UART commands](#uart-commands). |
+| `0x20` | `DAP_UART_Configure` | Data bits, parity, stop bits and baud rate. The response has the error bits and the real baud rate. |
+| `0x21` | `DAP_UART_Transfer` | Sends and receives UART data. Up to 59 bytes to send and 58 bytes to receive in one packet. |
+| `0x22` | `DAP_UART_Control` | Enables, disables and flushes the receiver and the transmitter. |
+| `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
+| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image other than `app-8k` replies `0xFF` to it. An image with one personality that is not `app-8k` replies `ID_DAP_Invalid` to each code. See [Multi image](usb-device.md#multi-image). |
+| `0x81` | `ID_DAP_Vendor1` | Only in an image with `VSL_CMSIS_DAP_RV_BRIDGE`: switches the RISC-V bridge, `[0x81][on u8]`, `1` on, `0` off. The response is `[0x81][status u8]`: `0` when the switch is done, `0xFF` for another value. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
@@ -165,8 +177,9 @@ An unknown command replies `ID_DAP_Invalid` (`0xFF`).
 The status of a command is `DAP_OK` (`0x00`) or `DAP_ERROR` (`0xFF`), as in the specification.
 Each "replies an error" in the table means the status `0xFF`.
 `DAP_Connect` is the exception: it replies port `0` for a failure.
-The UART commands come with their own work item.
-The capabilities in `DAP_Info` show SWD, JTAG and atomic commands.
+The capabilities in `DAP_Info` show SWD, JTAG, atomic commands, the UART port and the USB COM port.
+`DAP_Info` also gives the size of the UART receive buffer (`0xFB`) and transmit buffer (`0xFC`).
+A processor without a `DapUart` does not show the UART, and the `DAP_UART_*` commands then reply `ID_DAP_Invalid`.
 A processor without a JTAG port does not show JTAG, and `DAP_Connect` to JTAG then replies 0 (failed).
 
 The transfer commands follow the reference implementation of Arm.
@@ -208,6 +221,77 @@ The other commands of the packet run, for example in `DAP_ExecuteCommands`.
 
 When the host goes away, the transport calls `hostGone()`.
 It disconnects, releases the pins, and drops the queued packets and the responses that the transport did not send.
+
+## UART commands
+
+The `DAP_UART_*` commands of CMSIS-DAP v2.1 give access to the UART of the board.
+They use the same UART and the same two ring buffers of 1 KB as the [UART bridge](uart-bridge.md).
+`DAP_Info` thus reports 1023 bytes for each buffer.
+
+`DAP_UART_Transport` selects the owner of the UART:
+
+| Value | Owner | Note |
+|---|---|---|
+| `0` | None | The firmware discards the received data. |
+| `1` | USB COM port | The default. The UART bridge moves the data. |
+| `2` | DAP commands | `DAP_UART_Configure`, `_Control`, `_Status` and `_Transfer` move the data. |
+
+Only the owner gets data.
+While the DAP commands own the UART, the bridge discards the data from the serial port, and it sends no data to the serial port.
+While the serial port owns the UART, the DAP commands send and receive no data.
+A change of the owner stops the transmitter and empties both ring buffers.
+Thus no data of one side goes to the other side.
+The byte in the shift register of the UART still goes out.
+When the serial port gets the UART again, the UART gets the line coding of the serial port again.
+A line coding that the host sets on the serial port in the meantime is kept.
+
+When the DAP commands get the UART, it is not configured, and the receiver and the transmitter are disabled.
+Send these commands first:
+
+1. `DAP_UART_Transport` `2`.
+2. `DAP_UART_Configure` with the frame format and the baud rate.
+3. `DAP_UART_Control` `0x11` to enable the receiver and the transmitter.
+
+`DAP_UART_Configure` uses the control byte of the CMSIS-Driver USART interface:
+
+| Bits | Field | Values |
+|---|---|---|
+| 3..0 | Data bits | `0` or `8`: 8 data bits. `7`: 7 data bits. |
+| 5..4 | Parity | `0` none, `1` even, `2` odd. |
+| 7..6 | Stop bits | `0` 1 stop bit, `1` 2 stop bits, `2` 1.5 stop bits. |
+
+The formats are the formats of the UART bridge (see [UART bridge](uart-bridge.md)).
+7 data bits need a parity bit.
+Other values set the error bit of their field: bit 0 data bits, bit 1 parity, bit 2 stop bits.
+The baud rate has the same limits as in the UART bridge.
+A baud rate out of these limits gives no error bit, but the response baud rate is 0, as in the reference implementation of Arm.
+Else the response has the real baud rate of the UART, for example 230032 for 230400 baud.
+A configuration that fails disables the receiver and the transmitter.
+
+The UART gets a new format when the transmit buffer is empty and the last byte is sent.
+Until then, `DAP_UART_Transfer` takes no data to send and gives no received data, and the receive count of `DAP_UART_Status` is 0.
+At the change, the firmware discards the bytes that the UART received in the old format.
+The errors before the change are not reported.
+
+Other rules:
+
+- `DAP_UART_Control` enables the receiver or the transmitter only after a configuration. Else it replies an error.
+- A disable bit has priority over its enable bit.
+- An enable of the receiver empties the receive buffer.
+- A disable or a flush of the transmitter discards the bytes that are not sent yet.
+- While the receiver is disabled, the firmware discards the received data.
+- The status has these bits: bit 0 receiver enabled, bit 1 data lost, bit 2 framing error, bit 3 parity error, bit 4 transmitter enabled.
+- "Data lost" includes the bytes that the full receive buffer dropped and the overruns of the UART. "Framing error" includes the noise errors.
+- Each error bit shows the errors since the last read of the status, the last enable of the receiver or the last format change. `DAP_UART_Status` and `DAP_UART_Transfer` read the status.
+- The UART receives also while the receiver is disabled. The errors of that time are not reported.
+- `DAP_UART_Transfer` takes the bytes that fit in the transmit buffer, and gives the received bytes that fit in the response.
+  The response gives the status after the transfer.
+- A `DAP_UART_Transfer` with a Tx Count that is larger than its data gives `ID_DAP_Invalid`.
+- While the serial port owns the UART, `DAP_UART_Configure` replies all error bits and baud rate 0. `DAP_UART_Control` replies an error. The status and the counts are 0.
+- When the host goes away (USB reset or unconfigure), the serial port gets the UART again.
+  A host tool that ends without this event must send `DAP_UART_Transport` `1` itself.
+
+`tools/dap_uart_loopback_test.py` tests the commands with a loopback wire from TX to RX (see [UART hardware test](#uart-hardware-test)).
 
 ## SWD engine rules
 
@@ -260,6 +344,163 @@ Each DR scan of a transfer ends with the idle cycles of `DAP_TransferConfigure`.
 These commands make the next transfer write the IR again: `DAP_Connect`, `DAP_JTAG_Configure`, a sequence command and `DAP_SWJ_Pins`.
 A transfer to another device also writes the IR again.
 
+## RISC-V DTM bridge
+
+Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is not done yet.
+Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
+
+The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
+The host sees a CMSIS-DAP adapter in JTAG mode, with one RISC-V Debug Transport Module (DTM) on the chain.
+`cmsisdap::RvDtmTap` (`src/protocol/cmsisdap/RvDtmTap.h`) is a JTAG port without pins.
+It follows the TMS and TDI bits of `DAP_JTAG_Sequence` and `DAP_SWJ_Sequence`.
+It does each DMI access on the WCH wire (one wire or two wires), with the wire engine of the `wch-link` personality.
+
+| IR (5 bits) | Register | Content |
+|---|---|---|
+| `0x01` | IDCODE | `0x15653101` |
+| `0x10` | DTMCS | `version` 1 (debug spec 0.13), `abits` 7, `idle` 0, `dmistat` |
+| `0x11` | DMI (41 bits) | `address[40:34]`, `data[33:2]`, `op[1:0]` |
+| Others | BYPASS | 1 bit |
+
+### Build
+
+The CMake option `VSL_CMSIS_DAP_RV_BRIDGE` (default `OFF`) adds the bridge to the `cmsis-dap` personality.
+It needs `VSL_PERSONALITIES=cmsis-dap`: the configure step stops with an error for another set of personalities, also for a multi image.
+It needs an STM32F1 board, because the one-wire engine uses the timers and DMA1 of the STM32F1.
+The image tag ends with `-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-rv-bridge-app-10k-Release-<version>.bin`.
+The presets `mini-cmsis-dap-rv-bridge` and `otheruse-cmsis-dap-rv-bridge` set the option:
+
+```sh
+cmake --preset mini-cmsis-dap-rv-bridge
+cmake --build --preset mini-cmsis-dap-rv-bridge -j
+```
+
+The bridge adds about 6.4 KB to the image: the `app-10k` image of the Mini is 38,240 of 55,296 bytes.
+
+### OpenOCD configs
+
+`etc/openocd/` has a config for each target family:
+
+| Config | Targets | Wire | `WORKAREASIZE` default |
+|---|---|---|---|
+| `ch32v003-cmsis-dap.cfg` | CH32V003 | One wire | `0x800` (2 KB) |
+| `ch32v00x-cmsis-dap.cfg` | CH32V002, CH32V004, CH32V005, CH32V006, CH32V007 | One wire | `0x1000` (4 KB, the CH32V002) |
+| `ch32v20x-cmsis-dap.cfg` | CH32V20x | Two wires | `0x2800` (10 KB, the CH32V203x6) |
+
+Each config sources `ch32v-cmsis-dap-bridge.cfg`. This file selects the adapter (`0403:9b3c`, JTAG) and creates the TAP and the `riscv` target.
+The work area starts at `0x20000000`, without backup.
+The default `WORKAREASIZE` is the RAM of the smallest part. Set the RAM of your part before the config, for example 8 KB on the CH32V006:
+
+```sh
+openocd -c "set WORKAREASIZE 0x2000" -f etc/openocd/ch32v00x-cmsis-dap.cfg
+```
+
+The common file replaces the `jtag_init` proc of OpenOCD. The proc sends `cmsis-dap cmd 0x81 0x01` before the chain scan.
+A TAP `setup` event is too late: OpenOCD sends it after the chain scan.
+An image without the bridge replies `ID_DAP_Invalid`. OpenOCD logs the cause of the failure.
+Then `init` stops with "The probe has no RISC-V bridge".
+The proc also adds `cmsis-dap cmd 0x81 0x00` to `pre_shutdown_commands`. Thus `shutdown` switches the bridge off before OpenOCD closes the adapter.
+Ctrl-C and SIGTERM also run `shutdown`.
+An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
+Switch the bridge off with `python3 tools/vsl_rv_bridge.py off`, or replug the probe.
+The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
+The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
+The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (#110).
+
+Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, OtherUse with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
+The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
+The CH32V003 and CH32V20x configs are not tested on hardware.
+
+### Bridge switch
+
+The vendor command `ID_DAP_Vendor1` (`0x81`) switches the bridge: `81 01` on, `81 00` off.
+The response is `81 00`.
+
+- The bridge is off at power-up, after a USB reset and after `81 00`.
+  Then the JTAG commands use the JTAG port of the board, as in an image without the bridge.
+- When the bridge is on, `DAP_Connect` to JTAG, `DAP_JTAG_Sequence`, `DAP_SWJ_Sequence` and the JTAG transfers use the emulated TAP.
+  SWD (`DAP_Connect` to SWD) does not change.
+- A switch while JTAG is connected stops the old port and starts the new one at once.
+  The TAP state and the IR of the new port are not known, as after `DAP_SWJ_Pins`.
+- The switch off releases SWCLK and SWDIO, and resets the timer of the one-wire engine.
+  The JTAG fast path uses the same pin (PB4) and DMA1 channel 3.
+  The release goes in both directions: the `fini()` of the JTAG fast path clears the DMA requests of SPI1 and SPI2.
+  The one-wire timer shares DMA1 channel 3 (TIM3) or channel 5 (TIM1) with them.
+  The `fini()` also removes the SPI1 remap. A disabled SPI1 with the remap still owns PB4 (MISO), and blocks the TIM3_CH1 output of the one-wire engine.
+  A CH32V006 test on 2026-10-24 showed this: with the remap, the one-wire frames sent no bits after the line reset.
+- `DAP_SWJ_Clock` sets the TCK of the board port also while the bridge is on. The wire has its own clock: the high speed of the `wch-link` personality.
+
+OpenOCD sends the command with `cmsis-dap cmd 0x81 0x01`.
+probe-rs cannot send a vendor command (#103, decision 7). Send the command with `tools/vsl_rv_bridge.py` before probe-rs starts:
+
+```sh
+python3 tools/vsl_rv_bridge.py on
+probe-rs info --protocol jtag
+python3 tools/vsl_rv_bridge.py off
+```
+
+The bridge stays on until a USB reset, a power cycle or `81 00`.
+The OpenOCD configs send `81 00` at `shutdown` and after Ctrl-C, but not after an error in a `-c` command.
+Thus probe-rs must not reset the USB device when it opens it. The hardware test (#109) checks this.
+
+### Connect
+
+The first DMI access after one of these events connects to the target:
+
+- `DAP_Connect` to JTAG, or the bridge switch on while JTAG is connected
+- Test-Logic-Reset of the TAP
+- `DAP_SWJ_Pins` with SWCLK or SWDIO selected
+
+The connect finds the wire: one wire first, then two wires, as the connect of the `wch-link` personality.
+After a connect on two wires, the next connect tries two wires first.
+On each wire, it writes `5aa50400` to the DM registers `0x7e` and `0x7d`, and reads `dmstatus`.
+A `dmstatus` with the version of debug spec 0.13 selects the wire.
+The CH32V006 answers on one wire only.
+The connect does not halt the hart, and it does no clock setup (unlike the `wch-link` connect of the CH32V00X).
+OpenOCD and the flash driver own the target state.
+
+The connect is at the first DMI access, not at the switch or at `DAP_Connect`.
+A test image attached at boot, and the first DMI access then failed ([Connect](cmsis-dap-captures/README.md#connect)).
+A connect that fails on both wires gives `op` 2 and the sticky error (see [DMI errors](#dmi-errors)).
+After `dmireset`, the next access tries the connect again.
+
+### IDCODE
+
+The IDCODE is `0x15653101`: version 1, part `0x5653` ("VS"), and a manufacturer code with continuation code 1 and ID 0.
+
+- JEP106 assigns no ID 0. Thus no real part has this manufacturer code, and no tool shows a manufacturer name for it. OpenOCD shows `<invalid>`.
+- probe-rs 0.32.0 rejects an IDCODE whose 11-bit manufacturer field (bits 11:1) is 0 or `0x7F` (`IdCode::valid()`). The field of this IDCODE is `0x80`. A capture with the first value, `0x15653001` (field 0), showed the rejection.
+- WCH has no JEP106 manufacturer code. The WCH fork of OpenOCD uses `0x00001` for its targets, which probe-rs rejects.
+- OpenOCD accepts each IDCODE. The [OpenOCD configs](#openocd-configs) give this value with `-expected-id`.
+
+### DMI errors
+
+The bridge follows the debug spec 0.13 (section 6.1.5):
+
+- A failed access gives `op` 2 at the next Capture-DR, and sets a sticky error.
+- While the error is set, the bridge starts no access. DTMCS `dmistat` reads 2.
+- `dmireset`, `dmihardreset` and Test-Logic-Reset clear the error.
+- `op` 3 (busy) never occurs.
+
+probe-rs reports `op` 2 as an error (`DtmOperationFailed`).
+Mainline OpenOCD checks `op` 2 only in its batch memory read, and sends `dmireset` only after `op` 3.
+Thus, with OpenOCD, a failed single access looks like a success.
+After it, the sticky error blocks all accesses until Test-Logic-Reset, and OpenOCD does not log the cause.
+A capture on 2026-10-24 (CH32V208, two wires, a test image) shows this: the first DMI read failed, and OpenOCD then read `dmcontrol` for 5 s ([openocd-ch32v208-attach-at-boot.pcapng](cmsis-dap-captures/openocd-ch32v208-attach-at-boot.pcapng)).
+That access failed because the test image called `attach()` at boot, not because of a wire error ([Connect](cmsis-dap-captures/README.md#connect)).
+The [unplug capture](cmsis-dap-captures/README.md#errors) shows the same limit with a real wire error.
+On one wire, a frame without an answer of the target reads `ffffffff` and gives `op` 0, not `op` 2 ([One wire](cmsis-dap-captures/README.md#one-wire)).
+Thus the host sees data that the target did not send. The planned changes below do not cover this yet.
+
+Planned changes (#103):
+
+- The firmware retries a wire access 2 or 3 times before `op` 2, but only when the target did not run the access. Examples: a two-wire frame without the handshake of the target at bit 11, or a one-wire frame that did not start.
+- A read with a parity error, or a one-wire line that stays low, gives `op` 2 at once. A second access can have side effects, for example on `command`, on `data0` with `abstractauto`, or on `sbdata0`.
+- A patch for mainline OpenOCD makes `dmi_read()` and `dmi_write()` check `op` 2.
+
+The bridge does not report a wire failure as `op` 3.
+OpenOCD would then repeat accesses that the target already ran, and a permanent failure would stay hidden until a timeout.
+
 ## Tests
 
 `tests/TestCmsisDap.cpp` runs the processor on the real SWD bit-bang engine, with the mock SWD target of `tests/MockSwdPins.h`.
@@ -271,6 +512,26 @@ One device of the chain is a JTAG-DP with a memory AP.
 The tests cover the JTAG commands, IDCODE, DPACC and APACC reads and writes, posted reads, WAIT, value match, block transfers, ABORT and chains with more than one device.
 Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.
 One test sends the abort during the WAIT retries of one SWD transfer, from the serial service of the engine.
+
+`tests/TestRvDtmTap.cpp` runs the emulated TAP of the RISC-V bridge (`src/protocol/cmsisdap/RvDtmTap.h`, #103).
+The TAP is a JTAG port without pins: it follows TMS and TDI and gives TDO.
+It has a 5-bit IR, IDCODE, DTMCS (`version` 1, `abits` 7), DMI and BYPASS.
+Update-DR of the DMI register does the access on the wire, with the wire engine of the `wch-link` personality (`wchlink::Target`).
+The next Capture-DR gives the result: `op` 0 (success) or 2 (failed).
+A failed access sets a sticky error. `dmireset`, `dmihardreset` and Test-Logic-Reset clear it.
+The tests check the TAP state machine and each register.
+They run the DMI accesses on the wire engine with mock pins and the mock DM, on one wire and on two wires: read, write, failure and reset.
+They also send the requests of the OpenOCD and probe-rs captures (`tests/replay/dap-*.trace`) through the processor, with the TAP as its JTAG port.
+The scan chain rules of OpenOCD (`jtag_examine_chain()`, `jtag_validate_ircapture()`) and the DR length of probe-rs must pass on the replies.
+Other tests check the connect: the wire, the unlock writes, no halt, a connect without a target, and the connect again after each event.
+
+`tests/TestRvBridge.cpp` runs the bridge switch (`src/protocol/cmsisdap/RvBridge.h`) on a fake board port and the TAP.
+The tests check the default port, the switch with and without a connection, the TCK of the board port and the pin release.
+They also run `ID_DAP_Vendor1` through the processor, the switch off at `hostGone()`, and `DAP_SWJ_Pins` on SWCLK and SWDIO.
+
+`tests/TestDapUart.cpp` runs `uart::DapUartChannel` with the real CDC-ACM function, the UART bridge and a fake UART.
+The tests cover the owner switch, the frame formats, the receiver and transmitter control, the status bits and the buffer limits.
+They also run the `DAP_UART_*` commands and `DAP_Info` through the processor.
 
 ## Hardware test
 
@@ -405,3 +666,44 @@ Findings:
 - The probe re-enumerated once on the USB bus, about 2 minutes after the firmware started (device number 7 to 8). The first OpenOCD tries failed with "No such device" in that time. It then stayed on device number 8 for the rest of the test. The cause is not known. A second run did not repeat it.
 - The probe-rs JTAG test is not done. The issue asks for OpenOCD and pyOCD only.
 
+## UART hardware test
+
+`tools/dap_uart_loopback_test.py` tests the `DAP_UART_*` commands on the dongle.
+pyOCD, OpenOCD and probe-rs do not use these commands, so the script sends them directly on interface 0.
+It needs the pyusb Python package and Python 3.
+
+1. Write a `cmsis-dap` image or a multi image with `cmsis-dap`, and select the CMSIS-DAP personality.
+2. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini and the OtherUse).
+3. Run the script:
+
+```sh
+python3 tools/dap_uart_loopback_test.py
+python3 tools/dap_uart_loopback_test.py --serial-port /dev/ttyACM0
+```
+
+The script gets the UART with `DAP_UART_Transport` `2`.
+For each baud rate and frame format, it sends a byte pattern with `DAP_UART_Transfer` and compares the echo.
+A test fails when a byte is wrong or missing, or when the status shows lost data, a framing error or a parity error.
+At most half of a ring buffer is on the way, so the receive buffer does not overflow.
+At the end, the script gives the UART back to the serial port.
+With `--serial-port`, the script also checks that the serial port gets no data during the tests.
+
+The default run tests the baud rates from 9600 to 2000000 baud, and the formats 8N1, 8E1, 8O1, 7E1, 7O1, 8N2 and 8N1.5.
+Useful options: `--bauds`, `--formats`, `--size`, `--repeat` and `--serial`.
+
+The unit tests of the script need no pyusb and no hardware:
+
+```sh
+python3 -m unittest discover -s tools -p "test_*.py"
+```
+
+Status: the host tests pass. The hardware test passed on 2026-10-15.
+Probe: OtherUse board with the 10k bootloader, `app-10k` image of the `otheruse-cmsis-dap` preset, build `v0.9.0-42-g52e32da`.
+The UART TX pin was connected to the UART RX pin (PA9 to PA10).
+The run used `--serial-port /dev/ttyACM0`.
+All 70 cases passed: the baud rates from 57600 to 2000000 baud, each with the seven frame formats.
+The serial port got no data while the DAP commands owned the UART.
+A 256 KiB flash with OpenOCD (SWD, 2000 kHz) and the serial loopback test on the COM port ran at the same time.
+Both passed.
+The SWD and JTAG checks with OpenOCD, pyOCD and probe-rs still passed on this firmware.
+The `DAP_UART_*` commands and a flash on the same DAP interface did not run at the same time.

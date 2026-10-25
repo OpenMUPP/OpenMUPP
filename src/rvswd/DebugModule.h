@@ -7,15 +7,15 @@
 // with mock pins and a mock DM (tests/MockDebugModule.h).
 //
 // The sequences come from the WCH-LinkE captures (docs/wch-link-protocol.md,
-// "Probe actions" and "Debug module layer"):
+// "Probe actions", and docs/wch-link.md, "Debug module layer"):
 //
 // - DM reset: dmcontrol 0, then dmactive (wlink halt).
 // - Halt: dmcontrol haltreq twice, then dmstatus until allhalted (the
 //   connect command of the probe). haltreq stays set, as on the probe:
 //   the host tools read dmcontrol 80000001 after a connect.
-// - Resume: dmcontrol resumereq, then dmstatus until allresumeack or
-//   allrunning (the first two accesses of the quit command of the probe).
-//   The write also clears haltreq. A resumereq to a running hart clears
+// - Resume: dmcontrol dmactive (clears haltreq), dmcontrol resumereq, then
+//   dmstatus until allresumeack or allrunning (wlink resume). The CH32V006
+//   ignores a resumereq in the write that clears haltreq. A resumereq to a running hart clears
 //   allresumeack and sets nothing (debug spec), so allrunning also ends
 //   the poll. The quit of the probe also writes dmcontrol 40000000
 //   (dmactive 0) after the poll. resume() does not do that write.
@@ -55,7 +55,10 @@
 // with bit 11 and bit 49 high (the pull-up, no target drives) gives
 // Status::NoTarget. A frame with bit 49 high only (the target dropped the
 // frame) gives Status::Wire. One wire: a frame without a target
-// reads 0xffffffff. Thus each dmstatus read checks the version field
+// reads 0xffffffff when a pull-up holds the line high (the Mini and the
+// OtherUse: the SWDIO input pin; the ST-Link/V2 has no pull-up on the
+// line in a read bit, so a read can give other values). Thus each
+// dmstatus read checks the version field
 // (2: spec 0.13), else Status::NoTarget. Other accesses do not detect a
 // missing target on one wire: dmiRead() gives 0xffffffff with Status::Ok,
 // and an abstract command reads abstractcs ffffffff (busy) and ends with
@@ -168,7 +171,8 @@ inline constexpr uint8_t cmderrException = 3;
 
 enum class Status : uint8_t {
    Ok,
-   // The engine returned flags: parity error or line low.
+   // The engine returned flags: parity error, line low, or a frame that
+   // the timer did not end.
    Wire,
    // No target answers (see above).
    NoTarget,
@@ -281,7 +285,12 @@ class DebugModule {
    }
 
    Status resume() {
-      const Status status = write(dm::dmcontrol, dm::resumereq | dm::dmactive);
+      // haltreq goes first: the CH32V006 ignores a resumereq in the write that clears haltreq
+      // (wlink resume sends the same two writes on all chips).
+      Status status = write(dm::dmcontrol, dm::dmactive);
+      if(status == Status::Ok) {
+         status = write(dm::dmcontrol, dm::resumereq | dm::dmactive);
+      }
       if(status != Status::Ok) {
          return status;
       }

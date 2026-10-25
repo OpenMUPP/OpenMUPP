@@ -4,7 +4,7 @@
 // the flash controller (FPEC) of the CH32V00x and the CH32V20x. The two
 // controllers have the same registers for these operations (CH32V003 and
 // CH32FV2x_V3x reference manuals, chapter "Flash Memory and User Option
-// Bytes"). docs/wch-link-protocol.md, "Flash", has the sequences.
+// Bytes"). docs/wch-link.md, "Flash", has the sequences.
 //
 // Two kinds of operations:
 //
@@ -47,6 +47,7 @@ inline constexpr uint32_t keyr = 0x4002'2004;
 inline constexpr uint32_t obkeyr = 0x4002'2008;
 inline constexpr uint32_t statr = 0x4002'200c;
 inline constexpr uint32_t ctlr = 0x4002'2010;
+inline constexpr uint32_t addr = 0x4002'2014;
 inline constexpr uint32_t obr = 0x4002'201c;
 inline constexpr uint32_t wpr = 0x4002'2020;
 inline constexpr uint32_t modekeyr = 0x4002'2024;
@@ -69,7 +70,7 @@ inline constexpr uint32_t flock = 1u << 15;
 
 // The user option bytes: half words with the value in the low byte and its
 // inverse in the high byte. RDPR, USER, DATA0, DATA1, WRPR0-WRPR3. The
-// CH32V00x has WRPR0 and WRPR1 only.
+// CH32V003 has WRPR0 and WRPR1 only.
 inline constexpr uint32_t optionBytes = 0x1fff'f800;
 inline constexpr uint8_t rdprUnprotected = 0xa5;
 // Any other value protects. Not 0xcc: that is the permanent level on
@@ -83,7 +84,12 @@ inline constexpr std::size_t optionBytesV20x = 8;
 
 // The chip series of the flash operations
 enum class Series : uint8_t {
+   // CH32V003, CH641: 6 option half words, programmed with OBPG
    V00x,
+   // CH32V002/4/5/6/7, CH32M007: 8 option half words, programmed with OBPG half words, each with STRT and its inverse
+   V006,
+   // CH32V20x, CH32V30x, CH32X035, CH32L103, CH643, CH645: 8 option half
+   // words, programmed with OBPG
    V20x,
 };
 
@@ -94,8 +100,8 @@ constexpr std::size_t optionBytesOf(Series series) {
 // The option bytes (RDPR first) from FLASH_OBR and FLASH_WPR. They hold
 // the loaded values also on a protected chip, where the option byte area
 // may not be readable.
-// - CH32V00x: USER is OBR bits 9-2, DATA0 bits 17-10, DATA1 bits 25-18
-//   (reference manual 16.3.7).
+// - CH32V003 and CH32V002/4/5/6/7: USER is OBR bits 9-2, DATA0 bits 17-10,
+//   DATA1 bits 25-18 (CH32V003 RM 16.3.7, CH32V00X RM 18.3.7).
 // - CH32V20x: USER bits 2-0 are OBR bits 4-2, USER bits 7-5
 //   (SRAM_CODE_MODE) are OBR bits 10-8, USER bits 4-3 are reserved (1).
 //   The manual does not agree with itself on the place of SRAM_CODE_MODE
@@ -131,9 +137,13 @@ struct StubLayout {
    }
 };
 
-// CH32V00x: 2 KB RAM. The buffer follows the stub.
+// CH32V003, CH641: 2 KB RAM, 64-byte pages. The buffer follows the stub.
 inline constexpr StubLayout layoutV00x{ 0x2000'0000, 0x2000'0200, 1024, 64, 0x2000'0800 };
-// CH32V20x: 10 KB RAM or more
+// CH32V002/4/5/6/7, CH32M007: 4 KB RAM or more, 256-byte pages. Checked on
+// a CH32V006: the wlink stub has the buffer at 0x20000200, 1024-byte blocks
+// and 256-byte pages.
+inline constexpr StubLayout layoutV006{ 0x2000'0000, 0x2000'0200, 1024, 256, 0x2000'0800 };
+// CH32V20x, CH32V30x, CH32X035, CH32L103, CH643, CH645: 10 KB RAM or more
 inline constexpr StubLayout layoutV20x{ 0x2000'0000, 0x2000'1000, 4096, 256, 0x2000'2800 };
 
 class Flash {
@@ -206,6 +216,8 @@ class Flash {
    [[nodiscard]] bool write(uint32_t address, uint32_t value);
    [[nodiscard]] bool unlockController();
    [[nodiscard]] bool waitIdle();
+   // Waits until the abstract command ends, after the module gave up on it.
+   [[nodiscard]] bool waitCommand();
    [[nodiscard]] bool lockController();
    // Writes the next word of the image to the buffer.
    [[nodiscard]] bool bufferWord(uint32_t word);

@@ -4,8 +4,8 @@
 #include "board/boards/Mini.h"
 #include "board/boards/OtherUse.h"
 #include "board/boards/StLinkV2.h"
-#include "protocol/GpioBlock.h"
-#include "protocol/UsbToAll.h"
+#include "protocol/versaloon/GpioBlock.h"
+#include "protocol/versaloon/UsbToAll.h"
 
 #include "VersaloonBench.h"
 

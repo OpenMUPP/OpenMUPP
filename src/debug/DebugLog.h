@@ -16,13 +16,19 @@
 // debug::cdcLog is false. USART1 then stays unused, and the device ignores
 // the data that the host sends to the CDC port.
 //
+// Call pollLog() only when UsbStack::hasSerialPort() is true: the
+// WCH-Link personality has no CDC port. The log lines of a start without
+// the port stay in the sink until it is full, and the newer ones are lost.
+//
 // Use: LOG_INFO(debug::appLog, "format", args...). Log only from the main
 // loop, never from an interrupt handler (see debug/LogSink.h).
 
 #include <logging/Logger.h>
 
-#if defined(VSL_DEBUG_CDC) && defined(VSL_WITH_WCH_LINK)
-#error "The WCH-Link personality has no CDC port for the debug log"
+#include "usb/SerialPortConfig.h"
+
+#if defined(VSL_DEBUG_CDC) && !defined(VSL_USB_SERIAL_PORT)
+#error "The image has no CDC port for the debug log: the WCH-Link personality has none"
 #endif
 
 namespace usb {

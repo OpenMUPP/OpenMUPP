@@ -2,7 +2,7 @@
 // with the fake controller of libArT as the host.
 
 #include "boot/BootloaderEntry.h"
-#include "protocol/Versaloon.h"
+#include "protocol/versaloon/Versaloon.h"
 #include "usb/CmsisDapDescriptors.h"
 #include "usb/UsbDescriptors.h"
 #include "usb/VersaloonFunction.h"

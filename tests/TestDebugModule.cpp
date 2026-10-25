@@ -211,15 +211,15 @@ TEST_CASE("Halt: a hart that does not halt gives Timeout") {
    CHECK(accesses.size() == 2 + rvswd::pollLimit);
 }
 
-TEST_CASE("Resume: resumereq, then dmstatus (the quit of the probe)") {
+TEST_CASE("Resume: clear haltreq, resumereq, then dmstatus (wlink resume)") {
    for(const Wire wire : wires) {
       CAPTURE(wire);
       Bench bench(wire);
       bench.connect();
       CHECK(bench.module.resume() == Status::Ok);
       CHECK_FALSE(bench.target.halted);
-      CHECK(bench.take() == std::vector{ W(dm::dmcontrol, 0x4000'0001), R(dm::dmstatus, 0x0003'0c82) });
-      // The write cleared haltreq.
+      CHECK(bench.take() == std::vector{ W(dm::dmcontrol, 0x0000'0001), W(dm::dmcontrol, 0x4000'0001), R(dm::dmstatus, 0x0003'0c82) });
+      // The first write cleared haltreq: the CH32V006 ignores a resumereq in the same write.
       CHECK(bench.pins.registers[dm::dmcontrol] == 0x0000'0001);
       bench.checkWire();
    }
@@ -523,7 +523,7 @@ TEST_CASE("Resume of a running hart ends at allrunning") {
       bench.take();
       CHECK(bench.module.resume() == Status::Ok);
       // resumereq cleared resumeack: the poll ends at allrunning.
-      CHECK(bench.take() == std::vector{ W(dm::dmcontrol, 0x4000'0001), R(dm::dmstatus, 0x0000'0c82) });
+      CHECK(bench.take() == std::vector{ W(dm::dmcontrol, 0x0000'0001), W(dm::dmcontrol, 0x4000'0001), R(dm::dmstatus, 0x0000'0c82) });
       CHECK_FALSE(bench.target.halted);
    }
 }

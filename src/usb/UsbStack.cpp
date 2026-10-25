@@ -3,6 +3,9 @@
 #include <array>
 #include <delaybusywait.h>
 #include <peripherals/Rcc.h>
+#if !defined(STM32F1)
+#include <peripherals/Crs.h>
+#endif
 #include <peripherals/Uid.h>
 
 #include "Hardware.h"
@@ -24,12 +27,13 @@ namespace {
 
 using personality::Personality;
 
-#if !defined(VSL_WITH_WCH_LINK)
+#if defined(VSL_USB_SERIAL_PORT)
 static_assert(art::usb::CdcAcmFunctionBase::kDataPacketSize == cdcDataPacketSize);
 #endif
 static_assert(hw::Uid::SizeBytes == uidBytes);
 #if defined(VSL_WITH_CMSIS_DAP)
 static_assert(dap::packetMemoryUsed <= hw::UsbDevice::PacketMemorySize);
+static_assert(switchRequestCode != dap::msOs20VendorCode);
 // The two personalities share the endpoint numbers, so the OUT endpoint is
 // double-buffered in each.
 static_assert(dap::outEndpoint == versaloonOutEndpoint);
@@ -45,7 +49,7 @@ static_assert(endpointCount * 8 + 2 * 64 + 2 * versaloonPacketSize + versaloonPa
 // How long D+ stays low before a reset, so the host sees a disconnect
 constexpr uint32_t disconnectMs = 20;
 
-#if !defined(VSL_WITH_WCH_LINK)
+#if defined(VSL_USB_SERIAL_PORT)
 constexpr art::usb::CdcAcmEndpoints serialPortEndpoints{
    .notification = cdcNotificationEndpoint,
    .notificationMaxPacketSize = cdcNotificationPacketSize,
@@ -113,73 +117,132 @@ const art::usb::Descriptors wchDescriptors{
 };
 #endif
 
-#if defined(VSL_WITH_VERSALOON) && defined(VSL_WITH_CMSIS_DAP)
-const art::usb::Descriptors &descriptorsOf(Personality personality) {
-   return personality == Personality::CmsisDap ? dapDescriptors : versaloonDescriptors;
+// The descriptors of a personality of the image. The constructor of
+// UsbStack takes only a personality of the image.
+const art::usb::Descriptors &descriptorsOf([[maybe_unused]] Personality personality) {
+#if defined(VSL_WITH_WCH_LINK)
+   if(personality == Personality::WchLink) {
+      return wchDescriptors;
+   }
+#endif
+#if defined(VSL_WITH_CMSIS_DAP)
+   if(personality == Personality::CmsisDap) {
+      return dapDescriptors;
+   }
+#endif
+#if defined(VSL_WITH_VERSALOON)
+   return versaloonDescriptors;
+#elif defined(VSL_WITH_CMSIS_DAP)
+   return dapDescriptors;
+#else
+   return wchDescriptors;
+#endif
+}
+
+// The handler of the other vendor requests to the device in a personality
+// (SwitchRequestHandler)
+art::usb::VendorRequestHandler *nextVendorHandlerOf([[maybe_unused]] Personality personality) {
+#if defined(VSL_WITH_CMSIS_DAP)
+   if(personality == Personality::CmsisDap) {
+      return &msOs20Handler;
+   }
+#endif
+   return nullptr;
+}
+
+// The highest endpoint number of a personality, plus 1 (hw::UsbDevice)
+uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
+#if defined(VSL_WITH_WCH_LINK)
+   if(personality == Personality::WchLink) {
+      return wch::endpointCount;
+   }
+#endif
+   return endpointCount;
+}
+
+#if !defined(STM32F1)
+// USB clock of the STM32H5: HSI48, trimmed by the CRS from the USB SOF
+// packets. PA11 and PA12 are USB_DM and USB_DP on AF10. A failure leaves
+// USB without a clock, and the host sees no device.
+void startUsbClock() {
+   if(!Rcc::enableHSI48()) {
+      LOG_ERROR(debug::appLog, "USB: HSI48 does not start");
+      return;
+   }
+   Rcc::setUSBClockSource(Rcc::USBClockSource::HSI48);
+   Rcc::enableCRSClock();
+   if(hw::Crs::configure({})) {
+      hw::Crs::enable();
+   }
+   for(const uint8_t pin : { 11, 12 }) {
+      const auto gpio = board::gpioPin({ board::Port::A, pin });
+      gpio.setAlternateFunction(hw::GpioPin::AlternateFunction::AF10);
+      gpio.configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::None,
+                     hw::GpioPin::Speed::VeryHigh);
+   }
+   Rcc::enableUSBClock();
 }
 #endif
 
 } // namespace
 
-#if defined(VSL_WITH_VERSALOON) && defined(VSL_WITH_CMSIS_DAP)
-UsbStack::UsbStack(Personality active,
-                   boot::BootloaderEntry *bootloader,
-                   protocol::UsbToXxxHandler &usbToXxx,
-                   personality::PersonalitySwitch &personalitySwitch,
-                   cmsisdap::Processor &processor)
-   : controller_(hardware_, events_)
+UsbStack::UsbStack(Personality active, const Functions &functions)
+   : hardware_(endpointCountOf(active))
+   , controller_(hardware_, events_)
    , active_(active)
    , device_(controller_, descriptorsOf(active))
-   , versaloon_(deviceInfo, bootloader, &usbToXxx, &personalitySwitch)
-   , dap_(processor)
-#elif defined(VSL_WITH_WCH_LINK)
-UsbStack::UsbStack(wchlink::Processor &processor)
-   : controller_(hardware_, events_)
-   , active_(Personality::WchLink)
-   , device_(controller_, wchDescriptors)
-   , wch_(processor)
-#elif defined(VSL_WITH_CMSIS_DAP)
-UsbStack::UsbStack(cmsisdap::Processor &processor)
-   : controller_(hardware_, events_)
-   , active_(Personality::CmsisDap)
-   , device_(controller_, dapDescriptors)
-   , dap_(processor)
-#else
-UsbStack::UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler &usbToXxx)
-   : controller_(hardware_, events_)
-   , active_(Personality::Versaloon)
-   , device_(controller_, versaloonDescriptors)
-   , versaloon_(deviceInfo, bootloader, &usbToXxx)
+#if defined(VSL_WITH_VERSALOON)
+   , versaloon_(deviceInfo, functions.bootloader, functions.versaloon->usbToXxx, functions.personalitySwitch)
 #endif
-#if !defined(VSL_WITH_WCH_LINK)
+#if defined(VSL_WITH_CMSIS_DAP)
+   , dap_(*functions.dap)
+#endif
+#if defined(VSL_WITH_WCH_LINK)
+   , wch_(*functions.wch)
+#endif
+#if defined(VSL_USB_SERIAL_PORT)
    , serialPort_(cdcControlInterface, serialPortEndpoints)
 #endif
-{
-#if !defined(VSL_WITH_WCH_LINK)
-   // Both bulk pairs of the WCH-Link personality are single-buffered
-   // (usb/WchLinkDescriptors.h).
-   controller_.setDoubleBufferedOut(versaloonOutEndpoint);
+   , switchRequest_(functions.personalitySwitch, functions.bootloader, nextVendorHandlerOf(active)) {
+#if defined(VSL_USB_SERIAL_PORT)
+   if(hasSerialPort()) {
+      // Both bulk pairs of the WCH-Link personality are single-buffered
+      // (usb/WchLinkDescriptors.h).
+      controller_.setDoubleBufferedOut(versaloonOutEndpoint);
+   }
 #endif
    // Fails only for an interface range that does not fit the device: a
    // static configuration error, which the host tests catch.
+   switch(personality()) {
+#if defined(VSL_WITH_VERSALOON)
+   case Personality::Versaloon:
+      static_cast<void>(device_.addFunction(versaloon_));
+      break;
+#endif
 #if defined(VSL_WITH_CMSIS_DAP)
-   if(active_ == Personality::CmsisDap) {
+   case Personality::CmsisDap:
       // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
       events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
-      device_.setVendorRequestHandler(&msOs20Handler);
       static_cast<void>(device_.addFunction(dap_));
-   }
-#endif
-#if defined(VSL_WITH_VERSALOON)
-   if(active_ == Personality::Versaloon) {
-      static_cast<void>(device_.addFunction(versaloon_));
-   }
+      break;
 #endif
 #if defined(VSL_WITH_WCH_LINK)
-   static_cast<void>(device_.addFunction(wch_));
-#else
-   static_cast<void>(device_.addFunction(serialPort_));
+   case Personality::WchLink:
+      static_cast<void>(device_.addFunction(wch_));
+      break;
 #endif
+   default:
+      break;
+   }
+#if defined(VSL_USB_SERIAL_PORT)
+   if(hasSerialPort()) {
+      static_cast<void>(device_.addFunction(serialPort_));
+   }
+#endif
+   // The switch request, and in the CMSIS-DAP personality the MS OS 2.0
+   // request after it. Without a personality switch and a bootloader, the
+   // handler stalls each switch request.
+   device_.setVendorRequestHandler(&switchRequest_);
 }
 
 void UsbStack::start() {
@@ -191,10 +254,14 @@ void UsbStack::start() {
       hardware_.setPullupCallback(&UsbStack::setPullUp, nullptr);
    }
 
+#if defined(STM32F1)
    // USBPRE is set by the 72 MHz clock setup, before the clock is enabled.
    Rcc::enableUSBClock();
+#else
+   startUsbClock();
+#endif
    // Before begin(), which enables the interrupt (Hardware.h)
-   NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, hardware::usbIrqPriority);
+   NVIC_SetPriority(hw::usbfs::Irq, hardware::usbIrqPriority);
    controller_.begin();
    device_.start();
 }
@@ -202,7 +269,7 @@ void UsbStack::start() {
 void UsbStack::poll() {
    controller_.poll();
 #if defined(VSL_WITH_CMSIS_DAP)
-   if(active_ == Personality::CmsisDap) {
+   if(personality() == Personality::CmsisDap) {
       // Run one command, then deliver the USB events that came during it:
       // the InComplete event frees the IN endpoint for the next response,
       // and the next OUT packet is stored. The loop has no limit: while
@@ -216,25 +283,34 @@ void UsbStack::poll() {
    }
 #endif
 #if defined(VSL_WITH_WCH_LINK)
-   // As the CMSIS-DAP personality: run requests and data packets, and
-   // deliver the events that came during them.
-   while(wch_.poll()) {
-      controller_.poll();
+   if(personality() == Personality::WchLink) {
+      // As the CMSIS-DAP personality: run requests and data packets, and
+      // deliver the events that came during them.
+      while(wch_.poll()) {
+         controller_.poll();
+      }
    }
-#else
+#endif
+#if defined(VSL_USB_SERIAL_PORT)
    // Without VSL_DEBUG_CDC the UART bridge reads the serial port
    // (uart/SerialBridge.h).
    if constexpr(debug::cdcLog) {
-      discardSerialInput();
+      if(hasSerialPort()) {
+         discardSerialInput();
+      }
    }
 #endif
 }
 
 void UsbStack::disconnect() {
-   NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
+   NVIC_DisableIRQ(hw::usbfs::Irq);
    if(const auto pullUp = board::current.usbPullUp) {
       board::write(*pullUp, false);
    } else {
+#if !defined(STM32F1)
+      // The host sees the disconnect when the internal D+ pull-up is off
+      hw::usbfs::setInternalPullup(false);
+#else
       // Stop the transceiver and reset the USB peripheral, then turn off
       // its clock. The GPIO then drives D+ (PA12) low.
       USB->CNTR = USB_CNTR_FRES | USB_CNTR_PDWN;
@@ -242,6 +318,7 @@ void UsbStack::disconnect() {
       RCC->APB1RSTR &= ~RCC_APB1RSTR_USBRST;
       RCC->APB1ENR &= ~RCC_APB1ENR_USBEN;
       board::configureOutput(board::Signal{ { board::Port::A, 12 }, board::Active::High }, false);
+#endif
    }
    delaymS(disconnectMs);
 }
@@ -250,9 +327,11 @@ void UsbStack::pollSerial() {
    events_.setSerialOnly(true);
    controller_.poll();
    events_.setSerialOnly(false);
-#if !defined(VSL_WITH_WCH_LINK)
+#if defined(VSL_USB_SERIAL_PORT)
    if constexpr(debug::cdcLog) {
-      discardSerialInput();
+      if(hasSerialPort()) {
+         discardSerialInput();
+      }
    }
 #endif
 }
@@ -263,7 +342,7 @@ void UsbStack::setPullUp(void * /*context*/, bool enable) {
    }
 }
 
-#if !defined(VSL_WITH_WCH_LINK)
+#if defined(VSL_USB_SERIAL_PORT)
 void UsbStack::discardSerialInput() {
    std::array<uint8_t, cdcDataPacketSize> chunk{};
    while(serialPort_.read(art::span<uint8_t>(chunk.data(), chunk.size())) != 0) {

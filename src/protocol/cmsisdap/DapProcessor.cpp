@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "boot/BootloaderEntry.h"
 #include "personality/PersonalitySwitch.h"
 
 namespace cmsisdap {
@@ -159,6 +160,8 @@ constexpr std::array<SwjPin, 6> swjPinTable{ {
 { 0x20, protocol::gpio::trst, protocol::PinMode::OpenDrain, true },
 { 0x80, protocol::gpio::srst, protocol::PinMode::OpenDrain, true },
 } };
+// The SWD pins of DAP_SWJ_Pins: SWCLK/TCK and SWDIO/TMS
+constexpr uint8_t swjSwdPins = 0x03;
 
 // DAP_HostStatus
 constexpr uint8_t hostStatusConnected = 0;
@@ -173,13 +176,19 @@ Processor::Processor(DapSwd &swd,
                      Platform &platform,
                      const DeviceInfo &info,
                      protocol::JtagPort *jtag,
-                     personality::PersonalitySwitch *personalitySwitch)
+                     personality::PersonalitySwitch *personalitySwitch,
+                     DapUart *uart,
+                     boot::BootloaderEntry *bootloader,
+                     Bridge *bridge)
    : swd_(swd)
    , jtag_(jtag)
    , gpio_(gpio)
    , platform_(platform)
    , info_(info)
-   , personalitySwitch_(personalitySwitch) {
+   , personalitySwitch_(personalitySwitch)
+   , uart_(uart)
+   , bootloader_(bootloader)
+   , bridge_(bridge) {
    if(jtag_.available()) {
       info_.capabilities = static_cast<uint16_t>(info_.capabilities | capability::jtag);
    }
@@ -221,6 +230,12 @@ void Processor::hostGone() {
    responses_ = 0;
    responseFirst_ = 0;
    disconnect();
+   if(bridge_ != nullptr) {
+      bridge_->enable(false);
+   }
+   if(uart_ != nullptr) {
+      uart_->hostGone();
+   }
 }
 
 void Processor::submit(art::span<const uint8_t> request) {
@@ -350,9 +365,25 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       return jtagConfigure(in, out);
    case command::jtagIdcode:
       return jtagIdcode(in, out);
+   case command::uartTransport:
+   case command::uartConfigure:
+   case command::uartTransfer:
+   case command::uartControl:
+   case command::uartStatus:
+      if(uart_ != nullptr) {
+         return uartCommand(id, in, out);
+      }
+      out.u8(command::invalid);
+      return true;
    case command::vendor0:
-      if(personalitySwitch_ != nullptr) {
+      if(personalitySwitch_ != nullptr || bootloader_ != nullptr) {
          return switchPersonality(in, out);
+      }
+      out.u8(command::invalid);
+      return true;
+   case command::vendor1:
+      if(bridge_ != nullptr) {
+         return switchBridge(in, out);
       }
       out.u8(command::invalid);
       return true;
@@ -395,7 +426,13 @@ bool Processor::switchPersonality(PacketReader &in, PacketWriter &out) {
       return false;
    }
    out.u8(command::vendor0);
-   const auto target = personality::fromCode(code);
+   if(code == boot::bootloaderCode && bootloader_ != nullptr) {
+      // The main loop enters the bootloader after the reply delay
+      bootloader_->request();
+      out.u8(statusOk);
+      return true;
+   }
+   const auto target = personalitySwitch_ != nullptr ? personality::fromCode(code) : std::nullopt;
    if(!target) {
       out.u8(statusError);
       return true;
@@ -404,6 +441,79 @@ bool Processor::switchPersonality(PacketReader &in, PacketWriter &out) {
    // delay: the transport sends this response first.
    personalitySwitch_->request(*target);
    out.u8(statusOk);
+   return true;
+}
+
+bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
+   const uint8_t on = in.u8();
+   if(!in.ok()) {
+      return false;
+   }
+   out.u8(command::vendor1);
+   if(on > 1) {
+      out.u8(statusError);
+      return true;
+   }
+   bridge_->enable(on == 1);
+   // The other port has another TAP state and IR.
+   jtag_.invalidate();
+   out.u8(statusOk);
+   return true;
+}
+
+bool Processor::uartCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
+   if(id == command::uartTransfer) {
+      return uartTransfer(in, out);
+   }
+   if(id == command::uartStatus) {
+      out.u8(id);
+      out.u8(uart_->status());
+      out.u32(uart_->rxCount());
+      out.u32(uart_->txCount());
+      return true;
+   }
+   const uint8_t value = in.u8();
+   if(id == command::uartConfigure) {
+      uint32_t baudRate = in.u32();
+      if(!in.ok()) {
+         return false;
+      }
+      out.u8(id);
+      out.u8(uart_->configure(value, baudRate));
+      out.u32(baudRate);
+      return true;
+   }
+   if(!in.ok()) {
+      return false;
+   }
+   out.u8(id);
+   const bool ok = id == command::uartTransport ? uart_->setTransport(value) : uart_->control(value);
+   out.u8(ok ? statusOk : statusError);
+   return true;
+}
+
+// [0x21][Rx Count u16][Tx Count u16][data] ->
+// [0x21][status][Tx Count u16][Rx Count u16][data]
+bool Processor::uartTransfer(PacketReader &in, PacketWriter &out) {
+   const uint16_t rxWanted = in.u16();
+   const uint16_t txCount = in.u16();
+   const auto txData = in.bytes(txCount);
+   if(!in.ok()) {
+      return false;
+   }
+   constexpr std::size_t header = 6;
+   if(out.room() < header) {
+      return false;
+   }
+   const std::size_t written = uart_->write(txData);
+   const std::size_t rxRoom = std::min<std::size_t>(rxWanted, out.room() - header);
+   std::array<uint8_t, packetSize> rxData{};
+   const std::size_t received = uart_->read({ rxData.data(), rxRoom });
+   out.u8(command::uartTransfer);
+   out.u8(uart_->status());
+   out.u16(static_cast<uint16_t>(written));
+   out.u16(static_cast<uint16_t>(received));
+   out.bytes({ rxData.data(), received });
    return true;
 }
 
@@ -439,12 +549,30 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
    case infoId::firmwareVersion:
       text(info_.firmwareVersion);
       break;
-   case infoId::capabilities:
-      out.u8(info_.capabilities > 0xFF ? 2 : 1);
-      out.u8(static_cast<uint8_t>(info_.capabilities));
-      if(info_.capabilities > 0xFF) {
-         out.u8(static_cast<uint8_t>(info_.capabilities >> 8));
+   case infoId::capabilities: {
+      // The DapUart is asked here, not in the constructor (see there).
+      uint16_t capabilities = info_.capabilities;
+      if(uart_ != nullptr) {
+         capabilities = static_cast<uint16_t>(capabilities | capability::uartPort);
+         if(uart_->hasComPort()) {
+            capabilities = static_cast<uint16_t>(capabilities | capability::usbComPort);
+         }
       }
+      out.u8(capabilities > 0xFF ? 2 : 1);
+      out.u8(static_cast<uint8_t>(capabilities));
+      if(capabilities > 0xFF) {
+         out.u8(static_cast<uint8_t>(capabilities >> 8));
+      }
+      break;
+   }
+   case infoId::uartRxBufferSize:
+   case infoId::uartTxBufferSize:
+      if(uart_ == nullptr) {
+         out.u8(0);
+         break;
+      }
+      out.u8(4);
+      out.u32(id == infoId::uartRxBufferSize ? uart_->rxBufferSize() : uart_->txBufferSize());
       break;
    case infoId::packetCount:
       out.u8(1);
@@ -456,7 +584,7 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
       break;
    default:
       // Not available: the target device and board, the test domain timer,
-      // and the UART and SWO buffers
+      // and the SWO buffer
       out.u8(0);
       break;
    }
@@ -804,6 +932,9 @@ bool Processor::swjPins(PacketReader &in, PacketWriter &out) {
          gpio_.configure(pin.gpio, pin.mode, (output & pin.bit) != 0);
          selected = static_cast<uint8_t>(selected | pin.bit);
       }
+   }
+   if(bridge_ != nullptr && (selected & swjSwdPins) != 0) {
+      bridge_->pinsChanged();
    }
    uint8_t value = pinsIn();
    if(wait != 0) {

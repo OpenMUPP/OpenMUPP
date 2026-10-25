@@ -1,0 +1,89 @@
+"""Host tests for vsl_rv_bridge.py. They need no pyusb and no hardware.
+
+Run: python3 -m unittest discover -s tools -p "test_*.py"
+"""
+
+import contextlib
+import io
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import vsl_rv_bridge as rb  # noqa: E402
+from test_vsl_personality import FakeDevice, fake_usb  # noqa: E402
+
+
+class RequestTest(unittest.TestCase):
+    def test_on_and_off(self):
+        self.assertEqual(rb.bridge_request(True), bytes([0x81, 0x01]))
+        self.assertEqual(rb.bridge_request(False), bytes([0x81, 0x00]))
+
+
+class CheckReplyTest(unittest.TestCase):
+    def test_done(self):
+        rb.check_reply([0x81, 0x00])
+
+    def test_no_bridge(self):
+        with self.assertRaisesRegex(rb.BridgeError, "no RISC-V bridge"):
+            rb.check_reply([0xFF])
+
+    def test_refused(self):
+        with self.assertRaisesRegex(rb.BridgeError, "status 255"):
+            rb.check_reply([0x81, 0xFF])
+
+    def test_other_response(self):
+        for reply in ([], [0x80, 0x00], [0x81]):
+            with self.assertRaises(rb.BridgeError):
+                rb.check_reply(reply)
+
+
+class MainTest(unittest.TestCase):
+    def run_main(self, argv, devices):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = rb.main(argv, fake_usb(devices))
+        return result, stdout.getvalue(), stderr.getvalue()
+
+    def test_on(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        result, out, _ = self.run_main(["on"], [device])
+        self.assertEqual(result, 0)
+        self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x01]))])
+        self.assertIn("is on", out)
+
+    def test_off(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        self.assertEqual(self.run_main(["off"], [device])[0], 0)
+        self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x00]))])
+
+    def test_image_without_bridge(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0xFF])
+        result, _, err = self.run_main(["on"], [device])
+        self.assertEqual(result, 1)
+        self.assertIn("VSL_CMSIS_DAP_RV_BRIDGE", err)
+
+    def test_no_response(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=None)
+        result, _, err = self.run_main(["on"], [device])
+        self.assertEqual(result, 1)
+        self.assertIn("Cannot send", err)
+
+    def test_only_cmsis_dap(self):
+        versaloon = FakeDevice(0x0483, 0xA038)
+        result, _, err = self.run_main(["on"], [versaloon])
+        self.assertEqual(result, 1)
+        self.assertIn("No dongle", err)
+        self.assertEqual(versaloon.writes, [])
+
+    def test_more_than_one(self):
+        a = FakeDevice(0x0403, 0x9B3C, serial="A", reply=[0x81, 0x00])
+        b = FakeDevice(0x0403, 0x9B3C, serial="B", reply=[0x81, 0x00])
+        self.assertEqual(self.run_main(["on"], [a, b])[0], 1)
+        self.assertEqual(self.run_main(["--serial", "B", "on"], [a, b])[0], 0)
+        self.assertEqual(a.writes, [])
+        self.assertEqual(len(b.writes), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

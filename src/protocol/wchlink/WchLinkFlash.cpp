@@ -30,6 +30,11 @@ constexpr uint32_t roundUp(uint32_t value, uint32_t multiple) {
    return (value + multiple - 1) / multiple * multiple;
 }
 
+// The option half word with its inverse byte
+constexpr uint32_t halfWithInverse(uint8_t value) {
+   return value | static_cast<uint32_t>(static_cast<uint8_t>(~value)) << 8;
+}
+
 bool ok(rvswd::Status status) {
    return status == rvswd::Status::Ok;
 }
@@ -37,7 +42,7 @@ bool ok(rvswd::Status status) {
 } // namespace
 
 void optionsFromRegisters(Series series, uint32_t obr, uint32_t wpr, uint8_t (&values)[fpec::optionBytesV20x]) {
-   if(series == Series::V00x) {
+   if(series != Series::V20x) {
       values[1] = static_cast<uint8_t>(obr >> 2);
       values[2] = static_cast<uint8_t>(obr >> 10);
       values[3] = static_cast<uint8_t>(obr >> 18);
@@ -100,6 +105,20 @@ bool Flash::waitIdle() {
    return write(fpec::statr, fpec::eop | fpec::wrprterr) && (status & fpec::wrprterr) == 0;
 }
 
+bool Flash::waitCommand() {
+   for(uint32_t i = 0; i < pollCount; ++i) {
+      uint32_t abstractcs = 0;
+      if(!ok(target_.dmiRead(dm::abstractcs, abstractcs))) {
+         return false;
+      }
+      if((abstractcs & dm::busy) == 0) {
+         return (abstractcs >> dm::cmderrShift & dm::cmderrMask) == 0;
+      }
+      platform_.delayUs(pollIntervalUs);
+   }
+   return false;
+}
+
 bool Flash::lockController() {
    // A locked controller takes no CTLR write.
    uint32_t control = 0;
@@ -152,12 +171,26 @@ bool Flash::setReadProtection(bool protect, Series series) {
       return false;
    }
    // OBWRE stays 1 in each write: a 0 locks the option bytes again.
-   bool done = write(fpec::ctlr, fpec::ober | fpec::obwre) && write(fpec::ctlr, fpec::ober | fpec::strt | fpec::obwre) &&
-               waitIdle() && write(fpec::ctlr, fpec::obpg | fpec::obwre);
-   // The controller writes the inverse byte itself. RDPR comes first: the
-   // chip erases the main flash when it becomes unprotected.
+   bool done =
+   write(fpec::ctlr, fpec::ober | fpec::obwre) && write(fpec::ctlr, fpec::ober | fpec::strt | fpec::obwre) && waitIdle();
+   // The controller writes the inverse byte itself. RDPR comes first: the chip
+   // erases the main flash when it becomes unprotected.
+   done = done && write(fpec::ctlr, fpec::obpg | fpec::obwre);
    for(std::size_t i = 0; i < optionBytes && done; ++i) {
-      done = ok(target_.writeMemory(fpec::optionBytes + 2 * i, values[i], rvswd::Width::Half)) && waitIdle();
+      // The CH32V006 takes a half word only after STRT. FTPG, as the manual
+      // says, does not set in FLASH_CTLR through the debug module (hardware).
+      if(series == Series::V006) {
+         done = write(fpec::ctlr, fpec::obpg | fpec::strt | fpec::obwre);
+      }
+      if(done) {
+         // The write of RDPR 0xa5 on a protected chip erases the main flash and stalls the bus for about 110 ms:
+         // the abstract command stays busy longer than the module polls.
+         // The CH32V006 leaves a half word unprogrammed when the byte is 0xff and the hardware adds the inverse:
+         // USER reads 0xffff. The half word goes out with its inverse.
+         const uint32_t half = series == Series::V006 ? halfWithInverse(values[i]) : values[i];
+         const rvswd::Status status = target_.writeMemory(fpec::optionBytes + 2 * i, half, rvswd::Width::Half);
+         done = (ok(status) || (status == rvswd::Status::Timeout && waitCommand())) && waitIdle();
+      }
    }
    done = write(fpec::ctlr, 0) && lockController() && done;
    // Unprotect: the reset loads FLASH_OBR from the new option bytes. The

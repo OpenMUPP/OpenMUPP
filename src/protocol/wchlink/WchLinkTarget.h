@@ -15,6 +15,14 @@
 
 namespace wchlink {
 
+// The WCH DM registers that the connect writes with unlockValue, also in
+// the RISC-V bridge of CMSIS-DAP (cmsisdap::RvDtmTap)
+namespace wchdm {
+inline constexpr uint8_t unlock1 = 0x7e;
+inline constexpr uint8_t unlock2 = 0x7d;
+inline constexpr uint32_t unlockValue = 0x5aa5'0400;
+} // namespace wchdm
+
 // The speed byte of the configure command (0x0c)
 enum class Speed : uint8_t {
    High = 1,
@@ -41,6 +49,8 @@ class Target {
    virtual rvswd::Status writeRegister(uint16_t regno, uint32_t value) = 0;
    virtual rvswd::Status readMemory(uint32_t address, uint32_t &value) = 0;
    virtual rvswd::Status writeMemory(uint32_t address, uint32_t value, rvswd::Width width) = 0;
+   // The method after attach() is the method of the wire. A target can need the other one.
+   virtual void setMemoryAccess(rvswd::MemoryAccess access) = 0;
 
    protected:
    ~Target() = default;
@@ -108,6 +118,9 @@ class RvSwdTarget final : public Target {
    }
    rvswd::Status writeMemory(uint32_t address, uint32_t value, rvswd::Width width) override {
       return module_.writeMemory(address, value, width);
+   }
+   void setMemoryAccess(rvswd::MemoryAccess access) override {
+      module_.setMemoryAccess(access);
    }
 
    private:

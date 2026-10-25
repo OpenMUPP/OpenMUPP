@@ -1,7 +1,7 @@
 // The USB_TO_JTAG_RAW block on a fake JTAG port.
 
-#include "protocol/JtagRawBlock.h"
-#include "protocol/UsbToAll.h"
+#include "protocol/versaloon/JtagRawBlock.h"
+#include "protocol/versaloon/UsbToAll.h"
 
 #include <doctest/doctest.h>
 

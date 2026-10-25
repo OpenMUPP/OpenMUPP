@@ -13,17 +13,22 @@
 
 #include <cstdint>
 
+#include "IntDiv.h"
+
 // ticks: the tick count (1 tick is 1 ms). reload: the SysTick LOAD value
 // plus 1, the counter clocks of one tick. value: the SysTick counter value
 // (VAL), read after the tick count. tickPending: the pending bit of the
-// SysTick interrupt, read after the counter value.
+// SysTick interrupt, read after the counter value. value is less than
+// reload.
 constexpr uint32_t uptimeMicroseconds(uint64_t ticks, uint32_t reload, uint32_t value, bool tickPending) {
-   const uint64_t elapsed = reload - value;
+   const uint32_t elapsed = reload - value;
    // A wrap that happens after the counter was read leaves a large
    // elapsed value. The next read then counts the tick. Thus only a small
    // elapsed value shows a tick that was not counted.
-   if(tickPending && elapsed * 2 <= reload) {
+   if(tickPending && elapsed <= reload / 2) {
       ++ticks;
    }
-   return static_cast<uint32_t>(ticks * 1000 + elapsed * 1000 / reload);
+   // The result wraps at 2^32: the low 32 bits of the tick count are
+   // sufficient.
+   return static_cast<uint32_t>(ticks) * 1000u + intdiv::mulDiv(elapsed, 1000u, reload);
 }

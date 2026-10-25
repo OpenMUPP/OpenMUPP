@@ -1,7 +1,8 @@
 #pragma once
 
-// The stored personality of a dual image, in one flash page at the end of
-// the application area. Hardware-independent: the host unit tests run it
+// The stored personality of an image with more than one personality
+// (VSL_MULTI_PERSONALITY), in one flash page at the end of the application
+// area. Hardware-independent: the host unit tests run it
 // on a fake page. board/SettingsFlashPage.h has the page of the target.
 //
 // The page is a log of 16-bit records. An erased slot is 0xFFFF. Each

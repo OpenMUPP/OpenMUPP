@@ -2,8 +2,8 @@
 
 // The CMSIS-DAP v2.1 command processor for SWD and JTAG. Hardware-
 // independent: it runs on a DapSwd object, a protocol::JtagPort object, a
-// protocol::GpioPins object and a Platform object, and the host unit tests
-// use mock ones. usb::CmsisDapFunction moves the packets.
+// protocol::GpioPins object, a DapUart object and a Platform object, and
+// the host unit tests use mock ones. usb::CmsisDapFunction moves the packets.
 //
 // The transport calls submit() for each request packet (at most
 // packetSize bytes). submit() only stores the packet. run() runs the
@@ -18,8 +18,11 @@
 //   0x05 DAP_Transfer           0x15 DAP_JTAG_Configure
 //   0x06 DAP_TransferBlock      0x16 DAP_JTAG_IDCODE
 //   0x08 DAP_WriteABORT         0x1D DAP_SWD_Sequence
-//   0x09 DAP_Delay
-//   0x0A DAP_ResetTarget        0x80 ID_DAP_Vendor0
+//   0x09 DAP_Delay              0x1F DAP_UART_Transport
+//   0x0A DAP_ResetTarget        0x20 DAP_UART_Configure
+//                               0x21 DAP_UART_Transfer
+//   0x80 ID_DAP_Vendor0         0x22 DAP_UART_Control
+//   0x81 ID_DAP_Vendor1         0x23 DAP_UART_Status
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
 // DAP.c): posted AP reads, RDBUFF at the end of a read sequence, a read of
@@ -59,8 +62,18 @@
 //   the USB personality of a dual image (personality/PersonalitySwitch.h).
 //   The personality is the code of personality/Personality.h: 0 Versaloon,
 //   1 CMSIS-DAP. The status is DAP_OK (0) or DAP_ERROR (0xFF) for a code
-//   that is not a personality. Without a personality switch (an image with one
-//   personality), the command replies ID_DAP_Invalid.
+//   that is not a personality. The code boot::bootloaderCode (0xB0) starts
+//   the bootloader (boot/BootloaderEntry.h): DAP_ERROR in a multi image
+//   without a bootloader. Without a personality switch (an image with one
+//   personality) and without a bootloader, the command replies
+//   ID_DAP_Invalid.
+// - ID_DAP_Vendor1 [0x81][on u8] -> [0x81][status u8] switches the RISC-V
+//   bridge (RvBridge.h): 1 on, 0 off. On, DAP_Connect to JTAG and the JTAG
+//   commands use the emulated TAP, and the TAP state and IR are not known.
+//   The status is DAP_OK (0), or DAP_ERROR (0xFF) for another value.
+//   Without a bridge, the command replies ID_DAP_Invalid. hostGone()
+//   switches the bridge off. DAP_SWJ_Pins with SWCLK or SWDIO selected
+//   tells the bridge that the pins changed (Bridge::pinsChanged()).
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -68,6 +81,12 @@
 //   are one acknowledge, and the processor does not read STICKYERR: only
 //   WAIT after all retries, an invalid acknowledge and a failed scan count.
 //   The error LED shows the count (ErrorLed.h).
+// - The DAP_UART_* commands run on the DapUart object (DapUart.h). Without
+//   one, they reply ID_DAP_Invalid, and DAP_Info reports no UART. With one,
+//   DAP_Info reports the UART port, the USB COM port when the UART has it,
+//   and the buffer sizes. A DAP_UART_Transfer takes the received bytes
+//   that fit in the response, and replies the status after the transfer.
+//   A Tx Count that is more than the request has gives ID_DAP_Invalid.
 //
 // DAP_QueueCommands packets wait. The next packet with another command
 // runs the queued packets and then itself, back to back. The responses of
@@ -91,10 +110,15 @@
 #include <cstdint>
 #include <utils/compat/span.h>
 
-#include "protocol/GpioBlock.h"
+#include "protocol/GpioPins.h"
 #include "protocol/JtagPort.h"
 #include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
+#include "protocol/cmsisdap/DapUart.h"
+
+namespace boot {
+class BootloaderEntry;
+}
 
 namespace personality {
 class PersonalitySwitch;
@@ -122,7 +146,13 @@ inline constexpr uint8_t jtagSequence = 0x14;
 inline constexpr uint8_t jtagConfigure = 0x15;
 inline constexpr uint8_t jtagIdcode = 0x16;
 inline constexpr uint8_t swdSequence = 0x1D;
+inline constexpr uint8_t uartTransport = 0x1F;
+inline constexpr uint8_t uartConfigure = 0x20;
+inline constexpr uint8_t uartTransfer = 0x21;
+inline constexpr uint8_t uartControl = 0x22;
+inline constexpr uint8_t uartStatus = 0x23;
 inline constexpr uint8_t vendor0 = 0x80;
+inline constexpr uint8_t vendor1 = 0x81;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
 inline constexpr uint8_t invalid = 0xFF;
@@ -154,6 +184,7 @@ inline constexpr uint16_t swd = 0x01;
 inline constexpr uint16_t jtag = 0x02;
 inline constexpr uint16_t atomicCommands = 0x10;
 inline constexpr uint16_t uartPort = 0x80;
+inline constexpr uint16_t usbComPort = 0x100;
 } // namespace capability
 
 // The values of DAP_Info. A string that is nullptr, or too long for a
@@ -164,8 +195,8 @@ struct DeviceInfo {
    // The chip UID, as text
    const char *serialNumber{ nullptr };
    const char *firmwareVersion{ nullptr };
-   // The processor adds JTAG when it has a JTAG port. The UART port comes
-   // with its commands.
+   // The processor adds JTAG when it has a JTAG port, and the UART port
+   // and the USB COM port when it has a DapUart.
    uint16_t capabilities{ capability::swd | capability::atomicCommands };
 };
 
@@ -186,6 +217,17 @@ class Platform {
    ~Platform() = default;
 };
 
+// The RISC-V bridge of ID_DAP_Vendor1 (RvBridge.h)
+class Bridge {
+   public:
+   virtual void enable(bool on) = 0;
+   // DAP_SWJ_Pins drove SWCLK or SWDIO.
+   virtual void pinsChanged() = 0;
+
+   protected:
+   ~Bridge() = default;
+};
+
 class PacketReader;
 class PacketWriter;
 
@@ -203,13 +245,20 @@ class Processor final : private TransferAbort {
    static constexpr uint32_t maxPinWaitUs = 3'000'000;
 
    // jtag: nullptr for a board without JTAG. personalitySwitch: nullptr
-   // for an image with one personality.
+   // for an image with one personality. uart: nullptr for no DAP_UART_*
+   // commands. The constructor only stores the uart pointer, so the object
+   // can be constructed later. bootloader: nullptr for an image without a
+   // bootloader. bridge: nullptr for an image without the RISC-V bridge;
+   // else the bridge is also the jtag port.
    Processor(DapSwd &swd,
              protocol::GpioPins &gpio,
              Platform &platform,
              const DeviceInfo &info,
              protocol::JtagPort *jtag = nullptr,
-             personality::PersonalitySwitch *personalitySwitch = nullptr);
+             personality::PersonalitySwitch *personalitySwitch = nullptr,
+             DapUart *uart = nullptr,
+             boot::BootloaderEntry *bootloader = nullptr,
+             Bridge *bridge = nullptr);
 
    [[nodiscard]] bool canSubmit() const {
       return requests_ + responses_ < packetCount;
@@ -237,7 +286,8 @@ class Processor final : private TransferAbort {
    [[nodiscard]] art::span<const uint8_t> response() const;
    void popResponse();
 
-   // The host went away: like DAP_Disconnect, and the queue is empty.
+   // The host went away: like DAP_Disconnect, and the queue is empty. The
+   // UART goes back to its default transport.
    void hostGone();
 
    // Like DAP_Disconnect: releases the pins. The queued packets and the
@@ -294,6 +344,9 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool jtagIdcode(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool executeCommands(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool switchPersonality(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool switchBridge(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool uartCommand(uint8_t id, PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
 
    [[nodiscard]] uint8_t pinsIn() const;
    void applySettings();
@@ -311,6 +364,9 @@ class Processor final : private TransferAbort {
    Platform &platform_;
    DeviceInfo info_;
    personality::PersonalitySwitch *personalitySwitch_;
+   DapUart *uart_;
+   boot::BootloaderEntry *bootloader_;
+   Bridge *bridge_;
 
    Port port_{ Port::None };
    // Also the idle cycles and the WAIT retries of JTAG

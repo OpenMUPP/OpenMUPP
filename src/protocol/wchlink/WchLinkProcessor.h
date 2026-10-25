@@ -147,10 +147,18 @@ inline constexpr uint8_t dmiNop = 0x00;
 inline constexpr uint8_t dmiRead = 0x01;
 inline constexpr uint8_t dmiWrite = 0x02;
 
-// The chip type of command 0x0c for the CH32V00x, and the family code of
-// the connect response. Captured: 0x09 (CH32V003), 0x05 (CH32V208).
-inline constexpr uint8_t familyV00x = 0x09;
+// The chip type of command 0x0c and the family code of the connect
+// response. Captured: 0x09 (CH32V003), 0x05 (CH32V208), 0x4e (CH32V006); the rest match wlink.
 inline constexpr uint8_t familyV20x = 0x05;
+inline constexpr uint8_t familyV30x = 0x06;
+inline constexpr uint8_t familyV00x = 0x09;
+inline constexpr uint8_t familyCh643 = 0x0c;
+inline constexpr uint8_t familyX035 = 0x0d;
+inline constexpr uint8_t familyL103 = 0x0e;
+inline constexpr uint8_t familyCh645 = 0x46;
+inline constexpr uint8_t familyCh641 = 0x49;
+inline constexpr uint8_t familyV006 = 0x4e;
+inline constexpr uint8_t familyV317 = 0x86;
 
 // The sub-commands of command 0x06
 inline constexpr uint8_t protectionQuery = 0x01;
@@ -171,14 +179,37 @@ inline constexpr uint8_t firmwareMajor = 2;
 inline constexpr uint8_t firmwareMinor = 19;
 inline constexpr uint8_t probeType = 0x12;
 
-// The registers of the probe actions at connect
+// The registers of the probe actions at connect. The unlock registers are
+// in WchLinkTarget.h.
 namespace wchdm {
-inline constexpr uint8_t unlock1 = 0x7e;
-inline constexpr uint8_t unlock2 = 0x7d;
-inline constexpr uint32_t unlockValue = 0x5aa5'0400;
 inline constexpr uint16_t csr7c0 = 0x07c0;
 inline constexpr uint32_t csr7c0Value = 0x0000'0300;
 } // namespace wchdm
+
+// The clock setup that the probe does at connect on the family 0x4e
+// (docs/wch-link-protocol.md, "CH32V006"): FLASH_ACTLR, RCC and the flash
+// controller registers. Captured on a CH32V006 only.
+namespace clocksetup {
+inline constexpr uint32_t flashActlr = 0x4002'2000;
+inline constexpr uint32_t flashStatr = 0x4002'200c;
+inline constexpr uint32_t flashCtlr = 0x4002'2010;
+inline constexpr uint32_t rccCtlr = 0x4002'1000;
+inline constexpr uint32_t rccCfgr0 = 0x4002'1004;
+inline constexpr uint32_t rccIntr = 0x4002'1008;
+
+inline constexpr uint32_t flashActlrValue = 0x0000'0002;
+// The reset values of FLASH_CTLR (locked) and FLASH_STATR, with EOP cleared
+inline constexpr uint32_t flashCtlrValue = 0x0000'8080;
+inline constexpr uint32_t flashStatrValue = 0x0000'b020;
+// All the ready and security flags of RCC_INTR
+inline constexpr uint32_t rccIntrClear = 0x009d'0000;
+inline constexpr uint32_t pllOn = 1u << 24;
+inline constexpr uint32_t pllReady = 1u << 25;
+// RCC_CFGR0: SW and SWS select the PLL as the system clock
+inline constexpr uint32_t switchPll = 0x2;
+inline constexpr uint32_t switchStatusMask = 0xc;
+inline constexpr uint32_t switchStatusPll = 0x8;
+} // namespace clocksetup
 
 // The words of the chip information (command 0x11)
 inline constexpr std::array<uint32_t, 4> chipInfoAddresses{ 0x1fff'f7e0, 0x1fff'f7e8, 0x1fff'f7ec, 0x1fff'f7f0 };
@@ -191,14 +222,33 @@ struct ChipFamily {
    uint8_t family;
 };
 
-// The known chip series. Captured: CH32V003 (0x003, 0x09) and CH32V208
-// (0x208, 0x05). The CH32V203 and the CH32V207 are in the CH32V20x series of
-// the CH32V208. Their IDs are not captured.
-inline constexpr std::array<ChipFamily, 4> chipFamilies{ {
+// The known chip series. Captured: CH32V003 (0x003, 0x09), CH32V208
+// (0x208, 0x05) and CH32V006 (0x006, 0x4e). The other series have the same debug module, ESIG and FPEC
+// registers (reference manuals and wlink).
+inline constexpr std::array<ChipFamily, 20> chipFamilies{ {
+// 1-wire QingKe V2A (64-byte flash page)
 { 0x003, familyV00x },
+{ 0x641, familyCh641 },
+// 1-wire QingKe V2C (256-byte flash page: CH32V002/4/5/6/7, CH32M007)
+{ 0x002, familyV006 },
+{ 0x004, familyV006 },
+{ 0x005, familyV006 },
+{ 0x006, familyV006 },
+{ 0x007, familyV006 },
+// 2-wire QingKe V4 (256-byte flash page)
+{ 0x033, familyX035 },
+{ 0x035, familyX035 },
+{ 0x103, familyL103 },
 { 0x203, familyV20x },
 { 0x207, familyV20x },
 { 0x208, familyV20x },
+{ 0x303, familyV30x },
+{ 0x305, familyV30x },
+{ 0x307, familyV30x },
+{ 0x317, familyV317 },
+{ 0x643, familyCh643 },
+{ 0x645, familyCh645 },
+{ 0x653, familyCh645 },
 } };
 
 // The family code of the connect response. 0 for a chip ID that is not in
@@ -316,6 +366,8 @@ class Processor {
       Unknown,
    };
    [[nodiscard]] Found connectOn(uint32_t &chipId);
+   // The clock setup of the family 0x4e. False when an access fails or a poll times out.
+   [[nodiscard]] bool setupClock();
    void quit();
    // Resumes the hart and ends dmactive, as the quit of the probe
    void restore();

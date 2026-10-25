@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include "IntDiv.h"
+
 class ErrorLed {
    public:
    static constexpr uint32_t flashMs = 60;
@@ -31,7 +33,7 @@ class ErrorLed {
       if(active && nowMs >= endMs) {
          active = false;
       }
-      const uint64_t phase = active ? (nowMs - startMs) % periodMs : periodMs;
+      const uint32_t phase = active ? intdiv::mod(nowMs - startMs, periodMs) : periodMs;
       on = phase < flashMs || (phase >= 2 * flashMs && phase < 3 * flashMs);
    }
 

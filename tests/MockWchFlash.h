@@ -42,6 +42,7 @@ class MockWchFlash {
    static constexpr uint32_t flashBase = 0x0800'0000;
 
    struct Chip {
+      wchlink::Series series;
       uint32_t size;
       uint32_t pageSize;
       // Erased flash reads this word (CH32V208: 0xe339e339).
@@ -50,8 +51,12 @@ class MockWchFlash {
       wchlink::StubLayout layout;
    };
    // The flash sizes are small to keep the tests fast.
-   static constexpr Chip v003{ 16 * 1024, 64, 0xffff'ffff, wchlink::fpec::optionBytesV00x, wchlink::layoutV00x };
-   static constexpr Chip v208{ 32 * 1024, 256, 0xe339'e339, wchlink::fpec::optionBytesV20x, wchlink::layoutV20x };
+   static constexpr Chip v003{ wchlink::Series::V00x,          16 * 1024,          64, 0xffff'ffff,
+                               wchlink::fpec::optionBytesV00x, wchlink::layoutV00x };
+   static constexpr Chip v006{ wchlink::Series::V006,          32 * 1024,          256, 0xe339'e339,
+                               wchlink::fpec::optionBytesV20x, wchlink::layoutV006 };
+   static constexpr Chip v208{ wchlink::Series::V20x,          32 * 1024,          256, 0xe339'e339,
+                               wchlink::fpec::optionBytesV20x, wchlink::layoutV20x };
 
    MockWchFlash(MockDebugModule &dm, const Chip &chip)
       : flash(chip.size)
@@ -106,6 +111,7 @@ class MockWchFlash {
    // The operation bits of CTLR (no LOCK, FLOCK, OBWRE, STRT)
    uint32_t mode{ 0 };
    uint32_t status{ 0 };
+   uint32_t addr{ 0 };
    bool readProtected{ false };
    // FLASH_OBR without RDPRT, loaded at a system reset from USER and DATA
    uint32_t obrLoaded{ 0 };
@@ -131,6 +137,8 @@ class MockWchFlash {
    };
    std::vector<Call> calls;
 
+   // The reads of abstractcs that the abstract command of the RDPR write stays busy
+   uint32_t autoEraseBusyReads{ 1500 };
    int massErases{ 0 };
    int autoErases{ 0 };
    int optionErases{ 0 };
@@ -138,6 +146,13 @@ class MockWchFlash {
 
    private:
    static constexpr uint32_t opMask = 0x00ff'0000u | 0x3fu;
+   // The clock setup of the probe at connect on a CH32V006
+   static constexpr uint32_t rccCtlr = 0x4002'1000;
+   static constexpr uint32_t rccCfgr0 = 0x4002'1004;
+   static constexpr uint32_t pllOn = 1u << 24;
+   static constexpr uint32_t pllReady = 1u << 25;
+   uint32_t rccCtlrValue_{ 0x0050'9c83 };
+   uint32_t rccCfgr0Value_{ 0x20 };
    static constexpr uint16_t csrDcsr = 0x07b0;
    static constexpr uint16_t csrMstatus = 0x0300;
    // An ebreak of the stub
@@ -174,10 +189,11 @@ class MockWchFlash {
       flocked = true;
       obwre = false;
       mode = 0;
+      addr = 0;
       keySteps_ = {};
       readProtected = option(wchlink::fpec::optionRdpr) != wchlink::fpec::rdprUnprotected;
       const uint32_t user = option(1);
-      if(chip_.optionBytes == wchlink::fpec::optionBytesV00x) {
+      if(chip_.series != wchlink::Series::V20x) {
          obrLoaded = user << 2 | static_cast<uint32_t>(option(2)) << 10 | static_cast<uint32_t>(option(3)) << 18;
       } else {
          // CH32V20x: IWDG_SW, STOP_RST, STANDBY_RST, then SRAM_CODE_MODE
@@ -210,6 +226,13 @@ class MockWchFlash {
             value |= static_cast<uint32_t>(options[index + 1]) << 16;
          }
          return value;
+      }
+      // RCC_CTLR: PLLRDY follows PLLON. RCC_CFGR0: SWS follows SW.
+      if(address == rccCtlr) {
+         return rccCtlrValue_ | (rccCtlrValue_ & pllOn ? pllReady : 0);
+      }
+      if(address == rccCfgr0) {
+         return rccCfgr0Value_ | (rccCfgr0Value_ & 3) << 2;
       }
       switch(address) {
       case fpec::ctlr:
@@ -259,6 +282,10 @@ class MockWchFlash {
          storeOption(address, value, bytes);
          return true;
       }
+      if(address == rccCtlr || address == rccCfgr0) {
+         (address == rccCtlr ? rccCtlrValue_ : rccCfgr0Value_) = value;
+         return true;
+      }
       if(address < 0x4002'2000 || address >= 0x4002'2030) {
          return false;
       }
@@ -301,6 +328,9 @@ class MockWchFlash {
       case fpec::ctlr:
          storeControl(value);
          break;
+      case fpec::addr:
+         addr = value;
+         break;
       default:
          break;
       }
@@ -310,7 +340,11 @@ class MockWchFlash {
    void storeControl(uint32_t value) {
       namespace fpec = wchlink::fpec;
       if(locked) {
-         errors.push_back("CTLR write while locked");
+         // The probe writes the reset value at connect, which only locks
+         // (v006-wlink-status-timing.csv).
+         if(value != (fpec::lock | fpec::flock)) {
+            errors.push_back("CTLR write while locked");
+         }
          return;
       }
       locked = locked || (value & fpec::lock) != 0;
@@ -326,6 +360,10 @@ class MockWchFlash {
       } else if((mode & fpec::ober) != 0 && obwre) {
          options.fill(erasedOption());
          ++optionErases;
+      } else if(chip_.series == wchlink::Series::V006 && (mode & fpec::obpg) != 0 && obwre) {
+         // The CH32V006 takes an option half word only after STRT (seen on hardware)
+         strtArmed_ = true;
+         return;
       } else {
          errors.push_back("STRT without an operation");
          return;
@@ -335,14 +373,24 @@ class MockWchFlash {
 
    void storeOption(uint32_t address, uint32_t value, uint32_t bytes) {
       namespace fpec = wchlink::fpec;
+      const std::size_t index = (address - fpec::optionBytes) / 2;
       if(bytes != 2 || (mode & fpec::obpg) == 0 || !obwre || locked) {
          errors.push_back("option byte write without OBPG, or not a half word");
          return;
       }
-      const std::size_t index = (address - fpec::optionBytes) / 2;
       if(index >= chip_.optionBytes) {
          errors.push_back("option byte that the chip does not have");
          return;
+      }
+      if(chip_.series == wchlink::Series::V006) {
+         if(!strtArmed_) {
+            errors.push_back("V006 option half word without STRT");
+         }
+         strtArmed_ = false;
+         // A byte of 0xff with a hardware inverse stays unprogrammed on the chip: the half word needs its inverse.
+         if(((value ^ value >> 8) & 0xff) != 0xff) {
+            errors.push_back("V006 option half word without its inverse");
+         }
       }
       if(options[index] != erasedOption()) {
          errors.push_back("option byte write without erase");
@@ -352,6 +400,10 @@ class MockWchFlash {
       if(index == fpec::optionRdpr && byte == fpec::rdprUnprotected && readProtected) {
          eraseMain();
          ++autoErases;
+         // The erase of the main flash stalls the bus for about 110 ms (CH32V006, hardware).
+         if(chip_.series == wchlink::Series::V006) {
+            dm_.holdBusy(autoEraseBusyReads);
+         }
       }
       operationDone();
    }
@@ -449,6 +501,7 @@ class MockWchFlash {
    MockDebugModule &dm_;
    Chip chip_;
    KeySteps keySteps_;
+   bool strtArmed_{ false };
    uint32_t busyLeft_{ 0 };
 };
 

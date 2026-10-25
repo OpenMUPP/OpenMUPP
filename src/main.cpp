@@ -1,31 +1,3 @@
-// versaloon-NG firmware. os_startup_initialize_hardware()
-// (src/initialize_hardware.cpp) sets up the clocks and the board pins
-// before main() runs. The main loop wakes up on each 1 ms SysTick and on
-// each USB interrupt. It runs the USB device, the UART bridge
-// (uart/SerialBridge.h) or, in a VSL_DEBUG_CDC build, the debug log
-// (debug/DebugLog.h), and drives the LEDs: the target power on the power
-// LED, the command activity on the state LED (the probe error pattern
-// after a JTAG or SWD error, the clock fault pattern when the crystal
-// fails) and the USB state on the USB LED. After VERSALOON_FW_UPDATE it
-// enters versaloon-bootloader (boot/BootloaderEntry.h). The USB_TO_XXX
-// commands of OpenOCD go to the USB_TO_ALL dispatcher (protocol/UsbToAll.h),
-// with the GPIO block (protocol/GpioBlock.h) on the debug connector pins
-// the JTAG_RAW block (protocol/JtagRawBlock.h) on the JTAG port of the
-// board (board/BoardJtag.h: SPI fast path or bit-bang), and the SWD block (protocol/SwdBlock.h) on the
-// bit-bang SWD engine (swd/SwdBitBang.h). The POWER block
-// (protocol/PowerBlock.h) switches the target supply, and its poll() in the
-// main loop switches it off when the rail drops. GET_TVCC replies the
-// voltage of its Vref sense. During a long JTAG or SWD command, the
-// engines call the serial service (protocol/Background.h): it runs the
-// serial port of the USB device and the UART bridge, or the debug log.
-// A CMSIS-DAP image runs the CMSIS-DAP processor
-// (protocol/cmsisdap/DapProcessor.h) instead of USB_TO_ALL. A dual image
-// has both: the stored personality (personality/PersonalityStore.h)
-// selects one at the start. A switch command, or a key that is down for 3 s
-// (then the key release), stores the next personality and resets (personality/PersonalitySwitch.h).
-// A wch-link image runs the WCH-Link processor (protocol/wchlink/WchLinkProcessor.h)
-// on the RISC-V debug wire engine (board/BoardRvSwd.h). It has no serial
-// port: no UART bridge and no debug log.
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
@@ -45,9 +17,10 @@
 #include "board/BoardPower.h"
 #include "board/BoardSwd.h"
 #include "board/Leds.h"
+#include "boot/Bootloader.h"
+#include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
 #include "protocol/Background.h"
-#include "protocol/GpioBlock.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
@@ -60,16 +33,20 @@
 
 #include "protocol/cmsisdap/BitBangDapSwd.h"
 #include "protocol/cmsisdap/DapProcessor.h"
+#if defined(VSL_CMSIS_DAP_RV_BRIDGE)
+#include "board/BoardRvSwd.h"
+#include "protocol/cmsisdap/RvBridge.h"
+#include "protocol/cmsisdap/RvDtmTap.h"
+#endif
 #endif
 #if defined(VSL_WITH_VERSALOON)
-#include "boot/Bootloader.h"
-#include "boot/BootloaderEntry.h"
-#include "protocol/JtagRawBlock.h"
-#include "protocol/PowerBlock.h"
-#include "protocol/SwdBlock.h"
-#include "protocol/UsbToAll.h"
+#include "protocol/versaloon/GpioBlock.h"
+#include "protocol/versaloon/JtagRawBlock.h"
+#include "protocol/versaloon/PowerBlock.h"
+#include "protocol/versaloon/SwdBlock.h"
+#include "protocol/versaloon/UsbToAll.h"
 #endif
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
 #include "board/BoardPins.h"
 #include "board/SettingsFlashPage.h"
 #include "personality/KeyGesture.h"
@@ -79,7 +56,11 @@
 
 namespace {
 
-#if !defined(VSL_WITH_WCH_LINK)
+using personality::Personality;
+
+#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
+
+// The SWD and JTAG ports of the Versaloon and CMSIS-DAP personalities
 
 // The serial port during a long command. It runs only the serial port
 // events of the USB device (UsbStack::pollSerial()), so no command starts
@@ -99,20 +80,11 @@ board::BoardJtag boardJtag{ jtagPins, &serialService };
 
 #endif
 
-#if defined(VSL_DUAL_PERSONALITY)
-
-using personality::Personality;
-
-// The personality when the settings page has none
-#if defined(VSL_DEFAULT_CMSIS_DAP)
-constexpr Personality defaultPersonality = Personality::CmsisDap;
-#else
-constexpr Personality defaultPersonality = Personality::Versaloon;
-#endif
+#if defined(VSL_MULTI_PERSONALITY)
 
 Personality loadPersonality() {
    board::SettingsFlashPage page;
-   return personality::PersonalityStore{ page }.load().value_or(defaultPersonality);
+   return personality::PersonalityStore{ page }.load().value_or(personality::defaultPersonality);
 }
 
 // The personality of this start. Before the USB stack, which takes it.
@@ -120,17 +92,51 @@ const Personality activePersonality = loadPersonality();
 personality::PersonalitySwitch personalitySwitch{ activePersonality };
 personality::KeyGesture keyGesture;
 
+#else
+
+// The one personality of the image
+constexpr Personality activePersonality = personality::all[0];
+
 #endif
+
+// True when the personality runs in this start. In an image with one
+// personality it is a constant, so the compiler drops the other groups.
+// The constructors only keep references, so no group touches the hardware
+// before main(). Only the active personality configures its pins, timers
+// and DMA channels. A personality switch resets the MCU, so nothing is set
+// back.
+bool isActive(Personality personality) {
+   return activePersonality == personality;
+}
 
 // The Vref sense and the target switch. The target power LED reads the
 // sense in every personality.
 board::BoardPower boardPower;
 
+// The bootloader entry of FW_UPDATE and of the bootloader code of the switch
+// commands, in every personality. Only the app-8k image enters the
+// bootloader, behind versaloon-bootloader. CMake defines
+// VSL_HAS_BOOTLOADER_ENTRY for this file of that image only
+// (vsl_add_app_image() in CMakeLists.txt). The other sources are shared by
+// all images and compiled without the define, so the value is here and not
+// in a shared header.
+#if defined(VSL_HAS_BOOTLOADER_ENTRY)
+constexpr bool hasBootloaderEntry = true;
+#else
+constexpr bool hasBootloaderEntry = false;
+#endif
+boot::BootloaderEntry bootloaderEntry;
+boot::BootloaderEntry *const bootloader = hasBootloaderEntry ? &bootloaderEntry : nullptr;
+
 #if defined(VSL_WITH_WCH_LINK)
 
+// --- WCH-Link ---------------------------------------------------------
 // The processor runs in the main loop, outside the USB event delivery. The
 // target gets no Background: the personality has no serial port to service
-// during a long command.
+// during a long command. rvSwdPins.init() sets up the one-wire timer and
+// its DMA channels when the host attaches the target (wchProcessor), so
+// only in a WCH-Link start. The personality has no start, no poll work and no error count.
+
 class WchPlatform final : public wchlink::Platform {
    public:
    void delayUs(uint32_t microseconds) override {
@@ -147,6 +153,7 @@ wchlink::Processor wchProcessor{ wchTarget, wchPlatform };
 
 #if defined(VSL_WITH_CMSIS_DAP)
 
+// --- CMSIS-DAP --------------------------------------------------------
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
 // processor keeps a pointer to the serial number text.
 constexpr const char *dapVendor = "Versaloon";
@@ -181,6 +188,14 @@ class DapPlatform final : public cmsisdap::Platform {
 
 DapPlatform dapPlatform;
 cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
+#if defined(VSL_CMSIS_DAP_RV_BRIDGE)
+// The RISC-V bridge: ID_DAP_Vendor1 switches the JTAG port from the board
+// to the emulated RISC-V DTM on the debug wire engine.
+board::RvSwdPins dapRvSwdPins;
+wchlink::RvSwdTarget<board::RvSwdPins> dapRvTarget{ dapRvSwdPins, &serialService };
+cmsisdap::RvDtmTap dapRvTap{ dapRvTarget };
+cmsisdap::RvBridge dapRvBridge{ boardJtag, dapRvTap };
+#endif
 cmsisdap::Processor dapProcessor{ dapSwd,
                                   boardGpio,
                                   dapPlatform,
@@ -190,18 +205,47 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   .serialNumber = dapSerialNumber.data(),
                                   .firmwareVersion = versionString,
                                   },
-                                  &boardJtag,
-#if defined(VSL_DUAL_PERSONALITY)
-                                  &personalitySwitch
+#if defined(VSL_CMSIS_DAP_RV_BRIDGE)
+                                  &dapRvBridge,
 #else
-                                  nullptr
+                                  &boardJtag,
 #endif
-};
+#if defined(VSL_MULTI_PERSONALITY)
+                                  &personalitySwitch,
+#else
+                                  nullptr,
+#endif
+                                  uart::dapUart(),
+                                  bootloader,
+#if defined(VSL_CMSIS_DAP_RV_BRIDGE)
+                                  &dapRvBridge };
+#else
+                                  nullptr };
+#endif
+
+// The chip UID as the 24 hexadecimal digits of the USB serial number
+// string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one
+// serial number in the USB string and in DAP_Info.
+void setDapSerialNumber() {
+   std::array<uint8_t, hw::Uid::SizeBytes> uid{};
+   hw::Uid::read(uid);
+   constexpr char digits[] = "0123456789ABCDEF";
+   for(std::size_t i = 0; i < uid.size(); ++i) {
+      dapSerialNumber[2 * i] = digits[uid[i] >> 4];
+      dapSerialNumber[2 * i + 1] = digits[uid[i] & 0x0F];
+   }
+}
+
+// The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
+void startDap() {
+   setDapSerialNumber();
+}
 
 #endif
 
 #if defined(VSL_WITH_VERSALOON)
 
+// --- Versaloon --------------------------------------------------------
 // The DELAY block busy-waits: the main loop stops for the delay, up to
 // 32.767 s. The host waits for the reply in this time.
 class BusyWaitDelay final : public protocol::Delay {
@@ -221,62 +265,12 @@ protocol::GpioBlock gpioBlock{ boardGpio };
 protocol::JtagRawBlock jtagRawBlock{ boardJtag };
 protocol::SwdBlock swdBlock{ boardSwd };
 protocol::PowerBlock powerBlock{ boardPower, busyWaitDelay };
-boot::BootloaderEntry bootloaderEntry;
-
-// FW_UPDATE enters the bootloader only in the app-8k image, behind
-// versaloon-bootloader. CMake defines VSL_HAS_BOOTLOADER_ENTRY for this file
-// of that image only (vsl_add_app_image() in CMakeLists.txt). The other
-// sources are shared by all images and compiled without the define, so the
-// value is here and not in a shared header.
-#if defined(VSL_HAS_BOOTLOADER_ENTRY)
-constexpr bool hasBootloaderEntry = true;
-#else
-constexpr bool hasBootloaderEntry = false;
-#endif
-
-#endif
-
-#if defined(VSL_DUAL_PERSONALITY)
-usb::UsbStack usbStack{ activePersonality, hasBootloaderEntry ? &bootloaderEntry : nullptr, usbToAll, personalitySwitch, dapProcessor };
-#elif defined(VSL_WITH_WCH_LINK)
-usb::UsbStack usbStack{ wchProcessor };
-#elif defined(VSL_WITH_CMSIS_DAP)
-usb::UsbStack usbStack{ dapProcessor };
-#else
-usb::UsbStack usbStack{ hasBootloaderEntry ? &bootloaderEntry : nullptr, usbToAll };
-#endif
-
-#if !defined(VSL_WITH_WCH_LINK)
-// A command runs only after usbStack.start(), so the USB device and the
-// bridge run.
-void SerialService::service() {
-   usbStack.pollSerial();
-   debug::pollLog(usbStack);
-   uart::pollBridge();
-}
-#endif
-
-#if defined(VSL_WITH_CMSIS_DAP)
-
-// The chip UID as the 24 hexadecimal digits of the USB serial number
-// string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one
-// serial number in the USB string and in DAP_Info.
-void setDapSerialNumber() {
-   std::array<uint8_t, hw::Uid::SizeBytes> uid{};
-   hw::Uid::read(uid);
-   constexpr char digits[] = "0123456789ABCDEF";
-   for(std::size_t i = 0; i < uid.size(); ++i) {
-      dapSerialNumber[2 * i] = digits[uid[i] >> 4];
-      dapSerialNumber[2 * i + 1] = digits[uid[i] & 0x0F];
-   }
-}
-
-#endif
-
-#if defined(VSL_WITH_VERSALOON)
+const usb::UsbStack::VersaloonDeps versaloonDeps{
+   .usbToXxx = &usbToAll,
+};
 
 // Adds the blocks of USB_TO_ALL before the first command
-void addUsbToAllBlocks() {
+void startVersaloon() {
    if(!usbToAll.add(gpioBlock)) {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the GPIO block");
    }
@@ -292,10 +286,53 @@ void addUsbToAllBlocks() {
    usbToAll.setTargetVoltage(&powerBlock);
 }
 
+// Switches the target supply off when the rail drops
+void afterUsbPollVersaloon(uint64_t nowMs) {
+   powerBlock.poll(nowMs);
+}
+
 #endif
 
-#if defined(VSL_DUAL_PERSONALITY)
+usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
+#if defined(VSL_WITH_VERSALOON)
+                                           .versaloon = &versaloonDeps,
+#else
+                                           .versaloon = nullptr,
+#endif
+#if defined(VSL_WITH_CMSIS_DAP)
+                                           .dap = &dapProcessor,
+#else
+                                           .dap = nullptr,
+#endif
+#if defined(VSL_WITH_WCH_LINK)
+                                           .wch = &wchProcessor,
+#else
+                                           .wch = nullptr,
+#endif
+#if defined(VSL_MULTI_PERSONALITY)
+                                           .personalitySwitch = &personalitySwitch,
+#else
+                                           .personalitySwitch = nullptr,
+#endif
+                                           .bootloader = bootloader,
+                                           } };
 
+#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
+// A command runs only after usbStack.start(), so the USB device and the
+// bridge run. Only the Versaloon and CMSIS-DAP engines call it. As in the
+// main loop, the log and the bridge run only with the serial port.
+void SerialService::service() {
+   usbStack.pollSerial();
+   if(usbStack.hasSerialPort()) {
+      debug::pollLog(usbStack);
+      uart::pollBridge();
+   }
+}
+#endif
+
+#if defined(VSL_MULTI_PERSONALITY)
+
+// --- Personality switch -----------------------------------------------
 // Stores the personality and resets. The USB device then enumerates with
 // the descriptors of that personality. When the store fails, the reset
 // keeps the active personality.
@@ -329,33 +366,56 @@ void pollPersonality(uint64_t nowMs) {
 
 #endif
 
+// --- The active personality -------------------------------------------
 // Before the first command
 void startProtocol() {
    boardPower.init();
 #if defined(VSL_WITH_CMSIS_DAP)
-   setDapSerialNumber();
+   if(isActive(Personality::CmsisDap)) {
+      startDap();
+   }
 #endif
 #if defined(VSL_WITH_VERSALOON)
-   addUsbToAllBlocks();
+   if(isActive(Personality::Versaloon)) {
+      startVersaloon();
+   }
 #endif
 }
 
-// The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
 void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
-#if defined(VSL_WITH_VERSALOON)
-   if(bootloaderEntry.isDue(nowMs)) {
-      boot::enterBootloader();
+   // Only the app-8k image links boot::enterBootloader() (an STM32F1 board)
+   if constexpr(hasBootloaderEntry) {
+      if(bootloaderEntry.isDue(nowMs)) {
+         boot::enterBootloader();
+      }
    }
-#endif
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
    pollPersonality(nowMs);
 #endif
 }
 
 void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
 #if defined(VSL_WITH_VERSALOON)
-   powerBlock.poll(nowMs);
+   if(isActive(Personality::Versaloon)) {
+      afterUsbPollVersaloon(nowMs);
+   }
 #endif
+}
+
+// Number of JTAG and SWD errors of the active personality, for the error
+// LED. It wraps at 2^32: only the difference between two values counts.
+uint32_t probeErrorCount() {
+#if defined(VSL_WITH_VERSALOON)
+   if(isActive(Personality::Versaloon)) {
+      return swdBlock.errorCount();
+   }
+#endif
+#if defined(VSL_WITH_CMSIS_DAP)
+   if(isActive(Personality::CmsisDap)) {
+      return dapProcessor.errorCount();
+   }
+#endif
+   return 0;
 }
 
 constexpr Heartbeat clockFaultBlink{ Heartbeat::clockFault };
@@ -363,23 +423,10 @@ ActivityLed activityLed;
 ErrorLed errorLed;
 TargetPowerLed targetPowerLed;
 
-// Number of JTAG and SWD errors of all personalities, for the error LED.
-// It wraps at 2^32: only the difference between two values counts.
-uint32_t probeErrorCount() {
-   uint32_t count = 0;
-#if defined(VSL_WITH_VERSALOON)
-   count += swdBlock.errorCount();
-#endif
-#if defined(VSL_WITH_CMSIS_DAP)
-   count += dapProcessor.errorCount();
-#endif
-   return count;
-}
-
 // Drives the LEDs (docs/boards.md, "LEDs"). Call it in each main loop
 // iteration, after the USB poll.
 void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
-#if defined(VSL_DUAL_PERSONALITY)
+#if defined(VSL_MULTI_PERSONALITY)
    // The key gesture flashes all LEDs before the switch.
    if(const auto flash = personalitySwitch.indication(nowMs)) {
       board::setLed(board::Led::Power, *flash);
@@ -403,6 +450,8 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
 } // namespace
 
 int main() {
+   // os_startup_initialize_hardware() (initialize_hardware.cpp) set up the
+   // clocks and the board pins before main().
    const bool clockFromCrystal = hardware::isClockFromCrystal();
 
    debug::startLog();
@@ -413,7 +462,9 @@ int main() {
    // USB needs the 48 MHz clock from the PLL. Without the crystal the
    // device stays disconnected, and the UART bridge is off.
    if(clockFromCrystal) {
-      uart::startBridge(usbStack);
+      if(usbStack.hasSerialPort()) {
+         uart::startBridge(usbStack);
+      }
       usbStack.start();
    }
 
@@ -423,11 +474,14 @@ int main() {
       beforeUsbPoll(nowMs);
       if(clockFromCrystal) {
          usbStack.poll();
-         debug::pollLog(usbStack);
-         uart::pollBridge();
+         if(usbStack.hasSerialPort()) {
+            debug::pollLog(usbStack);
+            uart::pollBridge();
+         }
       }
       afterUsbPoll(nowMs);
       updateLeds(nowMs, clockFromCrystal);
+      // The SysTick and the USB interrupt end the WFI.
       // Sleep only when no USB event waits. An event that came after the
       // USB poll has no pending interrupt to end the WFI: the interrupt
       // handler already ran, or the main loop queued the event itself (the

@@ -1,31 +1,41 @@
 #pragma once
 
 // The USB composite device of the dongle on the STM32F1 USB peripheral:
-// the protocol interface and one CDC-ACM serial port. Target only.
+// the protocol interface of one personality and, in most personalities,
+// one CDC-ACM serial port. Target only.
 //
-// The build selects the personalities (VSL_PROTOCOL in CMakeLists.txt):
+// The build selects the personalities of the image (VSL_PERSONALITIES,
+// cmake/Personalities.cmake). Each one has a define, its descriptors and its USB
+// function:
 //
-//   versaloon (default)  the Versaloon vendor interface of OpenOCD,
-//                        VSL_WITH_VERSALOON (usb/UsbDescriptors.h,
-//                        usb/VersaloonFunction.h)
-//   cmsis-dap            the CMSIS-DAP v2 interface, VSL_WITH_CMSIS_DAP
-//                        (usb/CmsisDapDescriptors.h, usb/CmsisDapFunction.h)
-//   dual                 both. The constructor selects the active one, and
-//                        the stack has only its descriptors and its USB
-//                        function. The other function is not used.
-//   wch-link             the WCH-Link interface, VSL_WITH_WCH_LINK
-//                        (usb/WchLinkDescriptors.h, usb/WchLinkFunction.h)
+//   versaloon   the Versaloon vendor interface of OpenOCD,
+//               VSL_WITH_VERSALOON (usb/UsbDescriptors.h,
+//               usb/VersaloonFunction.h)
+//   cmsis-dap   the CMSIS-DAP v2 interface, VSL_WITH_CMSIS_DAP
+//               (usb/CmsisDapDescriptors.h, usb/CmsisDapFunction.h)
+//   wch-link    the WCH-Link interface, VSL_WITH_WCH_LINK
+//               (usb/WchLinkDescriptors.h, usb/WchLinkFunction.h)
+//
+// The stack has the USB function of each personality in the image, so an
+// image with one personality has the RAM and flash of only that one. The
+// constructor selects the active personality. The device then has only the
+// descriptors and the USB function of that personality. The functions of
+// the other personalities are not used.
 //
 // The serial port is the same in each personality, except wch-link: its
-// two bulk pairs leave no packet memory for a serial port, so the
-// device has no serial port, and the UART bridge and the debug log are off.
+// two bulk pairs leave no packet memory for a serial port. hasSerialPort()
+// tells if the active personality has one. The serial port function is in
+// the stack when a personality of the image has a serial port
+// (VSL_USB_SERIAL_PORT). An image with only wch-link has no serial port, and
+// the UART bridge and the debug log are off.
 //
 // The USB interrupt only queues the events. poll() runs the USB protocol in
-// the main loop. The OUT endpoint of the protocol interface is double-buffered: the hardware
-// receives the next packet of a command while the main loop handles the
-// last one. pollSerial() runs only the serial port, during a long
-// USB_TO_XXX command (usb/SerialEventQueue.h). The D+ pull-up of the board definition connects the
-// device; a board without one has a fixed pull-up.
+// the main loop. In the personalities with a serial port, the OUT endpoint
+// of the protocol interface is double-buffered: the hardware receives the
+// next packet of a command while the main loop handles the last one.
+// pollSerial() runs only the serial port, during a long USB_TO_XXX command
+// (usb/SerialEventQueue.h). The D+ pull-up of the board definition connects
+// the device; a board without one has a fixed pull-up.
 
 #include <cstdint>
 #include <usb/CdcAcmFunction.h>
@@ -34,6 +44,8 @@
 
 #include "personality/Personality.h"
 #include "usb/SerialEventQueue.h"
+#include "usb/SerialPortConfig.h"
+#include "usb/SwitchRequest.h"
 #if defined(VSL_WITH_CMSIS_DAP)
 #include "usb/CmsisDapFunction.h"
 #endif
@@ -48,34 +60,57 @@
 #error "libart-stm32 has no USB device controller for this device"
 #endif
 
+// The objects behind the USB functions (UsbStack::Functions). Each
+// personality includes its own header.
+namespace boot {
+class BootloaderEntry;
+}
+namespace cmsisdap {
+class Processor;
+}
+namespace personality {
+class PersonalitySwitch;
+}
+namespace protocol {
+class UsbToXxxHandler;
+}
+namespace wchlink {
+class Processor;
+}
+
 namespace usb {
 
 class UsbStack {
    public:
-#if defined(VSL_WITH_VERSALOON) && defined(VSL_WITH_CMSIS_DAP)
-   // A dual image. active: the personality of this start. The other
-   // arguments are those of the two constructors below. personalitySwitch:
-   // takes SWITCH_PERSONALITY of the Versaloon protocol. The CMSIS-DAP
-   // processor has its own pointer to it (ID_DAP_Vendor0).
-   UsbStack(personality::Personality active,
-            boot::BootloaderEntry *bootloader,
-            protocol::UsbToXxxHandler &usbToXxx,
-            personality::PersonalitySwitch &personalitySwitch,
-            cmsisdap::Processor &processor);
-#elif defined(VSL_WITH_WCH_LINK)
-   // processor: runs the WCH-Link requests (see usb/WchLinkFunction.h). It
-   // must outlive the stack.
-   explicit UsbStack(wchlink::Processor &processor);
-#elif defined(VSL_WITH_CMSIS_DAP)
-   // processor: runs the CMSIS-DAP commands (see usb/CmsisDapFunction.h).
-   // It must outlive the stack.
-   explicit UsbStack(cmsisdap::Processor &processor);
-#else
-   // bootloader: the bootloader entry of VERSALOON_FW_UPDATE, nullptr when
-   // the firmware has no bootloader. usbToXxx: runs the USB_TO_XXX commands
-   // (see protocol/CommandProcessor.h).
-   UsbStack(boot::BootloaderEntry *bootloader, protocol::UsbToXxxHandler &usbToXxx);
-#endif
+   // What the Versaloon personality needs
+   struct VersaloonDeps {
+      // Runs the USB_TO_XXX commands (see protocol/versaloon/CommandProcessor.h)
+      protocol::UsbToXxxHandler *usbToXxx;
+   };
+
+   // The objects behind the USB functions. A pointer is nullptr when its
+   // personality is not in the image, and not nullptr when it is. The
+   // objects must outlive the stack.
+   struct Functions {
+      const VersaloonDeps *versaloon;
+      // Runs the CMSIS-DAP commands (see usb/CmsisDapFunction.h)
+      cmsisdap::Processor *dap;
+      // Runs the WCH-Link requests (see usb/WchLinkFunction.h)
+      wchlink::Processor *wch;
+      // Takes SWITCH_PERSONALITY of the Versaloon protocol and the switch
+      // request on EP0 (usb/SwitchRequest.h), nullptr in an image with one
+      // personality. The CMSIS-DAP processor has its own pointer to it
+      // (ID_DAP_Vendor0).
+      personality::PersonalitySwitch *personalitySwitch;
+      // Takes VERSALOON_FW_UPDATE and the bootloader code of
+      // SWITCH_PERSONALITY and of the switch request on EP0, nullptr when
+      // the firmware has no bootloader. The CMSIS-DAP processor has its own
+      // pointer to it (ID_DAP_Vendor0).
+      boot::BootloaderEntry *bootloader;
+   };
+
+   // active: the personality of this start. It must be in the image.
+   UsbStack(personality::Personality active, const Functions &functions);
 
    UsbStack(const UsbStack &) = delete;
    UsbStack &operator=(const UsbStack &) = delete;
@@ -113,38 +148,51 @@ class UsbStack {
    // Number of commands of the host so far, for the activity LED. It wraps
    // at 2^32: only the difference between two values counts.
    [[nodiscard]] uint32_t commandCount() const {
-      uint32_t count = 0;
+      switch(personality()) {
 #if defined(VSL_WITH_VERSALOON)
-      count += versaloon_.commandCount();
+      case personality::Personality::Versaloon:
+         return versaloon_.commandCount();
 #endif
 #if defined(VSL_WITH_CMSIS_DAP)
-      count += dap_.commandCount();
+      case personality::Personality::CmsisDap:
+         return dap_.commandCount();
 #endif
 #if defined(VSL_WITH_WCH_LINK)
-      count += wch_.commandCount();
+      case personality::Personality::WchLink:
+         return wch_.commandCount();
 #endif
-      return count;
+      default:
+         return 0;
+      }
    }
 
-   // The personality of the descriptors and of interface 0
+   // The personality of the descriptors and of interface 0. In an image
+   // with one personality, it is a constant, so the compiler drops the
+   // branches of the other ones.
    [[nodiscard]] personality::Personality personality() const {
-      return active_;
+      if constexpr(personality::all.size() > 1) {
+         return active_;
+      } else {
+         return personality::all[0];
+      }
    }
 
-#if !defined(VSL_WITH_WCH_LINK)
+   // True when the active personality has the CDC-ACM serial port
+   [[nodiscard]] bool hasSerialPort() const {
+      return !personality::has(personality::Personality::WchLink) || personality() != personality::Personality::WchLink;
+   }
+
+#if defined(VSL_USB_SERIAL_PORT)
    // The CDC-ACM serial port: the UART bridge, or the debug log in a
-   // VSL_DEBUG_CDC build (see debug/DebugLog.h). The WCH-Link personality
-   // has none.
+   // VSL_DEBUG_CDC build (see debug/DebugLog.h). The device has it only
+   // when hasSerialPort() is true.
    art::usb::CdcAcmFunctionBase &serialPort() {
       return serialPort_;
    }
 #endif
 
    private:
-#if defined(VSL_WITH_WCH_LINK)
-   static constexpr uint8_t usedEndpoints = wch::endpointCount;
-#else
-   static constexpr uint8_t usedEndpoints = endpointCount;
+#if defined(VSL_USB_SERIAL_PORT)
    // Queue sizes of the serial port
    static constexpr std::size_t serialRxSize = 256;
    static constexpr std::size_t serialTxSize = 256;
@@ -152,13 +200,13 @@ class UsbStack {
 
    static void setPullUp(void *context, bool enable);
 
-#if !defined(VSL_WITH_WCH_LINK)
+#if defined(VSL_USB_SERIAL_PORT)
    // VSL_DEBUG_CDC: the CDC port carries the log, so received data is
    // dropped.
    void discardSerialInput();
 #endif
 
-   hw::UsbDevice hardware_{ usedEndpoints };
+   hw::UsbDevice hardware_;
    SerialEventQueue<16> events_;
    Stm32UsbDeviceController controller_;
    personality::Personality active_;
@@ -171,9 +219,12 @@ class UsbStack {
 #endif
 #if defined(VSL_WITH_WCH_LINK)
    WchLinkFunction wch_;
-#else
+#endif
+#if defined(VSL_USB_SERIAL_PORT)
    art::usb::CdcAcmFunction<serialRxSize, serialTxSize> serialPort_;
 #endif
+   // The vendor requests to the device in each personality
+   SwitchRequestHandler switchRequest_;
 };
 
 } // namespace usb

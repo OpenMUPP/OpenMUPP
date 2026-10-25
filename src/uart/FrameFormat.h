@@ -25,6 +25,8 @@
 #include <optional>
 #include <usb/CdcAcmFunction.h>
 
+#include "IntDiv.h"
+
 namespace uart {
 
 enum class DataBits : uint8_t { Seven, Eight };
@@ -49,12 +51,19 @@ inline constexpr uint32_t maxBaudErrorPercent = 2;
 // 4 fraction bits) for a UART clock of uartClock Hz. Empty when the divider
 // is out of the range of BRR (16 to 0xFFFF), or when the real baud rate is
 // more than maxBaudErrorPercent off. At 72 MHz the range is 1099 to 4.5 M
-// baud; above 2.88 M baud only some rates are within the error.
+// baud; above 2.88 M baud only some rates are within the error. At 250 MHz
+// (STM32H5) the range is 3815 to 15.6 M baud: the USART prescaler would
+// give lower rates, but this code does not use it.
 constexpr std::optional<uint32_t> baudRateDivider(uint32_t baudRate, uint32_t uartClock) {
    if(baudRate == 0) {
       return std::nullopt;
    }
-   const uint64_t divider = (static_cast<uint64_t>(uartClock) + baudRate / 2) / baudRate;
+   // (uartClock + baudRate / 2) / baudRate, without the 64-bit sum: with
+   // uartClock = q * baudRate + r, it is q, plus 1 when r + baudRate / 2
+   // is at least baudRate.
+   const uint32_t quotient = uartClock / baudRate;
+   const uint32_t rest = uartClock % baudRate;
+   const uint64_t divider = quotient + (rest >= baudRate - baudRate / 2 ? 1u : 0u);
    if(divider < 16 || divider > 0xFFFF) {
       return std::nullopt;
    }

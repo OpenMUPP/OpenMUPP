@@ -1,7 +1,7 @@
 #pragma once
 
-// SWD bit-bang engine: runs the sequences and transfers of the SWD block
-// (protocol/SwdBlock.h) on GPIO pins. Hardware-independent: a Pins type
+// SWD bit-bang engine: runs the sequences and transfers of an SWD port
+// (protocol/SwdPort.h) on GPIO pins. Hardware-independent: a Pins type
 // gives the pin access, so the host unit tests run the protocol on mock
 // pins with a mock target. On target, board/BoardSwd.h gives FastPin
 // access.
@@ -94,7 +94,7 @@
 // sequenceIn(): each sequence is at most 256 bits, LSB first.
 //
 // The SWD block of the Versaloon protocol does not call setRules() or
-// setClockHz(). In a dual image, the CMSIS-DAP processor sets its rules
+// setClockHz(). In a multi image, the CMSIS-DAP processor sets its rules
 // at start, also when the Versaloon personality is active. Thus
 // configure() (INIT and CONFIG of the SWD block) sets the Versaloon rules
 // again.
@@ -107,8 +107,10 @@
 #include <array>
 #include <cstdint>
 
+#include "IntDiv.h"
+
 #include "protocol/Background.h"
-#include "protocol/SwdBlock.h"
+#include "protocol/SwdPort.h"
 
 namespace swd {
 
@@ -185,9 +187,10 @@ class RetryStop {
 
 // Core cycles of a half SWCLK period for a frequency, rounded up: SWCLK is
 // never faster than the frequency. 0 Hz gives the slowest clock (1 Hz).
+// coreHz / (2 * hz) rounded up, in two 32-bit steps: ceil(ceil(a / b) / c)
+// is ceil(a / (b * c)).
 constexpr uint32_t halfPeriodCyclesOfHz(uint32_t coreHz, uint32_t hz) {
-   const uint64_t cyclesPerPeriod = 2ull * (hz == 0 ? 1u : hz);
-   return static_cast<uint32_t>((coreHz + cyclesPerPeriod - 1) / cyclesPerPeriod);
+   return intdiv::ceilDiv(intdiv::ceilDiv(coreHz, 2u), hz == 0 ? 1u : hz);
 }
 
 // Core cycles of a half SWCLK period for an OpenOCD delay value, rounded
@@ -197,7 +200,7 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
       return halfPeriodCyclesOfHz(coreHz, fixedClockHz[delay]);
    }
    // Half a period is (delay + 1) us.
-   return static_cast<uint32_t>((static_cast<uint64_t>(coreHz) * (delay + 1u) + 999'999u) / 1'000'000u);
+   return intdiv::mulDivCeil(coreHz, delay + 1u, 1'000'000u);
 }
 
 static_assert(loopOverheadCycles < halfPeriodCycles(72'000'000, 1), "The wait at delay 1 would be 0");
@@ -439,7 +442,7 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    template <bool Timed>
-   void writeBits(uint32_t value, uint32_t count) {
+   [[gnu::always_inline]] void writeBits(uint32_t value, uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
          writeBit<Timed>((value & 1u) != 0);
          value >>= 1;
@@ -447,7 +450,7 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    template <bool Timed>
-   uint32_t readBits(uint32_t count) {
+   [[gnu::always_inline]] uint32_t readBits(uint32_t count) {
       uint32_t value = 0;
       for(uint32_t i = 0; i < count; ++i) {
          value |= static_cast<uint32_t>(readBit<Timed>()) << i;
@@ -457,7 +460,7 @@ class BitBangPort final : public protocol::SwdPort {
 
    // Clock cycles with SWDIO released, for a turnaround
    template <bool Timed>
-   void clocks(uint32_t count) {
+   [[gnu::always_inline]] void clocks(uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
          static_cast<void>(readBit<Timed>());
       }

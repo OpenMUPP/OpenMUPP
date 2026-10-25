@@ -26,6 +26,11 @@ void SwdPins::init() {
    }
    configureOutput(pins.tck, true);
    configureOutput(pins.tmsOut, true);
+#if !defined(STM32F1)
+   // The pull-up of swdioRelease() (board/BoardSwd.h). A pull-up on a
+   // push-pull output has no effect.
+   gpioPin(pins.tmsOut).configure(GpioPin::Mode::Output, GpioPin::OutputType::PushPull, GpioPin::Pull::Up, GpioPin::Speed::VeryHigh);
+#endif
 }
 
 void SwdPins::fini() {

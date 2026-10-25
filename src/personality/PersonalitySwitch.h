@@ -1,10 +1,11 @@
 #pragma once
 
-// The switch to the next personality of a dual image. Hardware-
-// independent: the host unit tests check it.
+// The switch to the next personality of an image with more than one
+// personality (VSL_MULTI_PERSONALITY). Hardware-independent: the host
+// unit tests check it.
 //
 // The switch commands call request(): SWITCH_PERSONALITY of the Versaloon
-// protocol (protocol/CommandProcessor.h) and ID_DAP_Vendor0 of CMSIS-DAP
+// protocol (protocol/versaloon/CommandProcessor.h) and ID_DAP_Vendor0 of CMSIS-DAP
 // (protocol/cmsisdap/DapProcessor.h). The key gesture
 // (personality/KeyGesture.h) requests the next personality. The command
 // queues its reply before the request takes effect. The main loop calls
@@ -24,6 +25,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "IntDiv.h"
 #include "personality/Personality.h"
 
 namespace personality {
@@ -112,7 +114,9 @@ class PersonalitySwitch {
       if(nowMs >= *dueMs_) {
          return true;
       }
-      const uint64_t elapsed = nowMs - (*dueMs_ - delayMs_);
+      // Less than delayMs_: nowMs is before *dueMs_, and the uptime
+      // was at least *dueMs_ - delayMs_ at the first isDue().
+      const auto elapsed = static_cast<uint32_t>(nowMs - (*dueMs_ - delayMs_));
       return elapsed % flashPeriodMs < flashPeriodMs / 2;
    }
 

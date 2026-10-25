@@ -1,9 +1,12 @@
 #pragma once
 
-// Entry into versaloon-bootloader from the running firmware
-// (VERSALOON_FW_UPDATE). Hardware-independent: the host unit tests check it.
+// Entry into versaloon-bootloader from the running firmware. Hardware-independent:
+// the host unit tests check it.
 //
-// The protocol calls request() after it has queued the reply. The main loop
+// These commands call request(): VERSALOON_FW_UPDATE, and the personality
+// switch commands with bootloaderCode instead of a personality code
+// (SWITCH_PERSONALITY, ID_DAP_Vendor0 and the switch request on EP0, see
+// personality/PersonalitySwitch.h). The protocol calls request() after it has queued the reply. The main loop
 // calls isDue() with the uptime. isDue() becomes true replyDelayMs after
 // the first isDue() call that sees the request, so the host has time to read
 // the reply. Then the main loop calls boot::enterBootloader()
@@ -17,6 +20,8 @@
 #include <cstdint>
 #include <optional>
 
+#include "personality/Personality.h"
+
 namespace boot {
 
 // The value in BKP->DR1 that keeps the bootloader in bootloader mode.
@@ -25,11 +30,16 @@ namespace boot {
 inline constexpr uint16_t bootRequest = 0xB007;
 
 // Only the app-8k image enters the bootloader (hasBootloaderEntry in
-// src/main.cpp). The other images refuse FW_UPDATE.
+// src/main.cpp). The other images refuse FW_UPDATE and bootloaderCode.
+
+// The code in the personality switch commands that starts the bootloader
+// instead of a personality. It is outside the personality codes.
+inline constexpr uint8_t bootloaderCode = 0xB0;
+static_assert(bootloaderCode >= personality::maxPersonalities);
 
 class BootloaderEntry {
    public:
-   // Time for the host to read the reply of FW_UPDATE before the reset.
+   // Time for the host to read the reply before the reset.
    static constexpr uint32_t replyDelayMs = 10;
 
    // Requests the bootloader. A second request does not move the time.

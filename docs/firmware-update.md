@@ -9,29 +9,68 @@ It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can wr
 
 To start `versaloon-bootloader`, use one of these methods:
 
-- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the `app-8k` image has this command.
+- Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the Versaloon personality has this command.
+- Send a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)). Each personality has a switch command.
 - Hold the key (PB9) down and reset the board.
 
+Only the `app-8k` image accepts the commands.
 To start the legacy bootloader, hold the key (PB9) down while you connect the board to USB.
 
-A firmware image built with `VSL_PROTOCOL=cmsis-dap` has no Versaloon interface.
-It has no `VERSALOON_FW_UPDATE` command.
-Use the key to start the bootloader.
-A firmware image built with `VSL_PROTOCOL=wch-link` has no `VERSALOON_FW_UPDATE` command either. Use the key.
-A dual image in the CMSIS-DAP personality has no `VERSALOON_FW_UPDATE` command either.
-Change it to the Versaloon personality first, or use the key (see [Dual image](usb-device.md#dual-image)).
+### Bootloader code
 
-A dual image stores its personality in the flash page at `0x0800FC00`.
+The switch commands of the personalities also start the bootloader.
+Send the bootloader code `0xB0` (`boot::bootloaderCode`) instead of a personality code:
+
+| Personality | Command | Reply when the firmware accepts |
+|---|---|---|
+| Each | Switch request on EP0: `bmRequestType` `0x40`, `bRequest` `0x0E`, `wValue` `0xB0` (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)) | Status stage (ACK) |
+| Versaloon | `SWITCH_PERSONALITY`: `[0x0E][0xB0]` | `[0x00]` |
+| CMSIS-DAP | `ID_DAP_Vendor0`: `[0x80][0xB0]` | `[0x80][0x00]` |
+
+The WCH-Link protocol has no switch command, so use the switch request on EP0.
+The commands also work in an image with one personality.
+An image other than `app-8k` refuses the code.
+The switch request on EP0 then stalls, and `SWITCH_PERSONALITY` replies status `1`.
+A multi image replies status `0xFF` to `ID_DAP_Vendor0`.
+A CMSIS-DAP image with one personality replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
+After the reply, the firmware does the same steps as for `VERSALOON_FW_UPDATE` (see [Reply and steps](#reply-and-steps)).
+
+`tools/vsl_personality.py` sends the bootloader code from the host:
+
+```sh
+python3 tools/vsl_personality.py switch bootloader
+```
+
+The tool sends the switch request on EP0 with the code `0xB0`.
+A firmware from before the bootloader code stalls the request.
+Then the tool sends `VERSALOON_FW_UPDATE` in the Versaloon personality, and `ID_DAP_Vendor0` with `0xB0` in the CMSIS-DAP personality.
+After the request, the tool waits 10 s for `versaloon-bootloader`.
+It finds the bootloader by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
+Other devices use the ID `0483:5740` too, so the tool also compares the product string.
+`python3 tools/vsl_personality.py show` also lists a dongle that runs the bootloader.
+
+The tool must open the bootloader to read its strings.
+On Linux, a udev rule gives a normal user this access.
+Copy `etc/70-versaloon-bootloader.rules` to `/etc/udev/rules.d/`.
+Then reload the rules with `udevadm control --reload`, and start the bootloader again.
+Without access, the tool does not find the bootloader.
+It then stops after 10 s with an error and a hint, also when the bootloader runs.
+
+### Stored personality
+
+A multi image stores its personality in the flash page at `0x0800FC00`.
 `stm32flash -w` erases only the pages of the image, so an update keeps the stored personality.
 A mass erase of the flash also erases this page.
 The firmware then starts with its default personality.
+
+### Reply and steps
 
 The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 
 | Status | Meaning |
 |---|---|
 | `0x00` | Accepted. The firmware starts the bootloader. |
-| `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. The `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The ST-Link/V2 has only the `standalone` image. The firmware continues to run. |
+| `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. The `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The ST-Link/V2 and the NUCLEO-H533RE have only the `standalone` image. The firmware continues to run. |
 
 After the reply, the firmware does these steps:
 
@@ -147,7 +186,7 @@ The firmware initializes its DATA and BSS sections. It does not use RAM content 
 The OtherUse has an STM32F103C8 with 64 KB flash.
 The bootloader uses the start of the flash, and the application uses the rest:
 
-| Image | Bootloader | Application | Size limit | Size limit, dual image |
+| Image | Bootloader | Application | Size limit | Size limit, multi image |
 |---|---|---|---|---|
 | `standalone` | none | `0x08000000` | 64 KB | 63 KB |
 | `app-8k` | `versaloon-bootloader`, 8 KB | `0x08002000` | 56 KB | 55 KB |
@@ -155,9 +194,10 @@ The bootloader uses the start of the flash, and the application uses the rest:
 
 The limits are hard limits for all boards.
 The firmware must also fit behind the legacy bootloader, because the existing boards need the `app-10k` image.
-Thus CI also checks the `standalone` image of the ST-Link/V2 against the `app-10k` limit.
+Thus CI also checks the `standalone` image of the ST-Link/V2 against the `app-10k` limit (see [Continuous integration](development.md#continuous-integration)).
 
-- `ldscripts/mem-f103.ld` has the FLASH region from the start of the application to the end of the 64 KB. The link of an image fails when the application is too large.
+- `ldscripts/mem-f103.ld` has the FLASH region from the start of the application to the end of the 64 KB. With `VSL_STRICT_SIZE=ON`, the link of an image fails when the application is too large. The CI build jobs set this option.
+- Without `VSL_STRICT_SIZE`, the build skips an image that is too large, and shows a warning (see [Images that do not fit](development.md#images-that-do-not-fit)).
 - CI reports the size of each image with `ci/check-size.sh` and fails when the `.bin` file is larger than its limit.
 
 The main stack is 2 KB (`ldscripts/sections.ld`), because the STM32F103 has only 20 KB RAM.
