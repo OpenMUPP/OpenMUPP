@@ -814,6 +814,22 @@ TEST_CASE("SWD bit-bang: the clock in Hz rounds down to an available rate") {
    }
 }
 
+TEST_CASE("SWD bit-bang: a fast core runs all clocks timed") {
+   CHECK(swd::runsUntimed(72'000'000));
+   CHECK_FALSE(swd::runsUntimed(250'000'000));
+   Bench bench;
+   bench.pins.coreClockHz = 250'000'000;
+   bench.port.configure(1, 0, 0);
+   CHECK(bench.port.isTimed());
+   CHECK(bench.port.halfCycles() == halfPeriodCycles(250'000'000, 0));
+   for(const uint32_t hz : { swd::maxClockHz, 4'000'000u, 10'000'000u }) {
+      CAPTURE(hz);
+      bench.port.setClockHz(hz);
+      CHECK(bench.port.isTimed());
+      CHECK(250e6 / (2.0 * bench.port.halfCycles()) <= hz);
+   }
+}
+
 TEST_CASE("SWD bit-bang: setTurnaround() and setRetries() keep the clock in Hz") {
    // A target with a turnaround of 3 cycles, OK after two WAIT
    MockSwdPins pins(3);

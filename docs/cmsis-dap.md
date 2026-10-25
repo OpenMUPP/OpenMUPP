@@ -588,6 +588,7 @@ Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
 Maximum SWD clock: the untimed engine from 1.85 MHz (`maxClockHz` in `src/swd/SwdBitBang.h`). Its real rate depends on the code (2.7 MHz on the OtherUse, see [Clock pacing](clock-pacing.md)).
 All runs passed up to this clock with the wiring of this test.
 A request above 1.85 MHz gives the same clock.
+This test used the OtherUse. On the STM32H5, all requests are timed: a request above 1.85 MHz gives a faster clock, up to about 5.6 MHz (see [Clock pacing](clock-pacing.md#stm32h5)).
 
 Findings:
 

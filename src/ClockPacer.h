@@ -41,7 +41,16 @@ namespace pacing {
 // value or less has no margin: an interrupt within the slack can make the
 // next half period very short. Check the rate on the wire after a change
 // of the engines or of the core (docs/clock-pacing.md).
+//
+// On the STM32H5 at 250 MHz, 32 cycles are a full half period at 4 MHz:
+// where the JTAG code is longer than the half period, the next half
+// period was then as short as 60 ns. With 16 cycles, the same edges start
+// the deadlines again (docs/clock-pacing.md).
+#if defined(STM32H5)
+inline constexpr uint32_t lateSlackCycles = 16;
+#else
 inline constexpr uint32_t lateSlackCycles = 32;
+#endif
 
 class ClockPacer {
    public:

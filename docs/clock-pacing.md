@@ -39,7 +39,7 @@ pacer.edge(pins);
 The code between two edges runs inside the half period.
 Thus the mean rate does not depend on the code, while the code of a half period is shorter than the half period.
 
-An edge more than `pacing::lateSlackCycles` (32) cycles after its deadline is late.
+An edge more than `pacing::lateSlackCycles` cycles after its deadline is late: 32 cycles on the STM32F1, 16 cycles on the STM32H5 (see [STM32H5](#stm32h5)).
 This occurs when the code took the whole half period (for example a call of the background service), or when an interrupt came between the wait and the edge.
 The next half period then starts at the edge.
 Thus a late edge makes its own half period longer, and the clock does not catch up with shorter half periods.
@@ -73,10 +73,11 @@ Thus single periods are up to about 12 % shorter or longer than requested at 1 M
 - The untimed SWD engine (`delay` 0, or 1.85 MHz and more in CMSIS-DAP) does not use the pacer.
   Its rate depends on the code: 2.5 MHz before this change and 2.7 MHz after it, on the OtherUse.
   This is faster than the 1.85 MHz of the table. Issue #118 tracks this.
+  Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
-- Only the OtherUse is measured. The Mini has the same MCU, core clock and pins.
-  The ST-Link/V2 and the STM32H5 boards are not measured.
+- The OtherUse and the WeAct STM32H523 are measured. The Mini has the same MCU, core clock and pins as the OtherUse.
+  The ST-Link/V2 and the NUCLEO-H533RE are not measured. The NUCLEO-H533RE has the same core and core clock as the WeAct STM32H523.
 
 ## Measurements
 
@@ -106,7 +107,7 @@ For example, 235 kHz gives 154 cycles for each half period: 4277.8 ns.
 
 ### Results
 
-The rate is the mean over the runs. "Shortest" is the shortest single period in the runs.
+The rate is the mean over the runs. The percentage is against the nominal period, not against the request. "Shortest" is the shortest single period in the runs.
 
 | Engine | Request | Nominal period | Before | After | Shortest before | Shortest after |
 |---|---|---|---|---|---|---|
@@ -133,3 +134,60 @@ Findings:
   On the OtherUse, the normal delay was often above the slack, so the pacer started the deadlines again at many edges: SWD was 2 % slower at 100 kHz and 14 % slower at 235 kHz.
   The state for each edge made the code of a half period at 1 MHz longer than 36 cycles: SWD was 41 % slower.
   Measure the rate again after a change of the engines, the pacer or the core clock.
+
+## STM32H5
+
+This section gives the measurements on the STM32H5 at 250 MHz (#94).
+
+### Setup
+
+- Probe: WeAct STM32H523 (STM32H523CCU6 at 250 MHz), the `weacth523-dual` image.
+- Target: STM32F103ZET6 on the 20-pin JTAG header, at its reset clock (8 MHz HSI).
+- Logic analyzer: Saleae Logic Pro 8 at 500 MS/s (2 ns resolution), TMS and SWDIO on channel 4, TCK and SWCLK on channel 5.
+  A glitch filter of 20 ns is on channel 5.
+  Without it, the analyzer saw pulses of 6 ns on SWCLK at each rising edge of SWDIO: crosstalk in the wires to the analyzer.
+- Traffic:
+  - SWD: `probe-rs read --chip STM32F103ZE --protocol swd --speed <kHz> b32 0x08000000 256`
+  - JTAG: `openocd -c "adapter driver cmsis-dap" -c "transport select jtag" -f target/stm32f1x.cfg -c "adapter speed <kHz>" -c "reset_config trst_and_srst" -c init -c "mdw 0x08000000 256" -c shutdown`.
+    Set `adapter speed` after `target/stm32f1x.cfg`: the file sets 1000 kHz.
+    After an SWD session, the STM32F103 stays in SWD mode. A pyOCD connect with `-O dap_protocol=jtag` sends the SWD-to-JTAG sequence.
+
+All reads gave the same data at all clocks.
+The STM32F103 permits TCK up to F_CPU / 6 (1.33 MHz at 8 MHz), so the JTAG reads at 4 MHz were out of its specification. They passed in this test.
+
+### Results
+
+The nominal period is two half periods, each rounded up to full core cycles (4 ns).
+
+| Engine | Request | Nominal period | Rate (mean of the runs, against the nominal period) | Median of all periods | Shortest |
+|---|---|---|---|---|---|
+| SWD | 100 kHz | 10000 ns | 100.0 kHz (−0.01 %) | 10000 ns | 9972 ns |
+| SWD | 235 kHz | 4256 ns | 234.7 kHz (−0.09 %) | 4260 ns | 4228 ns |
+| SWD | 1000 kHz | 1000 ns | 998.6 kHz (−0.14 %) | 1000 ns | 978 ns |
+| SWD | 1800 kHz | 560 ns | 1779.7 kHz (−0.34 %) | 564 ns | 538 ns |
+| SWD | 4000 kHz | 256 ns | 3879.1 kHz (−0.69 %) | 262 ns | 234 ns |
+| SWD | 12000 kHz | 88 ns | no run | 180 ns (5.6 MHz) | 152 ns |
+| JTAG | 100 kHz | 10000 ns | 99.9 kHz (−0.12 %) | 9998 ns | 9982 ns |
+| JTAG | 235 kHz | 4256 ns | 235.0 kHz (−0.00 %) | 4260 ns | 4234 ns |
+| JTAG | 1000 kHz | 1000 ns | 1000.2 kHz (+0.02 %) | 1004 ns | 980 ns |
+| JTAG | 4000 kHz | 256 ns | no run | 298 ns (3.4 MHz) | 250 ns |
+| JTAG | 12000 kHz | 88 ns | no run | 204 ns (4.9 MHz) | 202 ns |
+
+"No run": the code makes the periods longer than 1.3 times the nominal period. The code then limits the clock, and the clock is slower than the request.
+The JTAG row at 1000 kHz is +0.02 %: this is in the resolution of the analyzer (2 ns in a period of 1000 ns).
+
+Findings:
+
+- Up to 4 MHz, the mean SWD rate is within 0.7 % of the nominal period, and never faster than the request.
+  The rounding to full core cycles makes the nominal rate lower than the request: 2.3 % below at 4 MHz (3906 kHz), 0.8 % below at 1800 kHz (1786 kHz).
+  Up to 1 MHz, JTAG is within 0.15 % of the request.
+- The code of a timed SWD half period is about 22 cycles: a request of 12 MHz gives 5.6 MHz.
+- The untimed SWD engine of the first test gave 13 MHz (median period 76 ns) at a request of 4 MHz.
+  Thus the H5 does not use it (`swd::runsUntimed()`): the timed engine makes all clocks, also at `delay` 0 (1.85 MHz).
+- With a slack of 32 cycles, JTAG at 4 MHz had high half periods of 60 ns and periods of 178 ns (5.6 MHz).
+  The JTAG code is longer than a half period of 32 cycles at some edges. An edge late by less than the slack then made the next half period shorter.
+  With a slack of 16 cycles, the shortest period at 4 MHz is 250 ns. The rates up to 1 MHz did not change.
+- The JTAG bit-bang engine gives about 3.4 MHz at a request of 4 MHz, and 4.9 MHz at most.
+  `jtag::bitBangMaxKHz` is only for the choice between the bit-bang engine and the SPI fast path. The STM32H5 has no fast path yet (#97). Set the H5 value when the fast path is added.
+- RVSWD on the STM32H5 is not measured.
+
