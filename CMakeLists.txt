@@ -177,14 +177,6 @@ if (CMAKE_CROSSCOMPILING)
     # The flash page of the stored personality: only in a multi image. It is
     # at the end of the application area: one 1 KB flash page on the
     # STM32F103, one 8 KB flash sector on the STM32H5.
-    # The one-wire engine of WCH-Link uses the timers and DMA1 of the
-    # STM32F1. The STM32H5 engine is #98.
-    if ("wch-link" IN_LIST VSL_PERSONALITY_SET AND NOT STM32_FAMILY STREQUAL "STM32F1")
-        message(FATAL_ERROR "Board ${BOARD}: the wch-link personality needs the one-wire engine, which the ${STM32_FAMILY} does not have yet.")
-    endif ()
-    if (VSL_CMSIS_DAP_RV_BRIDGE AND NOT STM32_FAMILY STREQUAL "STM32F1")
-        message(FATAL_ERROR "Board ${BOARD}: VSL_CMSIS_DAP_RV_BRIDGE needs the one-wire engine, which the ${STM32_FAMILY} does not have yet.")
-    endif ()
     if (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32F1")
         set(VSL_SETTINGS_PAGE_SIZE 1024)
     elseif (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32H5")
@@ -197,13 +189,14 @@ if (CMAKE_CROSSCOMPILING)
     endif ()
     # STM32F1 only: the entry into versaloon-bootloader (BKP registers,
     # app-8k image), the JTAG fast path on SPI v1 and DMA1, and the one-wire
-    # engine of WCH-Link (#98). STM32H5 only: the entry into the ROM
-    # bootloader and the JTAG fast path on SPI v2 and GPDMA.
+    # engine of WCH-Link on the timers and DMA1. STM32H5 only: the entry into
+    # the ROM bootloader, the JTAG fast path on SPI v2 and GPDMA, and the
+    # one-wire engine on TIM3 and GPDMA.
     if (NOT STM32_FAMILY STREQUAL "STM32F1")
         list(APPEND _vsl_dropped_files "src/boot/Bootloader\\.cpp" "src/board/BoardJtagFast\\.cpp" "src/board/BoardRvSwd\\.cpp")
     endif ()
     if (NOT STM32_FAMILY STREQUAL "STM32H5")
-        list(APPEND _vsl_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp")
+        list(APPEND _vsl_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp" "src/board/BoardRvSwdH5\\.cpp")
     endif ()
     foreach (_file ${_vsl_dropped_files})
         list(FILTER VSL_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
@@ -276,7 +269,7 @@ if (CMAKE_CROSSCOMPILING)
     # They use -O2 instead of -Os. It comes after the -Os of
     # COMMON_OPTIONS, so it wins.
     set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardJtagFastH5.cpp
-            src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp PROPERTIES COMPILE_OPTIONS -O2)
+            src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp src/board/BoardRvSwdH5.cpp PROPERTIES COMPILE_OPTIONS -O2)
     # Apply unified build configuration
     target_link_libraries(versaloon-ng-objects PUBLIC art-build-config art::core art::stm32 system-stm32)
     target_include_directories(versaloon-ng-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
