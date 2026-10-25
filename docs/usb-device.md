@@ -302,13 +302,13 @@ The firmware sends the status stage (ACK), and then waits 10 ms, as for the othe
 The firmware stalls the request in these conditions:
 
 - The code is not a personality of the image.
-- The code is the bootloader code, and the image is not `app-8k`.
+- The code is the bootloader code, and the image has no bootloader entry. Only the `app-8k` image and the images of the STM32H5 have one.
 - `wIndex` or `wLength` is not `0`, or the direction is device to host.
 
 A stall means that the firmware does not switch.
 The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
 An image with one personality stalls the request for each personality code.
-It accepts the bootloader code, when it is an `app-8k` image.
+It accepts the bootloader code, when it is an `app-8k` image or an image of the STM32H5.
 
 With libusb, the call is:
 
