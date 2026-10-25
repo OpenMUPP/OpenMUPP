@@ -161,9 +161,9 @@ build:
         PROTOCOL_TAG: -vsl+dap+wch
 
 # WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash): all
-# presets of the board, on every pipeline. The board has the standalone image
-# only. The dual image keeps the last 8 KB flash sector for the stored
-# personality. Its own cache key: the H5 builds fetch the CMSIS packages of
+# presets of the board, on every pipeline. The board has the standalone link
+# image only. The dual-personality image keeps the last 8 KB flash sector for
+# the stored personality. Its own cache key: the H5 builds fetch the CMSIS packages of
 # the H5 and the Cortex-M33.
 build-weacth523:
   extends: .build-board-template
