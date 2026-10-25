@@ -196,13 +196,14 @@ if (CMAKE_CROSSCOMPILING)
         set(VSL_SETTINGS_PAGE_SIZE 0)
     endif ()
     # STM32F1 only: the entry into versaloon-bootloader (BKP registers,
-    # app-8k image), the JTAG fast path (#97) and the one-wire engine of
-    # WCH-Link (#98). STM32H5 only: the entry into the ROM bootloader.
+    # app-8k image), the JTAG fast path on SPI v1 and DMA1, and the one-wire
+    # engine of WCH-Link (#98). STM32H5 only: the entry into the ROM
+    # bootloader and the JTAG fast path on SPI v2 and GPDMA.
     if (NOT STM32_FAMILY STREQUAL "STM32F1")
         list(APPEND _vsl_dropped_files "src/boot/Bootloader\\.cpp" "src/board/BoardJtagFast\\.cpp" "src/board/BoardRvSwd\\.cpp")
     endif ()
     if (NOT STM32_FAMILY STREQUAL "STM32H5")
-        list(APPEND _vsl_dropped_files "src/boot/RomBootloader\\.cpp")
+        list(APPEND _vsl_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp")
     endif ()
     foreach (_file ${_vsl_dropped_files})
         list(FILTER VSL_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
@@ -274,8 +275,8 @@ if (CMAKE_CROSSCOMPILING)
     # files (see board/BoardJtag.h, board/BoardSwd.h and board/BoardRvSwd.h).
     # They use -O2 instead of -Os. It comes after the -Os of
     # COMMON_OPTIONS, so it wins.
-    set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardSwd.cpp
-            src/board/BoardRvSwd.cpp PROPERTIES COMPILE_OPTIONS -O2)
+    set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardJtagFastH5.cpp
+            src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp PROPERTIES COMPILE_OPTIONS -O2)
     # Apply unified build configuration
     target_link_libraries(versaloon-ng-objects PUBLIC art-build-config art::core art::stm32 system-stm32)
     target_include_directories(versaloon-ng-objects PUBLIC ${PROJECT_INCLUDE_DIRS})

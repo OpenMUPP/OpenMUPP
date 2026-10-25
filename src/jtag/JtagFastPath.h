@@ -45,11 +45,18 @@
 
 namespace jtag {
 
-// The SPI clock divider is 2^shift (SPI_CR1.BR + 1). Shift 1 (18 MHz) is
-// off: TMS comes from the SPI1 slave, valid up to 25 ns after the falling
-// edge (tv(SO), STM32F103x8/B datasheet), and the half period is 27.8 ns.
-// Set it to 1 only after a hardware test at 18 MHz passes.
+// The SPI clock divider is 2^shift (SPI_CR1.BR + 1 on the STM32F1,
+// SPI_CFG1.MBR + 1 on the STM32H5). TMS comes from the SPI1 slave, valid a
+// time tv(SO) after the falling edge. STM32F103: tv(SO) is 25 ns
+// (STM32F103x8/B datasheet), so shift 1 (18 MHz, half period 27.8 ns) is
+// off. STM32H5: tv(SO) is 11.5 ns on PA6 (DS14540 table 109), so shift 2
+// (31.25 MHz, half period 16 ns) is off. Lower the value only after a
+// hardware test at that rate passes.
+#if defined(STM32H5)
+inline constexpr uint8_t spiMinShift = 3;
+#else
 inline constexpr uint8_t spiMinShift = 2;
+#endif
 inline constexpr uint8_t spiMaxShift = 8;
 
 // The bit-bang rate that the choice between bit-bang and SPI assumes. It is
@@ -60,8 +67,14 @@ inline constexpr uint8_t spiMaxShift = 8;
 // low a value selects the SPI, which can be up to 2 times slower than the
 // request (2000 kHz gives 1125 kHz). To raise the value, set it to 18000
 // for a test. Then measure TCK at a request of 4000 kHz, and use the
-// measured rate rounded down.
+// measured rate rounded down. On the STM32H5, the bit-bang engine gives
+// 2.9 MHz at a request of 3000 kHz and 3.4 MHz at 4000 kHz
+// (docs/clock-pacing.md), and the next SPI rate below 3906 kHz is 1953 kHz.
+#if defined(STM32H5)
+inline constexpr uint32_t bitBangMaxKHz = 3000;
+#else
 inline constexpr uint32_t bitBangMaxKHz = 1000;
+#endif
 
 // The SPI divider shift for a request of kHz, or 0 for bit-bang: the SPI
 // rate must not be above the request and must be at least the bit-bang
