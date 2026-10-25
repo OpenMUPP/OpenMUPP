@@ -244,8 +244,8 @@ Thus PC13 is good for the LED, but do not use it for a target signal.
 | RTCK | PA8 | P2 pin 5 | Optional |
 | UART TX (to target RX) | PA9 | P2 pin 6 | USART1 of the serial bridge |
 | UART RX (from target TX) | PA10 | P2 pin 7 | |
-| TRST | PB4 | P2 pin 12 | Optional. The [hardware test](#hardware-test) needs it. |
-| SRST | PB5 | P2 pin 13 | The [hardware test](#hardware-test) needs it. |
+| TRST | PB4 | P2 pin 12 | Optional. See [Hardware test](#hardware-test) for JTAG after SWD. |
+| SRST | PB5 | P2 pin 13 | |
 | GND | GND | P2 pin 17 or 19 | |
 | TMS, SWDIO (output) | PA6 | P1 pin 9 | Connect a wire from PA6 to PB12 (P2 pin 1). |
 | Vref sense | PB0 | P1 pin 7 | Optional. Connect the target supply, 3.3 V maximum. No divider. |
@@ -295,10 +295,12 @@ Connect the wire from PA6 to PB12.
 Connect PA9 to PA10 for the UART loopback.
 
 The script runs SWD before JTAG with each tool.
-After an SWD connection, the debug port of an STM32F1 stays in SWD mode.
-A system reset does not change this mode.
-Only a power cycle, TRST or the SWD-to-JTAG switch sequence sets JTAG mode again.
-Without TRST, each JTAG step after an SWD step thus fails, with `JTAG scan chain interrogation failed: all ones`.
+The first run had no TRST and no SRST wire.
+All SWD steps passed, and all JTAG steps failed with `JTAG scan chain interrogation failed: all ones`.
+The TDI and TDO wires were correct: a GPIO test checked them.
+After the SWD-to-JTAG switch sequence, OpenOCD found the two TAPs of the target on JTAG.
+With TRST and SRST wired, all JTAG steps passed.
+The test did not show which of the two signals is necessary.
 
 Status: the test passed on 2026-10-25 (work item #95).
 Probe: WeAct STM32H523 core board.
@@ -310,7 +312,7 @@ Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
 |---|---|---|
 | Switch with the switch request on EP0 | pass | pass |
 | Switch with the key (3 s), also after a reset of the board | pass | pass |
-| Serial loopback, quick set | pass | pass |
+| Serial loopback, quick set (3 baud rates, 8N and 8E, 1 and 2 stop bits) | pass | pass |
 | `DAP_UART_*` loopback | - | pass |
 | OpenOCD SWD, 1000 and 2000 kHz | pass | pass |
 | OpenOCD JTAG, 1000 and 9000 kHz | pass | pass |
@@ -322,10 +324,11 @@ Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
 Findings:
 
 - One run of the script failed on OpenOCD JTAG with the `vsllink` driver.
-  At 1000 kHz, the read back of the flash had 10 bytes with one wrong bit each. Each wrong bit was 1, not 0.
-  The verify step passed, thus the flash content was correct.
+  At 1000 kHz, the read back of the flash had 10 bytes with one wrong bit each. Each wrong bit was 0 in the image and 1 in the read back.
+  The verify step calculates a CRC on the target, and it passed. Thus the error was in the read path, not in the flash.
   At 9000 kHz, the flash write stopped with `Invalid ACK (6) in DAP response`.
   This run came directly after a change to the wires.
-  Five more runs passed: four runs of the Versaloon steps only, and one full run.
+  Five more runs of the script passed: two runs of the Versaloon steps, two runs of the Versaloon and UART steps, and one full run.
+  Three more read backs of the 32 KiB image with OpenOCD and the `vsllink` driver on JTAG at 1000 kHz had no errors.
   The cause is not known. The timing of the bit-bang engines at 250 MHz is not yet measured (#94).
-- The test did not cover `--full-uart`, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.
+- The test did not cover `--full-uart`, the old switch commands, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.
