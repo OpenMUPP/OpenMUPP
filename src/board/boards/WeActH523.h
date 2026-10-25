@@ -14,8 +14,8 @@ namespace board {
 //
 // 3.3 V targets only: no level shifters, no power switch. The USB D+
 // pull-up is internal. SWDIO uses two pins with a wire between them (PA6 to
-// PB12), as on the Mini. The JTAG fast path needs the TCK link (PB13 to PB3)
-// and the H5 SPI driver (#97): not yet.
+// PB12), as on the Mini. The JTAG fast path needs the TCK link, a wire from
+// PB13 to PB3.
 inline constexpr Definition weActH523{
    .name = "weacth523",
    .hseFrequency = 8'000'000,
@@ -32,7 +32,7 @@ inline constexpr Definition weActH523{
    .srst{ Port::B, 5 },
    .rtck = Pin{ Port::A, 8 },
    },
-   .jtagFastPath = std::nullopt,
+   .jtagFastPath = JtagFastPath{ .tckLink{ Port::B, 3 } },
    .uart = Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } },
    // Optional: wire the target supply (3.3 V maximum) to PB0
    .vref = VrefSense{ .pin{ Port::B, 0 }, .divider = 1 },

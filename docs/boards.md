@@ -157,7 +157,7 @@ The firmware on the Nucleo has these limits:
 - The personalities Versaloon and CMSIS-DAP, alone or in a multi image. A multi image keeps the last 8 KB flash sector of bank 2 for the stored personality (see [Multi image](usb-device.md#multi-image)).
 - No WCH-Link personality. The one-wire engine of the STM32H5 is #98. The build stops with an error for `wch-link`.
 - Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE`, the bootloader code `0xB0` and the key at the reset start the ROM USB DFU (see [STM32H5: ROM USB DFU](firmware-update.md#stm32h5-rom-usb-dfu)).
-- Bit-bang JTAG only. The JTAG fast path is #97.
+- The JTAG fast path needs a wire from PB13 (CN10 pin 30) to PB3 (CN10 pin 31, D3). The fast path is not tested on the Nucleo.
 - The UART bridge supports 3815 baud to 15.6 Mbaud. USART1 runs from the 250 MHz bus clock, and the firmware does not use the USART prescaler. The bridge refuses a lower baud rate, for example 2400 baud.
 - The timing of the bit-bang engines is not yet measured at 250 MHz (#94).
 
@@ -174,6 +174,7 @@ Some pins are also on the ARDUINO connectors.
 | TDI | PB15 | CN10 pin 26 | |
 | TDO | PB14 | CN10 pin 28 | |
 | TRST | PB4 | CN10 pin 27 (D5) | Optional |
+| TCK link | PB3 | CN10 pin 31 (D3) | For the JTAG fast path: connect a wire from PB13 to PB3. Do not connect the target. |
 | SRST | PB10 | CN10 pin 25 (D6) | |
 | RTCK | PA0 | CN7 pin 28 (A0) | Optional |
 | UART TX (to target RX) | PA9 | CN10 pin 2 | USART1 of the serial bridge |
@@ -245,13 +246,15 @@ Thus PC13 is good for the LED, but do not use it for a target signal.
 | UART TX (to target RX) | PA9 | P2 pin 6 | USART1 of the serial bridge |
 | UART RX (from target TX) | PA10 | P2 pin 7 | |
 | TRST | PB4 | P2 pin 12 | Optional. See [Hardware test](#hardware-test) for JTAG after SWD. |
+| TCK link | PB3 | P2 pin 11 | For the JTAG fast path: connect a wire from PB13 (P2 pin 2) to PB3. Do not connect the target. |
 | SRST | PB5 | P2 pin 13 | |
 | GND | GND | P2 pin 17 or 19 | |
 | TMS, SWDIO (output) | PA6 | P1 pin 9 | Connect a wire from PA6 to PB12 (P2 pin 1). |
 | Vref sense | PB0 | P1 pin 7 | Optional. Connect the target supply, 3.3 V maximum. No divider. |
 
 The last four pins of P2 are GND, 5 V, GND and 3.3 V (pins 17 to 20).
-The JTAG fast path (#97) will also need a wire from PB13 (P2 pin 2) to PB3 (P2 pin 11).
+Without the wire from PB13 to PB3, JTAG fails at the speeds of the fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
+P2 pin 8 is PA11 (USB D-). Do not connect the TCK link there.
 
 The board has these other signals:
 
@@ -291,7 +294,7 @@ A debug probe on the SWD header P3 can also write the `standalone` image at `0x0
 
 `tools/probe_hw_test.py` tests the dual image on an STM32F1 target (see [Multi image hardware test](usb-device.md#multi-image-hardware-test)).
 Connect TMS, TCK, TDI, TDO, TRST, SRST and GND to the JTAG connector of the target.
-Connect the wire from PA6 to PB12.
+Connect the wire from PA6 to PB12, and the wire from PB13 to PB3.
 Connect PA9 to PA10 for the UART loopback.
 
 The script runs SWD before JTAG with each tool.

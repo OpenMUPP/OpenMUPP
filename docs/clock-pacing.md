@@ -188,6 +188,26 @@ Findings:
   The JTAG code is longer than a half period of 32 cycles at some edges. An edge late by less than the slack then made the next half period shorter.
   With a slack of 16 cycles, the shortest period at 4 MHz is 250 ns. The rates up to 1 MHz did not change.
 - The JTAG bit-bang engine gives about 3.4 MHz at a request of 4 MHz, and 4.9 MHz at most.
-  `jtag::bitBangMaxKHz` is only for the choice between the bit-bang engine and the SPI fast path. The STM32H5 has no fast path yet (#97). Set the H5 value when the fast path is added.
+  `jtag::bitBangMaxKHz` is only for the choice between the bit-bang engine and the SPI fast path. See [STM32H5 JTAG fast path](#stm32h5-jtag-fast-path) for the STM32H5 value.
 - RVSWD on the STM32H5 is not measured.
+
+### STM32H5 JTAG fast path
+
+Measured on 2026-10-25 (#97) with the setup above, with the `cmsis-dap` personality of the `weacth523-dual` image.
+The target ran at 64 MHz (`tools/stm32f1_clock.tcl`).
+Each run read 8 KiB of the target flash with OpenOCD. All reads gave the same data.
+
+| Request | Engine | Measured TCK |
+|---|---|---|
+| 1000 kHz | bit-bang | 1000 kHz (periods of 992 ns and 1016 ns) |
+| 2000 kHz | bit-bang | 1983 kHz (−0.85 %) |
+| 3000 kHz | bit-bang | 2874 kHz (−4.2 %) |
+| 3900 kHz | bit-bang | 3564 kHz (−8.6 %) |
+| 4000 kHz | SPI | 3906 kHz, periods 254 ns to 258 ns |
+| 8000 and 10000 kHz | SPI | 7812 kHz, period 128 ns |
+
+The bit-bang rates at 2000 kHz to 3900 kHz are higher than the SPI speed of 1953 kHz.
+Thus `jtag::bitBangMaxKHz` is 3000 on the STM32H5.
+The shortest single bit-bang period at 3900 kHz was 246 ns, as in the bit-bang results above.
+The SPI speed of 15.6 MHz is not measured: the STM32F103 permits TCK only up to F_CPU / 6 (10.6 MHz at 64 MHz).
 
