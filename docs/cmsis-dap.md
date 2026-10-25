@@ -34,7 +34,7 @@ The `cmsis-dap` image has these properties:
 - The CDC-ACM serial port, the UART bridge, the debug log and the LEDs are as in the Versaloon image.
 - The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
-  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
+  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more. On the STM32H5 boards, it uses the fast path at a TCK of 3906 kHz or more.
 
 A `cmsis-dap` image has only this personality.
 A multi image has `cmsis-dap` and other personalities, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
@@ -47,7 +47,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - A JTAG chain has up to 8 devices. The IR length of a device is 1 to 32 bits.
 - On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
   Else the next scan has an extra TCK edge or a missing TCK edge.
-  The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
+  The idle level is high on the boards with the SPI fast path (the Mini, the OtherUse and the STM32H5 boards), and low on the ST-Link/V2.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
 - No SWO.
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
@@ -314,8 +314,8 @@ A Versaloon-only image has no `RetryStop`.
 
 `DAP_Connect` with port 2 releases the SWD pins and starts the JTAG engine.
 The JTAG engine is the one of the Versaloon image (`board::BoardJtag`).
-On the Mini and the OtherUse, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
-This starts at a TCK of 1125 kHz. The other bits, and the slower rates, use GPIO bit-bang.
+On the boards with the fast path, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
+This starts at a TCK of 1125 kHz on the Mini and the OtherUse, and at 3906 kHz on the STM32H5 boards. The other bits, and the slower rates, use GPIO bit-bang.
 `DAP_SWJ_Clock` sets TCK in kHz, rounded down, and at least 1 kHz.
 
 `DAP_JTAG_Configure` gives the device chain: the IR length of each device.
