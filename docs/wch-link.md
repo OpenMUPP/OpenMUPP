@@ -644,6 +644,30 @@ First, the memory reads failed at random points with both images (with and witho
 The cause was the wiring between the probe and the target: after a new wiring, all items passed.
 The first probe also gave more failures than the second probe. Its wiring is not checked.
 
+### CH32V006 on the WeAct STM32H523 (one wire)
+
+Work item #98 tests the one-wire engine of the STM32H5.
+
+| Item | Value |
+|---|---|
+| Probe | WeAct STM32H523, `weacth523-wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` |
+| Target | CH32V006K8U6. SWIO on SWDIO (PB12, with the wire from PA6). |
+| Pull-up | 2.2 kΩ from SWDIO to 3.3 V |
+| Host | Linux, wlink 0.1.3, minichlink |
+| Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 4 |
+
+Results:
+
+| Item | Result |
+|---|---|
+| Wire times | The low pulses are 250 to 260 ns and 860 to 870 ns, the high level is 370 to 380 ns, and the turnaround is 750 ns. These are the WCH-LinkE times. |
+| Without the external pull-up | Failed. `wlink status` gives the error frame `81 55 01 01` (see [One-wire timer](#one-wire-timer)). |
+| `wlink status` | Passed. wlink shows the chip ID `0x00600620` and 62 KB flash. |
+| `wlink dump`, `wlink regs` | Passed. |
+| `wlink flash` | Passed. A dump of the 4 KB image is the same as the image. |
+| `wlink erase` | Passed. The flash then reads `0xff`. |
+| `minichlink -i`, `-r`, `-w` | Passed. A read after a write of 2 KB is the same as the image. |
+
 Open items:
 
 - The minichlink read of the full CH32V003 flash with a WCH-LinkE.
