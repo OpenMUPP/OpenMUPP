@@ -48,9 +48,10 @@
 //   (ClockPacer.h), halfCycles core cycles after the last one. The loop
 //   code runs inside the half period, so it does not change the rate. An
 //   interrupt makes a half period longer, never shorter. When halfCycles
-//   is shorter than the loop, TCK runs at the fastest rate of the loop. There is no loop without waits: its TCK high time would be
-//   only a few cycles, because the compiler puts the bit bookkeeping into
-//   the low half period.
+//   is shorter than the loop, TCK runs at the fastest rate of the loop.
+//   There is no loop without waits: its TCK high time would be only a few
+//   cycles, because the compiler puts the bit bookkeeping into the low half
+//   period.
 // - Adaptive: after each TCK edge, wait until RTCK has the same level. When
 //   RTCK does not follow within rtckTimeoutMs, the shift stops with TCK low
 //   and returns false. With TckIdle::High, TCK then stays low: TCK high
