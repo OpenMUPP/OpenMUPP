@@ -74,7 +74,8 @@ void *rxdr(SPI_TypeDef *spi) {
 
 // SPI1 slave, transmit only: clocked by TCK on the link, TMS on MISO. SSM
 // with SSI = 0: the slave is always selected. On an underrun (a late TMS
-// byte), the slave sets UDR.
+// byte), the slave sets UDR. UDR shows in SR only a few SCK cycles later
+// (RM0481, note to figure 826), so an underrun in the last frames is not seen.
 void startSlave() {
    RCC->APB2RSTR |= RCC_APB2RSTR_SPI1RST;
    RCC->APB2RSTR &= ~RCC_APB2RSTR_SPI1RST;
@@ -113,6 +114,14 @@ void stop() {
       spi.clearAllFlags();
    }
 }
+
+// The engine choice at the 125 MHz kernel clock (docs/usb-device.md):
+// bit-bang up to 3906 kHz, then the SPI up to 7.8 MHz.
+static_assert(jtag::spiShiftFor(125'000'000, 2000) == 0);
+static_assert(jtag::spiShiftFor(125'000'000, 3900) == 0);
+static_assert(jtag::spiShiftFor(125'000'000, 4000) == 5);
+static_assert(jtag::spiShiftFor(125'000'000, 8000) == 4);
+static_assert(jtag::spiShiftFor(125'000'000, 100'000) == 4);
 
 } // namespace
 

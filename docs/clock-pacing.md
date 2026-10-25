@@ -210,4 +210,5 @@ The bit-bang rates at 2000 kHz to 3900 kHz are higher than the SPI speed of 1953
 Thus `jtag::bitBangMaxKHz` is 3000 on the STM32H5.
 The shortest single bit-bang period at 3900 kHz was 246 ns, as in the bit-bang results above.
 The SPI speed of 15.6 MHz is not measured: the STM32F103 permits TCK only up to F_CPU / 6 (10.6 MHz at 64 MHz).
+Thus the firmware does not use 15.6 MHz (`jtag::spiMinShift` is 4 on the STM32H5).
 

@@ -644,12 +644,13 @@ The SPI clock idles high, so TCK also idles high between shifts.
 Only the rising edge clocks the TAP, so the idle level has no effect on the target.
 
 SPI1 makes TMS valid a time tv(SO) after the falling edge.
-The smallest SPI divider (`jtag::spiMinShift`) keeps tv(SO) less than the half period:
+The half period must be longer than tv(SO), the delay of the TCK link and the TMS setup time of the target.
+The smallest SPI divider is `jtag::spiMinShift`:
 
 | Family | SPI2 clock | SPI speeds (kHz) | Divider off | tv(SO) |
 |---|---|---|---|---|
 | STM32F1 | 36 MHz APB1 clock, divided by 4 to 256 | 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 | 2 (18 MHz, half period 27.8 ns) | 25 ns (STM32F103x8/B datasheet) |
-| STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 8 to 256 | 15625, 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) | 11.5 ns on PA6 (DS14540 table 109) |
+| STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 16 to 256 | 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) and 8 (15.6 MHz, not tested) | 11.5 ns on PA6 (DS14540 table 109) |
 
 Enable a smaller divider only after a hardware test at that speed passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
@@ -660,7 +661,7 @@ Enable a smaller divider only after a hardware test at that speed passes.
 - Adaptive clocking (0 kHz) always uses bit-bang.
 
 STM32F1 examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 2.25 MHz SPI, 2000 kHz gives 1.125 MHz SPI, 1000 kHz gives 1 MHz bit-bang.
-STM32H5 examples: 15625 kHz and more give 15.6 MHz SPI, 8000 kHz gives 7.8 MHz SPI, 4000 kHz gives 3.9 MHz SPI, 3000 kHz gives bit-bang, 2000 kHz gives bit-bang.
+STM32H5 examples: 7813 kHz and more give 7.8 MHz SPI, 4000 kHz gives 3.9 MHz SPI, 3000 kHz gives bit-bang, 2000 kHz gives bit-bang.
 On the STM32F1, the value of `jtag::bitBangMaxKHz` is conservative: 1000 kHz is the rate that was checked with the flash benchmark.
 The fastest rate of the bit-bang loop on the STM32F1 is not measured.
 A higher value selects bit-bang for some requests above 1125 kHz, and the SPI is then slower than the request less often.
@@ -677,8 +678,9 @@ Limits:
 - The STM32F1 SPI1 slave has no underrun flag. When DMA is late with a TMS byte, a TMS bit is wrong and the firmware does not see it.
   DMA channel 3 has the highest priority to prevent this.
   On the STM32H5, the SPI1 slave sets its underrun flag (UDR), and the shift fails.
+  The flag comes a few TCK cycles after the underrun, so an underrun in the last frames of a transfer is not seen.
   The STM32H5 shift also fails when SPI2 loses a TDO byte (OVR).
-- At 9 MHz, the half period is 55.6 ns (at 15.6 MHz on the STM32H5, 32 ns). The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
+- At 9 MHz, the half period is 55.6 ns (at 7.8 MHz on the STM32H5, 64 ns). The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
   Use a lower speed with a long cable.
 - The OpenOCD flash speed with the fast path is measured with `tools/flash_benchmark.py` (see [docs/development.md](development.md#flash-speed-benchmark)).
   On the STM32F1, at 4500 and 9000 kHz, the total flash time is 1 to 2 % longer than with the original firmware.

@@ -4,8 +4,9 @@
 // peripherals and DMA, and the other bits with the bit-bang engine
 // (jtag/JtagBitBang.h). Hardware-independent: an Spi type gives the SPI
 // and DMA access, so the host unit tests run the logic on a mock. On
-// target, board::JtagSpi (board/BoardJtag.h, board/BoardJtagFast.cpp)
-// gives the SPI1, SPI2 and DMA1 drivers.
+// target, board::JtagSpi (board/BoardJtag.h) gives the SPI1, SPI2 and DMA
+// drivers: board/BoardJtagFast.cpp (STM32F1, DMA1) and
+// board/BoardJtagFastH5.cpp (STM32H5, GPDMA1).
 //
 // The SPI master drives TCK and TDI and samples TDO. An SPI slave, clocked
 // by TCK through a board link, drives TMS. Both use clock polarity high and
@@ -18,7 +19,8 @@
 //   uint32_t clockHz();       SPI input clock: TCK = clockHz() >> shift
 //   void init();              clocks and configuration; the pins stay GPIO
 //   void fini();              SPI and DMA off
-//   void setShift(uint8_t);   TCK = clockHz() >> shift, shift 2-8
+//   void setShift(uint8_t);   TCK = clockHz() >> shift, shift
+//                             spiMinShift-spiMaxShift
 //   bool transfer(Pins &pins, const uint8_t *tdi, const uint8_t *tms,
 //                 uint8_t *tdo, uint32_t bytes);
 //                             1-65535 whole bytes, LSB first. TCK is high
@@ -47,13 +49,16 @@ namespace jtag {
 
 // The SPI clock divider is 2^shift (SPI_CR1.BR + 1 on the STM32F1,
 // SPI_CFG1.MBR + 1 on the STM32H5). TMS comes from the SPI1 slave, valid a
-// time tv(SO) after the falling edge. STM32F103: tv(SO) is 25 ns
-// (STM32F103x8/B datasheet), so shift 1 (18 MHz, half period 27.8 ns) is
-// off. STM32H5: tv(SO) is 11.5 ns on PA6 (DS14540 table 109), so shift 2
-// (31.25 MHz, half period 16 ns) is off. Lower the value only after a
-// hardware test at that rate passes.
+// time tv(SO) after the falling edge. tv(SO), the link delay and the TMS
+// setup time of the target must fit in the half period. STM32F103: tv(SO)
+// is 25 ns (STM32F103x8/B datasheet), so shift 1 (18 MHz, half period
+// 27.8 ns) is off. STM32H5: tv(SO) is 11.5 ns on PA6 (DS14540 table 109).
+// Shift 2 (31.25 MHz, half period 16 ns) leaves 4.5 ns. Shift 3 (15.6 MHz)
+// is not tested: the STM32F103 test target allows 10.6 MHz at most. Thus
+// the H5 starts at shift 4 (7.8 MHz, the fastest tested rate). Lower the
+// value only after a hardware test at that rate passes.
 #if defined(STM32H5)
-inline constexpr uint8_t spiMinShift = 3;
+inline constexpr uint8_t spiMinShift = 4;
 #else
 inline constexpr uint8_t spiMinShift = 2;
 #endif
