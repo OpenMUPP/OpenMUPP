@@ -255,6 +255,32 @@ TEST_CASE("RVSWD two wires: SWCLK timing of the capture") {
    }
 }
 
+TEST_CASE("RVSWD two wires: one start and one stop condition for each parity") {
+   // A release of a low SWDIO while SWCLK is high lets the pull-up make a
+   // stop condition (CH32V208 with a 2.2 kOhm pull-up). Request parity 0
+   // and 1 (bit 10), and data parity 0 and 1 (bit 48 of a write).
+   struct Frame {
+      uint8_t address;
+      bool write;
+      uint32_t data;
+   };
+   for(const Frame frame : { Frame{ 0x11, false, 0 }, Frame{ 0x10, false, 0 }, Frame{ 0x10, true, 0x3 },
+                             Frame{ 0x10, true, 0x1 }, Frame{ 0x11, true, 0x3 }, Frame{ 0x11, true, 0x1 } }) {
+      CAPTURE(frame.address);
+      CAPTURE(frame.write);
+      CAPTURE(frame.data);
+      Bench bench(Wire::Two);
+      bench.pins.registers[frame.address] = 0x0000'0382;
+      const int starts = bench.pins.starts;
+      const int stops = bench.pins.stops;
+      uint32_t data = 0;
+      CHECK((frame.write ? bench.engine.write(frame.address, frame.data) : bench.engine.read(frame.address, data)) == 0);
+      bench.checkIdle();
+      CHECK(bench.pins.starts - starts == 1);
+      CHECK(bench.pins.stops - stops == 1);
+   }
+}
+
 TEST_CASE("RVSWD two wires: a wrong parity bit of the read data") {
    Bench bench(Wire::Two);
    bench.pins.registers[0x11] = 0x0000'0382;
