@@ -10,14 +10,17 @@
 
 namespace {
 
-// Each call of now() is one cycle. edge() records the time of an edge.
+// Each call of now() is `step` cycles. edge() records the time of an edge.
 struct Clock {
    // Starts near the wrap of the counter.
    uint32_t time{ 0xFFFFFF00u };
+   uint32_t step{ 1 };
    std::vector<uint32_t> edges;
 
    uint32_t now() {
-      return time++;
+      const uint32_t t = time;
+      time += step;
+      return t;
    }
    void edge() {
       edges.push_back(time);
@@ -93,4 +96,26 @@ TEST_CASE("Clock pacer: an edge in the slack keeps the deadlines") {
    edges(clock, pacer, 1, 40, 0);
    // The second edge is on its deadline: the first edge was late within the slack.
    CHECK(clock.edges[1] - start == 80);
+}
+
+TEST_CASE("Clock pacer: the jitter of a slow wait loop does not make the clock slower") {
+   // The wait loop on the STM32F103 at 72 MHz with flash wait states: some
+   // cycles for each read of the counter. The edges spread by up to one
+   // loop pass, but the deadlines stay.
+   Clock clock;
+   clock.step = 9;
+   pacing::ClockPacer pacer;
+   pacer.start(clock);
+   const uint32_t start = clock.time;
+   edges(clock, pacer, 1000, 154, 37);
+   const auto &e = clock.edges;
+   for(std::size_t i = 1; i < e.size(); ++i) {
+      CAPTURE(i);
+      CHECK(e[i] - e[i - 1] >= 154 - 9);
+      CHECK(e[i] - e[i - 1] <= 154 + 9);
+   }
+   // The mean is exact: the last edge is less than one loop pass after its
+   // deadline.
+   CHECK(e.back() - start >= 1000 * 154);
+   CHECK(e.back() - start < 1000 * 154 + 9);
 }

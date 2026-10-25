@@ -14,11 +14,12 @@
 //   pins.swclk(level);              the edge, and nothing else
 //   pacer.edge(pins);
 //
-// An edge more than lateSlackCycles after its deadline is late: an
-// interrupt, or code longer than the half period. The next half period
-// then starts at the edge. Thus a late edge makes a half period longer,
-// never shorter, and the clock does not catch up. The edges have the
-// jitter of the wait loop (some core cycles). The mean rate is exact.
+// An edge is late when the code before the wait took the whole half
+// period, or when the edge comes more than lateSlackCycles after the end
+// of the wait (an interrupt). The next half period then starts at the
+// edge. Thus a late edge makes a half period longer, never shorter, and
+// the clock does not catch up. The edges have the jitter of the wait loop
+// (some core cycles). The mean rate is exact.
 //
 // The Pins type has `uint32_t now()`, the free-running core cycle counter.
 // The unsigned differences are correct across the wrap of the counter.
@@ -29,13 +30,14 @@
 
 namespace pacing {
 
-// The cycles from a deadline to the edge() call: the exit of the wait loop
-// and the pin write. A larger value lets an interrupt make the next half
-// period shorter by up to this many cycles. A smaller value makes the clock
-// slower when the normal delay is longer: the deadline then starts again
-// at each edge. Check the rate on the wire after a change of the engines
-// or of the core (docs/clock-pacing.md).
-inline constexpr uint32_t lateSlackCycles = 16;
+// The cycles from the end of the wait to the edge() call: the pin write,
+// a pin read before it (SWD), and the read of the counter. A larger value
+// lets an interrupt make the next half period shorter by up to this many
+// cycles. A smaller value makes the clock slower when the normal delay is
+// longer: the deadline then starts again at each edge. Check the rate on
+// the wire after a change of the engines or of the core
+// (docs/clock-pacing.md).
+inline constexpr uint32_t lateSlackCycles = 12;
 
 class ClockPacer {
    public:
@@ -49,20 +51,27 @@ class ClockPacer {
    template <typename Pins>
    [[gnu::always_inline]] void wait(Pins &pins, uint32_t cycles) {
       next_ = deadline_ + cycles;
-      while(pins.now() - deadline_ < cycles) {
+      uint32_t now = pins.now();
+      late_ = now - deadline_ >= cycles;
+      while(now - deadline_ < cycles) {
+         now = pins.now();
       }
+      end_ = now;
    }
 
    // After the edge that follows wait()
    template <typename Pins>
    [[gnu::always_inline]] void edge(Pins &pins) {
       const uint32_t now = pins.now();
-      deadline_ = now - next_ > lateSlackCycles ? now : next_;
+      deadline_ = late_ || now - end_ > lateSlackCycles ? now : next_;
    }
 
    private:
    uint32_t deadline_{ 0 };
    uint32_t next_{ 0 };
+   // The counter at the end of the last wait
+   uint32_t end_{ 0 };
+   bool late_{ false };
 };
 
 } // namespace pacing
