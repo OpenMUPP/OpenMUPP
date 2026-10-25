@@ -52,7 +52,7 @@ Some functions come from the pin map and the family, not from a separate field:
 - `board::adcChannelOf()` gives the ADC channel of the Vref pin.
   The channels of the STM32F103 come from RM0008. The channels of the STM32H523/H533 come from DS14539.
 - `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
-  The STM32H5 has no one-wire engine yet, so this function gives no timer for it.
+  On the STM32H5, only PA6 (TIM3_CH1) has a timer.
 - `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
   The crystal pins are PD0 and PD1 on the STM32F103, and PH0 and PH1 on the STM32H5.
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
