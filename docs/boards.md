@@ -244,8 +244,8 @@ Thus PC13 is good for the LED, but do not use it for a target signal.
 | RTCK | PA8 | P2 pin 5 | Optional |
 | UART TX (to target RX) | PA9 | P2 pin 6 | USART1 of the serial bridge |
 | UART RX (from target TX) | PA10 | P2 pin 7 | |
-| TRST | PB4 | P2 pin 12 | Optional |
-| SRST | PB5 | P2 pin 13 | |
+| TRST | PB4 | P2 pin 12 | Optional. The [hardware test](#hardware-test) needs it. |
+| SRST | PB5 | P2 pin 13 | The [hardware test](#hardware-test) needs it. |
 | GND | GND | P2 pin 17 or 19 | |
 | TMS, SWDIO (output) | PA6 | P1 pin 9 | Connect a wire from PA6 to PB12 (P2 pin 1). |
 | Vref sense | PB0 | P1 pin 7 | Optional. Connect the target supply, 3.3 V maximum. No divider. |
@@ -286,3 +286,46 @@ After the `:leave` request, `dfu-util` can show `Error during download get_statu
 This message has no effect: the write is complete.
 
 A debug probe on the SWD header P3 can also write the `standalone` image at `0x08000000`.
+
+### Hardware test
+
+`tools/probe_hw_test.py` tests the dual image on an STM32F1 target (see [Multi image hardware test](usb-device.md#multi-image-hardware-test)).
+Connect TMS, TCK, TDI, TDO, TRST, SRST and GND to the JTAG connector of the target.
+Connect the wire from PA6 to PB12.
+Connect PA9 to PA10 for the UART loopback.
+
+The script runs SWD before JTAG with each tool.
+After an SWD connection, the debug port of an STM32F1 stays in SWD mode.
+A system reset does not change this mode.
+Only a power cycle, TRST or the SWD-to-JTAG switch sequence sets JTAG mode again.
+Without TRST, each JTAG step after an SWD step thus fails, with `JTAG scan chain interrogation failed: all ones`.
+
+Status: the test passed on 2026-10-25 (work item #95).
+Probe: WeAct STM32H523 core board.
+Image: `weacth523-dual` preset (`VSL_PERSONALITIES=versaloon,cmsis-dap`), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
+Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
+Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
+
+| Check | Versaloon | CMSIS-DAP |
+|---|---|---|
+| Switch with the switch request on EP0 | pass | pass |
+| Switch with the key (3 s), also after a reset of the board | pass | pass |
+| Serial loopback, quick set | pass | pass |
+| `DAP_UART_*` loopback | - | pass |
+| OpenOCD SWD, 1000 and 2000 kHz | pass | pass |
+| OpenOCD JTAG, 1000 and 9000 kHz | pass | pass |
+| pyOCD SWD, 1000 and 2000 kHz | - | pass |
+| pyOCD JTAG, 1000 and 9000 kHz | - | pass |
+| probe-rs SWD, 1000 and 2000 kHz | - | pass |
+| probe-rs JTAG, 1000 kHz | - | pass |
+
+Findings:
+
+- One run of the script failed on OpenOCD JTAG with the `vsllink` driver.
+  At 1000 kHz, the read back of the flash had 10 bytes with one wrong bit each. Each wrong bit was 1, not 0.
+  The verify step passed, thus the flash content was correct.
+  At 9000 kHz, the flash write stopped with `Invalid ACK (6) in DAP response`.
+  This run came directly after a change to the wires.
+  Five more runs passed: four runs of the Versaloon steps only, and one full run.
+  The cause is not known. The timing of the bit-bang engines at 250 MHz is not yet measured (#94).
+- The test did not cover `--full-uart`, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.
