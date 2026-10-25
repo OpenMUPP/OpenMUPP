@@ -69,6 +69,17 @@
       }
     },
     {
+      "name": "board-weacth523",
+      "description": "Board weacth523",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "cacheVariables": {
+        "BOARD": "weacth523"
+      }
+    },
+    {
       "name": "personalities-cmsis-dap",
       "description": "CMSIS-DAP personality",
       "hidden": true,
@@ -353,6 +364,37 @@
       ]
     },
     {
+      "name": "weacth523",
+      "displayName": "WeAct STM32H523",
+      "inherits": [
+        "board-weacth523"
+      ]
+    },
+    {
+      "name": "weacth523-cmsis-dap",
+      "displayName": "WeAct STM32H523, CMSIS-DAP",
+      "inherits": [
+        "board-weacth523",
+        "personalities-cmsis-dap"
+      ]
+    },
+    {
+      "name": "weacth523-dual",
+      "displayName": "WeAct STM32H523, dual image",
+      "inherits": [
+        "board-weacth523",
+        "personalities-dual"
+      ]
+    },
+    {
+      "name": "weacth523-debug",
+      "displayName": "WeAct STM32H523, Debug",
+      "inherits": [
+        "debug",
+        "board-weacth523"
+      ]
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "description": "Native build of the unit tests (no toolchain file)",
@@ -462,6 +504,22 @@
     {
       "name": "nucleoh533-debug",
       "configurePreset": "nucleoh533-debug"
+    },
+    {
+      "name": "weacth523",
+      "configurePreset": "weacth523"
+    },
+    {
+      "name": "weacth523-cmsis-dap",
+      "configurePreset": "weacth523-cmsis-dap"
+    },
+    {
+      "name": "weacth523-dual",
+      "configurePreset": "weacth523-dual"
+    },
+    {
+      "name": "weacth523-debug",
+      "configurePreset": "weacth523-debug"
     },
     {
       "name": "host-tests",
