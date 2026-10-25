@@ -44,10 +44,11 @@
 //
 // Clocking modes:
 //
-// - Timed: each half period waits for halfCycles core cycles from its TCK
-//   edge. An interrupt makes a half period longer, never shorter. When
-//   halfCycles is shorter than the loop, TCK runs at the fastest rate of
-//   the loop. There is no loop without waits: its TCK high time would be
+// - Timed: each TCK edge comes at a deadline of a ClockPacer
+//   (ClockPacer.h), halfCycles core cycles after the last one. The loop
+//   code runs inside the half period, so it does not change the rate. An
+//   interrupt makes a half period longer, never shorter. When halfCycles
+//   is shorter than the loop, TCK runs at the fastest rate of the loop. There is no loop without waits: its TCK high time would be
 //   only a few cycles, because the compiler puts the bit bookkeeping into
 //   the low half period.
 // - Adaptive: after each TCK edge, wait until RTCK has the same level. When
@@ -58,6 +59,7 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "ClockPacer.h"
 #include "IntDiv.h"
 
 #include "protocol/Background.h"
@@ -93,13 +95,6 @@ struct Timing {
 namespace detail {
 
 template <typename Pins>
-[[gnu::always_inline]] inline void waitFrom(Pins &pins, uint32_t start, uint32_t cycles) {
-   // Unsigned difference: correct across the wrap of the counter.
-   while(pins.now() - start < cycles) {
-   }
-}
-
-template <typename Pins>
 [[gnu::always_inline]] inline bool waitRtck(Pins &pins, bool level, uint32_t timeoutCycles) {
    const uint32_t start = pins.now();
    while(pins.rtck() != level) {
@@ -119,16 +114,16 @@ bool shiftBits(Pins &pins,
                const uint8_t *tms,
                uint8_t *tdo) {
    // TCK is at its idle level since the end of the last shift.
-   uint32_t edge = 0;
+   pacing::ClockPacer pacer;
    if constexpr(C == Clocking::Timed) {
-      edge = pins.now();
+      pacer.start(pins);
    }
    for(uint32_t done = 0; done < bitCount; done += 8) {
       // TCK is at its idle level. After a call, the half period starts
       // again: the next TDI and TMS writes get their full setup time.
       if(background.poll(pins)) {
          if constexpr(C == Clocking::Timed) {
-            edge = pins.now();
+            pacer.start(pins);
          }
       }
       const uint32_t bits = std::min<uint32_t>(8, bitCount - done);
@@ -138,11 +133,11 @@ bool shiftBits(Pins &pins,
       for(uint32_t bit = 0; bit < bits; ++bit) {
          if constexpr(Idle == TckIdle::High) {
             if constexpr(C == Clocking::Timed) {
-               waitFrom(pins, edge, timing.halfCycles);
+               pacer.wait(pins, timing.halfCycles);
             }
             pins.tck(false);
             if constexpr(C == Clocking::Timed) {
-               edge = pins.now();
+               pacer.edge(pins);
             } else if constexpr(C == Clocking::Adaptive) {
                if(!waitRtck(pins, false, timing.timeoutCycles)) {
                   return false;
@@ -154,12 +149,12 @@ bool shiftBits(Pins &pins,
          tdiByte >>= 1;
          tmsByte >>= 1;
          if constexpr(C == Clocking::Timed) {
-            waitFrom(pins, edge, timing.halfCycles);
+            pacer.wait(pins, timing.halfCycles);
          }
          tdoByte |= static_cast<uint32_t>(pins.tdo()) << bit;
          pins.tck(true);
          if constexpr(C == Clocking::Timed) {
-            edge = pins.now();
+            pacer.edge(pins);
          } else if constexpr(C == Clocking::Adaptive) {
             if(!waitRtck(pins, true, timing.timeoutCycles)) {
                if constexpr(Idle == TckIdle::Low) {
@@ -170,11 +165,11 @@ bool shiftBits(Pins &pins,
          }
          if constexpr(Idle == TckIdle::Low) {
             if constexpr(C == Clocking::Timed) {
-               waitFrom(pins, edge, timing.halfCycles);
+               pacer.wait(pins, timing.halfCycles);
             }
             pins.tck(false);
             if constexpr(C == Clocking::Timed) {
-               edge = pins.now();
+               pacer.edge(pins);
             } else if constexpr(C == Clocking::Adaptive) {
                if(!waitRtck(pins, false, timing.timeoutCycles)) {
                   return false;

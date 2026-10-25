@@ -548,7 +548,7 @@ Each call sends one IN packet of up to 64 bytes: 64 bytes per ms.
 At 115200 baud, the UART receives 11.5 bytes per ms.
 
 The call makes one clock phase longer by the time of the service, some microseconds.
-The clock does not get faster: each half period waits from its clock edge.
+The clock does not get faster: after a late edge, the next half period is complete (see [Clock pacing](clock-pacing.md)).
 For JTAG in timed mode, the low half period starts again after the call.
 Thus TDI and TMS change a full half period before the next rising edge, as for all other bits.
 For SWD, each bit waits a full half period after the SWDIO write, so SWDIO also keeps its setup time.
