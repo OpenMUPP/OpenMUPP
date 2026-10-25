@@ -163,6 +163,7 @@ The firmware changes the personality only with a reset.
 
 The firmware stores the personality in the last 1 KB flash page of the application area, at `0x0800FC00`.
 On the NUCLEO-H533RE (STM32H5), the page is the last 8 KB flash sector of bank 2, at `0x0807E000`.
+On the WeAct STM32H523 core board (STM32H523CC, 256 KB flash), this sector is at `0x0803E000`.
 The linker script keeps this page out of the image.
 Thus a multi image has 1 KB (STM32F103) or 8 KB (STM32H5) less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
 When the page holds no personality, the image uses `VSL_DEFAULT_PERSONALITY`.

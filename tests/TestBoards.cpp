@@ -3,6 +3,7 @@
 #include "board/boards/NucleoH533.h"
 #include "board/boards/OtherUse.h"
 #include "board/boards/StLinkV2.h"
+#include "board/boards/WeActH523.h"
 
 #include <doctest/doctest.h>
 
@@ -147,11 +148,41 @@ TEST_CASE("NUCLEO-H533RE has the pin map of the H5 probe board") {
    CHECK(board::withSwd(nucleo) == nucleo);
 }
 
+TEST_CASE("WeAct H523 has SWDIO next to SWCLK and the on-board LED and key") {
+   const Definition &weAct = board::weActH523;
+
+   CHECK(weAct.name == "weacth523");
+   CHECK(weAct.family == board::Family::Stm32H5);
+   CHECK(weAct.hseFrequency == 8'000'000);
+   // Header P2 pins 1 to 7: SWDIO, SWCLK, TDO, TDI, RTCK, TX, RX
+   CHECK(weAct.debug.tmsIn == Pin{ Port::B, 12 });
+   CHECK(weAct.debug.tck == Pin{ Port::B, 13 });
+   CHECK(weAct.debug.tdo == Pin{ Port::B, 14 });
+   CHECK(weAct.debug.tdi == Pin{ Port::B, 15 });
+   CHECK(weAct.debug.rtck == Pin{ Port::A, 8 });
+   CHECK(weAct.uart == board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } });
+   // SPI1 MISO of the fast path, with a wire to PB12
+   CHECK(weAct.debug.tmsOut == Pin{ Port::A, 6 });
+   CHECK(weAct.debug.trst == Pin{ Port::B, 4 });
+   CHECK(weAct.debug.srst == Pin{ Port::B, 5 });
+   CHECK(weAct.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 1 });
+   CHECK(weAct.leds.state == Signal{ { Port::C, 13 }, Active::Low });
+   CHECK_FALSE(weAct.leds.power);
+   CHECK_FALSE(weAct.leds.usb);
+   CHECK(weAct.key == Signal{ { Port::A, 0 }, Active::Low });
+   CHECK_FALSE(weAct.hasJtagFastPath());
+   CHECK_FALSE(weAct.powerSwitch);
+   CHECK_FALSE(weAct.usbPullUp);
+   CHECK(board::swjConfig(weAct) == board::SwjConfig::NoJtag);
+   CHECK(board::withSwd(weAct) == weAct);
+}
+
 TEST_CASE("All boards are valid") {
    CHECK(board::isValid(board::mini));
    CHECK(board::isValid(board::otherUse));
    CHECK(board::isValid(board::stLinkV2));
    CHECK(board::isValid(board::nucleoH533));
+   CHECK(board::isValid(board::weActH523));
 }
 
 TEST_CASE("isValid rejects pin conflicts") {

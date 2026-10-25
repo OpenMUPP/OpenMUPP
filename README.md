@@ -2,7 +2,7 @@
 
 versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini and the OtherUse.
 A build for an ST-Link/V2 clone also exists, but it has no hardware test (see [Boards](#boards)).
-The port to the NUCLEO-H533RE (STM32H5) has the Versaloon and the CMSIS-DAP personalities.
+The port to the STM32H5 (the NUCLEO-H533RE and the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
@@ -31,11 +31,13 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 | `otheruse` | OtherUse | 12 MHz | target |
 | `stlinkv2` | ST-Link/V2 clone | 8 MHz | compile-only |
 | `nucleoh533` | NUCLEO-H533RE | 24 MHz | target, 3.3 V targets only |
+| `weacth523` | WeAct STM32H523 core board | 8 MHz | target, 3.3 V targets only |
 
 The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB.
 The NUCLEO-H533RE uses an STM32H533RE.
-It has no WCH-Link personality yet.
-See [docs/boards.md](docs/boards.md#nucleo-h533re) for its limits and the wiring to the target.
+The WeAct STM32H523 core board uses an STM32H523CC.
+The two STM32H5 boards have no WCH-Link personality yet.
+See [docs/boards.md](docs/boards.md#nucleo-h533re) and [docs/boards.md](docs/boards.md#weact-stm32h523-core-board) for their limits and the wiring to the target.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
 
 ## Get the source code
@@ -101,7 +103,7 @@ cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
 cmake --build build/mini -j
 ```
 
-Use `-DBOARD=otheruse`, `-DBOARD=stlinkv2` or `-DBOARD=nucleoh533` for the other boards.
+Use `-DBOARD=otheruse`, `-DBOARD=stlinkv2`, `-DBOARD=nucleoh533` or `-DBOARD=weacth523` for the other boards.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
 
 The build links the same firmware into one or more application images.
@@ -116,8 +118,9 @@ Each image has a different start address:
 The Mini and the OtherUse get all three images.
 The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
 The NUCLEO-H533RE gets the `standalone` image only, with 512 KB flash.
+The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
 A multi image has less flash, because the end of the flash holds the stored personality.
-This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the NUCLEO-H533RE.
+This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the STM32H5 boards.
 
 The build writes these files into the build directory:
 
