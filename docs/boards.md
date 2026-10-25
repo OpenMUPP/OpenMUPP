@@ -233,6 +233,8 @@ Thus PC13 is good for the LED, but do not use it for a target signal.
 
 ### Wiring to the target
 
+![Pinout of the WeAct STM32H523 core board](images/weacth523-pinout.svg)
+
 | Signal | Pin | Header | Note |
 |---|---|---|---|
 | TMS, SWDIO (input) | PB12 | P2 pin 1 | Connect the target here. |
