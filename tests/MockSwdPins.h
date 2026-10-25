@@ -112,7 +112,7 @@ class MockSwdPins {
       return time++;
    }
    [[nodiscard]] uint32_t coreHz() const {
-      return 72'000'000;
+      return coreClockHz;
    }
 
    [[nodiscard]] bool swclkLevel() const {
@@ -161,6 +161,8 @@ class MockSwdPins {
    uint32_t stallCycles{ 0 };
    // Starts near the wrap of the counter.
    uint32_t time{ 0xFFFFFF00u };
+   // The core clock: the STM32F103 by default
+   uint32_t coreClockHz{ 72'000'000 };
 
    private:
    // Release: nobody drives. Expect: the data phase of a read that the
