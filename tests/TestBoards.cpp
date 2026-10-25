@@ -140,7 +140,8 @@ TEST_CASE("NUCLEO-H533RE has the pin map of the H5 probe board") {
    CHECK_FALSE(nucleo.leds.power);
    CHECK_FALSE(nucleo.leds.usb);
    CHECK(nucleo.key == Signal{ { Port::C, 13 }, Active::High });
-   CHECK_FALSE(nucleo.hasJtagFastPath());
+   REQUIRE(nucleo.hasJtagFastPath());
+   CHECK(nucleo.jtagFastPath->tckLink == Pin{ Port::B, 3 });
    CHECK_FALSE(nucleo.powerSwitch);
    CHECK_FALSE(nucleo.usbPullUp);
    // PB4 (NJTRST) is TRST: the debug port keeps SWD for the on-board ST-LINK
@@ -170,7 +171,8 @@ TEST_CASE("WeAct H523 has SWDIO next to SWCLK and the on-board LED and key") {
    CHECK_FALSE(weAct.leds.power);
    CHECK_FALSE(weAct.leds.usb);
    CHECK(weAct.key == Signal{ { Port::A, 0 }, Active::Low });
-   CHECK_FALSE(weAct.hasJtagFastPath());
+   REQUIRE(weAct.hasJtagFastPath());
+   CHECK(weAct.jtagFastPath->tckLink == Pin{ Port::B, 3 });
    CHECK_FALSE(weAct.powerSwitch);
    CHECK_FALSE(weAct.usbPullUp);
    CHECK(board::swjConfig(weAct) == board::SwjConfig::NoJtag);

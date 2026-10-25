@@ -12,7 +12,7 @@ namespace board {
 // 3.3 V targets only: no level shifters, no power switch. The only user LED
 // is LD2 (PA5), the state LED. The USB D+ pull-up is internal. SWDIO uses
 // two pins with a wire between them, as on the Mini. The JTAG fast path
-// needs the TCK link (PB13 to PB3) and the H5 SPI driver (#97): not yet.
+// needs the TCK link, a wire from PB13 to PB3.
 inline constexpr Definition nucleoH533{
    .name = "nucleoh533",
    .hseFrequency = 24'000'000,
@@ -29,7 +29,7 @@ inline constexpr Definition nucleoH533{
    .srst{ Port::B, 10 },
    .rtck = Pin{ Port::A, 0 },
    },
-   .jtagFastPath = std::nullopt,
+   .jtagFastPath = JtagFastPath{ .tckLink{ Port::B, 3 } },
    .uart = Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } },
    // Optional: wire the target supply (3.3 V maximum) to PB0
    .vref = VrefSense{ .pin{ Port::B, 0 }, .divider = 1 },
