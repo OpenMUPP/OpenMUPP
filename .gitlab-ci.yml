@@ -184,6 +184,29 @@ build-nucleoh533:
         VARIANT: -debug
         BUILD_TYPE: Debug
 
+# WeAct STM32H523 core board (STM32H523CC, 256 KB flash): the same presets
+# as the NUCLEO-H533RE. It reads the H5 cache of build-nucleoh533, and only
+# build-nucleoh533 writes it.
+build-weacth523:
+  extends: .build-board-template
+  cache:
+    <<: *fetchcontent-cache
+    key: fetchcontent-firmware-h5
+    policy: pull
+  parallel:
+    matrix:
+      - BOARD: weacth523
+        VARIANT: ""
+      - BOARD: weacth523
+        VARIANT: -cmsis-dap
+        PROTOCOL_TAG: -cmsis-dap
+      - BOARD: weacth523
+        VARIANT: -dual
+        PROTOCOL_TAG: -vsl+dap
+      - BOARD: weacth523
+        VARIANT: -debug
+        BUILD_TYPE: Debug
+
 # VSL_PERSONALITIES=cmsis-dap,wch-link, a set without Versaloon. Build and
 # size check only, no artifacts.
 build-mini-cmsis-dap-wch-link:

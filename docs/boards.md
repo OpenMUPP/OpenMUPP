@@ -10,6 +10,7 @@ The firmware knows two families: STM32F1 and STM32H5.
 The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB (family STM32F1).
 CMSIS has one device define (`STM32F103xB`) for both parts.
 The NUCLEO-H533RE uses an STM32H533RE (family STM32H5, see [NUCLEO-H533RE](#nucleo-h533re)).
+The WeAct STM32H523 core board uses an STM32H523CC (family STM32H5, see [WeAct STM32H523 core board](#weact-stm32h523-core-board)).
 
 `cmake/Boards.cmake` has one line for each board, with these values:
 
@@ -205,3 +206,83 @@ openocd -f interface/stlink.cfg -f target/stm32h5x.cfg \
 Then connect the user USB connector CN3 to the host.
 The firmware keeps the SW-DP of the STM32H5 on, so the STLINK-V3EC can connect at any time.
 The STLINK-V3EC uses PA13 and PA14. The firmware does not use these pins.
+
+## WeAct STM32H523 core board
+
+The board `weacth523` is the WeAct Studio STM32H523 core board V1.0, in the "Black Pill" form.
+It has an STM32H523CCU6 or an STM32H523CCT6, and an 8 MHz crystal.
+The STM32H523CC has 256 KB flash in two banks of 128 KB.
+The schematics are in the WeAct repository [WeActStudio.STM32H523CoreBoard](https://github.com/WeActStudio/WeActStudio.STM32H523CoreBoard), in `Hardware/`.
+
+The pin map is the pin map of the NUCLEO-H533RE, with these changes:
+
+- The state LED is the on-board LED (PC13, active low).
+- The key is the on-board KEY button (PA0, active low).
+- RTCK moves from PA0 to PA8, because PA0 is the key.
+- SWDIO in is PB12, not PA7. SWDIO in is then on the header pin next to SWCLK.
+- SRST is PB5, not PB10. Thus all target signals except Vref are on header P2.
+
+The board has the same limits as the NUCLEO-H533RE (see [NUCLEO-H533RE](#nucleo-h533re)).
+It has no level shifters and no target power switch.
+Connect only targets with a 3.3 V supply.
+The board and the target must have a common ground.
+
+PC13 is in the backup domain.
+It can sink only 3 mA, and its speed is low.
+Thus PC13 is good for the LED, but do not use it for a target signal.
+
+### Wiring to the target
+
+![Pinout of the WeAct STM32H523 core board](images/weacth523-pinout.svg)
+
+| Signal | Pin | Header | Note |
+|---|---|---|---|
+| TMS, SWDIO (input) | PB12 | P2 pin 1 | Connect the target here. |
+| TCK, SWCLK | PB13 | P2 pin 2 | |
+| TDO | PB14 | P2 pin 3 | |
+| TDI | PB15 | P2 pin 4 | |
+| RTCK | PA8 | P2 pin 5 | Optional |
+| UART TX (to target RX) | PA9 | P2 pin 6 | USART1 of the serial bridge |
+| UART RX (from target TX) | PA10 | P2 pin 7 | |
+| TRST | PB4 | P2 pin 12 | Optional |
+| SRST | PB5 | P2 pin 13 | |
+| GND | GND | P2 pin 17 or 19 | |
+| TMS, SWDIO (output) | PA6 | P1 pin 9 | Connect a wire from PA6 to PB12 (P2 pin 1). |
+| Vref sense | PB0 | P1 pin 7 | Optional. Connect the target supply, 3.3 V maximum. No divider. |
+
+The last four pins of P2 are GND, 5 V, GND and 3.3 V (pins 17 to 20).
+The JTAG fast path (#97) will also need a wire from PB13 (P2 pin 2) to PB3 (P2 pin 11).
+
+The board has these other signals:
+
+| Signal | Pin | Note |
+|---|---|---|
+| State LED | PC13 | Blue LED, active low. The board has no power LED and no USB LED. |
+| Key | PA0 | KEY button, active low. The firmware sets the pull-up of the pin. |
+| USB | PA11, PA12 | USB Type-C connector. The D+ pull-up is in the STM32H5. |
+| SWD of the dongle MCU | PA13, PA14 | SWD header P3: SWDIO on pin 2, SWCLK on pin 3. The firmware does not use these pins. |
+
+Without a Vref connection, the Vref value of the Versaloon personality is not valid.
+
+### Flash the firmware
+
+The board has no on-board debug probe.
+Use the USB DFU (Device Firmware Upgrade) bootloader in the system memory of the STM32H5.
+To write the firmware, do these steps:
+
+1. Hold the BOOT0 button down.
+2. Push and release the NRST button.
+3. Release the BOOT0 button. The board shows as the USB device `0483:df11`.
+4. Write the `standalone` image with `dfu-util`:
+
+   ```sh
+   dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D versaloon-ng-standalone.bin
+   ```
+
+5. Disconnect the board and connect it again. The firmware starts.
+
+The `:leave` request does not start the firmware on this board, so step 5 is necessary.
+After the `:leave` request, `dfu-util` can show `Error during download get_status`.
+This message has no effect: the write is complete.
+
+A debug probe on the SWD header P3 can also write the `standalone` image at `0x08000000`.
