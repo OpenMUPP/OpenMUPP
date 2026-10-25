@@ -504,6 +504,14 @@ The pins on the dongle:
 
 The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
 
+#### Two-wire release
+
+The WCH-LinkE releases SWDIO after the rising edge of SWCLK in bits 10 and 48 (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
+Its pull-up is weak: a released line rises slowly, to 1.5 to 1.9 V before the falling edge (analog capture). Thus the target sees no start or stop condition.
+A strong pull-up, as the 2.2 kΩ pull-up for one wire (see [One-wire timer](#one-wire-timer)), raises a released SWDIO at once.
+When SWDIO is low there, the rise comes while SWCLK is high, and the target sees a stop condition (CH32V208 on the WeAct STM32H523).
+Thus the engine releases a low SWDIO after the falling edge of SWCLK. The target then drives bit 11 or bit 49 low, and the line stays low. A high SWDIO is still released after the rising edge.
+
 #### One-wire timer
 
 The width of a low pulse is the value of the bit. Thus code cannot make the bits.
@@ -554,10 +562,6 @@ At the sample point, the line is at 3.06 V. While the probe drives the line low 
 On the WeAct STM32H523 with a CH32V006, nothing on the target side drives the line high.
 With only the internal pull-ups (PA6 and PB12, about 40 kΩ each), the line is at about 1.1 V 420 ns after a release. The input does not see a high level in time, and no read bit is correct.
 An external pull-up of 2.2 kΩ to 3.3 V fixes this. A read bit of a 1 needs the line high about 150 ns after the target releases it, so the time constant must be about 160 ns or less.
-
-On two wires, the same pull-up raises a released SWDIO at once. The WCH-LinkE releases SWDIO after the rising edge of SWCLK in bits 10 and 48 (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
-When SWDIO is low there, the rise comes while SWCLK is high, and the target sees a stop condition (CH32V208 on the WeAct STM32H523).
-Thus the engine releases a low SWDIO after the falling edge of SWCLK. The target then drives bit 11 or bit 49 low, and the line stays low. A high SWDIO is still released after the rising edge.
 
 ## Hardware test
 
@@ -684,7 +688,7 @@ Results:
 
 The first tests failed for two reasons:
 
-- **The release in bit 10.** Each read with a request parity bit of 0 failed. The pull-up raised SWDIO while SWCLK was high, and the target saw a stop condition (see [One-wire timer](#one-wire-timer)). The engine now releases a low SWDIO after the falling edge.
+- **The release in bit 10.** Each read with a request parity bit of 0 failed. The pull-up raised SWDIO while SWCLK was high, and the target saw a stop condition (see [Two-wire release](#two-wire-release)). The engine now releases a low SWDIO after the falling edge.
 - **The cable.** SWDIO and SWCLK were next to each other in a flat cable of about 20 cm, with one GND wire. Each SWDIO edge put a pulse of 4 to 6 ns on SWCLK, and about one read in 1000 failed. GND conductors between the signals in the flat cable fixed this.
 
 Results after the two fixes:
