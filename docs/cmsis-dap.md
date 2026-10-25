@@ -550,8 +550,8 @@ Rates, with the target at its reset clock:
 | Measurement | Result |
 |---|---|
 | OpenOCD `riscv dmi_read`, 1000 single reads | 0.87 ms for each read. Each read is one USB round trip |
-| OpenOCD memory read, `dump_image` of 8 KB | 4.64 s (1.77 KiB/s) |
-| OpenOCD memory write, `load_image` of 8 KB | 4.62 s (1.77 KiB/s) |
+| OpenOCD memory read, `dump_image` of 8 KB | 4.64 s (1.72 KiB/s) |
+| OpenOCD memory write, `load_image` of 8 KB | 4.62 s (1.73 KiB/s) |
 | probe-rs `read` of 16 KB | 4.28 s (3.7 KiB/s), with the attach |
 | probe-rs `download --verify` of 16 KB | 15.7 s |
 | One-wire DMI frame, Saleae on SWDIO | 44 µs to 52 µs |
@@ -603,7 +603,7 @@ Rates, with the target at its reset clock:
 | Measurement | Result |
 |---|---|
 | OpenOCD `riscv dmi_read`, 1000 single reads | 0.87 ms for each read |
-| OpenOCD memory read, `dump_image` of 2 KB RAM | 0.27 s (7.3 KiB/s) |
+| OpenOCD memory read, `dump_image` of 2 KB RAM | 0.27 s (7.4 KiB/s) |
 | OpenOCD memory read, `dump_image` of 8 KB flash | 1.03 s (7.8 KiB/s) |
 | OpenOCD memory write, `load_image` of 2 KB RAM | 0.25 s (8.0 KiB/s) |
 | probe-rs `read` of 8 KB | 2.23 s (3.6 KiB/s), with the attach |
