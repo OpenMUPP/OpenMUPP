@@ -34,8 +34,9 @@
 //
 // At delay 0 (1.85 MHz), the engine runs untimed: it does not read the
 // cycle counter, and each half period is the loop code and untimedPadNops NOP
-// instructions. SWCLK is then 1.845 MHz (66 % duty), measured on the
-// Versaloon Mini. The original firmware bursts at 2.25 to 3 MHz.
+// instructions. Thus its rate depends on the code: 2.7 MHz (62 % duty) on
+// the OtherUse (docs/clock-pacing.md, #118). The original firmware bursts
+// at 2.25 to 3 MHz.
 //
 // A transfer:
 //
@@ -134,7 +135,8 @@ inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'0
 // Untimed (delay 0): NOP instructions in each half period. They keep a
 // minimum low half period, so SWDIO has a setup time before the rising
 // edge, and the target has time to drive SWDIO before the read. With the
-// loop code, one bit takes about 39 cycles: 1.845 MHz measured at delay 0.
+// loop code, one bit takes about 27 cycles: 2.7 MHz measured at delay 0
+// on the OtherUse.
 inline constexpr uint32_t untimedPadNops = 6;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
