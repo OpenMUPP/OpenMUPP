@@ -68,8 +68,8 @@ Thus single periods are up to about 12 % shorter or longer than requested at 1 M
 
 - The timed rate is limited by the code of the half periods.
   The pacer adds about 10 to 15 cycles to each edge.
-  On the STM32F103, timed SWD thus gives at most about 1 MHz: a request of 1.8 MHz gives 0.96 MHz (before this change: 1.79 MHz).
-  The clock is never faster than the request. Issue #117 tracks a faster mode.
+  On the STM32F103, the code of a timed SWD half period is about 23 cycles: a request of 1.8 MHz gives about 1.56 MHz (before this change: 1.79 MHz).
+  The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
 - The untimed SWD engine (`delay` 0, or 1.85 MHz and more in CMSIS-DAP) does not use the pacer.
   Its rate depends on the code: 2.5 MHz before this change and 2.7 MHz after it, on the OtherUse.
   This is faster than the 1.85 MHz of the table. Issue #118 tracks this.
@@ -134,6 +134,33 @@ Findings:
   On the OtherUse, the normal delay was often above the slack, so the pacer started the deadlines again at many edges: SWD was 2 % slower at 100 kHz and 14 % slower at 235 kHz.
   The state for each edge made the code of a half period at 1 MHz longer than 36 cycles: SWD was 41 % slower.
   Measure the rate again after a change of the engines, the pacer or the core clock.
+
+### SWD pacer in registers
+
+The first version of this change limited timed SWD on the STM32F103 to about 1 MHz (#117).
+The cause was the place of the pacer: it was a member of the SWD engine.
+The compiler assumes that a store to a GPIO register can change a `uint32_t` member.
+Thus it loaded and stored the deadline at each edge.
+Now each SWD operation (a transfer or a sequence) uses its own local pacer, as the JTAG engine does.
+The deadline then stays in a register.
+The first half period of each operation is a full half period.
+
+Measured on 2026-10-26 with the `otheruse-cmsis-dap` image (`app-8k`) on the OtherUse, and an STM32F103ZET6 as the target.
+The Saleae Logic Pro 8 ran at 500 MS/s, with SWCLK on channel 6 and a glitch filter of 20 ns.
+Each run read 1 KiB of the target flash with `probe-rs read --chip STM32F103ZE --protocol swd --speed <kHz>`.
+"Before" is `dev` at `64d5245`. The rate is the mean over the runs, against the nominal period.
+
+| Request | Before | After | Shortest period after |
+|---|---|---|---|
+| 100 kHz | 99.8 kHz (−0.16 %) | 99.9 kHz (−0.07 %) | 9722 ns |
+| 500 kHz | 498.9 kHz (−0.22 %) | 499.6 kHz (−0.09 %) | 1778 ns |
+| 1000 kHz | 988.0 kHz (−1.20 %) | 999.8 kHz (−0.02 %) | 846 ns |
+| 1200 kHz | 1199.2 kHz (−0.07 %) | 1198.6 kHz (−0.11 %) | 734 ns |
+| 1500 kHz | 1000.0 kHz (median) | 1495.4 kHz (−0.31 %) | 610 ns |
+| 1800 kHz | 972.8 kHz (median) | 1562.5 kHz (median) | 568 ns |
+
+At 1800 kHz, the nominal period is 40 core cycles. Most periods after this change are 46 cycles, some are 57 cycles: the code limits the clock.
+The shortest single period is 41 cycles, so the clock is not faster than the request.
 
 ## STM32H5
 

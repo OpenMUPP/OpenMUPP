@@ -195,11 +195,11 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 // From this SWCLK, the engine runs untimed on a slow core (delay 0)
 inline constexpr uint32_t maxClockHz = fixedClockHz[0];
 
-// The cycles of the code of a timed half period, rounded up: about 37 on
-// the STM32F103 (0.96 MHz at 72 MHz) and 22 on the STM32H5 (5.6 MHz at
-// 250 MHz, docs/clock-pacing.md). Measure again after a change of the
-// engine or the pacer.
-inline constexpr uint32_t timedCodeCycles = 40;
+// The cycles of the code of a timed half period, rounded up: about 23 on
+// the STM32F103 (1.56 MHz at 72 MHz, #117) and 22 on the STM32H5 before
+// #117 (5.6 MHz at 250 MHz, docs/clock-pacing.md). Measure again after a
+// change of the engine or the pacer.
+inline constexpr uint32_t timedCodeCycles = 24;
 
 // True when the timed engine cannot make maxClockHz: the untimed engine is
 // then the fastest. On the STM32H5 at 250 MHz, the untimed engine gives
@@ -311,24 +311,26 @@ class BitBangPort final : public protocol::SwdPort {
          return;
       }
       begin();
+      auto pacer = startPacer<Timed>();
       pins_.swdioDrive((data[0] & 1u) != 0);
       for(uint32_t i = 0; i < bitCount; ++i) {
          if(i % 8 == 0) {
             background_.poll(pins_);
          }
-         writeBit<Timed>(((data[i / 8] >> (i % 8)) & 1u) != 0);
+         writeBit<Timed>(pacer, ((data[i / 8] >> (i % 8)) & 1u) != 0);
       }
    }
 
    template <bool Timed>
    void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) {
       begin();
+      auto pacer = startPacer<Timed>();
       pins_.swdioRelease();
       for(uint32_t i = 0; i < bitCount; ++i) {
          if(i % 8 == 0) {
             background_.poll(pins_);
          }
-         if(readBit<Timed>()) {
+         if(readBit<Timed>(pacer)) {
             data[i / 8] = static_cast<uint8_t>(data[i / 8] | 1u << (i % 8));
          }
       }
@@ -356,8 +358,21 @@ class BitBangPort final : public protocol::SwdPort {
 
    void setHalfCycles(uint32_t halfCycles, bool timed) {
       halfCycles_ = halfCycles;
-      pacer_.setHalfCycles(halfCycles);
       timed_ = timed;
+   }
+
+   // The pacer of one operation: a local, so its deadline stays in a
+   // register. A member pacer was loaded and stored at each edge, because
+   // the compiler assumes that a GPIO store can change it (#117). The first
+   // half period starts now.
+   template <bool Timed>
+   [[gnu::always_inline]] pacing::ClockPacer startPacer() {
+      pacing::ClockPacer pacer;
+      if constexpr(Timed) {
+         pacer.setHalfCycles(halfCycles_);
+         pacer.start(pins_);
+      }
+      return pacer;
    }
 
    void begin() {
@@ -369,21 +384,22 @@ class BitBangPort final : public protocol::SwdPort {
    // flags.
    template <bool Timed>
    uint8_t transferOnce(uint8_t request, uint32_t &data) {
+      auto pacer = startPacer<Timed>();
       pins_.swdioDrive(true);
-      writeBits<Timed>(request, 8);
+      writeBits<Timed>(pacer, request, 8);
       pins_.swdioRelease();
-      clocks<Timed>(turnaround_);
-      const auto ack = static_cast<uint8_t>(readBits<Timed>(3));
+      clocks<Timed>(pacer, turnaround_);
+      const auto ack = static_cast<uint8_t>(readBits<Timed>(pacer, 3));
       uint8_t result = ack;
       const bool ackError = ack != ackOk && ack != ackWait && ack != ackFault;
       if(!rules_.dataPhase && (ack == ackWait || ack == ackFault)) {
          // No data phase: the turnaround back to the host
-         clocks<Timed>(turnaround_);
+         clocks<Timed>(pacer, turnaround_);
       } else if((request & readRequest) != 0 || (ackError && rules_.releaseOnAckError)) {
          // A read, or the back-off after a protocol error: SWDIO released
-         const uint32_t value = readBits<Timed>(32);
-         const bool parityBit = readBit<Timed>();
-         clocks<Timed>(turnaround_);
+         const uint32_t value = readBits<Timed>(pacer, 32);
+         const bool parityBit = readBit<Timed>(pacer);
+         clocks<Timed>(pacer, turnaround_);
          if(ack == ackOk) {
             if(parityBit != parity(value)) {
                result |= parityErrorFlag;
@@ -392,10 +408,10 @@ class BitBangPort final : public protocol::SwdPort {
             }
          }
       } else {
-         clocks<Timed>(turnaround_);
+         clocks<Timed>(pacer, turnaround_);
          pins_.swdioDrive((data & 1u) != 0);
-         writeBits<Timed>(data, 32);
-         writeBit<Timed>(parity(data));
+         writeBits<Timed>(pacer, data, 32);
+         writeBit<Timed>(pacer, parity(data));
       }
       if(ack == ackFault) {
          result |= faultFlag;
@@ -404,16 +420,16 @@ class BitBangPort final : public protocol::SwdPort {
       }
       pins_.swdioDrive(false);
       if(ack == ackOk || !rules_.idleOnlyAfterOk) {
-         writeBits<Timed>(0, rules_.idleCycles);
+         writeBits<Timed>(pacer, 0, rules_.idleCycles);
       }
       return result;
    }
 
    // Waits for the end of the half period. The SWCLK edge must follow.
    template <bool Timed>
-   [[gnu::always_inline]] void waitHalfPeriod() {
+   [[gnu::always_inline]] void waitHalfPeriod(pacing::ClockPacer &pacer) {
       if constexpr(Timed) {
-         pacer_.wait(pins_);
+         pacer.wait(pins_);
       } else {
          static_assert(untimedPadNops == 6, "Change the NOP count below too");
          asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop");
@@ -422,54 +438,54 @@ class BitBangPort final : public protocol::SwdPort {
 
    // The SWCLK edge after waitHalfPeriod()
    template <bool Timed>
-   [[gnu::always_inline]] void swclk(bool level) {
+   [[gnu::always_inline]] void swclk(pacing::ClockPacer &pacer, bool level) {
       pins_.swclk(level);
       if constexpr(Timed) {
-         pacer_.edge(pins_);
+         pacer.edge(pins_);
       }
    }
 
    template <bool Timed>
-   [[gnu::always_inline]] void writeBit(bool level) {
-      waitHalfPeriod<Timed>();
-      swclk<Timed>(false);
+   [[gnu::always_inline]] void writeBit(pacing::ClockPacer &pacer, bool level) {
+      waitHalfPeriod<Timed>(pacer);
+      swclk<Timed>(pacer, false);
       pins_.swdioWrite(level);
-      waitHalfPeriod<Timed>();
-      swclk<Timed>(true);
+      waitHalfPeriod<Timed>(pacer);
+      swclk<Timed>(pacer, true);
    }
 
    template <bool Timed>
-   [[gnu::always_inline]] bool readBit() {
-      waitHalfPeriod<Timed>();
-      swclk<Timed>(false);
-      waitHalfPeriod<Timed>();
+   [[gnu::always_inline]] bool readBit(pacing::ClockPacer &pacer) {
+      waitHalfPeriod<Timed>(pacer);
+      swclk<Timed>(pacer, false);
+      waitHalfPeriod<Timed>(pacer);
       const bool level = pins_.swdio();
-      swclk<Timed>(true);
+      swclk<Timed>(pacer, true);
       return level;
    }
 
    template <bool Timed>
-   [[gnu::always_inline]] void writeBits(uint32_t value, uint32_t count) {
+   [[gnu::always_inline]] void writeBits(pacing::ClockPacer &pacer, uint32_t value, uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
-         writeBit<Timed>((value & 1u) != 0);
+         writeBit<Timed>(pacer, (value & 1u) != 0);
          value >>= 1;
       }
    }
 
    template <bool Timed>
-   [[gnu::always_inline]] uint32_t readBits(uint32_t count) {
+   [[gnu::always_inline]] uint32_t readBits(pacing::ClockPacer &pacer, uint32_t count) {
       uint32_t value = 0;
       for(uint32_t i = 0; i < count; ++i) {
-         value |= static_cast<uint32_t>(readBit<Timed>()) << i;
+         value |= static_cast<uint32_t>(readBit<Timed>(pacer)) << i;
       }
       return value;
    }
 
    // Clock cycles with SWDIO released, for a turnaround
    template <bool Timed>
-   [[gnu::always_inline]] void clocks(uint32_t count) {
+   [[gnu::always_inline]] void clocks(pacing::ClockPacer &pacer, uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
-         static_cast<void>(readBit<Timed>());
+         static_cast<void>(readBit<Timed>(pacer));
       }
    }
 
@@ -481,7 +497,6 @@ class BitBangPort final : public protocol::SwdPort {
    TransferRules rules_;
    RetryStop *stop_{ nullptr };
    uint32_t halfCycles_{ 0 };
-   pacing::ClockPacer pacer_;
    bool timed_{ true };
 };
 
