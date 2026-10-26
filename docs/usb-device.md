@@ -36,7 +36,10 @@ The main loop also does not sleep while a debugger is connected (`DHCSR.C_DEBUGE
 On the STM32H5, the debugger reads zeros from flash, SRAM and the peripherals while the core sleeps.
 The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
-A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
+A board without a pull-up pin (the ST-Link/V2 and the ST-Link/V2 mini clone) has a fixed pull-up.
+On such an STM32F1 board, the firmware sets D+ (PA12) low for 20 ms before it starts the USB device.
+Thus the host sees a disconnect also after a reset by a debugger or a watchdog.
+Without this step, the host keeps the device of the old firmware and does not enumerate the new one.
 
 The Versaloon OUT endpoint `0x03` is double-buffered (system-stm32 `hw::UsbDevice`, "Double-buffered bulk OUT").
 The hardware receives the next packet of a command while the main loop handles the last packet.

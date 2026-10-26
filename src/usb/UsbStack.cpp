@@ -255,6 +255,15 @@ void UsbStack::start() {
    }
 
 #if defined(STM32F1)
+   if(!board::current.usbPullUp) {
+      // Fixed D+ pull-up: a reset without disconnect() (debugger, watchdog)
+      // leaves the host with the old device. D+ low shows a disconnect. The
+      // USB clock is still off, so PA12 is a GPIO.
+      const board::Signal dPlus{ { board::Port::A, 12 }, board::Active::High };
+      board::configureOutput(dPlus, false);
+      delaymS(disconnectMs);
+      board::gpioPin(dPlus.pin).configure(hw::GpioPin::Mode::Input);
+   }
    // USBPRE is set by the 72 MHz clock setup, before the clock is enabled.
    Rcc::enableUSBClock();
 #else
