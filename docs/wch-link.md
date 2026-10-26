@@ -479,8 +479,8 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 | Status | Cause |
 |---|---|
 | `Wire` | The engine returned a flag: a parity error (two wires), a line that stays low (one wire), or a frame that the timer did not end correctly or did not start because the core clock is below 72 MHz (one wire, see [One-wire timer](#one-wire-timer)). |
-| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](wch-link-protocol.md#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini and the OtherUse, because the pull-up of the SWDIO input pin holds the line high. On the ST-Link/V2, nothing holds the line high in a read bit (see [One-wire timer](#one-wire-timer)), so a read without a target can give other values. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
-| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini and the OtherUse: `abstractcs` reads `ffffffff` (`busy` 1). On the ST-Link/V2, it can end with another status. After a `Timeout`, read `dmstatus` to find a missing target. |
+| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](wch-link-protocol.md#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini and the OtherUse, because the pull-up of the SWDIO input pin holds the line high. The ST-Link/V2 mini clone has the same pull-up, but this is not tested on hardware. On the ST-Link/V2, nothing holds the line high in a read bit (see [One-wire timer](#one-wire-timer)), so a read without a target can give other values. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
+| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini and the OtherUse: `abstractcs` reads `ffffffff` (`busy` 1). The ST-Link/V2 mini clone has the same pull-up (not tested on hardware). On the ST-Link/V2, it can end with another status. After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
 | `Unsupported` | A byte access, or a half-word read, with the program buffer method. |
 | `Misaligned` | The address is not a multiple of the access width. The layer sends no frame. |
@@ -501,7 +501,7 @@ The pins on the dongle:
 |---|---|---|---|---|
 | Mini, OtherUse | PB13 | PB4 | PB6 | PB11 |
 | ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
-| ST-Link/V2 mini clone | PA5 | PB14 | PB14 | PB6 |
+| ST-Link/V2 mini clone | PA5 | PB14 | PB12 | PB6 |
 
 The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
 
@@ -542,7 +542,7 @@ The STM32H5 engine works as the STM32F1 engine, with these differences:
 - **Times.** The bits have the WCH-LinkE times: a 1 is low for 250 ns, a 0 is low for 860 ns, and the high level is 370 ns.
   The high level after bit 8 of a read is 750 ns. A read bit lasts 1.3 µs.
 - **Read bits.** In the turnaround after bit 8, the code switches SWDIO to open drain. The STM32F1 has no internal pull-up on an output pin.
-  On the Mini and the OtherUse, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 (one SWDIO pin), nothing on the probe holds the line high in a read bit.
+  On the Mini and the OtherUse, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 mini clone, the separate input pin is PB12. On the ST-Link/V2 (one SWDIO pin), nothing on the probe holds the line high in a read bit.
   The timer then drives the low pulse of 250 ns, and the target can hold the line low for a 0.
   The sample channel compares at 450 ns. Its DMA copies the input port (`IDR`) to RAM.
   The DMA reads 80 to 210 ns after the compare (measured), thus at 530 to 660 ns.

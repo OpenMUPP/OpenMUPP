@@ -12,6 +12,8 @@ namespace board {
 // The board ties pins together: PA5 + PB13 (SWCLK), PB14 + PB12
 // (SWDIO), PB6 + PB5 (RST) and PB7-PB11 (SWIM). The firmware drives one pin
 // of each group; the other pins stay a floating input after the reset.
+// SWDIO uses both pins, as on the Mini: PB14 drives (TIM1_CH2N of the
+// one-wire engine), and PB12 reads with its pull-up, so an open line reads 1.
 // TDI, TDO and the UART are not on the header: these pins are not
 // connected, so JTAG and the UART bridge do not reach a target.
 // No power switch, no key, and a fixed USB pull-up.
@@ -24,7 +26,7 @@ inline constexpr Definition stLinkV2MiniClone{
    .debug{
    .tck{ Port::A, 5 },
    .tmsOut{ Port::B, 14 },
-   .tmsIn{ Port::B, 14 },
+   .tmsIn{ Port::B, 12 },
    .tdi{ Port::A, 7 },
    .tdo{ Port::A, 6 },
    .trst = std::nullopt,

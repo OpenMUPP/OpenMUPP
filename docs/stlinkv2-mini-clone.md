@@ -54,12 +54,18 @@ The firmware drives one MCU pin of each signal:
 | Signal | Pin of the firmware | Other MCU pins | Board definition field |
 |---|---|---|---|
 | SWCLK, TCK | PA5 | PB13 | `debug.tck` |
-| SWDIO, TMS | PB14 | PB12 | `debug.tmsOut`, `debug.tmsIn` |
+| SWDIO, TMS | PB14 (output), PB12 (input) | - | `debug.tmsOut` (PB14), `debug.tmsIn` (PB12) |
 | RST (target reset) | PB6 | PB5 | `debug.srst` |
 | SWIM | - | PB7 to PB11 | not used |
 
 The other MCU pins stay floating inputs after the reset.
 Do not set them to output: they connect to the pin that the firmware drives.
+
+SWDIO uses two MCU pins, as on the Versaloon Mini.
+PB14 is the output. It has the timer output of the WCH-Link one-wire engine (TIM1_CH2N).
+PB12 is the input, with the internal pull-up on.
+The pull-up holds an open SWDIO line high.
+Thus SWD without a target reads the acknowledge `0b111`, and the one-wire read bits have a pull-up (see [One-wire timer](wch-link.md#one-wire-timer)).
 The SWIM pins have a pull-up on the board.
 The firmware does not support SWIM (the STM8 debug protocol).
 
@@ -90,9 +96,9 @@ These pins of the official ST-Link/V2 design are not connected on this board:
 
 The board has no key and no power LED.
 
-Other documents name the ST-Link/V2 for a board with one SWDIO pin, a fixed USB pull-up, no key and no RTCK.
+Other documents name the ST-Link/V2 for a board with a fixed USB pull-up, no key and no RTCK.
 These statements also apply to this board.
-The differences are the RST pin (PB6, not PB0), and the missing JTAG and UART pins on the header.
+The differences are the RST pin (PB6, not PB0), the SWDIO input pin (PB12), and the missing JTAG and UART pins on the header.
 
 ## SWD pads of the MCU
 

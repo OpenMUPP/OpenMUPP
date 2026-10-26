@@ -477,7 +477,7 @@ Each bit of a `u16` mask selects one pin of the debug connector:
 | `0x0020` | TDO (input only) | PB14 | PA6 | PA6 (not on the header) |
 | `0x0040` | TDI | PB15 | PA7 | PA7 (not on the header) |
 | `0x0080` | RTCK (input only) | PA8 | none | none |
-| `0x0100` | TMS | PB4 out, PB6 in | PB14 | PB14 |
+| `0x0100` | TMS | PB4 out, PB6 in | PB14 | PB14 out, PB12 in |
 
 The sub-commands use port index 0. The values are `u16`, little-endian:
 

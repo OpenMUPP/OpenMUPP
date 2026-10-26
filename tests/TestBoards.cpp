@@ -125,10 +125,11 @@ TEST_CASE("ST-Link/V2 mini clone has the measured pin map of the dongle") {
    CHECK(clone.family == F1);
    CHECK(clone.hseFrequency == 8'000'000);
    CHECK(clone.hardwareId == 0x38);
-   // Header: CLK, DIO and RST. PB13, PB12 and PB5 are tied to them and stay inputs.
+   // Header: CLK, DIO and RST. PB13 and PB5 are tied to them and stay inputs.
    CHECK(clone.debug.tck == Pin{ Port::A, 5 });
    CHECK(clone.debug.tmsOut == Pin{ Port::B, 14 });
-   CHECK(clone.debug.tmsIn == clone.debug.tmsOut);
+   // DIO: PB14 drives, PB12 reads with its pull-up
+   CHECK(clone.debug.tmsIn == Pin{ Port::B, 12 });
    CHECK(clone.debug.srst == Pin{ Port::B, 6 });
    CHECK(clone.leds.state == Signal{ { Port::A, 9 }, Active::High });
    CHECK_FALSE(clone.hasJtagFastPath());
