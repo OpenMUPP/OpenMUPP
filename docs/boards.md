@@ -118,6 +118,20 @@ A board without a working Vref sense keeps the power LED on all the time. This i
 The dongle has no idle indication of the firmware. An idle dongle with no target and no USB host has all LEDs off. A hung main loop shows the same.
 A continuous command stream gives a steady flicker on the state LED, because the LED stays off for at least 40 ms after each flash.
 
+A board can have two LEDs on the state pin, one to each supply (`stateTwoColour` in the board definition).
+One pin level lights one LED, and the other level lights the other LED.
+On such a board, the state LED works in a different way:
+
+| State | Pin | LEDs (ST-Link/V2 mini clone) |
+|---|---|---|
+| Idle | Asserted level | Blue on |
+| Activity: the flash of a command, or of the key gesture | Analog mode | Both off |
+| Fault: the flashes of a probe error or of a clock fault | The other level | Red on |
+
+Thus the dongle shows that the firmware runs: the idle state is a lit LED, not a dark one.
+The activity state uses the analog mode of the pin, not a digital input.
+With a digital input, the red LED of the mini clone glows a little. In analog mode, both LEDs are off.
+
 Three fault and event patterns replace the normal function:
 
 | LED | Pattern | Meaning |

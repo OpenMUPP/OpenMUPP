@@ -132,6 +132,7 @@ TEST_CASE("ST-Link/V2 mini clone has the measured pin map of the dongle") {
    CHECK(clone.debug.tmsIn == Pin{ Port::B, 12 });
    CHECK(clone.debug.srst == Pin{ Port::B, 6 });
    CHECK(clone.leds.state == Signal{ { Port::A, 9 }, Active::High });
+   CHECK(clone.leds.stateTwoColour);
    CHECK_FALSE(clone.hasJtagFastPath());
    CHECK_FALSE(clone.powerSwitch);
    CHECK_FALSE(clone.usbPullUp);
@@ -400,6 +401,33 @@ TEST_CASE("withSwd drops the LEDs on the SWD pins and keeps SWD on") {
    def = board::stLinkV2;
    def.key = Signal{ { Port::A, 14 }, Active::Low };
    CHECK(board::swjConfig(board::withSwd(def)) == board::SwjConfig::Disabled);
+}
+
+TEST_CASE("stateDriveOf drives one LED or two colours on one pin") {
+   using board::StateDrive;
+   using board::StateShow;
+   constexpr Signal highOn{ { Port::A, 9 }, Active::High };
+   constexpr Signal lowOn{ { Port::A, 15 }, Active::Low };
+
+   // One LED: on for activity and a fault, as before
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Idle) == StateDrive{ false, false });
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Activity) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Fault) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(lowOn, false, StateShow::Idle) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(lowOn, false, StateShow::Fault) == StateDrive{ false, false });
+
+   // Two colours: idle the asserted colour, a fault the other, activity off
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Idle) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Fault) == StateDrive{ false, false });
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Activity).off);
+   CHECK(board::stateDriveOf(lowOn, true, StateShow::Idle) == StateDrive{ false, false });
+}
+
+TEST_CASE("Only the mini clone has a two-colour state LED") {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2, board::weActH523 }) {
+      CAPTURE(def.name);
+      CHECK_FALSE(def.leds.stateTwoColour);
+   }
 }
 
 TEST_CASE("Signal::levelFor gives the pin level of the signal state") {

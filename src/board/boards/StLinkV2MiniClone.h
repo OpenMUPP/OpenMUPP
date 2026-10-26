@@ -41,9 +41,11 @@ inline constexpr Definition stLinkV2MiniClone{
    .powerSwitch = std::nullopt,
    .leds{
    .power = std::nullopt,
-   // Two LEDs on PA9: high lights the blue LED, low the red LED.
+   // Two LEDs on PA9: high lights the blue LED, low the red LED. Idle is
+   // blue, activity switches both off, a fault is red.
    .state = Signal{ { Port::A, 9 }, Active::High },
    .usb = std::nullopt,
+   .stateTwoColour = true,
    },
    .key = std::nullopt,
    .usbPullUp = std::nullopt,

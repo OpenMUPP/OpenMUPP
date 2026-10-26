@@ -204,16 +204,43 @@ struct Leds {
    std::optional<Signal> power;
    std::optional<Signal> state;
    std::optional<Signal> usb;
+   // Two LEDs on the state pin, one to each supply: the asserted level
+   // lights one colour, the other level the other colour (stateDriveOf()).
+   bool stateTwoColour = false;
 
    constexpr bool operator==(const Leds &) const = default;
 };
+
+// What the state LED shows (docs/boards.md, "Start-up and LEDs").
+enum class StateShow : uint8_t { Idle, Activity, Fault };
+
+struct StateDrive {
+   bool off;   // analog mode: no LED is on
+   bool level; // output level when not off
+   constexpr bool operator==(const StateDrive &) const = default;
+};
+
+// The pin drive of the state LED. One LED: off when idle, on for activity
+// and a fault. Two colours: idle lights the asserted colour, a fault the
+// other colour, and activity sets the pin to analog mode. A floating
+// digital input lets one LED glow (measured on the mini clone); analog
+// mode switches both off.
+constexpr StateDrive stateDriveOf(Signal state, bool twoColour, StateShow show) {
+   if(!twoColour) {
+      return { false, state.levelFor(show != StateShow::Idle) };
+   }
+   if(show == StateShow::Activity) {
+      return { true, false };
+   }
+   return { false, state.levelFor(show == StateShow::Idle) };
+}
 
 struct Definition {
    std::string_view name;
    // Crystal, Hz. 0: the board has no crystal (STM32H5 only, USB then runs
    // from the HSI48 with the CRS).
    uint32_t hseFrequency : 28;
-   // In the word of the crystal: a definition stays 68 bytes. The firmware
+   // In the word of the crystal, so the family adds no byte. The firmware
    // keeps board::current in flash (BoardGpio reads the debug pins).
    Family family : 4;
    uint8_t hardwareId; // reply of VERSALOON_GET_HARDWARE

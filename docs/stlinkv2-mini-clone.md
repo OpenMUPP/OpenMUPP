@@ -88,7 +88,7 @@ These pins of the official ST-Link/V2 design are not connected on this board:
 
 | Signal | MCU pin | Note |
 |---|---|---|
-| LEDs | PA9 | Two LEDs on one pin. High: blue LED on. Low: red LED on. Input: both LEDs are dim. The firmware uses PA9 as the state LED, active high (blue). |
+| LEDs | PA9 | Two LEDs on one pin. High: blue LED on. Low: red LED on. Digital input: the red LED glows a little. Analog mode: both LEDs are off. The firmware uses PA9 as a two-colour state LED: blue when idle, off for activity, red for a fault (see [Start-up and LEDs](boards.md#start-up-and-leds)). |
 | Vref sense | PA0 | Divider 2 (1.648 V at VDDA 3.289 V). The divider reads the 3.3 V of the board. The header 3.3V pins are an output, so the probe cannot measure a target voltage. |
 | USB | PA11, PA12 | The D+ pull-up is fixed. No GPIO switches it. |
 | BOOT1 | PB2 | Resistor to GND |
