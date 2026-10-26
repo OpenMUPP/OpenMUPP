@@ -796,7 +796,9 @@ TEST_CASE("SWD bit-bang: half period of a clock in Hz") {
 
 TEST_CASE("SWD bit-bang: the clock in Hz rounds down to an available rate") {
    Bench bench;
-   for(const uint32_t hz : { 0u, 1u, 1000u, 72'000u, 100'001u, 235'000u, 1'000'000u, 1'500'000u, swd::maxClockHz - 1 }) {
+   // 1.85 MHz to maxClockHz: timed. The untimed engine is faster there (#118).
+   for(const uint32_t hz :
+       { 0u, 1u, 1000u, 72'000u, 100'001u, 235'000u, 1'000'000u, 1'500'000u, 1'850'000u, 2'000'000u, swd::maxClockHz - 1 }) {
       CAPTURE(hz);
       bench.port.setClockHz(hz);
       CHECK(bench.port.isTimed());
@@ -805,7 +807,7 @@ TEST_CASE("SWD bit-bang: the clock in Hz rounds down to an available rate") {
       // The next shorter half period would be faster than hz.
       CHECK(72e6 / (2.0 * (bench.port.halfCycles() - 1)) > hz);
    }
-   for(const uint32_t hz : { swd::maxClockHz, 2'000'000u, 10'000'000u, UINT32_MAX }) {
+   for(const uint32_t hz : { swd::maxClockHz, 4'000'000u, 10'000'000u, UINT32_MAX }) {
       CAPTURE(hz);
       bench.port.setClockHz(hz);
       // Untimed, as at delay 0

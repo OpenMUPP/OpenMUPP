@@ -68,11 +68,12 @@ Thus single periods are up to about 12 % shorter or longer than requested at 1 M
 
 - The timed rate is limited by the code of the half periods.
   The pacer adds about 10 to 15 cycles to each edge.
-  On the STM32F103, the code of a timed SWD half period is about 23 cycles: a request of 1.8 MHz gives about 1.56 MHz (before this change: 1.79 MHz).
+  On the STM32F103, the code of a timed SWD half period is about 23 to 28 cycles: a request of 1.8 MHz gives 1.3 to 1.56 MHz (before this change: 1.79 MHz).
   The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
-- The untimed SWD engine (`delay` 0, or 1.85 MHz and more in CMSIS-DAP) does not use the pacer.
-  Its rate depends on the code: 2.5 MHz before this change and 2.7 MHz after it, on the OtherUse.
-  This is faster than the 1.85 MHz of the table. Issue #118 tracks this.
+- The untimed SWD engine (`delay` 0, or 3 MHz and more in CMSIS-DAP) does not use the pacer.
+  Its rate depends on the code: 2.42 to 2.7 MHz on the OtherUse.
+  At `delay` 0, this is faster than the 1.85 MHz of the table (#118).
+  In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz` (3 MHz), so a request does not give a faster clock.
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
@@ -161,6 +162,23 @@ Each run read 1 KiB of the target flash with `probe-rs read --chip STM32F103ZE -
 
 At 1800 kHz, the nominal period is 40 core cycles. Most periods after this change are 46 cycles, some are 57 cycles: the code limits the clock.
 The shortest single period is 41 cycles, so the clock is not faster than the request.
+
+The code layout in the flash changes the code-limited rates.
+In a second build with only other constants, a request of 1800 kHz gave 1.31 MHz (median period 764 ns), and the untimed engine gave 2.67 MHz.
+A third build gave the values of the table again, and 2.45 MHz untimed.
+The cause is probably the flash wait states and the alignment of the loops. This is not confirmed.
+
+Thus CMSIS-DAP runs the untimed engine only from 3 MHz (`swd::maxClockHz`, #118).
+Before, it ran untimed from 1.85 MHz, and a request of 1.85 or 2 MHz gave 2.4 to 2.7 MHz.
+Measured with the third build:
+
+| Request | Engine | Rate |
+|---|---|---|
+| 1850 kHz | timed | 1562.5 kHz (median), shortest period 568 ns |
+| 2500 kHz | timed | 1562.5 kHz (median), shortest period 568 ns |
+| 2999 kHz | timed | 1562.5 kHz (median), shortest period 568 ns |
+| 3000 kHz | untimed | 2445.0 kHz (mean of the runs), shortest period 346 ns |
+| 4000 kHz | untimed | 2325.6 kHz (median), shortest period 346 ns |
 
 ## STM32H5
 

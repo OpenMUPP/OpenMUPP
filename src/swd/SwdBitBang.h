@@ -32,10 +32,10 @@
 // OpenOCD table on each board and build. An interrupt makes a half period
 // longer, never shorter.
 //
-// At delay 0 (1.85 MHz), the engine runs untimed on a slow core (see
-// runsUntimed()): it does not read the cycle counter, and each half period
-// is the loop code and untimedPadNops NOP instructions. Thus its rate
-// depends on the code: 2.7 MHz (62 % duty) on the OtherUse
+// At delay 0 (1.85 MHz) and from maxClockHz, the engine runs untimed on a
+// slow core (see runsUntimed()): it does not read the cycle counter, and
+// each half period is the loop code and untimedPadNops NOP instructions.
+// Thus its rate depends on the code: 2.42 to 2.7 MHz on the OtherUse
 // (docs/clock-pacing.md, #118). The original firmware bursts at 2.25 to
 // 3 MHz. On a fast core, delay 0 is timed at 1.85 MHz.
 //
@@ -192,20 +192,24 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
    return intdiv::mulDivCeil(coreHz, delay + 1u, 1'000'000u);
 }
 
-// From this SWCLK, the engine runs untimed on a slow core (delay 0)
-inline constexpr uint32_t maxClockHz = fixedClockHz[0];
+// From this SWCLK, the engine runs untimed on a slow core, as at delay 0.
+// The untimed rate changes with the code layout: 2.42 to 2.7 MHz on the
+// OtherUse (#118). Thus a request from this value does not give a faster
+// clock. Measure again after a change of the engine.
+inline constexpr uint32_t maxClockHz = 3'000'000;
 
-// The cycles of the code of a timed half period, rounded up: about 23 on
-// the STM32F103 (1.56 MHz at 72 MHz, #117) and 22 on the STM32H5 before
-// #117 (5.6 MHz at 250 MHz, docs/clock-pacing.md). Measure again after a
-// change of the engine or the pacer.
-inline constexpr uint32_t timedCodeCycles = 24;
+// The cycles of the code of a timed half period, rounded up: 23 to 28 on
+// the STM32F103 (1.3 to 1.56 MHz at 72 MHz, it changes with the code
+// layout, #117) and 22 on the STM32H5 before #117 (5.6 MHz at 250 MHz,
+// docs/clock-pacing.md). Measure again after a change of the engine or
+// the pacer.
+inline constexpr uint32_t timedCodeCycles = 28;
 
 // True when the timed engine cannot make maxClockHz: the untimed engine is
 // then the fastest. On the STM32H5 at 250 MHz, the untimed engine gives
 // 13 MHz at a request of 4 MHz, so the timed engine makes all clocks.
 constexpr bool runsUntimed(uint32_t coreHz) {
-   return halfPeriodCycles(coreHz, 0) < timedCodeCycles;
+   return halfPeriodCyclesOfHz(coreHz, maxClockHz) < timedCodeCycles;
 }
 
 // The SWD port of the SWD block on bit-banged pins.
@@ -263,7 +267,8 @@ class BitBangPort final : public protocol::SwdPort {
 
    // CMSIS-DAP: SWCLK in Hz, rounded down to the nearest available rate.
    // From maxClockHz, the engine runs untimed on a slow core (as at delay
-   // 0). The code limits the timed rate (5.6 MHz on the STM32H5).
+   // 0). The code limits the timed rate: 1.3 to 1.56 MHz on the STM32F103
+   // (#117), 5.6 MHz on the STM32H5.
    void setClockHz(uint32_t hz) {
       if(hz >= maxClockHz && runsUntimed(pins_.coreHz())) {
          setHalfCycles(halfPeriodCycles(pins_.coreHz(), 0), false);
