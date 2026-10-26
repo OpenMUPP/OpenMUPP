@@ -14,20 +14,31 @@ This document gives the pin map of the board, and how we measured it.
 The top side has the MCU, the 8 MHz crystal and the two LEDs.
 The four wires on the top side go to the SWD pads of the MCU (see [SWD pads of the MCU](#swd-pads-of-the-mcu)).
 
-Status: the pin map is measured.
-The firmware has not run on this board yet.
+Status: the pin map is measured, and the firmware runs on the board (see [Hardware test](#hardware-test)).
 
 ## MCU
 
-The MCU is an STM32F103 in a 48-pin package.
-The text on the package is not readable.
+The MCU is in a 48-pin package with the ST logo and the text "STM32".
+The rest of the text is not readable.
+The MCU is not a genuine STM32F103.
+It is a compatible MCU of an unknown manufacturer.
 We read these values with SWD:
 
-| Value | Read | Meaning |
+| Value | Read | Genuine STM32F103 |
 |---|---|---|
-| DPIDR | `0x1BA01477` | Arm Cortex-M3 debug port of ST. Some STM32 copies (for example CKS32) give a different value. |
-| `DBGMCU_IDCODE` | `0x20030410` | STM32F103 medium density, revision X |
-| Flash size register | 128 KB | The firmware uses only 64 KB (see [MCU family](boards.md#mcu-family)). |
+| DPIDR | `0x1BA01477` | The same |
+| `DBGMCU_IDCODE` | `0x20030410` (medium density, revision X) | The same |
+| CPUID | `0x412FC230` (Cortex-M3 r2p0) | `0x411FC231` (r1p1) |
+| Flash size register | 128 KB | 64 KB or 128 KB |
+| SRAM | 96 KB or more: 4 test words to `0x20017FF0` keep different values | 20 KB |
+| Unique ID (`0x1FFFF7E8`) | All zeros | A unique value |
+| Boot alias of an empty flash | `0x1FFFB000` | The flash, or the system memory at `0x1FFFF000` (BOOT0 high) |
+
+The firmware uses only 64 KB flash and 20 KB SRAM (see [MCU family](boards.md#mcu-family)).
+The USB, GPIO, ADC, timer and flash peripherals work with the STM32F103 drivers (see [Hardware test](#hardware-test)).
+
+The unique ID is zero, so the USB serial number is `000000000000000000000000`.
+Two of these probes on one host have the same serial number.
 
 The crystal is 8 MHz.
 
@@ -156,6 +167,21 @@ openocd -f interface/cmsis-dap.cfg -f target/stm32f1x.cfg -c "init; reset halt; 
 ```
 
 Then disconnect the power of the board, and connect it again.
+
+## Hardware test
+
+Status: the test passed on 2026-10-26.
+Image: `stlinkv2miniclone-triple` preset (`VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`), `Release` build, `app-8k` image behind `versaloon-bootloader`.
+The image was written with SWD (OpenOCD `program`, with verify) through the SWD pads.
+
+| Check | Result |
+|---|---|
+| Enumeration after the reset by the debugger (fixed D+ pull-up) | pass: `0483:a038` |
+| Switch Versaloon → CMSIS-DAP → WCH-Link → Versaloon with the switch request on EP0 | pass: `0403:9b3c`, `1209:0001`, `0483:a038` |
+| State LED, idle | pass: blue |
+| State LED, commands and probe errors (OpenOCD `vsllink`, no target) | pass: blue off on each command, red double flashes |
+
+No target was connected: the test did not check SWD or JTAG transfers to a target.
 
 ## How we measured the pin map
 

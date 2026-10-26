@@ -1,7 +1,7 @@
 # versaloon-NG
 
 versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini and the OtherUse.
-Builds for the ST-Link/V2 and for the ST-Link/V2 mini clone also exist, but they have no hardware test (see [Boards](#boards)).
+A build for the ST-Link/V2 mini clone also exists, with a hardware test of the USB personalities and the LEDs. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
 The port to the STM32H5 (the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
 
@@ -30,10 +30,10 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 | `mini` | Versaloon Mini | 12 MHz | target |
 | `otheruse` | OtherUse | 12 MHz | target |
 | `stlinkv2` | ST-Link/V2, pin map of the official design | 8 MHz | compile-only |
-| `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | compile-only, pin map measured |
+| `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | target, no target transfers tested |
 | `weacth523` | WeAct STM32H523 core board | 8 MHz | target, 3.3 V targets only |
 
-The Mini, the OtherUse, the ST-Link/V2 and the ST-Link/V2 mini clone use an STM32F103x8 or STM32F103xB.
+The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
 The WeAct STM32H523 core board uses an STM32H523CC.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
