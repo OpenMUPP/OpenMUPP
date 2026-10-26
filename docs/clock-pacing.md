@@ -260,10 +260,18 @@ The rate is the mean over the runs, against the nominal period. "Median" is the 
 
 Findings:
 
-- Up to 6 MHz, the mean rate after #117 is within 0.2 % of the nominal period, and never faster than the request.
-  At 6 MHz, the mean is 0.19 % above the nominal period (5952 kHz), but below the request.
+- Up to 6 MHz, the mean rate after #117 is within 0.2 % of the nominal period, and the mean is never faster than the request.
+  Below the code limit, the error is smaller than before: −0.15 % instead of −0.60 % at 4 MHz.
+- At 6 MHz, the mean is 0.19 % above the nominal period (5952 kHz), but below the request.
+  This comes from the filter of `tools/clock_rate.py`: it drops the long periods after a late edge, and keeps the shorter periods that follow.
+- Single periods at 5 and 6 MHz are often shorter than the request.
+  At 5 MHz, the code is almost a full half period (24 of 25 cycles).
+  Thus many edges are late within the slack, and the next half period is then shorter (see [Decision](#decision)).
+  After #117, 65 % of the periods at 5 MHz and 47 % at 6 MHz are shorter than the request. Before, these values were 16 % and 23 %.
+  At 5 MHz, the median period is 192 ns (5.21 MHz). At 6 MHz, the shortest period is 134 ns (7.5 MHz, 20 % short).
 - From 8 MHz, the code limits the clock to 5.2 to 6.1 MHz (median). Before #117, it was 4.8 to 6.4 MHz.
-  Thus the code limit on the STM32H5 changes less than on the STM32F103. Below the limit, the error is smaller: −0.15 % instead of −0.60 % at 4 MHz.
+  The limit does not increase with the request: 8 MHz gave 6.0 MHz, but 10 MHz gave 5.2 MHz.
+  The code limit on the STM32H5 changed less than on the STM32F103, and at 10 MHz it is lower than before.
 - All requests used the timed engine. All reads were correct.
 
 ### STM32H5 JTAG fast path
