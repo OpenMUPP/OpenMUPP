@@ -501,6 +501,7 @@ The pins on the dongle:
 |---|---|---|---|---|
 | Mini, OtherUse | PB13 | PB4 | PB6 | PB11 |
 | ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
+| ST-Link/V2 mini clone | PA5 | PB14 | PB14 | PB6 |
 
 The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
 
@@ -523,7 +524,7 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `sr
 | Board | SWDIO output | Timer channel | Update DMA | Sample channel and DMA |
 |---|---|---|---|---|
 | Mini, OtherUse | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
-| ST-Link/V2 (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
+| ST-Link/V2, ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | WeAct STM32H523 | PA6 | TIM3_CH1 (AF2) | TIM3_UP, GPDMA1 channel 3 | TIM3_CH3, GPDMA1 channel 4 |
 
 `board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz on the STM32F1, 250 MHz on the STM32H5).

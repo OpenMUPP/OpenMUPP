@@ -467,17 +467,17 @@ OpenOCD then stops with an error.
 OpenOCD controls the reset lines SRST and TRST through the `GPIO` block (`src/protocol/versaloon/GpioBlock.h`).
 Each bit of a `u16` mask selects one pin of the debug connector:
 
-| Bit | Signal | Mini and OtherUse | ST-Link/V2 |
-|---|---|---|---|
-| `0x0001` | SRST | PB11 | PB0 |
-| `0x0002` | TRST | PB10 | none |
-| `0x0004` | USR1 | none | none |
-| `0x0008` | USR2 | none | none |
-| `0x0010` | TCK | PB13 | PA5 |
-| `0x0020` | TDO (input only) | PB14 | PA6 |
-| `0x0040` | TDI | PB15 | PA7 |
-| `0x0080` | RTCK (input only) | PA8 | none |
-| `0x0100` | TMS | PB4 out, PB6 in | PB14 |
+| Bit | Signal | Mini and OtherUse | ST-Link/V2 | ST-Link/V2 mini clone |
+|---|---|---|---|---|
+| `0x0001` | SRST | PB11 | PB0 | PB6 |
+| `0x0002` | TRST | PB10 | none | none |
+| `0x0004` | USR1 | none | none | none |
+| `0x0008` | USR2 | none | none | none |
+| `0x0010` | TCK | PB13 | PA5 | PA5 |
+| `0x0020` | TDO (input only) | PB14 | PA6 | PA6 (not on the header) |
+| `0x0040` | TDI | PB15 | PA7 | PA7 (not on the header) |
+| `0x0080` | RTCK (input only) | PA8 | none | none |
+| `0x0100` | TMS | PB4 out, PB6 in | PB14 | PB14 |
 
 The sub-commands use port index 0. The values are `u16`, little-endian:
 

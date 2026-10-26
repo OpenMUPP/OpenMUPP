@@ -138,17 +138,17 @@ build:
   parallel:
     matrix:
       # VSL_PERSONALITIES=versaloon. The Mini is the build-mini job.
-      - BOARD: [otheruse, stlinkv2]
-      - BOARD: [mini, otheruse, stlinkv2]
+      - BOARD: [otheruse, stlinkv2, stlinkv2miniclone]
+      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
         VARIANT: -cmsis-dap
         PROTOCOL_TAG: -cmsis-dap
-      - BOARD: [mini, otheruse, stlinkv2]
+      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
         VARIANT: -wch-link
         PROTOCOL_TAG: -wch-link
       # VSL_PERSONALITIES=versaloon,cmsis-dap. The last 1 KB flash page holds
       # the stored personality, so each image limit of a multi image is 1 KB
       # smaller.
-      - BOARD: [mini, otheruse, stlinkv2]
+      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
         VARIANT: -dual
         PROTOCOL_TAG: -vsl+dap
       # The same, with CMSIS-DAP as the default personality
@@ -156,7 +156,7 @@ build:
         VARIANT: -dual-cmsis-dap
         PROTOCOL_TAG: -dap+vsl
       # VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link
-      - BOARD: [mini, otheruse, stlinkv2]
+      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
         VARIANT: -triple
         PROTOCOL_TAG: -vsl+dap+wch
 

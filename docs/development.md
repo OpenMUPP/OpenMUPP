@@ -132,14 +132,14 @@ The default is `/usr`.
 
 | Preset | Board | Personalities (`VSL_PERSONALITIES`) | Build type |
 |---|---|---|---|
-| `mini`, `otheruse`, `stlinkv2` | Mini, OtherUse, ST-Link/V2 | `versaloon` | Release |
-| `mini-cmsis-dap`, `otheruse-cmsis-dap`, `stlinkv2-cmsis-dap` | Mini, OtherUse, ST-Link/V2 | `cmsis-dap` | Release |
+| `mini`, `otheruse`, `stlinkv2`, `stlinkv2miniclone` | Mini, OtherUse, ST-Link/V2, ST-Link/V2 mini clone | `versaloon` | Release |
+| `mini-cmsis-dap`, `otheruse-cmsis-dap`, `stlinkv2-cmsis-dap`, `stlinkv2miniclone-cmsis-dap` | Mini, OtherUse, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap` | Release |
 | `mini-cmsis-dap-rv-bridge`, `otheruse-cmsis-dap-rv-bridge` | Mini, OtherUse | `cmsis-dap`, with `VSL_CMSIS_DAP_RV_BRIDGE=ON` | Release |
-| `mini-dual`, `otheruse-dual`, `stlinkv2-dual` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
+| `mini-dual`, `otheruse-dual`, `stlinkv2-dual`, `stlinkv2miniclone-dual` | Mini, OtherUse, ST-Link/V2, ST-Link/V2 mini clone | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
 | `mini-dual-cmsis-dap` | Mini | `versaloon,cmsis-dap`, with `VSL_DEFAULT_PERSONALITY=cmsis-dap` (tag `-dap+vsl`) | Release |
-| `mini-wch-link`, `otheruse-wch-link`, `stlinkv2-wch-link` | Mini, OtherUse, ST-Link/V2 | `wch-link` | Release |
+| `mini-wch-link`, `otheruse-wch-link`, `stlinkv2-wch-link`, `stlinkv2miniclone-wch-link` | Mini, OtherUse, ST-Link/V2, ST-Link/V2 mini clone | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
-| `mini-triple`, `otheruse-triple`, `stlinkv2-triple` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
+| `mini-triple`, `otheruse-triple`, `stlinkv2-triple`, `stlinkv2miniclone-triple` | Mini, OtherUse, ST-Link/V2, ST-Link/V2 mini clone | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
 | `mini-cmsis-dap-wch-link` | Mini | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
 | `weacth523` | WeAct STM32H523 core board | `versaloon` | Release |
