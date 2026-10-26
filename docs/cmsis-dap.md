@@ -565,7 +565,18 @@ The probe takes about 1.1 ms for a packet with 3 DMI scans, and about 0.2 ms for
 Thus the firmware takes about 300 µs for each DMI scan, and the wire uses only about 50 µs of it.
 `adapter speed` (100 kHz to 10 MHz) does not change the rate.
 The [CH32V006 rates on the WeAct STM32H523](#ch32v006-rates-on-the-weact-stm32h523) show the cause (#114).
-The fix was not measured on the OtherUse.
+
+The rates with the fix, on 2026-10-26, with an OtherUse with `versaloon-bootloader` and `app-8k` images of `otheruse-cmsis-dap-rv-bridge`:
+
+| Measurement | Before (`v0.12.0-60-gd7f95ac`) | After the fix |
+|---|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.908 ms for each read | 0.531 ms for each read |
+| OpenOCD memory read, `dump_image` of 8 KB | 4.80 s (1.67 KiB/s) | 2.93 s (2.73 KiB/s) |
+| OpenOCD memory write, `load_image` of 4 KB to RAM | 2.38 s (1.68 KiB/s) | 1.45 s (2.76 KiB/s) |
+| probe-rs `read` of 16 KB, with the attach | 4.41 s (3.6 KiB/s) | 2.95 s to 3.00 s (5.4 KiB/s) |
+
+The data of the reads is the same before and after the fix, and `verify_image` passes after each `load_image`.
+The Saleae was not on the SWDIO line of this OtherUse, so this test has no wire capture.
 
 #### CH32V003 on the OtherUse
 
