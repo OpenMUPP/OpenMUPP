@@ -3,8 +3,10 @@
 
 The dongle must have a multi image with the Versaloon and the CMSIS-DAP
 personalities. Connect it to an STM32F1 target on SWD and JTAG (SWDIO/TMS,
-SWCLK/TCK, TDI, TDO, nRST and GND), and connect the UART TX pin to the UART
-RX pin (PA9 to PA10 on the Mini and the OtherUse).
+SWCLK/TCK, TDI, TDO, nTRST, nRST and GND), and connect the UART TX pin to the
+UART RX pin (PA9 to PA10 on the Mini, the OtherUse and the WeAct H523). Each
+tool runs SWD before JTAG: on the WeAct H523, all JTAG steps failed without
+nTRST and nRST, and passed with them.
 
 The script runs these steps in this order:
 
@@ -76,7 +78,8 @@ SEED = 0x5A17
 SETUP_SPEED_KHZ = 1000
 # probe-rs cannot set the target clock: TCK <= 8 MHz / 6
 PROBE_RS_JTAG_MAX_KHZ = 1333
-DEFAULT_SWD_SPEEDS = [1000, 2000]
+# 4000 kHz: the untimed SWD engine of CMSIS-DAP on the STM32F1 (swd::maxClockHz)
+DEFAULT_SWD_SPEEDS = [1000, 2000, 4000]
 DEFAULT_JTAG_SPEEDS = [1000, 9000]
 STEP_TIMEOUT_S = 300
 

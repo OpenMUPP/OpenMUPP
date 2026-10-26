@@ -2,7 +2,7 @@
 
 versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini and the OtherUse.
 A build for an ST-Link/V2 clone also exists, but it has no hardware test (see [Boards](#boards)).
-The port to the NUCLEO-H533RE (STM32H5) has the Versaloon and the CMSIS-DAP personalities.
+The port to the STM32H5 (the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
@@ -30,12 +30,12 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 | `mini` | Versaloon Mini | 12 MHz | target |
 | `otheruse` | OtherUse | 12 MHz | target |
 | `stlinkv2` | ST-Link/V2 clone | 8 MHz | compile-only |
-| `nucleoh533` | NUCLEO-H533RE | 24 MHz | target, 3.3 V targets only |
+| `weacth523` | WeAct STM32H523 core board | 8 MHz | target, 3.3 V targets only |
 
 The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB.
-The NUCLEO-H533RE uses an STM32H533RE.
-It has no WCH-Link personality yet.
-See [docs/boards.md](docs/boards.md#nucleo-h533re) for its limits and the wiring to the target.
+The WeAct STM32H523 core board uses an STM32H523CC.
+On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
+See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
 
 ## Get the source code
@@ -85,7 +85,7 @@ Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini.
-The presets `nucleoh533`, `nucleoh533-cmsis-dap`, `nucleoh533-dual` and `nucleoh533-debug` build the NUCLEO-H533RE.
+The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
@@ -101,7 +101,7 @@ cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
 cmake --build build/mini -j
 ```
 
-Use `-DBOARD=otheruse`, `-DBOARD=stlinkv2` or `-DBOARD=nucleoh533` for the other boards.
+Use `-DBOARD=otheruse`, `-DBOARD=stlinkv2` or `-DBOARD=weacth523` for the other boards.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
 
 The build links the same firmware into one or more application images.
@@ -115,9 +115,9 @@ Each image has a different start address:
 
 The Mini and the OtherUse get all three images.
 The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
-The NUCLEO-H533RE gets the `standalone` image only, with 512 KB flash.
+The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
 A multi image has less flash, because the end of the flash holds the stored personality.
-This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the NUCLEO-H533RE.
+This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the STM32H5 board.
 
 The build writes these files into the build directory:
 
@@ -199,7 +199,8 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
         -c "program versaloon-ng-standalone.hex verify reset exit"
 ```
 
-The `standalone` image refuses `VERSALOON_FW_UPDATE`.
+On the STM32F1 boards, the `standalone` image refuses `VERSALOON_FW_UPDATE`.
+On the WeAct STM32H523 core board, it starts the ROM USB DFU, and `dfu-util` writes the next firmware (see [STM32H5: ROM USB DFU](docs/firmware-update.md#stm32h5-rom-usb-dfu)).
 
 See [docs/firmware-update.md](docs/firmware-update.md) for the other ways to start the bootloader, and for the flash layout.
 
@@ -251,6 +252,7 @@ The Python scripts in `tools/` need Python 3.
 | `tools/pyocd_jtag_test.py` | Runs the pyOCD JTAG test on an STM32F1 target with the CMSIS-DAP personality (see [docs/cmsis-dap.md](docs/cmsis-dap.md#jtag-hardware-test)). `--protocol swd` runs the same checks on SWD. `--target` selects the pyOCD target. It erases the flash of the target. | pyOCD |
 | `tools/probe_hw_test.py` | Runs the hardware test of a multi image on an STM32F1 target and a UART loopback. It tests the Versaloon personality with OpenOCD (SWD and JTAG). It then switches to the CMSIS-DAP personality and tests it with OpenOCD, pyOCD and probe-rs. It also runs the UART loopback tests. It erases the flash of the target. | `pyusb`, `pyserial`, OpenOCD, pyOCD, probe-rs (`--skip` for a missing tool) |
 | `tools/wch_link_frames_2wire.py`, `tools/wch_link_frames_1wire.py` | Decode the wire frames of a WCH-LinkE from a logic analyzer CSV file: 54-clock frames on two wires, 41-pulse frames on one wire (see [docs/wch-link-protocol.md](docs/wch-link-protocol.md#wire-frame-format)). | none |
+| `tools/clock_rate.py` | Measures the clock rate of a bit-bang engine from a logic analyzer CSV file (see [docs/clock-pacing.md](docs/clock-pacing.md#measurements)). | none |
 
 The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 
@@ -261,6 +263,7 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/uart-bridge.md](docs/uart-bridge.md): the USB-to-UART bridge, and the serial port test script.
 - [docs/debug-log.md](docs/debug-log.md): the debug log over the serial port in a `Debug` build.
 - [docs/cmsis-dap.md](docs/cmsis-dap.md): the CMSIS-DAP personality and its command processor for SWD and JTAG.
+- [docs/clock-pacing.md](docs/clock-pacing.md): how the SWD, JTAG and RVSWD engines time their clock, with measurements on the wire.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
 - [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule, size, implementation and hardware test.
 - [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures ([docs/wch-link-captures/](docs/wch-link-captures/README.md)).

@@ -84,7 +84,7 @@ bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
 
 #include "personality/FlashWordSlot.h"
 
-// The start of the sector (ldscripts/mem-h533.ld)
+// The start of the sector (ldscripts/mem-h523xc.ld)
 extern "C" const personality::FlashWord __vsl_settings_start[];
 
 namespace board {
@@ -94,7 +94,6 @@ namespace {
 using personality::FlashWord;
 
 constexpr std::size_t slotCount = SettingsFlashPage::sizeBytes / personality::flashWordBytes;
-constexpr uint32_t bankBytes = 256 * 1024; // STM32H523/H533: two banks of 256 KB
 constexpr uint32_t errorFlags = FLASH_SR_WRPERR | FLASH_SR_PGSERR | FLASH_SR_STRBERR | FLASH_SR_INCERR;
 constexpr uint32_t clearFlags =
 FLASH_CCR_CLR_EOP | FLASH_CCR_CLR_WRPERR | FLASH_CCR_CLR_PGSERR | FLASH_CCR_CLR_STRBERR | FLASH_CCR_CLR_INCERR;
@@ -107,6 +106,12 @@ std::array<uint16_t, slotCount> view{};
 volatile bool readingSector = false;
 volatile bool eccError = false;
 
+// Two banks: 2 x 256 KB on the xE parts, 2 x 128 KB on the xC parts. CMSIS
+// reads the flash size from the flash size data register (RM0481 67.2).
+uint32_t bankBytes() {
+   return FLASH_BANK_SIZE;
+}
+
 uint32_t sectorOffset() {
    return reinterpret_cast<uint32_t>(__vsl_settings_start) - FLASH_BASE;
 }
@@ -115,14 +120,14 @@ uint32_t sectorOffset() {
 // the other bank.
 bool inPhysicalBank2() {
    const bool swapped = (FLASH->OPTSR_CUR & FLASH_OPTSR_SWAP_BANK) != 0;
-   return (sectorOffset() >= bankBytes) != swapped;
+   return (sectorOffset() >= bankBytes()) != swapped;
 }
 
 // The slot that FLASH_ECCCORR or FLASH_ECCDETR points to, slotCount when the
 // address is not in the sector. ADDR_ECC counts flash words from the start
 // of the bank (16 bits: 1 MB banks, RM0481 table 88).
 std::size_t eccSlot(uint32_t eccRegister) {
-   const uint32_t first = (sectorOffset() % bankBytes) / personality::flashWordBytes;
+   const uint32_t first = (sectorOffset() % bankBytes()) / personality::flashWordBytes;
    const uint32_t word = eccRegister & FLASH_ECCR_ADDR_ECC;
    const bool bank2 = (eccRegister & FLASH_ECCR_BK_ECC) != 0;
    if(bank2 != inPhysicalBank2() || word < first || word >= first + slotCount) {
@@ -206,7 +211,7 @@ art::span<const uint16_t> SettingsFlashPage::slots() const {
 bool SettingsFlashPage::erase() {
    // BKSEL selects the physical bank
    const bool bank2 = inPhysicalBank2();
-   const uint32_t sector = (sectorOffset() % bankBytes) / FLASH_SECTOR_SIZE;
+   const uint32_t sector = (sectorOffset() % bankBytes()) / FLASH_SECTOR_SIZE;
    unlock();
    FLASH->NSCR = (FLASH->NSCR & ~(FLASH_CR_SNB | FLASH_CR_BKSEL)) | FLASH_CR_SER | (sector << FLASH_CR_SNB_Pos) |
                  (bank2 ? FLASH_CR_BKSEL : 0U);

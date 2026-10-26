@@ -162,7 +162,7 @@ The active personality has its descriptors, its USB function and its commands, a
 The firmware changes the personality only with a reset.
 
 The firmware stores the personality in the last 1 KB flash page of the application area, at `0x0800FC00`.
-On the NUCLEO-H533RE (STM32H5), the page is the last 8 KB flash sector of bank 2, at `0x0807E000`.
+On the WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash), the page is the last 8 KB flash sector of bank 2, at `0x0803E000`.
 The linker script keeps this page out of the image.
 Thus a multi image has 1 KB (STM32F103) or 8 KB (STM32H5) less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
 When the page holds no personality, the image uses `VSL_DEFAULT_PERSONALITY`.
@@ -232,9 +232,13 @@ If the flash write fails, the firmware starts again with the old personality.
 
 `tools/probe_hw_test.py` tests the Versaloon and the CMSIS-DAP personalities of a multi image on an STM32F1 target.
 Connect the target on SWD and JTAG, and connect the UART TX pin to the UART RX pin.
+The script runs SWD before JTAG with each tool.
+On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, and passed with them (see [Hardware test](boards.md#hardware-test)).
 The script switches to the Versaloon personality and runs the serial loopback test and OpenOCD with the `vsllink` driver.
 It then switches to the CMSIS-DAP personality and runs the serial and `DAP_UART_*` loopback tests, OpenOCD, pyOCD and probe-rs.
 Each tool runs on SWD and JTAG, at each speed of `--swd-speeds` and `--jtag-speeds`.
+The default speeds are 1000, 2000 and 4000 kHz for SWD, and 1000 and 9000 kHz for JTAG.
+In the CMSIS-DAP personality on an STM32F1 probe, only 4000 kHz runs the untimed SWD engine (`swd::maxClockHz`).
 The script erases the flash of the target:
 
 ```sh
@@ -299,13 +303,13 @@ The firmware sends the status stage (ACK), and then waits 10 ms, as for the othe
 The firmware stalls the request in these conditions:
 
 - The code is not a personality of the image.
-- The code is the bootloader code, and the image is not `app-8k`.
+- The code is the bootloader code, and the image has no bootloader entry. Only the `app-8k` image and the images of the STM32H5 have one.
 - `wIndex` or `wLength` is not `0`, or the direction is device to host.
 
 A stall means that the firmware does not switch.
 The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
 An image with one personality stalls the request for each personality code.
-It accepts the bootloader code, when it is an `app-8k` image.
+It accepts the bootloader code, when it is an `app-8k` image or an image of the STM32H5.
 
 With libusb, the call is:
 
@@ -548,7 +552,7 @@ Each call sends one IN packet of up to 64 bytes: 64 bytes per ms.
 At 115200 baud, the UART receives 11.5 bytes per ms.
 
 The call makes one clock phase longer by the time of the service, some microseconds.
-The clock does not get faster: each half period waits from its clock edge.
+The clock does not get faster: after a late edge, the next half period is complete (see [Clock pacing](clock-pacing.md)).
 For JTAG in timed mode, the low half period starts again after the call.
 Thus TDI and TMS change a full half period before the next rising edge, as for all other bits.
 For SWD, each bit waits a full half period after the SWDIO write, so SWDIO also keeps its setup time.
@@ -572,7 +576,7 @@ Limits:
 
 OpenOCD shifts all JTAG bits through the `JTAG_RAW` block (`src/protocol/versaloon/JtagRawBlock.h`).
 The firmware drives the pins with GPIO bit-bang (`src/jtag/JtagBitBang.h`).
-On the Mini and the OtherUse, the [JTAG fast path](#jtag-fast-path) shifts the whole bytes with SPI and DMA.
+On the boards with the [JTAG fast path](#jtag-fast-path), SPI and DMA shift the whole bytes.
 The pins are TCK, TMS, TDI, TDO and RTCK in the table of the [GPIO block](#gpio-block).
 TRST and SRST stay in the `GPIO` block.
 
@@ -619,18 +623,19 @@ A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `IN
 
 ### JTAG fast path
 
-On the Mini and the OtherUse, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`, `src/board/BoardJtagFast.cpp`).
+On the Mini, the OtherUse and the WeAct STM32H523, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
+The STM32F1 driver is `src/board/BoardJtagFast.cpp` (SPI and DMA1). The STM32H5 driver is `src/board/BoardJtagFastH5.cpp` (SPI v2 and GPDMA1).
 The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
 A board has the fast path when its definition has `jtagFastPath` (see [Boards](boards.md)).
 The ST-Link/V2 does not have it.
 
-| Signal | Pin | Peripheral | DMA1 channel |
-|---|---|---|---|
-| TCK | PB13 | SPI2 SCK, master | - |
-| TDO | PB14 | SPI2 MISO | 4 |
-| TDI | PB15 | SPI2 MOSI | 5 |
-| TCK link | PB3 | SPI1 SCK (remapped), slave | - |
-| TMS | PB4 | SPI1 MISO (remapped) | 3 |
+| Signal | Pin | Peripheral | STM32F1 DMA1 channel | STM32H5 GPDMA1 channel |
+|---|---|---|---|---|
+| TCK | PB13 | SPI2 SCK, master | - | - |
+| TDO | PB14 | SPI2 MISO | 4 | 1 |
+| TDI | PB15 | SPI2 MOSI | 5 | 2 |
+| TCK link | PB3 | SPI1 SCK, slave (remapped on the STM32F1) | - | - |
+| TMS | PB4 (STM32F1), PA6 (STM32H5) | SPI1 MISO (remapped on the STM32F1) | 3 | 0 |
 
 The board links TCK (PB13) to PB3, so TCK also clocks SPI1.
 Both SPIs use clock polarity high and the second clock edge, LSB first.
@@ -639,24 +644,31 @@ The target and SPI2 sample at the rising edge.
 The SPI clock idles high, so TCK also idles high between shifts.
 Only the rising edge clocks the TAP, so the idle level has no effect on the target.
 
-SPI2 runs from the 36 MHz APB1 clock, divided by 4 to 256.
-Thus the SPI speeds are 9000, 4500, 2250, 1125, 562.5, 281.25 and 140.625 kHz.
-The divider 2 (18 MHz) is off (`jtag::spiMinShift`).
-SPI1 makes TMS valid up to 25 ns after the falling edge (tv(SO) in the STM32F103x8/B datasheet).
-At 18 MHz, the half period is only 27.8 ns, so the target can sample an old TMS bit.
-Enable 18 MHz only after a hardware test at 18 MHz passes.
+SPI1 makes TMS valid a time tv(SO) after the falling edge.
+The half period must be longer than tv(SO), the delay of the TCK link and the TMS setup time of the target.
+The smallest SPI divider is `jtag::spiMinShift`:
+
+| Family | SPI2 clock | SPI speeds (kHz) | Divider off | tv(SO) |
+|---|---|---|---|---|
+| STM32F1 | 36 MHz APB1 clock, divided by 4 to 256 | 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 | 2 (18 MHz, half period 27.8 ns) | 25 ns (STM32F103x8/B datasheet) |
+| STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 16 to 256 | 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) and 8 (15.6 MHz, not tested) | 11.5 ns on PA6 (DS14540 table 109) |
+
+Enable a smaller divider only after a hardware test at that speed passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
 
 - The SPI gives the fastest SPI speed that is not above the request.
-- Bit-bang gives the request. For the choice, its speed counts as the request, up to `jtag::bitBangMaxKHz` (1000 kHz).
+- Bit-bang gives the request. For the choice, its speed counts as the request, up to `jtag::bitBangMaxKHz`: 1000 kHz on the STM32F1, 3000 kHz on the STM32H5.
 - The SPI wins when its speed is equal to or higher than the bit-bang speed.
 - Adaptive clocking (0 kHz) always uses bit-bang.
 
-Examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 2.25 MHz SPI, 2000 kHz gives 1.125 MHz SPI, 1000 kHz gives 1 MHz bit-bang.
-The value of `jtag::bitBangMaxKHz` is conservative: 1000 kHz is the rate that was checked with the flash benchmark.
-The fastest rate of the bit-bang loop is not measured.
+STM32F1 examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 2.25 MHz SPI, 2000 kHz gives 1.125 MHz SPI, 1000 kHz gives 1 MHz bit-bang.
+STM32H5 examples: 7813 kHz and more give 7.8 MHz SPI, 4000 kHz gives 3.9 MHz SPI, 3000 kHz gives bit-bang, 2000 kHz gives bit-bang.
+On the STM32F1, the value of `jtag::bitBangMaxKHz` is conservative: 1000 kHz is the rate that was checked with the flash benchmark.
+The fastest rate of the bit-bang loop on the STM32F1 is not measured.
 A higher value selects bit-bang for some requests above 1125 kHz, and the SPI is then slower than the request less often.
 To raise the value, set it to 18000 for a test, and measure TCK at a request of 4000 kHz with a logic analyzer.
+On the STM32H5, the bit-bang engine gives 2.87 MHz at a request of 3000 kHz, and 3.56 MHz at 3900 kHz (see [Clock pacing](clock-pacing.md#stm32h5-jtag-fast-path)).
+Both rates are higher than the SPI speed below them (1953 kHz).
 
 A long shift runs in SPI chunks of about 1 ms, and the [serial service](#serial-port-during-long-commands) runs between two chunks.
 The pins are GPIO between two transfers, so the bit-bang engine and the SWD engine can use them.
@@ -664,12 +676,16 @@ SPI1 also counts the TCK edges of bit-bang and SWD, so each transfer resets SPI1
 
 Limits:
 
-- The SPI1 slave has no underrun flag. When DMA is late with a TMS byte, a TMS bit is wrong and the firmware does not see it.
+- The STM32F1 SPI1 slave has no underrun flag. When DMA is late with a TMS byte, a TMS bit is wrong and the firmware does not see it.
   DMA channel 3 has the highest priority to prevent this.
-- At 9 MHz, the half period is 55.6 ns. The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
+  On the STM32H5, the SPI1 slave sets its underrun flag (UDR), and the shift fails.
+  The flag comes a few TCK cycles after the underrun, so an underrun in the last frames of a transfer is not seen.
+  The STM32H5 shift also fails when SPI2 loses a TDO byte (OVR).
+- At 9 MHz, the half period is 55.6 ns (at 7.8 MHz on the STM32H5, 64 ns). The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
   Use a lower speed with a long cable.
 - The OpenOCD flash speed with the fast path is measured with `tools/flash_benchmark.py` (see [docs/development.md](development.md#flash-speed-benchmark)).
-  At 4500 and 9000 kHz, the total flash time is 1 to 2 % longer than with the original firmware.
+  On the STM32F1, at 4500 and 9000 kHz, the total flash time is 1 to 2 % longer than with the original firmware.
+  The flash speed on the STM32H5 is not measured.
 
 ### SWD block
 
@@ -710,25 +726,17 @@ A separate SWDIO input pin gets a pull-up, so an open SWDIO reads 1.
 | SWCLK | 1.85 MHz | 235 kHz | 130 kHz | 102 kHz | 85 kHz | 72 kHz | 500000 / (`delay` + 1) Hz |
 
 The firmware rounds the half period up to full core clock cycles (72 MHz).
-Each half period waits from its SWCLK edge, so an interrupt makes a period longer, but not shorter.
-The wait subtracts an estimate of the cycles of the loop code (`swd::loopOverheadCycles`).
-A smaller value makes SWCLK slower, so the value is a lower bound: SWCLK is not faster than the table at `delay` 1 (measured).
-The engines are compiled with `-O2`. The value 24 gives 232 kHz at `delay` 1, measured with a logic analyzer on the Versaloon Mini.
-With `-O2`, the value 8 gave 210 kHz.
-With `-Os`, the value 21 gave 230 kHz.
-`delay` 2 and more are not measured. The margin there is small.
-Measure SWCLK again after a change of the engine code.
-The measurement is from before link-time optimisation (LTO, #75).
-With LTO, each bit loop has the same instructions or one instruction more, so SWCLK is not faster.
-A new measurement with LTO is open.
-The ST-Link/V2 board has other SWD pins and is not measured.
+Each SWCLK edge comes at a deadline of the core cycle counter.
+Thus the loop code does not change the SWCLK rate (see [Clock pacing](clock-pacing.md)).
+An interrupt makes a period longer, but not shorter.
 
 At `delay` 0, the firmware runs untimed, without the cycle counter.
 Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`).
 The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
-SWCLK is then 1.845 MHz (66 % duty), measured with a logic analyzer on the Versaloon Mini.
+Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the OtherUse, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md), #118).
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
+On the STM32H5 (250 MHz), `delay` 0 is timed at 1.85 MHz: the untimed engine there gives 13 MHz (`swd::runsUntimed()`, see [Clock pacing](clock-pacing.md#stm32h5)).
 
 `OUT` drives the bits on SWDIO. `IN` releases SWDIO and reads the bits.
 SWCLK is high between bits.

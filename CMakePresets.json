@@ -58,14 +58,14 @@
       }
     },
     {
-      "name": "board-nucleoh533",
-      "description": "Board nucleoh533",
+      "name": "board-weacth523",
+      "description": "Board weacth523",
       "hidden": true,
       "inherits": [
         "base"
       ],
       "cacheVariables": {
-        "BOARD": "nucleoh533"
+        "BOARD": "weacth523"
       }
     },
     {
@@ -322,34 +322,42 @@
       ]
     },
     {
-      "name": "nucleoh533",
-      "displayName": "NUCLEO-H533RE",
+      "name": "weacth523",
+      "displayName": "WeAct STM32H523",
       "inherits": [
-        "board-nucleoh533"
+        "board-weacth523"
       ]
     },
     {
-      "name": "nucleoh533-cmsis-dap",
-      "displayName": "NUCLEO-H533RE, CMSIS-DAP",
+      "name": "weacth523-cmsis-dap",
+      "displayName": "WeAct STM32H523, CMSIS-DAP",
       "inherits": [
-        "board-nucleoh533",
+        "board-weacth523",
         "personalities-cmsis-dap"
       ]
     },
     {
-      "name": "nucleoh533-dual",
-      "displayName": "NUCLEO-H533RE, dual image",
+      "name": "weacth523-dual",
+      "displayName": "WeAct STM32H523, dual image",
       "inherits": [
-        "board-nucleoh533",
+        "board-weacth523",
         "personalities-dual"
       ]
     },
     {
-      "name": "nucleoh533-debug",
-      "displayName": "NUCLEO-H533RE, Debug",
+      "name": "weacth523-wch-link",
+      "displayName": "WeAct STM32H523, WCH-Link",
+      "inherits": [
+        "board-weacth523",
+        "personalities-wch-link"
+      ]
+    },
+    {
+      "name": "weacth523-debug",
+      "displayName": "WeAct STM32H523, Debug",
       "inherits": [
         "debug",
-        "board-nucleoh533"
+        "board-weacth523"
       ]
     },
     {
@@ -448,20 +456,24 @@
       "configurePreset": "stlinkv2-triple"
     },
     {
-      "name": "nucleoh533",
-      "configurePreset": "nucleoh533"
+      "name": "weacth523",
+      "configurePreset": "weacth523"
     },
     {
-      "name": "nucleoh533-cmsis-dap",
-      "configurePreset": "nucleoh533-cmsis-dap"
+      "name": "weacth523-cmsis-dap",
+      "configurePreset": "weacth523-cmsis-dap"
     },
     {
-      "name": "nucleoh533-dual",
-      "configurePreset": "nucleoh533-dual"
+      "name": "weacth523-dual",
+      "configurePreset": "weacth523-dual"
     },
     {
-      "name": "nucleoh533-debug",
-      "configurePreset": "nucleoh533-debug"
+      "name": "weacth523-wch-link",
+      "configurePreset": "weacth523-wch-link"
+    },
+    {
+      "name": "weacth523-debug",
+      "configurePreset": "weacth523-debug"
     },
     {
       "name": "host-tests",

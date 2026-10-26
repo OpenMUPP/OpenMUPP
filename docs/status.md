@@ -11,12 +11,13 @@ The Versaloon and CMSIS-DAP images have these functions:
   The bridge continues to run during long JTAG and SWD commands.
 - It starts the bootloader when you hold the key.
   The Versaloon personality also starts it on request, in the `app-8k` image.
+  On the WeAct STM32H523 core board, the request and the key start the ROM USB DFU of the STM32H5.
 
 The Versaloon personality has the USB identity of the original Versaloon firmware:
 
 - It receives Versaloon commands and replies to the common commands, for example `GET_INFO`.
 - It runs the `USB_TO_ALL` command of OpenOCD, with the `INFO`, `DELAY`, `GPIO`, `JTAG_RAW`, `SWD` and `POWER` blocks. OpenOCD controls SRST and TRST through the `GPIO` block.
-- It shifts JTAG bits through the `JTAG_RAW` block, with a fixed TCK frequency or with adaptive clocking (RTCK). The Mini and the OtherUse use SPI and DMA up to 9 MHz TCK. The other bits and speeds use GPIO bit-bang.
+- It shifts JTAG bits through the `JTAG_RAW` block, with a fixed TCK frequency or with adaptive clocking (RTCK). The Mini and the OtherUse use SPI and DMA up to 9 MHz TCK, the STM32H5 boards up to 7.8 MHz. The other bits and speeds use GPIO bit-bang.
 - It runs SWD transfers with GPIO bit-bang through the `SWD` block, at the SWCLK frequencies of the OpenOCD `vsllink` driver.
 - It switches the 3.3 V target supply through the `POWER` block, and replies the target voltage to `GET_TVCC`. It refuses to switch on a target that has its own supply.
 
@@ -42,4 +43,7 @@ Hardware test status:
 - The multi image `versaloon,cmsis-dap,wch-link` passed the test on Linux (see [usb-device.md](usb-device.md#multi-image-hardware-test)).
   The Versaloon personality passed with OpenOCD on SWD and JTAG.
   The CMSIS-DAP personality passed with OpenOCD, pyOCD and probe-rs on SWD and JTAG. probe-rs ran on JTAG only at 1000 kHz.
-- Windows (also the driverless WinUSB binding), the key switch and the WCH-Link personality of the multi image need a test on the hardware.
+- The dual image `versaloon,cmsis-dap` on the WeAct STM32H523 core board passed the same test on Linux, with an STM32F103ZE target (see [boards.md](boards.md#hardware-test)).
+  The key switch passed in both directions on this board.
+  One earlier run had read errors on OpenOCD JTAG with the `vsllink` driver. Five later runs passed. The cause is not known.
+- Windows (also the driverless WinUSB binding), the key switch on the STM32F1 boards, and the WCH-Link personality of the multi image need a test on the hardware.

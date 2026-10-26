@@ -34,7 +34,7 @@ The `cmsis-dap` image has these properties:
 - The CDC-ACM serial port, the UART bridge, the debug log and the LEDs are as in the Versaloon image.
 - The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
-  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
+  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more. On the STM32H5 boards, it uses the fast path at a TCK of 3906 kHz or more.
 
 A `cmsis-dap` image has only this personality.
 A multi image has `cmsis-dap` and other personalities, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
@@ -47,7 +47,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - A JTAG chain has up to 8 devices. The IR length of a device is 1 to 32 bits.
 - On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
   Else the next scan has an extra TCK edge or a missing TCK edge.
-  The idle level is high on the boards with the SPI fast path (the Mini and the OtherUse), and low on the other boards.
+  The idle level is high on the boards with the SPI fast path (the Mini, the OtherUse and the STM32H5 boards), and low on the ST-Link/V2.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
 - No SWO.
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
@@ -168,7 +168,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x21` | `DAP_UART_Transfer` | Sends and receives UART data. Up to 59 bytes to send and 58 bytes to receive in one packet. |
 | `0x22` | `DAP_UART_Control` | Enables, disables and flushes the receiver and the transmitter. |
 | `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
-| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image other than `app-8k` replies `0xFF` to it. An image with one personality that is not `app-8k` replies `ID_DAP_Invalid` to each code. See [Multi image](usb-device.md#multi-image). |
+| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image without the bootloader entry replies `0xFF` to it. An image with one personality and without the bootloader entry replies `ID_DAP_Invalid` to each code. Only the `app-8k` image and the images of the STM32H5 have the bootloader entry. See [Multi image](usb-device.md#multi-image). |
 | `0x81` | `ID_DAP_Vendor1` | Only in an image with `VSL_CMSIS_DAP_RV_BRIDGE`: switches the RISC-V bridge, `[0x81][on u8]`, `1` on, `0` off. The response is `[0x81][status u8]`: `0` when the switch is done, `0xFF` for another value. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
@@ -314,8 +314,8 @@ A Versaloon-only image has no `RetryStop`.
 
 `DAP_Connect` with port 2 releases the SWD pins and starts the JTAG engine.
 The JTAG engine is the one of the Versaloon image (`board::BoardJtag`).
-On the Mini and the OtherUse, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
-This starts at a TCK of 1125 kHz. The other bits, and the slower rates, use GPIO bit-bang.
+On the boards with the fast path, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
+This starts at a TCK of 1125 kHz on the Mini and the OtherUse, and at 3906 kHz on the STM32H5 boards. The other bits, and the slower rates, use GPIO bit-bang.
 `DAP_SWJ_Clock` sets TCK in kHz, rounded down, and at least 1 kHz.
 
 `DAP_JTAG_Configure` gives the device chain: the IR length of each device.
@@ -346,7 +346,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is not done yet.
+Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is done: see [Bridge hardware test](#bridge-hardware-test).
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -366,7 +366,7 @@ It does each DMI access on the WCH wire (one wire or two wires), with the wire e
 
 The CMake option `VSL_CMSIS_DAP_RV_BRIDGE` (default `OFF`) adds the bridge to the `cmsis-dap` personality.
 It needs `VSL_PERSONALITIES=cmsis-dap`: the configure step stops with an error for another set of personalities, also for a multi image.
-It needs an STM32F1 board, because the one-wire engine uses the timers and DMA1 of the STM32F1.
+The STM32H5 boards also build the bridge. The bridge is not tested on them.
 The image tag ends with `-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-rv-bridge-app-10k-Release-<version>.bin`.
 The presets `mini-cmsis-dap-rv-bridge` and `otheruse-cmsis-dap-rv-bridge` set the option:
 
@@ -409,7 +409,7 @@ The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (
 
 Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, OtherUse with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
 The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
-The CH32V003 and CH32V20x configs are not tested on hardware.
+The [bridge hardware test](#bridge-hardware-test) has the results of the three configs.
 
 ### Bridge switch
 
@@ -441,7 +441,7 @@ python3 tools/vsl_rv_bridge.py off
 
 The bridge stays on until a USB reset, a power cycle or `81 00`.
 The OpenOCD configs send `81 00` at `shutdown` and after Ctrl-C, but not after an error in a `-c` command.
-Thus probe-rs must not reset the USB device when it opens it. The hardware test (#109) checks this.
+Thus probe-rs must not reset the USB device when it opens it. probe-rs 0.32.0 does not reset it ([Bridge hardware test](#bridge-hardware-test)).
 
 ### Connect
 
@@ -500,6 +500,259 @@ Planned changes (#103):
 
 The bridge does not report a wire failure as `op` 3.
 OpenOCD would then repeat accesses that the target already ran, and a permanent failure would stay hidden until a timeout.
+
+### Bridge hardware test
+
+The hardware test (#109) has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the OtherUse.
+A last step checks the real JTAG port with an STM32F103 after the bridge was on.
+The Mini has almost the same hardware as the OtherUse, so this test does not include it.
+
+#### CH32V006 on the OtherUse
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-24 |
+| Probe | OtherUse, legacy bootloader, `otheruse-cmsis-dap-rv-bridge` `app-10k` image, `v0.11.0-130-g6487129` |
+| Target | CH32V006K8U6 on one wire, with its own supply |
+| OpenOCD | `0.12.0+dev-01355-gcba596a3e`, `ch32v00x-cmsis-dap.cfg` with `WORKAREASIZE` `0x2000` |
+| GDB | `riscv-none-elf-gdb` (xPack GCC 15.2.0-1) |
+| probe-rs | 0.32.0, `--chip CH32V006K8U6 --protocol jtag`, after `tools/vsl_rv_bridge.py on` |
+| Test programs | A counter loop of 14 bytes in RAM at `0x20000000`. The same loop in flash at `0x00000000`, with 16 KB of random data after it. Each loop writes its counter to `0x20001000` |
+
+| Test | Tool | Result |
+|---|---|---|
+| Examine | OpenOCD | Pass. IDCODE `0x15653101`, `XLEN=32`, `misa=0x40801014` (RV32EMC and X) |
+| `halt`, `resume` | OpenOCD | Pass. One OpenOCD `resume` resumes the hart: `dmstatus` shows `allrunning`, and the counter increases. The CH32V006 needs two `dmcontrol` writes (see [Debug module layer](wch-link.md#debug-module-layer)), and OpenOCD resumes it |
+| `step` | OpenOCD, GDB `stepi` | Pass. See note 1 |
+| `reg` | OpenOCD, GDB | Pass: `pc`, `a0`, `a1`, `misa`, `dcsr` |
+| `mdw`, `mww` | OpenOCD, GDB | Pass on a halted hart. On a running hart, OpenOCD `mdw` fails with "Failed to read priv register" |
+| Software breakpoint in RAM | OpenOCD `bp`, GDB `break` | Pass. The hart stops at each pass of the loop, and `rbp` puts the original instruction back |
+| Hardware breakpoint | OpenOCD `bp ... hw`, GDB `hbreak` | Not available: the CH32V006 has no triggers ("Found 0 triggers") |
+| `load_image` to RAM | OpenOCD, GDB `load` | Pass, with `verify_image` |
+| Reset by `ndmreset` | OpenOCD `reset halt`, `reset run` | Pass. `reset halt` stops at `pc` 0. After `reset run`, `dmstatus` shows `allhavereset` and `allrunning` |
+| WCH registers `0x7c` to `0x7f` | OpenOCD `riscv dmi_read` | Pass: `11038403`, `5aa58401`, `00000400`, `00600620` |
+| `shutdown` | OpenOCD | Pass. The bridge is off after it: a plain JTAG session finds no TAP |
+| `info` | probe-rs | probe-rs finds the DTM, but it cannot identify the chip. It ignores `--chip`. The same result as on the CH32V208 ([captures](cmsis-dap-captures/README.md#results)) |
+| `read` | probe-rs | Pass. 16 KB of flash agree with the image |
+| `download --verify` | probe-rs, built-in flash algorithm | Pass. 16 KB in 15.7 s, with the verify. After `probe-rs reset`, the program runs |
+| `gdb` | probe-rs | Fail, in probe-rs. See note 2 |
+| Bridge on after `vsl_rv_bridge.py on` | probe-rs | Pass. probe-rs does not reset the USB device when it opens it |
+| Fast path first, then bridge on, in one USB session | Python script, then OpenOCD | Pass. See note 3 |
+
+Notes:
+
+1. One time, the first `step` did not change `pc`. The flash was erased at that time, and the hart reset again and again. With a program in flash, every `step` passed: after `reset halt`, after a `pc` write, and after `halt`.
+2. When GDB connects, probe-rs reads all 32 general registers. The CH32V006 is RV32E and has only `x0` to `x15`. The abstract command for `x16` (regno `0x1010`) gives `cmderr` 3 (exception), and probe-rs ends the session with "A RISC-V specific error occurred". probe-rs does not use the E extension of `misa` here. The bridge sends the correct result of the target. An original WCH-LinkE (firmware 2.19) with the probe-rs `wlink` driver gives the same failure on the same CH32V006.
+3. The script sends `81 00`, `DAP_Connect` to JTAG and `DAP_SWJ_Clock` 9 MHz. Then it sends 20 DR scans of 128 bits with TDO capture. These scans use the SPI fast path: a TCK of 9 MHz is above the fast path limit of 1125 kHz. The test did not measure the pins. Then the script sends `81 01` and reads the IDCODE `0x15653101` from the emulated TAP. OpenOCD then examines the hart, halts it and reads RAM and flash.
+
+Rates, with the target at its reset clock:
+
+| Measurement | Result |
+|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.87 ms for each read. Each read is one USB round trip |
+| OpenOCD memory read, `dump_image` of 8 KB | 4.64 s (1.72 KiB/s) |
+| OpenOCD memory write, `load_image` of 8 KB | 4.62 s (1.73 KiB/s) |
+| probe-rs `read` of 16 KB | 4.28 s (3.7 KiB/s), with the attach |
+| probe-rs `download --verify` of 16 KB | 15.7 s |
+| One-wire DMI frame, Saleae on SWDIO | 44 µs to 52 µs |
+| Time between two DMI frames in one USB packet | 334 µs minimum |
+
+OpenOCD reads memory with the abstract command, one word at a time.
+For each word, it sends 3 USB packets with 7 DMI scans, and the wire carries about 3 DMI frames.
+OpenOCD does not use `aampostincrement` on this target.
+The USB capture shows that the host sends the next packet a few µs after the reply.
+The probe takes about 1.1 ms for a packet with 3 DMI scans, and about 0.2 ms for a packet with only TMS moves.
+Thus the firmware takes about 300 µs for each DMI scan, and the wire uses only about 50 µs of it.
+`adapter speed` (100 kHz to 10 MHz) does not change the rate.
+The [CH32V006 rates on the WeAct STM32H523](#ch32v006-rates-on-the-weact-stm32h523) show the cause (#114).
+
+The rates with the fix, on 2026-10-26, with an OtherUse with `versaloon-bootloader` and `app-8k` images of `otheruse-cmsis-dap-rv-bridge`:
+
+| Measurement | Before (`v0.12.0-60-gd7f95ac`) | After the fix |
+|---|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.908 ms for each read | 0.531 ms for each read |
+| OpenOCD memory read, `dump_image` of 8 KB | 4.80 s (1.67 KiB/s) | 2.93 s (2.73 KiB/s) |
+| OpenOCD memory write, `load_image` of 4 KB to RAM | 2.38 s (1.68 KiB/s) | 1.45 s (2.76 KiB/s) |
+| probe-rs `read` of 16 KB, with the attach | 4.41 s (3.6 KiB/s) | 2.95 s to 3.00 s (5.4 KiB/s) |
+| One-wire DMI frame, Saleae on SWDIO, OpenOCD `dump_image` of 1 KB | 50 µs | 50 µs |
+| Time between two DMI frames in one USB packet | 350 µs to 375 µs | 150 µs to 175 µs |
+| Time between two DMI frames in two USB packets | 825 µs to 1000 µs | 500 µs to 650 µs |
+
+The data of the reads is the same before and after the fix, and `verify_image` passes after each `load_image`.
+
+#### CH32V003 on the OtherUse
+
+The probe, OpenOCD, GDB and probe-rs are the same as for the CH32V006.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-24 |
+| Target | CH32V003 on one wire, with its own supply. probe-rs uses `--chip CH32V003F4P6` |
+| OpenOCD config | `ch32v003-cmsis-dap.cfg`, default `WORKAREASIZE` (`0x800`) |
+| Test programs | The counter loops of the CH32V006 test, with the counter at `0x20000400` (2 KB RAM). The flash program has 8 KB of random data |
+
+| Test | Tool | Result |
+|---|---|---|
+| Examine | OpenOCD | Pass. IDCODE `0x15653101`, `XLEN=32`, `misa=0x40800014` (RV32EC and X). Chip ID at `0x1ffff7c4`: `00300500` |
+| `halt`, `resume` | OpenOCD | Pass. The counter increases after `resume` |
+| `step` | OpenOCD, GDB `stepi` | Pass |
+| `reg` | OpenOCD, GDB | Pass: `pc`, `a0`, `a1`, `x15`, `misa`, `dcsr` |
+| `mdw`, `mww` | OpenOCD, GDB | Pass on a halted hart. OpenOCD uses the program buffer |
+| Software breakpoint in RAM | OpenOCD `bp`, GDB `break` | Pass |
+| Hardware breakpoint | OpenOCD `bp ... hw` | Not available: no triggers |
+| `load_image` to RAM | OpenOCD, GDB `load` | Pass, with `verify_image` |
+| Reset by `ndmreset` | OpenOCD `reset halt`, `reset run` | Pass. `reset halt` stops at `pc` 0. Unlike the CH32V006, `dmstatus` does not show `allhavereset` after the reset |
+| WCH registers `0x7c` to `0x7f` | OpenOCD `riscv dmi_read` | Pass: `00010403`, `5aa50401`, `5aa50401`, `00300500` |
+| `shutdown` | OpenOCD | Pass. The bridge is off after it |
+| `info` | probe-rs | probe-rs finds the DTM, but it cannot identify the chip. The same result as on the CH32V006 |
+| `read` | probe-rs | Pass. 8 KB of flash agree with the image |
+| `download --verify` | probe-rs, built-in flash algorithm | Pass. 8 KB in 20.1 s, with the verify. After `probe-rs reset`, the program runs |
+| `gdb` | probe-rs | Fail, in probe-rs: the same `x16` read as on the CH32V006 (note 2 above) |
+
+After a GDB `monitor reset halt`, OpenOCD shows "Register fp is dirty!" and "Register s1 is dirty!".
+OpenOCD uses `s0` and `s1` as scratch registers for the program buffer, and it discards their values at the reset.
+
+Rates, with the target at its reset clock:
+
+| Measurement | Result |
+|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.87 ms for each read |
+| OpenOCD memory read, `dump_image` of 2 KB RAM | 0.27 s (7.4 KiB/s) |
+| OpenOCD memory read, `dump_image` of 8 KB flash | 1.03 s (7.8 KiB/s) |
+| OpenOCD memory write, `load_image` of 2 KB RAM | 0.25 s (8.0 KiB/s) |
+| probe-rs `read` of 8 KB | 2.23 s (3.6 KiB/s), with the attach |
+| probe-rs `download --verify` of 8 KB | 20.1 s |
+
+OpenOCD is about 4 times faster on the CH32V003 than on the CH32V006.
+On the CH32V003, it uses the program buffer. This test did not capture the USB packets of the CH32V003.
+The CH32V006 refuses the program buffer, so OpenOCD uses the abstract command there (see [OpenOCD configs](#openocd-configs)).
+
+#### CH32V208 on the OtherUse
+
+The probe, OpenOCD, GDB and probe-rs are the same as for the CH32V006.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-24 |
+| Target | CH32V208WBU6 on two wires (SWDIO, SWCLK), with its own supply. BOOT0 is tied low. probe-rs uses `--chip CH32V208WBU6` |
+| OpenOCD config | `ch32v20x-cmsis-dap.cfg`, default `WORKAREASIZE` (`0x2800`) |
+| Test programs | The counter loops of the CH32V006 test (counter at `0x20001000`, 16 KB flash program) |
+
+| Test | Tool | Result |
+|---|---|---|
+| Examine | OpenOCD | Pass. IDCODE `0x15653101`, `XLEN=32`, `misa=0x40901105` (RV32IMAC, U and X) |
+| `halt`, `resume` | OpenOCD | Pass |
+| `step` | OpenOCD, GDB `stepi` | Pass |
+| `reg` | OpenOCD, GDB | Pass: `pc`, `a0`, `a1`, `x31`, `dcsr` |
+| `mdw`, `mww` | OpenOCD, GDB | Pass on a halted hart |
+| Software breakpoint in RAM | OpenOCD `bp`, GDB `break` | Pass |
+| Hardware breakpoint | OpenOCD `bp ... hw` | Fail, in OpenOCD: "Found 0 triggers". See note 1 |
+| Hardware breakpoint | probe-rs `gdb`, GDB `hbreak` | Pass in flash. probe-rs finds 4 `mcontrol` triggers |
+| `load_image` to RAM | OpenOCD, GDB `load` | Pass, with `verify_image` |
+| Reset by `ndmreset` | OpenOCD `reset run` | Pass |
+| Reset by `ndmreset` | OpenOCD `reset halt` | Fail, "timed out while waiting for target halted". With BOOT0 low, 8 of 8 runs failed. Before that, 1 of 6 runs passed. See note 2 |
+| WCH registers `0x7c` to `0x7f` | OpenOCD `riscv dmi_read` | `00000000`, `00000000`, `00000000`, `2080053c` |
+| `shutdown` | OpenOCD | Pass. The bridge is off after it |
+| `info` | probe-rs | probe-rs finds the DTM, but it cannot identify the chip. The same result as on the CH32V006 |
+| `read` | probe-rs | Pass. 16 KB of flash agree with the image |
+| `download --verify` | probe-rs, built-in flash algorithm | Pass in 4 of 4 runs with BOOT0 low. 16 KB in 14.5 s, with the verify. After `probe-rs reset`, the program runs. See note 3 |
+| `gdb` | probe-rs, GDB | Pass: connect, `stepi`, registers up to `x31`, memory read and write, `hbreak` |
+| Wrong wiring | OpenOCD | See note 4 |
+
+Notes:
+
+1. On the CH32V208, the `tinfo` CSR (`0x7a4`) reads 0, without an exception. OpenOCD takes `tinfo` 0 as "no trigger" (`get_trigger_types()` in `src/target/riscv/riscv.c`), and stops the count. It does not look at the type in `tdata1`. `tdata1` of trigger 0 reads `20000000` (type 2, `mcontrol`). probe-rs uses the type in `tdata1`, and finds 4 triggers.
+2. After a reset with `haltreq`, the CH32V208 sets `allhavereset` before it halts. A poll of `dmstatus` after the reset reads `allrunning` and `allhavereset` first, and `allhalted` about 0.8 ms later. OpenOCD waits only for `allhavereset` (`deassert_reset()` in `src/target/riscv/riscv-013.c`). Then it writes `ackhavereset`, and this write also clears `haltreq`. When `haltreq` goes to 0 before the hart halts, the hart continues to run. OpenOCD then halts the hart to set `dcsr.ebreak*`, resumes it, and waits for a halt until the timeout. The debug spec 0.13 expects the hart to halt when `haltreq` stays set during the reset. In a manual sequence with `riscv dmi_write`, the `ackhavereset` write came 5 ms after the reset. Then the hart halted in 10 of 10 tries. The CH32V006 and the CH32V003 halt in time.
+3. In a first run, BOOT0 was not connected. Then address `0x00000000` showed the system bootloader (the same words as `0x1fff8000`) after some resets, and the user flash after others. The test image is linked at `0x00000000`, so probe-rs compared against the bootloader, and the verify failed in 3 of 6 runs. The user flash at `0x08000000` was correct each time. With BOOT0 low, address `0x00000000` showed the user flash after 10 of 10 resets.
+4. SWCLK was not connected in a first run. OpenOCD waited 5 s, and stopped with "Debug Module did not become active". DTMCS read `0x871`: `dmistat` 2, the sticky DMI error. OpenOCD does not show this error (see [DMI errors](#dmi-errors)).
+
+Rates, with the target at its reset clock:
+
+| Measurement | Result |
+|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.83 ms for each read |
+| OpenOCD memory read, `dump_image` of 8 KB RAM | 0.95 s (8.4 KiB/s) |
+| OpenOCD memory write, `load_image` of 8 KB RAM | 0.90 s (8.9 KiB/s) |
+| OpenOCD memory read, `dump_image` of 16 KB flash | 1.89 s (8.5 KiB/s) |
+| probe-rs `read` of 16 KB | 2.77 s (5.8 KiB/s), with the attach |
+| probe-rs `download --verify` of 16 KB | 14.5 s |
+
+#### CH32V006 rates on the WeAct STM32H523
+
+This test looked for the firmware time of #114 on an STM32H5 board.
+It measured rates only, not the full test list of the OtherUse.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-25 |
+| Probe | WeAct STM32H523, `weacth523-cmsis-dap` with `-DVSL_CMSIS_DAP_RV_BRIDGE=ON`, standalone image. Before the fix: `v0.12.0-60-gd7f95ac` |
+| Target | CH32V006K8U6 on one wire, on the wiring of the [WeAct one-wire test](wch-link.md#ch32v006-on-the-weact-stm32h523-one-wire) |
+| OpenOCD | The same as for the CH32V006 on the OtherUse, `adapter serial` of the WeAct |
+| Profile | An OtherUse in CMSIS-DAP mode on the SWD port of the WeAct. pyOCD read `DWT_PCSR` (the PC sample register) during the OpenOCD run, without a halt of the core |
+
+The profile before the fix:
+
+- 41% of the samples were in the main loop: the firmware waited for the next USB packet.
+- 18% were in the one-wire frame (`oneWireFrame()`), mostly the wait for the wire.
+- 14% were in `memset`, called from `JtagDp::start()`.
+
+OpenOCD sends about 10 sequences in `DAP_JTAG_Sequence` for each DMI scan, and 9 of them have 1 bit.
+`JtagDp::start()` cleared the three scan buffers (38 bytes each) for each sequence.
+`JtagDp::sequence()` then copied the TDI bits one at a time into the buffer.
+The fix clears only the bytes of the scan, and gives the bytes of a sequence to the port as they are.
+
+| Measurement | Before | After |
+|---|---|---|
+| OpenOCD `riscv dmi_read`, 1000 single reads | 0.284 ms for each read | 0.221 ms for each read |
+| OpenOCD memory read, `dump_image` of 8 KB | 1.56 s (5.1 KiB/s) | 1.28 s (6.3 KiB/s) |
+| OpenOCD memory write, `load_image` of 4 KB to RAM | not measured | 0.62 s (6.5 KiB/s), `verify_image` passes |
+| One-wire DMI frame, Saleae on SWDIO | 50 µs | 50 µs |
+| Time between two DMI frames in one USB packet | 50 µs to 75 µs | 25 µs to 50 µs |
+| Time between two DMI frames in two USB packets | 225 µs to 300 µs | 175 µs to 275 µs |
+
+After the fix, timestamps of the cycle counter in `Processor::execute()` and `Processor::jtagSequence()` (a test image) showed this:
+
+- A sequence of 1 bit takes 1.0 µs. A sequence with a DMI frame takes 63 µs to 67 µs.
+- The firmware time outside the sequences is 16 µs to 21 µs for each packet.
+- The host sends the next packet 72 µs to 111 µs after the end of the last one. This time includes the USB transfer of the reply and of the request.
+
+Thus the wire and USB now use most of the time.
+The remaining firmware time is spread over the TAP emulation and the packet code.
+A build with `-O2` for `DapJtag.cpp` and `RvDtmTap.cpp` did not make the sequences faster.
+The instruction cache misses are below 1%.
+
+#### OpenOCD messages at examine
+
+On the three targets, OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine.
+These targets have no vector extension and no AIA.
+OpenOCD prints the messages when a read of the CSR `vlenb`, or of `mtopi` and `mtopei`, succeeds (`src/target/riscv/riscv-013_reg.c`).
+The WCH cores give 0 for these reads, without an exception.
+The `tinfo` read of the CH32V208 (note 1 of the CH32V208) has the same cause.
+The messages have no other effect in this test.
+
+On the CH32V006, the first `halt` after `init` showed "halted due to undefined". The next halts showed "halted due to debug-request".
+OpenOCD sets the debug reason to "undefined" at examine (`examine()` in `src/target/riscv/riscv-013.c`).
+
+#### Real JTAG after the bridge
+
+This step checks that the JTAG port of the board works after the bridge was on.
+The probe and OpenOCD are the same as for the CH32V006.
+The target is the STM32F103 of the [JTAG hardware test](#jtag-hardware-test) (DBGMCU IDCODE `10036414`), with `interface/cmsis-dap.cfg` and `target/stm32f1x.cfg`.
+The flash test uses a random image of 32 KiB, as in the JTAG hardware test. At 9000 kHz, `tools/stm32f1_clock.tcl` sets the target clock to 64 MHz first.
+
+| Test | Result |
+|---|---|
+| `vsl_rv_bridge.py on`, then `off`, then an OpenOCD JTAG session | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`). `reset halt` stops at the reset vector |
+| The same switch before each flash run, then `program ... verify` and `dump_image` at 1000 kHz | Pass. The read-back agrees with the image |
+| The same at 9000 kHz (SPI fast path) | Pass. The read-back agrees with the image |
+| `cmsis-dap cmd 0x81 0x00` in a JTAG session, with the bridge already off | Pass. The next memory read works |
+| `cmsis-dap cmd 0x81 0x01`, then `0x81 0x00`, in a JTAG session, then a memory read | Fail: "Invalid ACK (7) in DAP response". See the note |
+| The same, then `jtag arp_init`, then memory read and write, `step`, a hardware breakpoint and `reset halt` | Pass |
+
+Note: a switch while JTAG is connected starts the new port with an unknown TAP state (see [Bridge switch](#bridge-switch)).
+OpenOCD does not know this. Probably it uses the IR of the target from before the switch. The test did not capture the scans to confirm this.
+`jtag arp_init` resets the TAPs and scans the chain again. After it, OpenOCD and the target agree again.
+The configs in `etc/openocd/` switch the bridge only before the chain scan and at `shutdown`, so they do not have this problem.
 
 ## Tests
 
@@ -580,19 +833,21 @@ The Versaloon personality (OtherUse board, same firmware version before E6, `vsl
 | 1.85 MHz (untimed) | 2.54 s | 0.81 s |
 
 The `vsllink` driver has fixed SWD steps. Thus the comparison is not exact at 250 kHz, where the clocks are 250 kHz and 235 kHz.
-At 2000 kHz, both personalities run the untimed engine.
+At 2000 kHz, both personalities ran the untimed engine. This firmware is from before #118: now CMSIS-DAP runs untimed only from 3 MHz.
 The write time is the same (2.55 s and 2.54 s).
 The read time with E6 is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon personality (91 and 79 KiB/s).
 Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
 
-Maximum SWD clock: 1.85 MHz (the untimed engine, `maxClockHz` in `src/swd/SwdBitBang.h`).
+Maximum SWD clock: the untimed engine. In this test, it ran from 1.85 MHz. Since #118, it runs from 3 MHz (`maxClockHz` in `src/swd/SwdBitBang.h`).
+Its real rate depends on the code (2.42 to 2.7 MHz on the OtherUse, see [Clock pacing](clock-pacing.md)).
 All runs passed up to this clock with the wiring of this test.
-A request above 1.85 MHz gives the same clock.
+A request above 3 MHz gives the same clock. A request from 1.85 MHz to 3 MHz now gives the timed engine at 1.3 to 1.56 MHz.
+This test used the OtherUse. On the STM32H5, all requests are timed: a request above 1.85 MHz gives a faster clock, up to 5.2 to 6.1 MHz (see [Clock pacing](clock-pacing.md#swd-pacer-on-the-stm32h5)).
 
 Findings:
 
 - Write time does not improve above 1 MHz. The flash programming time is probably the limit. This test did not measure it.
-- The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine runs untimed from 1.85 MHz, so both requests give the same clock.
+- The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine ran untimed from 1.85 MHz, so both requests gave the same clock.
 - E6 made the read time about 20% to 25% longer at 1000 kHz and 2000 kHz (0.56 s to 0.70 s at 2000 kHz). The 4000 kHz run shows 30%, but it is noisy. Write time and the 250 kHz read time did not change. The cause is not measured. Issue #35 tracks it.
 - After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause is probably the wiring. No log proves this, and the exact wire is not known.
 - `probe-rs info` does not print the DPIDR value. Without `--verbose`, it prints "Connecting to the chip was unsuccessful", although `download`, `verify`, `gdb` and `reset` connect. With `--verbose` (run before E6), it shows the DPv1 MemoryAP and the ROM table, and stops with "does not support SWD multidrop". This is normal for an STM32F1 target.

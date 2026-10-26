@@ -34,6 +34,7 @@ add_executable(vsl-tests
         TestTargetPowerLed.cpp
         TestUptimeMicros.cpp
         TestIntDiv.cpp
+        TestClockPacer.cpp
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
         TestCmsisDapDescriptors.cpp

@@ -45,7 +45,7 @@ These options select the board, the personality and the debug features:
 | `VSL_PERSONALITIES` | empty (`versaloon`) | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `0403:9b3c` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
 | `VSL_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `VSL_PERSONALITIES`. Empty: the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `VSL_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
-| `VSL_CMSIS_DAP_RV_BRIDGE` | `OFF` | Only with `VSL_PERSONALITIES=cmsis-dap`, on an STM32F1 board: add the RISC-V bridge to the CMSIS-DAP personality. The vendor command `ID_DAP_Vendor1` then switches the JTAG port to an emulated RISC-V DTM on the WCH debug wire (see [cmsis-dap.md](cmsis-dap.md#risc-v-dtm-bridge)). |
+| `VSL_CMSIS_DAP_RV_BRIDGE` | `OFF` | Only with `VSL_PERSONALITIES=cmsis-dap`: add the RISC-V bridge to the CMSIS-DAP personality. The vendor command `ID_DAP_Vendor1` then switches the JTAG port to an emulated RISC-V DTM on the WCH debug wire (see [cmsis-dap.md](cmsis-dap.md#risc-v-dtm-bridge)). On the STM32H5 boards, only the OpenOCD rates of the bridge are measured (WeAct STM32H523, see [cmsis-dap.md](cmsis-dap.md#ch32v006-rates-on-the-weact-stm32h523)). |
 | `VSL_PROTOCOL`, `VSL_DEFAULT_PROTOCOL` | not set | Deprecated. Use `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`. The build changes `VSL_PROTOCOL=dual` to `VSL_PERSONALITIES=versaloon,cmsis-dap`, and each other value to the personality with the same name. Then it shows a deprecation warning. With `VSL_PROTOCOL=dual` only, `VSL_DEFAULT_PROTOCOL` becomes `VSL_DEFAULT_PERSONALITY`. With the other values of `VSL_PROTOCOL`, the build ignores `VSL_DEFAULT_PROTOCOL`. Without `VSL_PROTOCOL`, the build ignores `VSL_DEFAULT_PROTOCOL` and shows a deprecation warning. Do not set `VSL_PROTOCOL` and `VSL_PERSONALITIES` together. To remove the old options from the cache of a build directory, use `-UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL`. The presets now set `VSL_PERSONALITIES`, so an old build directory of a preset can stop with an error. Then configure it again with `cmake --preset <name> --fresh`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_LTO` | `ON` in a `Release` build, else `OFF` | Link-time optimisation (LTO) of the firmware and of the libraries. The images are about 13 % smaller. The option sets `CMAKE_INTERPROCEDURAL_OPTIMIZATION`. CMake then makes the libraries with `gcc-ar` and `gcc-ranlib`, because `ar` and `ranlib` give no symbol index for LTO objects. |
@@ -142,10 +142,11 @@ The default is `/usr`.
 | `mini-triple`, `otheruse-triple`, `stlinkv2-triple` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
 | `mini-cmsis-dap-wch-link` | Mini | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `versaloon` | Debug |
-| `nucleoh533` | NUCLEO-H533RE | `versaloon` | Release |
-| `nucleoh533-cmsis-dap` | NUCLEO-H533RE | `cmsis-dap` | Release |
-| `nucleoh533-dual` | NUCLEO-H533RE | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
-| `nucleoh533-debug` | NUCLEO-H533RE | `versaloon` | Debug |
+| `weacth523` | WeAct STM32H523 core board | `versaloon` | Release |
+| `weacth523-cmsis-dap` | WeAct STM32H523 core board | `cmsis-dap` | Release |
+| `weacth523-dual` | WeAct STM32H523 core board | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
+| `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
+| `weacth523-debug` | WeAct STM32H523 core board | `versaloon` | Debug |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
@@ -292,7 +293,7 @@ It also exits with code 1 when a run in one of the files failed.
 The default speeds are 1000, 4500 and 9000 kHz for JTAG, and 250 and 2000 kHz for SWD.
 At 1000 kHz, JTAG uses bit-bang. At 4500 and 9000 kHz, JTAG uses the SPI fast path.
 The OpenOCD `vsllink` driver has fixed SWD steps: 250 kHz gives 235 kHz SWCLK, and 2000 kHz gives the fastest SWCLK (1.85 MHz in the table).
-At this setting, the firmware does not time SWCLK. A logic analyzer measured 1.845 MHz on the Versaloon Mini, see [SWD block](usb-device.md#swd-block).
+At this setting, the firmware does not time SWCLK. A logic analyzer measured 2.42 to 2.7 MHz on the OtherUse. The rate changes with the code layout, see [Clock pacing](clock-pacing.md).
 All requests from 235 to 1849 kHz give 235 kHz.
 These options change the run:
 
@@ -355,17 +356,17 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   This job keeps no artifacts.
 - `build-mini-cmsis-dap-rv-bridge`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=ON`, plus the size check.
   This job keeps no artifacts.
-- `build-nucleoh533`: a `parallel:matrix` job with the presets `nucleoh533`, `nucleoh533-cmsis-dap`, `nucleoh533-dual` and `nucleoh533-debug`, plus the size check.
+- `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug`, plus the size check.
   The limit of the dual image is 8 KB smaller, because the last flash sector holds the stored personality.
 
-The build jobs of the Mini and the NUCLEO-H533RE run in each pipeline.
+The build jobs of the Mini and the WeAct STM32H523 core board run in each pipeline.
 The build jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
 The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
-`build-mini`, `build-nucleoh533` and `run-unit-tests` update the cache, and the other jobs only read it.
-`build-nucleoh533` has its own cache key, because the STM32H5 needs other CMSIS packages.
+`build-mini`, `build-weacth523` and `run-unit-tests` update the cache, and the other jobs only read it.
+`build-weacth523` has its own cache key, because the STM32H5 needs other CMSIS packages.
 In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
 Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.

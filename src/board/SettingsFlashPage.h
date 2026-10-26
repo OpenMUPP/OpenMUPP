@@ -5,8 +5,8 @@
 //
 // STM32F1: the page is the 1 KB at __vsl_settings_start (ldscripts/mem-f103.ld).
 // STM32H5: the page is the 8 KB sector at __vsl_settings_start, the last
-// sector of bank 2 (ldscripts/mem-h533.ld). Each log slot is one 128-bit
-// flash word (personality/FlashWordSlot.h).
+// sector of bank 2 (ldscripts/mem-h523xc.ld). Each log slot
+// is one 128-bit flash word (personality/FlashWordSlot.h).
 // The linker script keeps the page out of the FLASH region of the image.
 // stm32flash erases only the pages of the image, so a firmware update
 // keeps the page. A mass erase erases it: the image then starts with its

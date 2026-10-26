@@ -9,7 +9,7 @@ The board selects the MCU family of the dongle.
 The firmware knows two families: STM32F1 and STM32H5.
 The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB (family STM32F1).
 CMSIS has one device define (`STM32F103xB`) for both parts.
-The NUCLEO-H533RE uses an STM32H533RE (family STM32H5, see [NUCLEO-H533RE](#nucleo-h533re)).
+The WeAct STM32H523 core board uses an STM32H523CC (family STM32H5, see [WeAct STM32H523 core board](#weact-stm32h523-core-board)).
 
 `cmake/Boards.cmake` has one line for each board, with these values:
 
@@ -51,7 +51,7 @@ Some functions come from the pin map and the family, not from a separate field:
 - `board::adcChannelOf()` gives the ADC channel of the Vref pin.
   The channels of the STM32F103 come from RM0008. The channels of the STM32H523/H533 come from DS14539.
 - `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
-  The STM32H5 has no one-wire engine yet, so this function gives no timer for it.
+  On the STM32H5, only PA6 (TIM3_CH1) has a timer.
 - `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
   The crystal pins are PD0 and PD1 on the STM32F103, and PH0 and PH1 on the STM32H5.
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
@@ -141,67 +141,137 @@ The reset of the switch waits until the key is up for 50 ms, because a key that 
 The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
 
-## NUCLEO-H533RE
+## WeAct STM32H523 core board
 
-The board `nucleoh533` is the NUCLEO-H533RE (MB1814, user manual UM3121).
-It has an STM32H533RET6 and a 24 MHz crystal.
-The pin map is the pin map of the new probe board with the STM32H523, so the two board definitions are almost the same.
+The board `weacth523` is the WeAct Studio STM32H523 core board V1.0, in the "Black Pill" form.
+It has an STM32H523CCU6 or an STM32H523CCT6, and an 8 MHz crystal.
+The STM32H523CC has 256 KB flash in two banks of 128 KB.
+The schematics are in the WeAct repository [WeActStudio.STM32H523CoreBoard](https://github.com/WeActStudio/WeActStudio.STM32H523CoreBoard), in `Hardware/`.
 
-The Nucleo has no level shifters and no target power switch.
+The pin map follows the board and its headers:
+
+- The state LED is the on-board LED (PC13, active low).
+- The key is the on-board KEY button (PA0, active low).
+- RTCK is PA8, because PA0 is the key.
+- SWDIO in is PB12, on the header pin next to SWCLK.
+- SRST is PB5. Thus all target signals except Vref are on header P2.
+
+The board has no level shifters and no target power switch.
 Connect only targets with a 3.3 V supply.
-The Nucleo and the target must have a common ground.
+The board and the target must have a common ground.
 
-The firmware on the Nucleo has these limits:
+The firmware on the board has these limits:
 
-- The personalities Versaloon and CMSIS-DAP, alone or in a multi image. A multi image keeps the last 8 KB flash sector of bank 2 for the stored personality (see [Multi image](usb-device.md#multi-image)).
-- No WCH-Link personality. The one-wire engine of the STM32H5 is #98. The build stops with an error for `wch-link`.
-- Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE` refuses the request (see [Firmware update](firmware-update.md)).
-- Bit-bang JTAG only. The JTAG fast path is #97.
+- The personalities Versaloon, CMSIS-DAP and WCH-Link, alone or in a multi image. A multi image keeps the last 8 KB flash sector of bank 2 for the stored personality (see [Multi image](usb-device.md#multi-image)).
+- A one-wire target (WCH-Link, CH32V00x) needs an external pull-up of 2.2 kΩ from SWDIO to 3.3 V. The internal pull-ups are too slow for the read bits (see [One-wire timer](wch-link.md#one-wire-timer)).
+- Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE`, the bootloader code `0xB0` and the key at the reset start the ROM USB DFU (see [STM32H5: ROM USB DFU](firmware-update.md#stm32h5-rom-usb-dfu)).
+- The JTAG fast path needs a wire from PB13 to PB3 (see [Wiring to the target](#wiring-to-the-target)).
 - The UART bridge supports 3815 baud to 15.6 Mbaud. USART1 runs from the 250 MHz bus clock, and the firmware does not use the USART prescaler. The bridge refuses a lower baud rate, for example 2400 baud.
-- The timing of the bit-bang engines is not yet measured at 250 MHz (#94).
+
+PC13 is in the backup domain.
+It can sink only 3 mA, and its speed is low.
+Thus PC13 is good for the LED, but do not use it for a target signal.
 
 ### Wiring to the target
 
-The pins are on the ST morpho connectors CN7 and CN10.
-Some pins are also on the ARDUINO connectors.
+![Pinout of the WeAct STM32H523 core board](images/weacth523-pinout.svg)
 
-| Signal | Pin | Connector | Note |
+| Signal | Pin | Header | Note |
 |---|---|---|---|
-| TCK, SWCLK | PB13 | CN10 pin 30 | |
-| TMS, SWDIO (output) | PA6 | CN10 pin 13 (D12) | Connect a wire from PA6 to PA7. Connect the target to one of the two pins. |
-| TMS, SWDIO (input) | PA7 | CN10 pin 15 (D11) | |
-| TDI | PB15 | CN10 pin 26 | |
-| TDO | PB14 | CN10 pin 28 | |
-| TRST | PB4 | CN10 pin 27 (D5) | Optional |
-| SRST | PB10 | CN10 pin 25 (D6) | |
-| RTCK | PA0 | CN7 pin 28 (A0) | Optional |
-| UART TX (to target RX) | PA9 | CN10 pin 2 | USART1 of the serial bridge |
-| UART RX (from target TX) | PA10 | CN10 pin 4 | |
-| Vref sense | PB0 | CN7 pin 34 (A3) | Optional. Connect the target supply, 3.3 V maximum. No divider. |
-| GND | GND | CN7 pin 8 | |
+| TMS, SWDIO (input) | PB12 | P2 pin 1 | Connect the target here. For a one-wire target, add a 2.2 kΩ pull-up to 3.3 V. |
+| TCK, SWCLK | PB13 | P2 pin 2 | |
+| TDO | PB14 | P2 pin 3 | |
+| TDI | PB15 | P2 pin 4 | |
+| RTCK | PA8 | P2 pin 5 | Optional |
+| UART TX (to target RX) | PA9 | P2 pin 6 | USART1 of the serial bridge |
+| UART RX (from target TX) | PA10 | P2 pin 7 | |
+| TRST | PB4 | P2 pin 12 | Optional. See [Hardware test](#hardware-test) for JTAG after SWD. |
+| TCK link | PB3 | P2 pin 11 | For the JTAG fast path: connect a wire from PB13 (P2 pin 2) to PB3. Do not connect the target. |
+| SRST | PB5 | P2 pin 13 | |
+| GND | GND | P2 pin 17 or 19 | |
+| TMS, SWDIO (output) | PA6 | P1 pin 9 | Connect a wire from PA6 to PB12 (P2 pin 1). |
+| Vref sense | PB0 | P1 pin 7 | Optional. Connect the target supply, 3.3 V maximum. No divider. |
 
-The default solder bridges of the NUCLEO-H533RE also connect PB14 and PB15 to CN10 pins 35 and 37, and to the ARDUINO pins D1 and D0.
+The last four pins of P2 are GND, 5 V, GND and 3.3 V (pins 17 to 20).
+Without the wire from PB13 to PB3, JTAG fails at the speeds of the fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
+P2 pin 8 is PA11 (USB D-). Do not connect the TCK link there.
 
 The board has these other signals:
 
 | Signal | Pin | Note |
 |---|---|---|
-| State LED | PA5 | LD2, green. The board has no power LED and no USB LED. |
-| Key | PC13 | B1, the blue button. |
-| USB | PA11, PA12 | USB Type-C connector CN3. The D+ pull-up is in the STM32H5. |
+| State LED | PC13 | Blue LED, active low. The board has no power LED and no USB LED. |
+| Key | PA0 | KEY button, active low. The firmware sets the pull-up of the pin. |
+| USB | PA11, PA12 | USB Type-C connector. The D+ pull-up is in the STM32H5. |
+| SWD of the dongle MCU | PA13, PA14 | SWD header P3: SWDIO on pin 2, SWCLK on pin 3. The firmware does not use these pins. |
 
 Without a Vref connection, the Vref value of the Versaloon personality is not valid.
 
 ### Flash the firmware
 
-Connect the USB connector of the on-board STLINK-V3EC (CN1).
-Write the `standalone` image with the STLINK-V3EC, for example:
+The board has no on-board debug probe.
+Use the USB DFU (Device Firmware Upgrade) bootloader in the system memory of the STM32H5.
+To write the firmware, do these steps:
 
-```sh
-openocd -f interface/stlink.cfg -f target/stm32h5x.cfg \
-        -c "program versaloon-ng-standalone.bin 0x08000000 verify reset exit"
-```
+1. Hold the BOOT0 button down.
+2. Push and release the NRST button.
+3. Release the BOOT0 button. The board shows as the USB device `0483:df11`.
+4. Write the `standalone` image with `dfu-util`:
 
-Then connect the user USB connector CN3 to the host.
-The firmware keeps the SW-DP of the STM32H5 on, so the STLINK-V3EC can connect at any time.
-The STLINK-V3EC uses PA13 and PA14. The firmware does not use these pins.
+   ```sh
+   dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D versaloon-ng-standalone.bin
+   ```
+
+5. Disconnect the board and connect it again. The firmware starts.
+
+The `:leave` request does not start the firmware on this board, so step 5 is necessary.
+After the `:leave` request, `dfu-util` can show `Error during download get_status`.
+This message has no effect: the write is complete.
+
+A debug probe on the SWD header P3 can also write the `standalone` image at `0x08000000`.
+
+### Hardware test
+
+`tools/probe_hw_test.py` tests the dual image on an STM32F1 target (see [Multi image hardware test](usb-device.md#multi-image-hardware-test)).
+Connect TMS, TCK, TDI, TDO, TRST, SRST and GND to the JTAG connector of the target.
+Connect the wire from PA6 to PB12, and the wire from PB13 to PB3.
+Connect PA9 to PA10 for the UART loopback.
+
+The script runs SWD before JTAG with each tool.
+The first run had no TRST and no SRST wire.
+All SWD steps passed, and all JTAG steps failed with `JTAG scan chain interrogation failed: all ones`.
+The TDI and TDO wires were correct: a GPIO test checked them.
+After the SWD-to-JTAG switch sequence, OpenOCD found the two TAPs of the target on JTAG.
+With TRST and SRST wired, all JTAG steps passed.
+The test did not show which of the two signals is necessary.
+
+Status: the test passed on 2026-10-25 (work item #95).
+Probe: WeAct STM32H523 core board.
+Image: `weacth523-dual` preset (`VSL_PERSONALITIES=versaloon,cmsis-dap`), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
+Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
+Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
+
+| Check | Versaloon | CMSIS-DAP |
+|---|---|---|
+| Switch with the switch request on EP0 | pass | pass |
+| Switch with the key (3 s), also after a reset of the board | pass | pass |
+| Serial loopback, quick set (3 baud rates, 8N and 8E, 1 and 2 stop bits) | pass | pass |
+| `DAP_UART_*` loopback | - | pass |
+| OpenOCD SWD, 1000 and 2000 kHz | pass | pass |
+| OpenOCD JTAG, 1000 and 9000 kHz | pass | pass |
+| pyOCD SWD, 1000 and 2000 kHz | - | pass |
+| pyOCD JTAG, 1000 and 9000 kHz | - | pass |
+| probe-rs SWD, 1000 and 2000 kHz | - | pass |
+| probe-rs JTAG, 1000 kHz | - | pass |
+
+Findings:
+
+- One run of the script failed on OpenOCD JTAG with the `vsllink` driver.
+  At 1000 kHz, the read back of the flash had 10 bytes with one wrong bit each. Each wrong bit was 0 in the image and 1 in the read back.
+  The verify step calculates a CRC on the target, and it passed. Thus the error was in the read path, not in the flash.
+  At 9000 kHz, the flash write stopped with `Invalid ACK (6) in DAP response`.
+  This run came directly after a change to the wires.
+  Five more runs of the script passed: two runs of the Versaloon steps, two runs of the Versaloon and UART steps, and one full run.
+  Three more read backs of the 32 KiB image with OpenOCD and the `vsllink` driver on JTAG at 1000 kHz had no errors.
+  The cause is not known. The timing of the bit-bang engines at 250 MHz is not yet measured (#94).
+- The test did not cover `--full-uart`, the old switch commands, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.

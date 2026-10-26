@@ -2,7 +2,7 @@
 
 // The board of this build: board::current. CMake defines one of
 // VSL_BOARD_MINI, VSL_BOARD_OTHERUSE, VSL_BOARD_STLINKV2 or
-// VSL_BOARD_NUCLEOH533 from BOARD.
+// VSL_BOARD_WEACTH523 from BOARD.
 // The protocol and the engines read board data only through board::current.
 // With VSL_DEBUG_SWD, board::current is the debug variant of the board.
 
@@ -12,10 +12,10 @@
 #include "board/boards/OtherUse.h"
 #elif defined(VSL_BOARD_STLINKV2)
 #include "board/boards/StLinkV2.h"
-#elif defined(VSL_BOARD_NUCLEOH533)
-#include "board/boards/NucleoH533.h"
+#elif defined(VSL_BOARD_WEACTH523)
+#include "board/boards/WeActH523.h"
 #else
-#error "No board selected: define VSL_BOARD_MINI, VSL_BOARD_OTHERUSE, VSL_BOARD_STLINKV2 or VSL_BOARD_NUCLEOH533"
+#error "No board selected: define VSL_BOARD_MINI, VSL_BOARD_OTHERUSE, VSL_BOARD_STLINKV2 or VSL_BOARD_WEACTH523"
 #endif
 
 namespace board {
@@ -26,8 +26,8 @@ inline constexpr const Definition &selected = mini;
 inline constexpr const Definition &selected = otherUse;
 #elif defined(VSL_BOARD_STLINKV2)
 inline constexpr const Definition &selected = stLinkV2;
-#elif defined(VSL_BOARD_NUCLEOH533)
-inline constexpr const Definition &selected = nucleoH533;
+#elif defined(VSL_BOARD_WEACTH523)
+inline constexpr const Definition &selected = weActH523;
 #endif
 
 // A debug build with VSL_DEBUG_SWD keeps the SW-DP of the dongle MCU on

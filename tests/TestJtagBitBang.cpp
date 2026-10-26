@@ -16,6 +16,7 @@ namespace {
 using jtag::BitBangPort;
 using jtag::Clocking;
 using jtag::halfPeriodCycles;
+using jtag::TckIdle;
 using jtag::Timing;
 using Pins = vsltest::MockJtagPins<>;
 
@@ -133,6 +134,35 @@ TEST_CASE("JTAG bit-bang: timed half periods are not shorter than the speed") {
       CHECK(edge - last >= 36);
       CHECK(edge - last <= 38);
       last = edge;
+   }
+}
+
+TEST_CASE("JTAG bit-bang: the code before each edge does not change the half period") {
+   // The edge comes 20 cycles after the end of the wait. A wait from a time
+   // stamp after the edge (the engine before #78) adds this code to each
+   // half period.
+   for(const TckIdle idle : { TckIdle::Low, TckIdle::High }) {
+      CAPTURE(static_cast<bool>(idle));
+      Pins pins;
+      pins.edgeDelayCycles = 20;
+      std::vector<uint32_t> edges;
+      if(idle == TckIdle::Low) {
+         BitBangPort<Pins> port(pins);
+         REQUIRE(port.setSpeed(1000));
+         REQUIRE(shift(port, 16, { 0x12, 0x34 }, { 0, 0 }).ok);
+      } else {
+         BitBangPort<Pins, TckIdle::High> port(pins);
+         REQUIRE(port.setSpeed(1000));
+         REQUIRE(shift(port, 16, { 0x12, 0x34 }, { 0, 0 }).ok);
+      }
+      // The mock starts with TCK low: with TckIdle::High, the first TCK low
+      // is no edge.
+      REQUIRE(pins.edges.size() == (idle == TckIdle::Low ? 32 : 31));
+      for(std::size_t i = 1; i < pins.edges.size(); ++i) {
+         CAPTURE(i);
+         CHECK(pins.edges[i] - pins.edges[i - 1] >= 36);
+         CHECK(pins.edges[i] - pins.edges[i - 1] <= 38);
+      }
    }
 }
 
