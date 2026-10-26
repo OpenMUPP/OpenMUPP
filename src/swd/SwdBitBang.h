@@ -136,8 +136,8 @@ inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'0
 // Untimed (delay 0): NOP instructions in each half period. They keep a
 // minimum low half period, so SWDIO has a setup time before the rising
 // edge, and the target has time to drive SWDIO before the read. With the
-// loop code, one bit takes about 27 cycles: 2.7 MHz measured at delay 0
-// on the OtherUse.
+// loop code, one bit takes about 27 to 30 cycles: 2.42 to 2.7 MHz measured
+// at delay 0 on the OtherUse, it changes with the code layout.
 inline constexpr uint32_t untimedPadNops = 6;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
@@ -268,7 +268,7 @@ class BitBangPort final : public protocol::SwdPort {
    // CMSIS-DAP: SWCLK in Hz, rounded down to the nearest available rate.
    // From maxClockHz, the engine runs untimed on a slow core (as at delay
    // 0). The code limits the timed rate: 1.3 to 1.56 MHz on the STM32F103
-   // (#117), 5.6 MHz on the STM32H5.
+   // (#117), 5.6 MHz on the STM32H5 (measured before #117).
    void setClockHz(uint32_t hz) {
       if(hz >= maxClockHz && runsUntimed(pins_.coreHz())) {
          setHalfCycles(halfPeriodCycles(pins_.coreHz(), 0), false);

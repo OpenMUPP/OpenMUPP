@@ -50,7 +50,9 @@ An interrupt adds at least its entry and exit (24 cycles on the Cortex-M3), so t
 An edge within the slack makes the next half period shorter by up to 32 cycles.
 
 The edges have the jitter of the wait loop: up to one pass of it.
-Thus single periods are up to about 12 % shorter or longer than requested at 1 MHz, but the mean is correct.
+Thus single periods are shorter or longer than requested, but the mean is correct.
+An edge within the slack also makes the next half period shorter.
+On the OtherUse, the shortest SWD period at 1 MHz was 880 ns at #78, and 846 ns (15 % shorter) after #117.
 
 ### Rejected options
 
@@ -68,7 +70,8 @@ Thus single periods are up to about 12 % shorter or longer than requested at 1 M
 
 - The timed rate is limited by the code of the half periods.
   The pacer adds about 10 to 15 cycles to each edge.
-  On the STM32F103, the code of a timed SWD half period is about 23 to 28 cycles: a request of 1.8 MHz gives 1.3 to 1.56 MHz (before this change: 1.79 MHz).
+  On the STM32F103, the code of a timed SWD half period is about 23 to 28 cycles.
+  Thus a request of 1.8 MHz gives 1.3 to 1.56 MHz. Before #78, it gave 1.79 MHz, and after !91 0.96 MHz.
   The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
 - The untimed SWD engine (`delay` 0, or 3 MHz and more in CMSIS-DAP) does not use the pacer.
   Its rate depends on the code: 2.42 to 2.7 MHz on the OtherUse.
@@ -130,7 +133,7 @@ Findings:
 
 - Up to 1 MHz, all engines are within 0.5 % of the request, and the mean rate is never faster than the request.
   Before this change, the error was −6 % to −40 % for JTAG and up to +4.8 % for RVSWD.
-- The single periods spread by the jitter of the wait loop. At 1 MHz, the shortest SWD period is 880 ns.
+- The single periods spread by the jitter of the wait loop. At 1 MHz, the shortest SWD period was 880 ns in this measurement.
 - The first version of the pacer had a smaller slack (16 cycles, then 12 cycles from the end of the wait), and more state for each edge.
   On the OtherUse, the normal delay was often above the slack, so the pacer started the deadlines again at many edges: SWD was 2 % slower at 100 kHz and 14 % slower at 235 kHz.
   The state for each edge made the code of a half period at 1 MHz longer than 36 cycles: SWD was 41 % slower.
@@ -138,7 +141,7 @@ Findings:
 
 ### SWD pacer in registers
 
-The first version of this change limited timed SWD on the STM32F103 to about 1 MHz (#117).
+After !91, timed SWD on the STM32F103 was limited to about 1 MHz (#117).
 The cause was the place of the pacer: it was a member of the SWD engine.
 The compiler assumes that a store to a GPIO register can change a `uint32_t` member.
 Thus it loaded and stored the deadline at each edge.
