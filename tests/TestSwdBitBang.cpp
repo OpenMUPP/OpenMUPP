@@ -332,12 +332,14 @@ TEST_CASE("SWD bit-bang: the code before each edge does not change the half peri
    // or shorter by this code.
    Bench bench(1, 0, 1);
    bench.pins.edgeDelayCycles = 20;
+   const uint32_t start = bench.pins.time;
    uint32_t data = 0;
    CHECK(bench.port.transfer(readDpidr, data) == pswd::ackOk);
    const auto &edges = bench.pins.edges;
    REQUIRE(edges.size() == 2 * transferEdges(1));
-   // The first edge is late (the transfer starts after a pause), so the
-   // deadlines start again after it: its next half period also has the code.
+   // The first half period starts with the operation, so the first edge
+   // also comes after a full half period.
+   CHECK(edges[0] - start >= 154);
    CHECK(edges[1] - edges[0] <= 154 + 20 + 2);
    for(std::size_t i = 2; i < edges.size(); ++i) {
       CAPTURE(i);
