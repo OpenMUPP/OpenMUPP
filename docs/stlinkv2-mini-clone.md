@@ -30,6 +30,7 @@ We read these values with SWD:
 | `DBGMCU_IDCODE` | `0x20030410` (medium density, revision X) | The same |
 | CPUID | `0x412FC230` (Cortex-M3 r2p0) | `0x411FC231` (r1p1) |
 | Flash size register | 128 KB | 64 KB or 128 KB |
+| Flash | 128 KB: a write and erase of the page at `0x0801FC00` does not change `0x0800FC00`, and a read at `0x08020000` gives a bus error | 64 KB or 128 KB |
 | SRAM | 96 KB or more: 4 test words to `0x20017FF0` keep different values | 20 KB |
 | Unique ID (`0x1FFFF7E8`) | All zeros | A unique value |
 | Boot alias of an empty flash | `0x1FFFB000` | The flash, or the system memory at `0x1FFFF000` (BOOT0 high) |
