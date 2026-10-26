@@ -35,7 +35,8 @@ We read these values with SWD:
 | Boot alias of an empty flash | `0x1FFFB000` | The flash, or the system memory at `0x1FFFF000` (BOOT0 high) |
 
 The firmware uses only 64 KB flash and 20 KB SRAM (see [MCU family](boards.md#mcu-family)).
-The USB, GPIO, ADC, timer and flash peripherals work with the STM32F103 drivers (see [Hardware test](#hardware-test)).
+The USB and GPIO peripherals work with the STM32F103 drivers (see [Hardware test](#hardware-test)).
+The test did not check the ADC (Vref sense) and the timers (WCH-Link one-wire) of the firmware.
 
 The unique ID is zero, so the USB serial number is `000000000000000000000000`.
 Two of these probes on one host have the same serial number.
