@@ -115,7 +115,7 @@ Each image has a different start address:
 | `app-10k` | `0x08002800` | 54 KB | Behind the legacy 10 KB Versaloon bootloader of the existing boards. |
 
 The Mini and the OtherUse get all three images.
-The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
+The ST-Link/V2 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image. They never had the legacy bootloader, so they get no `app-10k` image.
 The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
 A multi image has less flash, because the end of the flash holds the stored personality.
 This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the STM32H5 board.
@@ -124,8 +124,8 @@ The build writes these files into the build directory:
 
 - `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-ng-app-10k.bin`.
 - `versaloon-bootloader/versaloon-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
-  Only the Mini and the OtherUse have a bootloader.
-- `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of the Mini and the OtherUse.
+  Only the STM32F1 boards have a bootloader: the Mini, the OtherUse, the ST-Link/V2 and the ST-Link/V2 mini clone.
+- `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
   It has `versaloon-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
   The `.bin` file has `0xFF` between the two.
 

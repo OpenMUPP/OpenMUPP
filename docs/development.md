@@ -26,12 +26,13 @@ Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTR
 One linker script of the board links all images. The STM32F1 boards use `ldscripts/mem-f103.ld` (see [MCU family](boards.md#mcu-family)).
 CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
 
-For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
+For the STM32F1 boards (`VSL_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `versaloon-bootloader` for the same board.
 The target is `versaloon-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
-There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
+Only the boards with the legacy bootloader (`VSL_LEGACY_BOOTLOADER_BOARDS`: the Mini and the OtherUse) get the `app-10k` image.
+There is no bootloader for the WeAct STM32H523 core board, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
 
 ## CMake options
 
@@ -41,7 +42,7 @@ These options select the board, the personality and the debug features:
 | Option | Default | Description |
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [the README](../README.md#boards)). |
-| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse. |
+| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the STM32F1 boards. |
 | `VSL_PERSONALITIES` | empty (`versaloon`) | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `0403:9b3c` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
 | `VSL_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `VSL_PERSONALITIES`. Empty: the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `VSL_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
@@ -336,7 +337,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
 - `build-mini`: release build of all images of the Mini with the `mini` preset, plus the size check of each image in `vsl-images.txt`.
   The build jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
-  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
+  The jobs for the STM32F1 boards also build `versaloon-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
 - `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
   GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -triple, -vsl+dap+wch]` or `build: [otheruse]`.
@@ -372,7 +373,7 @@ Outside CI, CMake uses a source in `build/_deps` as it is, and does not check th
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
 The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
-The ST-Link/V2 has the `standalone` image only.
+The ST-Link/V2 and the ST-Link/V2 mini clone have the `standalone`, `app-8k` and `with-bootloader` images.
 The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
 The tag of a multi image has a `+`, also in the name of the artifact archive and of the matrix job.
 In a URL, encode the full job name, for example in a link to `/-/jobs/artifacts/<ref>/download?job=<job>`.

@@ -112,6 +112,31 @@ From the USB connector, the pads are:
 
 Connect a debug probe to these pads to write the firmware.
 
+## Bootloader
+
+The board runs the firmware behind `versaloon-bootloader` (board `stlinkv2miniclone` of the bootloader).
+Then you can update the firmware over USB, without the SWD pads.
+Write the combined image `versaloon-ng-with-bootloader.hex` one time with a debug probe on the SWD pads (see [Install the bootloader](firmware-update.md#install-the-bootloader)).
+Remove the read protection first (see [Read protection of the original firmware](#read-protection-of-the-original-firmware)).
+
+The bootloader starts in these conditions:
+
+1. The firmware sends a boot request (see [Start the bootloader](firmware-update.md#start-the-bootloader)).
+2. The application image is not valid.
+3. SWIM is connected to GND at the start. This is the key of the board.
+
+To start the bootloader with the key, do these steps:
+
+1. Disconnect the board from USB.
+2. Connect a wire from SWIM (header pin 3) to GND (header pin 5).
+3. Connect the board to USB. The bootloader starts.
+4. Remove the wire.
+
+The key also works when the application is valid but does not run.
+Thus a broken application does not need a debug probe.
+The SWIM pins (PB7 to PB11) have a pull-up on the board, so the key is released when no wire is connected.
+The firmware does not use the SWIM pin as a key.
+
 ## Read protection of the original firmware
 
 The original firmware has read protection level 1.
