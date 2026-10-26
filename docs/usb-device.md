@@ -32,6 +32,8 @@ It does not sleep while USB events wait in the queue (`UsbStack::hasPendingEvent
 An event that arrives after the USB poll has no pending interrupt to stop the sleep.
 For example, the double-buffered OUT endpoint reports a waiting packet from the main loop when the endpoint is armed again.
 Without this check, such an event waits for the next SysTick interrupt, up to 1 ms.
+The main loop also does not sleep while a debugger is connected (`DHCSR.C_DEBUGEN` is 1).
+On the STM32H5, the debugger reads zeros from flash, SRAM and the peripherals while the core sleeps.
 The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
 A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
