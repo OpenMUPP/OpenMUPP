@@ -237,6 +237,8 @@ On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, 
 The script switches to the Versaloon personality and runs the serial loopback test and OpenOCD with the `vsllink` driver.
 It then switches to the CMSIS-DAP personality and runs the serial and `DAP_UART_*` loopback tests, OpenOCD, pyOCD and probe-rs.
 Each tool runs on SWD and JTAG, at each speed of `--swd-speeds` and `--jtag-speeds`.
+The default speeds are 1000, 2000 and 4000 kHz for SWD, and 1000 and 9000 kHz for JTAG.
+In the CMSIS-DAP personality on an STM32F1 probe, only 4000 kHz runs the untimed SWD engine (`swd::maxClockHz`).
 The script erases the flash of the target:
 
 ```sh
