@@ -230,6 +230,7 @@ Findings:
   The rounding to full core cycles makes the nominal rate lower than the request: 2.3 % below at 4 MHz (3906 kHz), 0.8 % below at 1800 kHz (1786 kHz).
   Up to 1 MHz, JTAG is within 0.15 % of the request.
 - The code of a timed SWD half period is about 22 cycles: a request of 12 MHz gives 5.6 MHz.
+  This is before #117. See [SWD pacer on the STM32H5](#swd-pacer-on-the-stm32h5) for the values after it.
 - The untimed SWD engine of the first test gave 13 MHz (median period 76 ns) at a request of 4 MHz.
   Thus the H5 does not use it (`swd::runsUntimed()`): the timed engine makes all clocks, also at `delay` 0 (1.85 MHz).
 - With a slack of 32 cycles, JTAG at 4 MHz had high half periods of 60 ns and periods of 178 ns (5.6 MHz).
@@ -238,6 +239,32 @@ Findings:
 - The JTAG bit-bang engine gives about 3.4 MHz at a request of 4 MHz, and 4.9 MHz at most.
   `jtag::bitBangMaxKHz` is only for the choice between the bit-bang engine and the SPI fast path. See [STM32H5 JTAG fast path](#stm32h5-jtag-fast-path) for the STM32H5 value.
 - RVSWD on the STM32H5 is not measured.
+
+### SWD pacer on the STM32H5
+
+Measured on 2026-10-26 (#117) with the setup above, with the `weacth523-cmsis-dap` image.
+The Saleae Logic Pro 8 had SWCLK on channel 7, with a glitch filter of 20 ns.
+"Before" is `dev` at `64d5245`, "after" is the local pacer of #117.
+The rate is the mean over the runs, against the nominal period. "Median" is the median of all periods.
+
+| Request | Nominal period | Before | After | Shortest period after |
+|---|---|---|---|---|
+| 1000 kHz | 1000 ns | 998.9 kHz (−0.11 %) | 999.7 kHz (−0.03 %) | 968 ns |
+| 2000 kHz | 504 ns | 1978.5 kHz (−0.28 %) | 1983.5 kHz (−0.03 %) | 472 ns |
+| 4000 kHz | 256 ns | 3882.8 kHz (−0.60 %) | 3900.5 kHz (−0.15 %) | 232 ns |
+| 5000 kHz | 200 ns | 4964.3 kHz (−0.71 %) | 4998.7 kHz (−0.03 %) | 180 ns |
+| 6000 kHz | 168 ns | 5928.7 kHz (−0.40 %) | 5963.7 kHz (+0.19 %) | 134 ns |
+| 8000 kHz | 128 ns | 4807.7 kHz (median) | 6024.1 kHz (median) | 134 ns |
+| 10000 kHz | 104 ns | 5555.6 kHz (median) | 5208.3 kHz (median) | 136 ns |
+| 20000 kHz | 56 ns | 6410.3 kHz (median) | 6097.6 kHz (median) | 136 ns |
+
+Findings:
+
+- Up to 6 MHz, the mean rate after #117 is within 0.2 % of the nominal period, and never faster than the request.
+  At 6 MHz, the mean is 0.19 % above the nominal period (5952 kHz), but below the request.
+- From 8 MHz, the code limits the clock to 5.2 to 6.1 MHz (median). Before #117, it was 4.8 to 6.4 MHz.
+  Thus the code limit on the STM32H5 changes less than on the STM32F103. Below the limit, the error is smaller: −0.15 % instead of −0.60 % at 4 MHz.
+- All requests used the timed engine. All reads were correct.
 
 ### STM32H5 JTAG fast path
 

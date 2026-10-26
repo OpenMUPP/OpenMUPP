@@ -842,7 +842,7 @@ Maximum SWD clock: the untimed engine. In this test, it ran from 1.85 MHz. Since
 Its real rate depends on the code (2.42 to 2.7 MHz on the OtherUse, see [Clock pacing](clock-pacing.md)).
 All runs passed up to this clock with the wiring of this test.
 A request above 3 MHz gives the same clock. A request from 1.85 MHz to 3 MHz now gives the timed engine at 1.3 to 1.56 MHz.
-This test used the OtherUse. On the STM32H5, all requests are timed: a request above 1.85 MHz gives a faster clock, up to about 5.6 MHz (see [Clock pacing](clock-pacing.md#stm32h5)).
+This test used the OtherUse. On the STM32H5, all requests are timed: a request above 1.85 MHz gives a faster clock, up to 5.2 to 6.1 MHz (see [Clock pacing](clock-pacing.md#swd-pacer-on-the-stm32h5)).
 
 Findings:
 
