@@ -293,7 +293,7 @@ It also exits with code 1 when a run in one of the files failed.
 The default speeds are 1000, 4500 and 9000 kHz for JTAG, and 250 and 2000 kHz for SWD.
 At 1000 kHz, JTAG uses bit-bang. At 4500 and 9000 kHz, JTAG uses the SPI fast path.
 The OpenOCD `vsllink` driver has fixed SWD steps: 250 kHz gives 235 kHz SWCLK, and 2000 kHz gives the fastest SWCLK (1.85 MHz in the table).
-At this setting, the firmware does not time SWCLK. A logic analyzer measured 2.7 MHz on the OtherUse, see [Clock pacing](clock-pacing.md).
+At this setting, the firmware does not time SWCLK. A logic analyzer measured 2.42 to 2.7 MHz on the OtherUse. The rate changes with the code layout, see [Clock pacing](clock-pacing.md).
 All requests from 235 to 1849 kHz give 235 kHz.
 These options change the run:
 

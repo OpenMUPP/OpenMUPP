@@ -78,7 +78,8 @@ SEED = 0x5A17
 SETUP_SPEED_KHZ = 1000
 # probe-rs cannot set the target clock: TCK <= 8 MHz / 6
 PROBE_RS_JTAG_MAX_KHZ = 1333
-DEFAULT_SWD_SPEEDS = [1000, 2000]
+# 4000 kHz: the untimed SWD engine of CMSIS-DAP on the STM32F1 (swd::maxClockHz)
+DEFAULT_SWD_SPEEDS = [1000, 2000, 4000]
 DEFAULT_JTAG_SPEEDS = [1000, 9000]
 STEP_TIMEOUT_S = 300
 

@@ -237,6 +237,8 @@ On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, 
 The script switches to the Versaloon personality and runs the serial loopback test and OpenOCD with the `vsllink` driver.
 It then switches to the CMSIS-DAP personality and runs the serial and `DAP_UART_*` loopback tests, OpenOCD, pyOCD and probe-rs.
 Each tool runs on SWD and JTAG, at each speed of `--swd-speeds` and `--jtag-speeds`.
+The default speeds are 1000, 2000 and 4000 kHz for SWD, and 1000 and 9000 kHz for JTAG.
+In the CMSIS-DAP personality on an STM32F1 probe, only 4000 kHz runs the untimed SWD engine (`swd::maxClockHz`).
 The script erases the flash of the target:
 
 ```sh
@@ -731,7 +733,7 @@ An interrupt makes a period longer, but not shorter.
 At `delay` 0, the firmware runs untimed, without the cycle counter.
 Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`).
 The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
-Thus the SWCLK rate depends on the code. A logic analyzer measured 2.7 MHz (62 % duty) on the OtherUse, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md), #118).
+Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the OtherUse, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md), #118).
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 On the STM32H5 (250 MHz), `delay` 0 is timed at 1.85 MHz: the untimed engine there gives 13 MHz (`swd::runsUntimed()`, see [Clock pacing](clock-pacing.md#stm32h5)).

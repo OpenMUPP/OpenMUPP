@@ -833,20 +833,21 @@ The Versaloon personality (OtherUse board, same firmware version before E6, `vsl
 | 1.85 MHz (untimed) | 2.54 s | 0.81 s |
 
 The `vsllink` driver has fixed SWD steps. Thus the comparison is not exact at 250 kHz, where the clocks are 250 kHz and 235 kHz.
-At 2000 kHz, both personalities run the untimed engine.
+At 2000 kHz, both personalities ran the untimed engine. This firmware is from before #118: now CMSIS-DAP runs untimed only from 3 MHz.
 The write time is the same (2.55 s and 2.54 s).
 The read time with E6 is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon personality (91 and 79 KiB/s).
 Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
 
-Maximum SWD clock: the untimed engine from 1.85 MHz (`maxClockHz` in `src/swd/SwdBitBang.h`). Its real rate depends on the code (2.7 MHz on the OtherUse, see [Clock pacing](clock-pacing.md)).
+Maximum SWD clock: the untimed engine. In this test, it ran from 1.85 MHz. Since #118, it runs from 3 MHz (`maxClockHz` in `src/swd/SwdBitBang.h`).
+Its real rate depends on the code (2.42 to 2.7 MHz on the OtherUse, see [Clock pacing](clock-pacing.md)).
 All runs passed up to this clock with the wiring of this test.
-A request above 1.85 MHz gives the same clock.
-This test used the OtherUse. On the STM32H5, all requests are timed: a request above 1.85 MHz gives a faster clock, up to about 5.6 MHz (see [Clock pacing](clock-pacing.md#stm32h5)).
+A request above 3 MHz gives the same clock. A request from 1.85 MHz to 3 MHz now gives the timed engine at 1.3 to 1.56 MHz.
+This test used the OtherUse. On the STM32H5, all requests are timed: a request above 1.85 MHz gives a faster clock, up to 5.2 to 6.1 MHz (see [Clock pacing](clock-pacing.md#swd-pacer-on-the-stm32h5)).
 
 Findings:
 
 - Write time does not improve above 1 MHz. The flash programming time is probably the limit. This test did not measure it.
-- The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine runs untimed from 1.85 MHz, so both requests give the same clock.
+- The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine ran untimed from 1.85 MHz, so both requests gave the same clock.
 - E6 made the read time about 20% to 25% longer at 1000 kHz and 2000 kHz (0.56 s to 0.70 s at 2000 kHz). The 4000 kHz run shows 30%, but it is noisy. Write time and the 250 kHz read time did not change. The cause is not measured. Issue #35 tracks it.
 - After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause is probably the wiring. No log proves this, and the exact wire is not known.
 - `probe-rs info` does not print the DPIDR value. Without `--verbose`, it prints "Connecting to the chip was unsuccessful", although `download`, `verify`, `gdb` and `reset` connect. With `--verbose` (run before E6), it shows the DPv1 MemoryAP and the ROM table, and stops with "does not support SWD multidrop". This is normal for an STM32F1 target.

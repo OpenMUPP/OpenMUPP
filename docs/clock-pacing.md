@@ -50,7 +50,9 @@ An interrupt adds at least its entry and exit (24 cycles on the Cortex-M3), so t
 An edge within the slack makes the next half period shorter by up to 32 cycles.
 
 The edges have the jitter of the wait loop: up to one pass of it.
-Thus single periods are up to about 12 % shorter or longer than requested at 1 MHz, but the mean is correct.
+Thus single periods are shorter or longer than requested, but the mean is correct.
+On the OtherUse, the shortest SWD period at 1 MHz was 880 ns at #78, and 846 ns (15 % shorter) after #117.
+The two values come from different setups (sample rate and target), so a part of the difference is not from the code.
 
 ### Rejected options
 
@@ -68,11 +70,13 @@ Thus single periods are up to about 12 % shorter or longer than requested at 1 M
 
 - The timed rate is limited by the code of the half periods.
   The pacer adds about 10 to 15 cycles to each edge.
-  On the STM32F103, timed SWD thus gives at most about 1 MHz: a request of 1.8 MHz gives 0.96 MHz (before this change: 1.79 MHz).
-  The clock is never faster than the request. Issue #117 tracks a faster mode.
-- The untimed SWD engine (`delay` 0, or 1.85 MHz and more in CMSIS-DAP) does not use the pacer.
-  Its rate depends on the code: 2.5 MHz before this change and 2.7 MHz after it, on the OtherUse.
-  This is faster than the 1.85 MHz of the table. Issue #118 tracks this.
+  On the STM32F103, the code of a timed SWD half period is about 23 to 28 cycles.
+  Thus a request of 1.8 MHz gives 1.3 to 1.56 MHz. Before #78, it gave 1.79 MHz, and after !91 0.96 MHz.
+  The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
+- The untimed SWD engine (`delay` 0, or 3 MHz and more in CMSIS-DAP) does not use the pacer.
+  Its rate depends on the code: 2.42 to 2.7 MHz on the OtherUse.
+  At `delay` 0, this is faster than the 1.85 MHz of the table (#118).
+  In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz` (3 MHz), so a request does not give a faster clock.
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
@@ -129,11 +133,55 @@ Findings:
 
 - Up to 1 MHz, all engines are within 0.5 % of the request, and the mean rate is never faster than the request.
   Before this change, the error was −6 % to −40 % for JTAG and up to +4.8 % for RVSWD.
-- The single periods spread by the jitter of the wait loop. At 1 MHz, the shortest SWD period is 880 ns.
+- The single periods spread by the jitter of the wait loop. At 1 MHz, the shortest SWD period was 880 ns in this measurement.
 - The first version of the pacer had a smaller slack (16 cycles, then 12 cycles from the end of the wait), and more state for each edge.
   On the OtherUse, the normal delay was often above the slack, so the pacer started the deadlines again at many edges: SWD was 2 % slower at 100 kHz and 14 % slower at 235 kHz.
   The state for each edge made the code of a half period at 1 MHz longer than 36 cycles: SWD was 41 % slower.
   Measure the rate again after a change of the engines, the pacer or the core clock.
+
+### SWD pacer in registers
+
+After !91, timed SWD on the STM32F103 was limited to about 1 MHz (#117).
+The cause was the place of the pacer: it was a member of the SWD engine.
+The compiler assumes that a store to a GPIO register can change a `uint32_t` member.
+Thus it loaded and stored the deadline at each edge.
+Now each SWD operation (a transfer or a sequence) uses its own local pacer, as the JTAG engine does.
+The deadline then stays in a register.
+The first half period of each operation is a full half period.
+
+Measured on 2026-10-26 with the `otheruse-cmsis-dap` image (`app-8k`) on the OtherUse, and an STM32F103ZET6 as the target.
+The Saleae Logic Pro 8 ran at 500 MS/s, with SWCLK on channel 6 and a glitch filter of 20 ns.
+Each run read 1 KiB of the target flash with `probe-rs read --chip STM32F103ZE --protocol swd --speed <kHz>`.
+"Before" is `dev` at `64d5245`. The rate is the mean over the runs, against the nominal period.
+
+| Request | Before | After | Shortest period after |
+|---|---|---|---|
+| 100 kHz | 99.8 kHz (−0.16 %) | 99.9 kHz (−0.07 %) | 9722 ns |
+| 500 kHz | 498.9 kHz (−0.22 %) | 499.6 kHz (−0.09 %) | 1778 ns |
+| 1000 kHz | 988.0 kHz (−1.20 %) | 999.8 kHz (−0.02 %) | 846 ns |
+| 1200 kHz | 1199.2 kHz (−0.07 %) | 1198.6 kHz (−0.11 %) | 734 ns |
+| 1500 kHz | 1000.0 kHz (median) | 1495.4 kHz (−0.31 %) | 610 ns |
+| 1800 kHz | 972.8 kHz (median) | 1562.5 kHz (median) | 568 ns |
+
+At 1800 kHz, the nominal period is 40 core cycles. Most periods after this change are 46 cycles, some are 57 cycles: the code limits the clock.
+The shortest single period is 41 cycles, so the clock is not faster than the request.
+
+The code layout in the flash changes the code-limited rates.
+In a second build with only other constants, a request of 1800 kHz gave 1.31 MHz (median period 764 ns), and the untimed engine gave 2.67 MHz.
+A third build gave the values of the table again, and 2.45 MHz untimed.
+The cause is probably the flash wait states and the alignment of the loops. This is not confirmed.
+
+Thus CMSIS-DAP runs the untimed engine only from 3 MHz (`swd::maxClockHz`, #118).
+Before, it ran untimed from 1.85 MHz, and a request of 1.85 or 2 MHz gave 2.4 to 2.7 MHz.
+Measured with the third build:
+
+| Request | Engine | Rate |
+|---|---|---|
+| 1850 kHz | timed | 1562.5 kHz (median), shortest period 568 ns |
+| 2500 kHz | timed | 1562.5 kHz (median), shortest period 568 ns |
+| 2999 kHz | timed | 1562.5 kHz (median), shortest period 568 ns |
+| 3000 kHz | untimed | 2445.0 kHz (mean of the runs), shortest period 346 ns |
+| 4000 kHz | untimed | 2325.6 kHz (median), shortest period 346 ns |
 
 ## STM32H5
 
@@ -182,6 +230,7 @@ Findings:
   The rounding to full core cycles makes the nominal rate lower than the request: 2.3 % below at 4 MHz (3906 kHz), 0.8 % below at 1800 kHz (1786 kHz).
   Up to 1 MHz, JTAG is within 0.15 % of the request.
 - The code of a timed SWD half period is about 22 cycles: a request of 12 MHz gives 5.6 MHz.
+  This is before #117. See [SWD pacer on the STM32H5](#swd-pacer-on-the-stm32h5) for the values after it.
 - The untimed SWD engine of the first test gave 13 MHz (median period 76 ns) at a request of 4 MHz.
   Thus the H5 does not use it (`swd::runsUntimed()`): the timed engine makes all clocks, also at `delay` 0 (1.85 MHz).
 - With a slack of 32 cycles, JTAG at 4 MHz had high half periods of 60 ns and periods of 178 ns (5.6 MHz).
@@ -190,6 +239,40 @@ Findings:
 - The JTAG bit-bang engine gives about 3.4 MHz at a request of 4 MHz, and 4.9 MHz at most.
   `jtag::bitBangMaxKHz` is only for the choice between the bit-bang engine and the SPI fast path. See [STM32H5 JTAG fast path](#stm32h5-jtag-fast-path) for the STM32H5 value.
 - RVSWD on the STM32H5 is not measured.
+
+### SWD pacer on the STM32H5
+
+Measured on 2026-10-26 (#117) with the setup above, with the `weacth523-cmsis-dap` image.
+The Saleae Logic Pro 8 had SWCLK on channel 7, with a glitch filter of 20 ns.
+"Before" is `dev` at `64d5245`, "after" is the local pacer of #117.
+The rate is the mean over the runs, against the nominal period. "Median" is the median of all periods.
+
+| Request | Nominal period | Before | After | Shortest period after |
+|---|---|---|---|---|
+| 1000 kHz | 1000 ns | 998.9 kHz (−0.11 %) | 999.7 kHz (−0.03 %) | 968 ns |
+| 2000 kHz | 504 ns | 1978.5 kHz (−0.28 %) | 1983.5 kHz (−0.03 %) | 472 ns |
+| 4000 kHz | 256 ns | 3882.8 kHz (−0.60 %) | 3900.5 kHz (−0.15 %) | 232 ns |
+| 5000 kHz | 200 ns | 4964.3 kHz (−0.71 %) | 4998.7 kHz (−0.03 %) | 180 ns |
+| 6000 kHz | 168 ns | 5928.7 kHz (−0.40 %) | 5963.7 kHz (+0.19 %) | 134 ns |
+| 8000 kHz | 128 ns | 4807.7 kHz (median) | 6024.1 kHz (median) | 134 ns |
+| 10000 kHz | 104 ns | 5555.6 kHz (median) | 5208.3 kHz (median) | 136 ns |
+| 20000 kHz | 56 ns | 6410.3 kHz (median) | 6097.6 kHz (median) | 136 ns |
+
+Findings:
+
+- Up to 6 MHz, the mean rate after #117 is within 0.2 % of the nominal period, and the mean is never faster than the request.
+  Below the code limit, the error is smaller than before: −0.15 % instead of −0.60 % at 4 MHz.
+- At 6 MHz, the mean is 0.19 % above the nominal period (5952 kHz), but below the request.
+  This comes from the filter of `tools/clock_rate.py`: it drops the long periods after a late edge, and keeps the shorter periods that follow.
+- Single periods at 5 and 6 MHz are often shorter than the request.
+  At 5 MHz, the code is almost a full half period (24 of 25 cycles).
+  Thus many edges are late within the slack, and the next half period is then shorter (see [Decision](#decision)).
+  After #117, 65 % of the periods at 5 MHz and 47 % at 6 MHz are shorter than the request. Before, these values were 16 % and 23 %.
+  At 5 MHz, the median period is 192 ns (5.21 MHz). At 6 MHz, the shortest period is 134 ns (7.5 MHz, 20 % short).
+- From 8 MHz, the code limits the clock to 5.2 to 6.1 MHz (median). Before #117, it was 4.8 to 6.4 MHz.
+  The limit does not increase with the request: 8 MHz gave 6.0 MHz, but 10 MHz gave 5.2 MHz.
+  The code limit on the STM32H5 changed less than on the STM32F103, and at 10 MHz it is lower than before.
+- All requests used the timed engine. All reads were correct.
 
 ### STM32H5 JTAG fast path
 
