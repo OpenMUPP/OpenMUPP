@@ -574,9 +574,11 @@ The rates with the fix, on 2026-10-26, with an OtherUse with `versaloon-bootload
 | OpenOCD memory read, `dump_image` of 8 KB | 4.80 s (1.67 KiB/s) | 2.93 s (2.73 KiB/s) |
 | OpenOCD memory write, `load_image` of 4 KB to RAM | 2.38 s (1.68 KiB/s) | 1.45 s (2.76 KiB/s) |
 | probe-rs `read` of 16 KB, with the attach | 4.41 s (3.6 KiB/s) | 2.95 s to 3.00 s (5.4 KiB/s) |
+| One-wire DMI frame, Saleae on SWDIO, OpenOCD `dump_image` of 1 KB | 50 µs | 50 µs |
+| Time between two DMI frames in one USB packet | 350 µs to 375 µs | 150 µs to 175 µs |
+| Time between two DMI frames in two USB packets | 825 µs to 1000 µs | 500 µs to 650 µs |
 
 The data of the reads is the same before and after the fix, and `verify_image` passes after each `load_image`.
-The Saleae was not on the SWDIO line of this OtherUse, so this test has no wire capture.
 
 #### CH32V003 on the OtherUse
 
