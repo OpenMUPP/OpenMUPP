@@ -448,6 +448,16 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
    board::setLed(board::Led::Usb, usbStack.isConfigured());
 }
 
+// On the STM32H5, a debugger reads zeros from the memory bus while the
+// core sleeps in WFI, and DBGMCU_CR has no DBG_SLEEP bit (#115).
+bool isDebuggerConnected() {
+#if defined(DCB)
+   return (DCB->DHCSR & DCB_DHCSR_C_DEBUGEN_Msk) != 0;
+#else
+   return (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) != 0;
+#endif
+}
+
 } // namespace
 
 int main() {
@@ -490,7 +500,7 @@ int main() {
       // armed again). With the interrupts masked, an interrupt still ends
       // the WFI, and its handler runs after __enable_irq().
       __disable_irq();
-      if(!clockFromCrystal || !usbStack.hasPendingEvents()) {
+      if(!isDebuggerConnected() && (!clockFromCrystal || !usbStack.hasPendingEvents())) {
          __WFI();
       }
       __enable_irq();
