@@ -7,7 +7,8 @@ The README lists the supported boards.
 
 The board selects the MCU family of the dongle.
 The firmware knows two families: STM32F1 and STM32H5.
-The Mini, the OtherUse, the ST-Link/V2 and the ST-Link/V2 mini clone use an STM32F103x8 or STM32F103xB (family STM32F1).
+The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB (family STM32F1).
+The ST-Link/V2 mini clone uses an STM32F103 compatible MCU, with the same family.
 The ST-Link/V2 mini clone has its own document with the measured pin map: [ST-Link/V2 mini clone](stlinkv2-mini-clone.md).
 CMSIS has one device define (`STM32F103xB`) for both parts.
 The WeAct STM32H523 core board uses an STM32H523CC (family STM32H5, see [WeAct STM32H523 core board](#weact-stm32h523-core-board)).
