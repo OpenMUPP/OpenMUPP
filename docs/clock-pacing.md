@@ -51,8 +51,8 @@ An edge within the slack makes the next half period shorter by up to 32 cycles.
 
 The edges have the jitter of the wait loop: up to one pass of it.
 Thus single periods are shorter or longer than requested, but the mean is correct.
-An edge within the slack also makes the next half period shorter.
 On the OtherUse, the shortest SWD period at 1 MHz was 880 ns at #78, and 846 ns (15 % shorter) after #117.
+The two values come from different setups (sample rate and target), so a part of the difference is not from the code.
 
 ### Rejected options
 
