@@ -175,13 +175,8 @@ Then disconnect the power of the board, and connect it again.
 Status: the test passed on 2026-10-26.
 Image: `stlinkv2miniclone-triple` preset (`VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`), `Release` build.
 
-The test did not use the `standalone` image that this branch builds.
-It used the `app-8k` image behind `versaloon-bootloader`, in the combined image `versaloon-ng-with-bootloader.hex`.
-This image comes from the branch `feature/102-stlink-bootloader` (merge request !102), which has this branch merged in.
-The bootloader for this board comes from versaloon-bootloader merge request !11 (board `stlinkv2miniclone`, 8 MHz crystal).
-The two images have the same source code and clock setup.
-The differences are the start address (`0x08000000` or `0x08002000`) and the flash layout.
-Thus the results apply to the `standalone` image, but nobody ran that image on the board.
+The test used the `app-8k` image behind `versaloon-bootloader`, in the combined image `versaloon-ng-with-bootloader.hex`.
+The `standalone` image has the same source code and clock setup, but nobody ran it on the board.
 
 The image was written with SWD (OpenOCD `program`, with verify) through the SWD pads.
 
