@@ -141,6 +141,7 @@ Select the image for the bootloader on the board:
 |---|---|---|---|
 | Existing Mini or OtherUse | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
 | New Mini or OtherUse | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| ST-Link/V2 or ST-Link/V2 mini clone | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | Any board, debug probe | none | `standalone` | `0x08000000` |
 
 The images behind a bootloader have an application image header with a CRC32 (see [docs/firmware-update.md](docs/firmware-update.md#application-image-header)).
@@ -169,6 +170,7 @@ A new board needs `versaloon-bootloader` one time.
 An existing board can also change to it.
 Write the combined image with a debug probe on the SWD pins of the dongle MCU.
 It has the bootloader and the firmware, so one step is sufficient.
+On an ST-Link/V2 or a mini clone with its original firmware, remove the read protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
 For example, with OpenOCD:
 
 ```sh
