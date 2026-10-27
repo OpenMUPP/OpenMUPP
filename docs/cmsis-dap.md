@@ -479,7 +479,8 @@ Thus connect the target, and switch on its supply, before the host connects.
 - The detection uses the TCK of `DAP_SWJ_Clock`. The SWD step uses the SWD clock and the settings of the last `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure`.
 - The SWD step only runs when the JTAG step finds no chain.
   The JTAG host can then not use an SWD target, so the switch to SWD and back does no harm.
-  The SWD step makes sure that the probe sends no WCH frames to an Arm target.
+  The SWD step keeps WCH frames away from an SWJ-DP or SW-DP that answers the JTAG-to-SWD sequence.
+  A dormant or multidrop SW-DP (for example the RP2040) does not answer it, and gets the WCH frames.
 - After the WCH step, the first DMI access does the connect again, as after `DAP_Connect` in the on mode.
   The captures show that an attach at `DAP_Connect` passes (image B in [Connect](cmsis-dap-captures/README.md#connect)).
 - The JTAG and SWD steps toggle SWCLK and SWDIO before the WCH step. The hardware test of the auto mode is not done yet.
