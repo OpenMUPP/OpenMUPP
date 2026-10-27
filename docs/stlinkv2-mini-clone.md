@@ -188,7 +188,32 @@ The image was written with SWD (OpenOCD `program`, with verify) through the SWD 
 | Key: SWIM to GND at power-up, with a valid application | pass: `0483:5740` |
 | Power-up without the SWIM wire | pass: the firmware starts |
 
-No target was connected: the test did not check SWD or JTAG transfers to a target.
+### SWD test with a target
+
+Status: the test passed on 2026-10-27.
+Target: STM32H523CC (Cortex-M33) on a WeAct core board, at 3.3 V.
+The SWDIO, SWCLK and GND pins of the header were connected to the SWD pins of the target.
+The RST pin was not used: each tool reset the target with `SYSRESETREQ`.
+
+The test used SWD speeds of 1000, 2000, 4000, 8000 and 10000 kHz:
+
+| Tool | Steps | Result |
+|---|---|---|
+| probe-rs, CMSIS-DAP personality | Write and verify 32 KB of flash (`0x08038000`), read it back, reset | pass at all speeds |
+| pyOCD, CMSIS-DAP personality | Halt, write and read 16 KB of RAM, two single steps, hardware breakpoint, run and halt, reset | pass at all speeds |
+| OpenOCD `cmsis-dap`, CMSIS-DAP personality | Halt, `load_image` and `verify_image` of 16 KB of RAM, two single steps, hardware breakpoint, run and halt, reset | pass at all speeds |
+| OpenOCD `vsllink`, Versaloon personality | The same steps as OpenOCD `cmsis-dap` | pass at all speeds, with one failure at 4000 kHz in the first run (see below). Runs: 2 at 1000 and 2000 kHz, 11 at 4000 kHz, 6 at 8000 and 10000 kHz |
+
+The RAM speed of pyOCD (write and read) was 61 KiB/s at 1000 kHz, 97 KiB/s at 2000 kHz and 137 KiB/s at 4000 kHz and more.
+Thus above 4000 kHz, USB and not SWD sets the speed.
+
+In the first run of OpenOCD `vsllink` at 4000 kHz, the single steps did not run the test loop in RAM.
+After that, OpenOCD could not read the PC.
+OpenOCD wrote "target was in unknown state when halt was requested" before the halt.
+The run before it ended with a reset of the target, so the halt possibly came during the start of the target.
+The failure did not occur again in 20 more runs at 4000, 8000 and 10000 kHz.
+
+The board has no JTAG pins, so the test did not include JTAG.
 
 ## How we measured the pin map
 
