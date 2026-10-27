@@ -101,20 +101,23 @@ class PersonalityStore {
          return std::nullopt;
       }
       const uint16_t record = slots[end - 1];
-      for(const auto personality : all) {
+      // Each code, also one that is not in the image: a store of the bridge
+      // mode then keeps the personality of another image.
+      for(uint8_t code = 0; code < maxPersonalities; ++code) {
          for(uint8_t mode = 0; mode < bridgeModes; ++mode) {
-            if(record == recordOf(personality, mode)) {
-               return Settings{ personality, mode };
+            if(record == recordOfCode(code, mode)) {
+               return Settings{ static_cast<Personality>(code), mode };
             }
          }
       }
       return std::nullopt;
    }
 
-   // The stored personality. Empty when the page holds no valid record.
+   // The stored personality. Empty when the page holds no valid record, or
+   // a personality that is not in the image.
    [[nodiscard]] std::optional<Personality> load() const {
       const auto settings = loadSettings();
-      return settings ? std::optional{ settings->personality } : std::nullopt;
+      return settings ? fromCode(toCode(settings->personality)) : std::nullopt;
    }
 
    // Stores the settings. True when loadSettings() then returns them.
@@ -140,8 +143,9 @@ class PersonalityStore {
       return store(Settings{ personality, settings ? settings->bridgeMode : bridgeModeAuto });
    }
 
-   // Stores the bridge mode with the stored personality. active: the
-   // personality when the page holds no valid record. True when
+   // Stores the bridge mode with the stored personality, also one that is
+   // not in the image. active: the personality when the page holds no
+   // valid record. True when
    // loadSettings() then has the mode.
    bool storeBridgeMode(uint8_t bridgeMode, Personality active) {
       const auto settings = loadSettings();

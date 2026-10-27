@@ -336,6 +336,23 @@ TEST_CASE("The bridge mode is stored with the personality") {
    CHECK(page.programs == programs);
 }
 
+TEST_CASE("The bridge mode of a personality that is not in the image is loaded and kept") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+   // Code 3 is in no image: as a personality of another image
+   constexpr uint8_t other = 3;
+   REQUIRE_FALSE(personality::fromCode(other).has_value());
+   page.content[0] = PersonalityStore::recordOfCode(other, 0);
+
+   REQUIRE(store.loadSettings().has_value());
+   CHECK(store.loadSettings()->bridgeMode == 0);
+   CHECK_FALSE(store.load().has_value());
+
+   // The store of a mode keeps the personality of the other image
+   CHECK(store.storeBridgeMode(1, Personality::CmsisDap));
+   CHECK(page.content[1] == PersonalityStore::recordOfCode(other, 1));
+}
+
 TEST_CASE("A cut record of a bridge mode is no stored settings") {
    FakeFlashPage page;
    PersonalityStore store{ page };
