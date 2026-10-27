@@ -4,7 +4,7 @@
 The dongle must have a multi image with the Versaloon and the CMSIS-DAP
 personalities. Connect it to an STM32F1 target on SWD and JTAG (SWDIO/TMS,
 SWCLK/TCK, TDI, TDO, nTRST, nRST and GND), and connect the UART TX pin to the
-UART RX pin (PA9 to PA10 on the Mini, the OtherUse and the WeAct H523). Each
+UART RX pin (PA9 to PA10 on the Mini and the WeAct H523). Each
 tool runs SWD before JTAG: on the WeAct H523, all JTAG steps failed without
 nTRST and nRST, and passed with them.
 

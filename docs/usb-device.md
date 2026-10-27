@@ -263,8 +263,8 @@ A low or medium density chip needs the `Keil.STM32F1xx_DFP` pack in pyOCD.
 With `--serial`, all tools use only the dongle with this serial number.
 
 Status: the test passed on 2026-10-16.
-Probe: OtherUse board.
-Image: `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `otheruse` preset, `Release` build, `v0.9.0-113-gb2dab08` (`dev` with the fix of the SWD rules below).
+Probe: Mini board.
+Image: `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `mini` preset, `Release` build, `v0.9.0-113-gb2dab08` (`dev` with the fix of the SWD rules below).
 Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
 Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD and probe-rs. The test did not record the pyOCD and probe-rs versions.
 The results come from two runs of the script with this image. The serial loopback passed with `--full-uart` on `v0.9.0-112-ga8a1abe`.
@@ -470,7 +470,7 @@ OpenOCD then stops with an error.
 OpenOCD controls the reset lines SRST and TRST through the `GPIO` block (`src/protocol/versaloon/GpioBlock.h`).
 Each bit of a `u16` mask selects one pin of the debug connector:
 
-| Bit | Signal | Mini and OtherUse | ST-Link/V2 | ST-Link/V2 mini clone |
+| Bit | Signal | Mini | ST-Link/V2 | ST-Link/V2 mini clone |
 |---|---|---|---|---|
 | `0x0001` | SRST | PB11 | PB0 | PB6 |
 | `0x0002` | TRST | PB10 | none | none |
@@ -628,7 +628,7 @@ A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `IN
 
 ### JTAG fast path
 
-On the Mini, the OtherUse and the WeAct STM32H523, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
+On the Mini and the WeAct STM32H523, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
 The STM32F1 driver is `src/board/BoardJtagFast.cpp` (SPI and DMA1). The STM32H5 driver is `src/board/BoardJtagFastH5.cpp` (SPI v2 and GPDMA1).
 The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
 A board has the fast path when its definition has `jtagFastPath` (see [Boards](boards.md)).
@@ -738,7 +738,7 @@ An interrupt makes a period longer, but not shorter.
 At `delay` 0, the firmware runs untimed, without the cycle counter.
 Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`).
 The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
-Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the OtherUse, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md), #118).
+Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the Mini, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md), #118).
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 On the STM32H5 (250 MHz), `delay` 0 is timed at 1.85 MHz: the untimed engine there gives 13 MHz (`swd::runsUntimed()`, see [Clock pacing](clock-pacing.md#stm32h5)).
@@ -807,7 +807,7 @@ Other values give `INVALID_PARA`.
 The voltage is the supply of the adapter when it is on, and the supply of the target when it is off.
 `GET_TVCC` replies the same voltage.
 
-The Mini and the OtherUse have the power switch on PB8.
+The Mini has the power switch on PB8.
 The switch is on when PB8 is driven low, and off when PB8 floats.
 The Vref sense is on PB0 (ADC1 channel 8) with a divider of 2.
 The firmware calculates the voltage from the mean of 8 conversions, with a 3.3 V ADC reference.

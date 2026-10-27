@@ -7,14 +7,14 @@ When an issue and this document do not agree, the issue is correct. Update this 
 
 ## Targets
 
-- **Versaloon Mini** and **OtherUse**: STM32F103C8 or STM32F103CB, 12 MHz crystal, 72 MHz core clock.
+- **Versaloon Mini**: STM32F103C8 or STM32F103CB, 12 MHz crystal, 72 MHz core clock.
 - **ST-Link/V2** clone: STM32F103C8, 8 MHz crystal. It is a compile-only target.
   It is not a supported board now, but a port must be easy.
 
 The firmware runs behind `versaloon-bootloader`.
 The legacy bootloader uses the first 10 KB of flash, so the application starts at `0x08002800`.
 The new `versaloon-bootloader` uses 8 KB, so the application starts at `0x08002000`.
-The OtherUse has an STM32F103C8 (64 KB flash), so the application must not be larger than 54 KB: it must also fit behind the legacy bootloader.
+The Mini can have an STM32F103C8 (64 KB flash), so the application must not be larger than 54 KB: it must also fit behind the legacy bootloader.
 
 The firmware is compatible with the original Versaloon USB protocol.
 Unmodified upstream OpenOCD (`interface/vsllink.cfg`) must work with it.
@@ -49,7 +49,7 @@ The estimates are in person-days (low-high).
 |---|---|---|---|
 | #1 | A0: STM32F1 support in system-stm32 (tracking issue) | 9.75-17.75 | system-stm32#9 to system-stm32#16 |
 | #2 | B1: Project skeleton: CMake, submodules, CI, linker scripts | 1.5-2 | system-stm32#9 |
-| #3 | B7: Board abstraction (Mini, OtherUse, compile-only ST-Link/V2) | 1-1.5 | #2 |
+| #3 | B7: Board abstraction (Mini, compile-only ST-Link/V2) | 1-1.5 | #2 |
 | #4 | B2: Board bring-up: clocks, LEDs, logger, heartbeat | 0.5-1.5 | #3, system-stm32#10, system-stm32#11 |
 | #5 | B3: USB composite device: Versaloon vendor interface and CDC-ACM | 1-2 | #4, system-stm32#15, libart#49 |
 | #6 | B5: USB-CDC to UART bridge | 1.5-3 | #5, system-stm32#12, libart#49 |
@@ -118,6 +118,6 @@ flowchart LR
 
 ## Hardware tests
 
-Issues with the label `needs-hardware` need a Versaloon Mini or an OtherUse for the acceptance test.
+Issues with the label `needs-hardware` need a Versaloon Mini for the acceptance test.
 Do the software part first and verify it with the build and the host unit tests.
 Then record the open hardware test in the issue.

@@ -210,7 +210,7 @@ constexpr OneWireTicks oneWireTicks(uint32_t hz) {
             cyclesOfNs(hz, oneWireLeadNs) };
 }
 
-// The clock of the measured setup (OtherUse, TIM3). The DMA burst that
+// The clock of the measured setup (Mini, TIM3). The DMA burst that
 // loads a bit must end within the bit before; at a slower clock it can
 // end late, and each later bit then has the times of the bit before it.
 inline constexpr uint32_t oneWireMinClockHz = 72'000'000;

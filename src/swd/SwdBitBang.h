@@ -35,7 +35,7 @@
 // At delay 0 (1.85 MHz) and from maxClockHz, the engine runs untimed on a
 // slow core (see runsUntimed()): it does not read the cycle counter, and
 // each half period is the loop code and untimedPadNops NOP instructions.
-// Thus its rate depends on the code: 2.42 to 2.7 MHz on the OtherUse
+// Thus its rate depends on the code: 2.42 to 2.7 MHz on the Mini
 // (docs/clock-pacing.md, #118). The original firmware bursts at 2.25 to
 // 3 MHz. On a fast core, delay 0 is timed at 1.85 MHz.
 //
@@ -137,7 +137,7 @@ inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'0
 // minimum low half period, so SWDIO has a setup time before the rising
 // edge, and the target has time to drive SWDIO before the read. With the
 // loop code, one bit takes about 27 to 30 cycles: 2.42 to 2.7 MHz measured
-// at delay 0 on the OtherUse, it changes with the code layout.
+// at delay 0 on the Mini, it changes with the code layout.
 inline constexpr uint32_t untimedPadNops = 6;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
@@ -194,7 +194,7 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 
 // From this SWCLK, the engine runs untimed on a slow core, as at delay 0.
 // The untimed rate changes with the code layout: 2.42 to 2.7 MHz on the
-// OtherUse (#118). Thus a request from this value does not give a faster
+// Mini (#118). Thus a request from this value does not give a faster
 // clock. Measure again after a change of the engine.
 inline constexpr uint32_t maxClockHz = 3'000'000;
 

@@ -1,7 +1,7 @@
 # UART bridge
 
 The serial port (interfaces 1 and 2) is a USB-to-UART bridge.
-It uses the UART of the board definition: USART1 on PA9 (TX) and PA10 (RX) on the Mini and the OtherUse.
+It uses the UART of the board definition: USART1 on PA9 (TX) and PA10 (RX) on the Mini.
 The UART has no flow control lines.
 
 - `src/uart/UartBridge.h` moves the data between the serial port and two ring buffers of 1 KB each.
@@ -69,7 +69,7 @@ It does not support SEND_BREAK: the device stalls this request.
 It sends a byte pattern at each line coding and checks that the same bytes come back.
 It needs the pyserial Python package and Python 3.
 
-1. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini and the OtherUse).
+1. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini).
 2. Run the script with the serial port of the dongle:
 
 ```sh
@@ -104,5 +104,5 @@ The unit tests of the script need no pyserial and no hardware:
 python3 -m unittest discover -s tools -p "test_*.py"
 ```
 
-Status: the host tests pass. The test on a Mini and an OtherUse is not done yet.
+Status: the host tests pass. The test on a Mini is not done yet.
 

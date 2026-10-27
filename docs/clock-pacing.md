@@ -20,7 +20,7 @@ Thus the code of each half period added to the period:
 
 - SWD and RVSWD subtracted an estimate of the loop code, `loopOverheadCycles = 24`.
   This value was measured only for SWD at `delay` 1 on the Versaloon Mini.
-  On the OtherUse, some SWD periods were shorter than requested, and RVSWD was up to 4.8 % faster than requested.
+  On the Mini, some SWD periods were shorter than requested, and RVSWD was up to 4.8 % faster than requested.
 - JTAG did not subtract the loop code. TCK was 6 % to 40 % slower than requested.
 
 The error changes with the core clock, the flash wait states and the compiler output.
@@ -51,7 +51,7 @@ An edge within the slack makes the next half period shorter by up to 32 cycles.
 
 The edges have the jitter of the wait loop: up to one pass of it.
 Thus single periods are shorter or longer than requested, but the mean is correct.
-On the OtherUse, the shortest SWD period at 1 MHz was 880 ns at #78, and 846 ns (15 % shorter) after #117.
+On the Mini, the shortest SWD period at 1 MHz was 880 ns at #78, and 846 ns (15 % shorter) after #117.
 The two values come from different setups (sample rate and target), so a part of the difference is not from the code.
 
 ### Rejected options
@@ -59,7 +59,7 @@ The two values come from different setups (sample rate and target), so a part of
 - A timer that paces the clock, with DMA, as the one-wire engine does.
   SWD must read the ACK in the middle of a transfer and act on it (OK, WAIT, FAULT): a DMA table that is ready before the transfer does not fit.
   On the ST-Link/V2, SWCLK (PA5) has no timer channel.
-  A DMA transfer takes 80 to 210 ns on the OtherUse (#71), and this must fit in the shortest clock phase.
+  A DMA transfer takes 80 to 210 ns on the Mini (#71), and this must fit in the shortest clock phase.
 - SPI for the data, as the JTAG fast path does.
   SWD needs SWDIO on MOSI and MISO, and SPI moves 8 bits at a time. The turnaround (1 bit) and the ACK (3 bits) do not fit this.
   Not all boards have the necessary wiring.
@@ -74,27 +74,27 @@ The two values come from different setups (sample rate and target), so a part of
   Thus a request of 1.8 MHz gives 1.3 to 1.56 MHz. Before #78, it gave 1.79 MHz, and after !91 0.96 MHz.
   The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
 - The untimed SWD engine (`delay` 0, or 3 MHz and more in CMSIS-DAP) does not use the pacer.
-  Its rate depends on the code: 2.42 to 2.7 MHz on the OtherUse.
+  Its rate depends on the code: 2.42 to 2.7 MHz on the Mini.
   At `delay` 0, this is faster than the 1.85 MHz of the table (#118).
   In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz` (3 MHz), so a request does not give a faster clock.
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
-- The OtherUse and the WeAct STM32H523 are measured. The Mini has the same MCU, core clock and pins as the OtherUse.
+- The Mini and the WeAct STM32H523 are measured.
   The ST-Link/V2 is not measured.
 
 ## Measurements
 
 ### Setup
 
-- Probe: OtherUse (STM32F103C8 at 72 MHz), the `otheruse-triple` image with `-DVSL_WCH_LINK_WCH_USB_ID=ON`, `app-8k`.
+- Probe: Mini (STM32F103C8 at 72 MHz), an image with `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` and `-DVSL_WCH_LINK_WCH_USB_ID=ON`, `app-8k`.
   "Before" is `dev` at `07d900e`. "After" is this change at `6e7ca26`.
 - Target: WeAct STM32H523 on SWD. JTAG and RVSWD had no target: the probe clocks the frames also without a reply.
 - Logic analyzer: Saleae Logic Pro 8 at 100 MS/s (10 ns resolution), SWDIO on channel 4, SWCLK and TCK on channel 5.
 - Traffic:
   - SWD: `probe-rs read --chip STM32H523CC --protocol swd --speed <kHz> b32 0x08000000 64` (CMSIS-DAP personality)
   - JTAG: `openocd -c "adapter driver cmsis-dap" -c "transport select jtag" -c "adapter speed <kHz>" -c init -c shutdown`.
-    Below 1125 kHz, the OtherUse uses the JTAG bit-bang engine.
+    Below 1125 kHz, the Mini uses the JTAG bit-bang engine.
   - RVSWD: `wlink status --chip CH32V20X --speed low|high` (WCH-Link personality)
 
 `tools/clock_rate.py` calculates the rate from a raw CSV export of Logic 2.
@@ -135,7 +135,7 @@ Findings:
   Before this change, the error was −6 % to −40 % for JTAG and up to +4.8 % for RVSWD.
 - The single periods spread by the jitter of the wait loop. At 1 MHz, the shortest SWD period was 880 ns in this measurement.
 - The first version of the pacer had a smaller slack (16 cycles, then 12 cycles from the end of the wait), and more state for each edge.
-  On the OtherUse, the normal delay was often above the slack, so the pacer started the deadlines again at many edges: SWD was 2 % slower at 100 kHz and 14 % slower at 235 kHz.
+  On the Mini, the normal delay was often above the slack, so the pacer started the deadlines again at many edges: SWD was 2 % slower at 100 kHz and 14 % slower at 235 kHz.
   The state for each edge made the code of a half period at 1 MHz longer than 36 cycles: SWD was 41 % slower.
   Measure the rate again after a change of the engines, the pacer or the core clock.
 
@@ -149,7 +149,7 @@ Now each SWD operation (a transfer or a sequence) uses its own local pacer, as t
 The deadline then stays in a register.
 The first half period of each operation is a full half period.
 
-Measured on 2026-10-26 with the `otheruse-cmsis-dap` image (`app-8k`) on the OtherUse, and an STM32F103ZET6 as the target.
+Measured on 2026-10-26 with the `mini-cmsis-dap` image (`app-8k`) on the Mini, and an STM32F103ZET6 as the target.
 The Saleae Logic Pro 8 ran at 500 MS/s, with SWCLK on channel 6 and a glitch filter of 20 ns.
 Each run read 1 KiB of the target flash with `probe-rs read --chip STM32F103ZE --protocol swd --speed <kHz>`.
 "Before" is `dev` at `64d5245`. The rate is the mean over the runs, against the nominal period.
