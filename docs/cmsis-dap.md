@@ -346,7 +346,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Status: in progress (#103). An image with the build option `VSL_CMSIS_DAP_RV_BRIDGE` has the bridge. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is done: see [Bridge hardware test](#bridge-hardware-test).
+Status: in progress (#103). Each image with the `cmsis-dap` personality has the bridge, unless the build sets `VSL_CMSIS_DAP_RV_BRIDGE=OFF`. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is done: see [Bridge hardware test](#bridge-hardware-test).
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -364,18 +364,20 @@ It does each DMI access on the WCH wire (one wire or two wires), with the wire e
 
 ### Build
 
-The CMake option `VSL_CMSIS_DAP_RV_BRIDGE` (default `OFF`) adds the bridge to the `cmsis-dap` personality.
-It needs `VSL_PERSONALITIES=cmsis-dap`: the configure step stops with an error for another set of personalities, also for a multi image.
+The CMake option `VSL_CMSIS_DAP_RV_BRIDGE` (default `ON`) adds the bridge to the `cmsis-dap` personality.
+Each image with `cmsis-dap` has the bridge, also a multi image, for example `versaloon,cmsis-dap,wch-link`.
+In a multi image, only the active personality sets up the pins and the timer of the wire engine. A personality switch resets the MCU.
+An image without `cmsis-dap` ignores the option.
 The STM32H5 boards also build the bridge. The bridge is not tested on them.
-The image tag ends with `-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-rv-bridge-app-10k-Release-<version>.bin`.
-The preset `mini-cmsis-dap-rv-bridge` sets the option:
+The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-no-rv-bridge-app-10k-Release-<version>.bin`.
+The `cmsis-dap` and `dual` presets build the bridge:
 
 ```sh
-cmake --preset mini-cmsis-dap-rv-bridge
-cmake --build --preset mini-cmsis-dap-rv-bridge -j
+cmake --preset mini-cmsis-dap
+cmake --build --preset mini-cmsis-dap -j
 ```
 
-The bridge adds about 6.4 KB to the image: the `app-10k` image of the Mini is 38,240 of 55,296 bytes.
+The bridge adds about 6.4 KB to a `cmsis-dap` image.
 
 ### OpenOCD configs
 

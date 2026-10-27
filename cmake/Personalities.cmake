@@ -64,7 +64,8 @@ endfunction()
 #   VSL_DEFAULT_PERSONALITY  the personality when no personality is stored.
 #                            Empty: the first one in canonical order.
 #   VSL_WCH_LINK_WCH_USB_ID  the USB ID of WCH for the WCH-Link personality
-#   VSL_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality
+#   VSL_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality.
+#                            Not defined: ON. Ignored without cmsis-dap.
 #   VSL_DEBUG_CDC            the debug log on the CDC port
 # Sets these variables in the caller:
 #   VSL_PERSONALITY_SET         the personalities, in canonical order
@@ -74,6 +75,7 @@ endfunction()
 #   VSL_PERSONALITY_DROPPED_SOURCES
 #                               the source regexes of the other personalities
 #   VSL_IMAGE_TAG               the tag after the board in the file names
+#   VSL_RV_BRIDGE               ON when the image has the RISC-V bridge
 function(vsl_resolve_personalities)
     set(_set "${VSL_PERSONALITIES}")
     set(_default "${VSL_DEFAULT_PERSONALITY}")
@@ -119,10 +121,19 @@ function(vsl_resolve_personalities)
         message(FATAL_ERROR "VSL_WCH_LINK_WCH_USB_ID needs wch-link in VSL_PERSONALITIES.")
     endif ()
     # The bridge uses the pins and the timer of the wire engine in the JTAG
-    # port of CMSIS-DAP. A multi image would share them with other
-    # personalities: not supported (#103, decision 4).
-    if (VSL_CMSIS_DAP_RV_BRIDGE AND NOT _personalities STREQUAL "cmsis-dap")
-        message(FATAL_ERROR "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap (VSL_PERSONALITIES=cmsis-dap), not ${_personalities}.")
+    # port of CMSIS-DAP. In a multi image only the active personality sets
+    # them up (src/main.cpp, isActive()), so each image with cmsis-dap can
+    # have the bridge.
+    if (NOT DEFINED VSL_CMSIS_DAP_RV_BRIDGE OR VSL_CMSIS_DAP_RV_BRIDGE)
+        set(_bridge ON)
+    else ()
+        set(_bridge OFF)
+    endif ()
+    set(_bridge_off_tag "")
+    if (NOT "cmsis-dap" IN_LIST _personalities)
+        set(_bridge OFF)
+    elseif (NOT _bridge)
+        set(_bridge_off_tag "-no-rv-bridge")
     endif ()
     # The log goes to the CDC port. In a multi image the log is silent while
     # the WCH-Link personality is active.
@@ -146,7 +157,7 @@ function(vsl_resolve_personalities)
     if (VSL_WCH_LINK_WCH_USB_ID)
         list(APPEND _defines VSL_WCH_LINK_WCH_USB_ID)
     endif ()
-    if (VSL_CMSIS_DAP_RV_BRIDGE)
+    if (_bridge)
         list(APPEND _defines VSL_CMSIS_DAP_RV_BRIDGE)
         list(REMOVE_ITEM _dropped ${VSL_RV_WIRE_SOURCES})
     endif ()
@@ -172,9 +183,8 @@ function(vsl_resolve_personalities)
     if (VSL_WCH_LINK_WCH_USB_ID)
         string(APPEND _tag "-wch-id")
     endif ()
-    if (VSL_CMSIS_DAP_RV_BRIDGE)
-        string(APPEND _tag "-rv-bridge")
-    endif ()
+    # The bridge is the default: only an image without it has a tag
+    string(APPEND _tag "${_bridge_off_tag}")
 
     set(VSL_PERSONALITY_SET ${_personalities} PARENT_SCOPE)
     set(VSL_PERSONALITY_COUNT ${_count} PARENT_SCOPE)
@@ -183,4 +193,5 @@ function(vsl_resolve_personalities)
     set(VSL_PERSONALITY_DEFINES ${_defines} PARENT_SCOPE)
     set(VSL_PERSONALITY_DROPPED_SOURCES ${_dropped} PARENT_SCOPE)
     set(VSL_IMAGE_TAG "${_tag}" PARENT_SCOPE)
+    set(VSL_RV_BRIDGE ${_bridge} PARENT_SCOPE)
 endfunction()
