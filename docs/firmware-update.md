@@ -16,7 +16,7 @@ To start `versaloon-bootloader`, use one of these methods:
 
 - Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the Versaloon personality has this command.
 - Send a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)). Each personality has a switch command.
-- Hold the key (PB9) down and reset the board.
+- On the Mini and the OtherUse: hold the key (PB9) down and reset the board.
 - On the ST-Link/V2 mini clone: connect SWIM (header pin 3) to GND (header pin 5), then connect the board to USB (see [Bootloader](stlinkv2-mini-clone.md#bootloader)).
   The ST-Link/V2 has no key.
 
