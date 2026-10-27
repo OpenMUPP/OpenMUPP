@@ -103,6 +103,7 @@ The alternative is to give the options on the command line:
 
 ```sh
 cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
+      -DVSL_PERSONALITIES=cmsis-dap \
       -DGCC_TOOLCHAIN_PREFIX=/opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
 cmake --build build/mini -j
 ```

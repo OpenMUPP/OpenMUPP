@@ -75,6 +75,7 @@ The tag after the board in the file name tells the personalities of the image:
 | `wch-link` | - | `-wch-link` | `-wch-link` |
 | `versaloon,cmsis-dap` | `versaloon` | `-vsl+dap` | `-dual` |
 | `versaloon,cmsis-dap` | `cmsis-dap` | `-dap+vsl` | `-dual-cmsis-dap` |
+| `versaloon,cmsis-dap,wch-link` | `versaloon` | `-vsl+dap+wch` | - |
 | `cmsis-dap,wch-link` | `cmsis-dap` | `-dap+wch` | - |
 | `cmsis-dap,wch-link` | `wch-link` | `-wch+dap` | - |
 

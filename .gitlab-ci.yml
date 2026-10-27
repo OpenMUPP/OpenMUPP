@@ -132,6 +132,7 @@ build-mini-debug:
   variables:
     BOARD: mini
     VARIANT: -debug
+    PROTOCOL_TAG: -cmsis-dap
     BUILD_TYPE: Debug
 
 # The release images: the CMSIS-DAP image and the multi image with the
@@ -174,6 +175,7 @@ build-weacth523:
         PROTOCOL_TAG: -dap+wch
       - BOARD: weacth523
         VARIANT: -debug
+        PROTOCOL_TAG: -cmsis-dap
         BUILD_TYPE: Debug
 
 # VSL_PERSONALITIES=cmsis-dap with the RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE,
