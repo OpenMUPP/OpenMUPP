@@ -74,14 +74,14 @@ run-tool-tests:
 # the CDC port and SWD on. The job sets VSL_STRICT_SIZE, so the linker
 # script fails the link when an image does not fit; the size check reports
 # the size of each image in vsl-images.txt and fails on the same limit. The
-# default target also builds versaloon-bootloader for the Mini, the
-# OtherUse and the ST-Link/V2 boards.
+# default target also builds versaloon-bootloader for the Mini and the
+# ST-Link/V2 boards.
 .build-board-template:
   stage: build
   cache: *fetchcontent-cache
   variables:
     BUILD_TYPE: Release
-    # The preset is ${BOARD}${VARIANT}. Both empty for the default personality
+    # The preset is ${BOARD}${VARIANT}
     VARIANT: ""
     # The image tag of the personalities (docs/development.md "Image names")
     PROTOCOL_TAG: ""
@@ -115,7 +115,7 @@ run-tool-tests:
     - when: manual
       allow_failure: true
 
-# The Versaloon personality of the Mini. This job updates the cache.
+# The CMSIS-DAP image of the Mini. This job updates the cache.
 build-mini:
   extends: .build-board-template
   cache:
@@ -123,7 +123,10 @@ build-mini:
     policy: pull-push
   variables:
     BOARD: mini
+    VARIANT: -cmsis-dap
+    PROTOCOL_TAG: -cmsis-dap
 
+# The CMSIS-DAP personality with the debug log on the CDC port
 build-mini-debug:
   extends: .build-board-template
   variables:
@@ -131,40 +134,30 @@ build-mini-debug:
     VARIANT: -debug
     BUILD_TYPE: Debug
 
-# The release builds of the personality sets (#79, decision Q6). Each entry
-# gives the preset suffix VARIANT and the image tag PROTOCOL_TAG of one set.
+# The release images: the CMSIS-DAP image and the multi image with the
+# CMSIS-DAP and the WCH-Link personalities. Each entry gives the preset
+# suffix VARIANT and the image tag PROTOCOL_TAG of one set. The CI builds no
+# image with the Versaloon personality.
 build:
   extends: [.build-board-template, .manual-unless-tag]
   parallel:
     matrix:
-      # VSL_PERSONALITIES=versaloon. The Mini is the build-mini job.
-      - BOARD: [otheruse, stlinkv2, stlinkv2miniclone]
-      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
+      # VSL_PERSONALITIES=cmsis-dap. The Mini is the build-mini job.
+      - BOARD: [stlinkv2, stlinkv2miniclone]
         VARIANT: -cmsis-dap
         PROTOCOL_TAG: -cmsis-dap
-      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
-        VARIANT: -wch-link
-        PROTOCOL_TAG: -wch-link
-      # VSL_PERSONALITIES=versaloon,cmsis-dap. The last 1 KB flash page holds
+      # VSL_PERSONALITIES=cmsis-dap,wch-link. The last 1 KB flash page holds
       # the stored personality, so each image limit of a multi image is 1 KB
       # smaller.
-      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
-        VARIANT: -dual
-        PROTOCOL_TAG: -vsl+dap
-      # The same, with CMSIS-DAP as the default personality
-      - BOARD: mini
-        VARIANT: -dual-cmsis-dap
-        PROTOCOL_TAG: -dap+vsl
-      # VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link
-      - BOARD: [mini, otheruse, stlinkv2, stlinkv2miniclone]
-        VARIANT: -triple
-        PROTOCOL_TAG: -vsl+dap+wch
+      - BOARD: [mini, stlinkv2, stlinkv2miniclone]
+        VARIANT: -cmsis-dap-wch-link
+        PROTOCOL_TAG: -dap+wch
 
-# WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash): all
-# presets of the board, on every pipeline. The board has the standalone link
-# image only. The dual-personality image keeps the last 8 KB flash sector for
-# the stored personality. Its own cache key: the H5 builds fetch the CMSIS packages of
-# the H5 and the Cortex-M33.
+# WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash): the same
+# sets, on every pipeline. The board has the standalone link image only. The
+# multi image keeps the last 8 KB flash sector for the stored personality.
+# Its own cache key: the H5 builds fetch the CMSIS packages of the H5 and the
+# Cortex-M33.
 build-weacth523:
   extends: .build-board-template
   cache:
@@ -174,29 +167,14 @@ build-weacth523:
   parallel:
     matrix:
       - BOARD: weacth523
-        VARIANT: ""
-      - BOARD: weacth523
         VARIANT: -cmsis-dap
         PROTOCOL_TAG: -cmsis-dap
       - BOARD: weacth523
-        VARIANT: -dual
-        PROTOCOL_TAG: -vsl+dap
-      - BOARD: weacth523
-        VARIANT: -wch-link
-        PROTOCOL_TAG: -wch-link
+        VARIANT: -cmsis-dap-wch-link
+        PROTOCOL_TAG: -dap+wch
       - BOARD: weacth523
         VARIANT: -debug
         BUILD_TYPE: Debug
-
-# VSL_PERSONALITIES=cmsis-dap,wch-link, a set without Versaloon. Build and
-# size check only, no artifacts.
-build-mini-cmsis-dap-wch-link:
-  extends: .build-board-template
-  variables:
-    BOARD: mini
-    VARIANT: -cmsis-dap-wch-link
-    PROTOCOL_TAG: -dap+wch
-  artifacts: null
 
 # VSL_PERSONALITIES=cmsis-dap with the RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE,
 # #103). Build and size check only, no artifacts.

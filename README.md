@@ -1,6 +1,6 @@
 # versaloon-NG
 
-versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini and the OtherUse.
+versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini.
 A build for the ST-Link/V2 mini clone also exists, with a hardware test of the USB personalities, the LEDs and SWD to a target. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
 The port to the STM32H5 (the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
@@ -28,12 +28,11 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 | `BOARD` | Hardware | Crystal | Status |
 |---|---|---|---|
 | `mini` | Versaloon Mini | 12 MHz | target |
-| `otheruse` | OtherUse | 12 MHz | target |
 | `stlinkv2` | ST-Link/V2, pin map of the official design | 8 MHz | compile-only |
 | `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | target, SWD only (no JTAG pins) |
 | `weacth523` | WeAct STM32H523 core board | 8 MHz | target, 3.3 V targets only |
 
-The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
+The Mini and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
 The WeAct STM32H523 core board uses an STM32H523CC.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
@@ -71,22 +70,28 @@ Select a preset, then configure and build:
 
 ```sh
 export GCC_TOOLCHAIN_PREFIX=/opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
-cmake --preset mini
-cmake --build --preset mini -j
+cmake --preset mini-cmsis-dap
+cmake --build --preset mini-cmsis-dap -j
 ```
 
-The build directory is `build/<preset>`, here `build/mini`.
-The presets `mini`, `otheruse`, `stlinkv2` and `stlinkv2miniclone` build the Release images of one board.
-A preset without a suffix builds the Versaloon personality.
-Add `-cmsis-dap`, `-dual`, `-wch-link` or `-triple` for the other personalities, for example `mini-cmsis-dap`.
-A `-dual` preset builds the multi image with the Versaloon and the CMSIS-DAP personalities.
-A `-triple` preset builds the multi image with the Versaloon, the CMSIS-DAP and the WCH-Link personalities.
+The build directory is `build/<preset>`, here `build/mini-cmsis-dap`.
+The presets `mini`, `stlinkv2` and `stlinkv2miniclone` build the Release images of one board.
+The suffix of the preset selects the personalities:
+
+- `-cmsis-dap`: the CMSIS-DAP personality, for example `mini-cmsis-dap`.
+- `-cmsis-dap-wch-link`: the multi image with the CMSIS-DAP and the WCH-Link personalities. CMSIS-DAP is the default personality.
+- `-wch-link`: the WCH-Link personality.
+- No suffix: the Versaloon personality.
+- `-dual`: the multi image with the Versaloon and the CMSIS-DAP personalities.
+
+The CI builds only the `-cmsis-dap` and the `-cmsis-dap-wch-link` images.
+The Versaloon personality is for old tools only: use CMSIS-DAP for a new setup.
 For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,wch-link` (see [CMake options](docs/development.md#cmake-options)).
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
-`mini-debug` is the Debug build of the Mini.
-The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
+`mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality.
+The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-cmsis-dap-wch-link`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
@@ -102,7 +107,7 @@ cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
 cmake --build build/mini -j
 ```
 
-Use `-DBOARD=otheruse`, `-DBOARD=stlinkv2`, `-DBOARD=stlinkv2miniclone` or `-DBOARD=weacth523` for the other boards.
+Use `-DBOARD=stlinkv2`, `-DBOARD=stlinkv2miniclone` or `-DBOARD=weacth523` for the other boards.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
 
 The build links the same firmware into one or more application images.
@@ -114,7 +119,7 @@ Each image has a different start address:
 | `app-8k` | `0x08002000` | 56 KB | Behind the new 8 KB `versaloon-bootloader`. |
 | `app-10k` | `0x08002800` | 54 KB | Behind the legacy 10 KB Versaloon bootloader of the existing boards. |
 
-The Mini and the OtherUse get all three images.
+The Mini gets all three images.
 The ST-Link/V2 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image. They never had the legacy bootloader, so they get no `app-10k` image.
 The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
 A multi image has less flash, because the end of the flash holds the stored personality.
@@ -124,7 +129,7 @@ The build writes these files into the build directory:
 
 - `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-ng-app-10k.bin`.
 - `versaloon-bootloader/versaloon-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
-  Only the STM32F1 boards have a bootloader: the Mini, the OtherUse, the ST-Link/V2 and the ST-Link/V2 mini clone.
+  Only the STM32F1 boards have a bootloader: the Mini, the ST-Link/V2 and the ST-Link/V2 mini clone.
 - `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
   It has `versaloon-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
   The `.bin` file has `0xFF` between the two.
@@ -139,8 +144,8 @@ Select the image for the bootloader on the board:
 
 | Board | Bootloader | Image | Start address |
 |---|---|---|---|
-| Existing Mini or OtherUse | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
-| New Mini or OtherUse | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| Existing Mini | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
+| New Mini | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | ST-Link/V2 or ST-Link/V2 mini clone | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | Any board, debug probe | none | `standalone` | `0x08000000` |
 
@@ -215,7 +220,7 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
 - **Debug adapter:** use OpenOCD with `-f interface/vsllink.cfg`, in JTAG or SWD mode.
   On Windows, OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
 - **Serial port:** the dongle has a serial port (`/dev/ttyACM*` on Linux, a COM port on Windows).
-  The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini and the OtherUse.
+  The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
 
 A firmware image built with `-DVSL_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `Versaloon CMSIS-DAP`.
@@ -226,7 +231,7 @@ A firmware image built with `-DVSL_PERSONALITIES=wch-link` shows as a USB device
 The host tools `wlink` and `minichlink` find the probe if it has the ID `1a86:8010` (see [docs/wch-link.md](docs/wch-link.md#use-the-probe)).
 This image has no serial port.
 
-A firmware image built with more than one personality is a multi image, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`.
+A firmware image built with more than one personality is a multi image, for example `-DVSL_PERSONALITIES=cmsis-dap,wch-link`.
 `VSL_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
 The deprecated option `VSL_PROTOCOL=dual` builds the image with the Versaloon and the CMSIS-DAP personalities.
 To change the personality, send a switch command, or use the key.
