@@ -416,6 +416,29 @@ TEST_CASE("RV bridge: auto finds the port again at each connect") {
    CHECK(jtag.calls.back() == "init");
 }
 
+TEST_CASE("RV bridge: auto while connected keeps the port") {
+   FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap };
+   bridge.setMode(cmsisdap::BridgeMode::On);
+   bridge.init();
+   dmiRead(bridge);
+   const int finis = w.pins.finis;
+   // As at the OpenOCD shutdown: no detection, no pin activity
+   bridge.setMode(cmsisdap::BridgeMode::Auto);
+   CHECK(bridge.enabled());
+   CHECK(jtag.calls.empty());
+   CHECK(swd.inits == 0);
+   CHECK(w.pins.finis == finis);
+   // From off: the real port stays
+   bridge.setMode(cmsisdap::BridgeMode::Off);
+   bridge.setMode(cmsisdap::BridgeMode::Auto);
+   CHECK_FALSE(bridge.enabled());
+   CHECK(jtag.calls == std::vector<std::string>{ "init" });
+   CHECK(swd.inits == 0);
+}
+
 TEST_CASE("RV bridge: auto with TDO high is no chain") {
    FakeJtagPort jtag;
    jtag.tdoFill = 0xFF;
@@ -438,22 +461,4 @@ TEST_CASE("RV bridge: auto finds a TAP on the real port by its IDCODE") {
    CHECK_FALSE(bridge.enabled());
    CHECK(swd.inits == 0);
    CHECK(real.tap.state() == cmsisdap::RvDtmTap::State::Idle);
-}
-
-TEST_CASE("RV bridge: auto while connected finds the port at once") {
-   FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
-   swd.ack = cmsisdap::dap::ackNone;
-   Wire w;
-   cmsisdap::RvBridge bridge{ jtag, swd, w.tap };
-   bridge.setMode(cmsisdap::BridgeMode::Off);
-   bridge.init();
-   bridge.setMode(cmsisdap::BridgeMode::Auto);
-   CHECK(bridge.enabled());
-   CHECK(jtag.calls == std::vector<std::string>{ "init", "fini", "init", "shift 75", "fini" });
-   // Auto without a connection finds nothing until init()
-   bridge.fini();
-   bridge.setMode(cmsisdap::BridgeMode::Off);
-   bridge.setMode(cmsisdap::BridgeMode::Auto);
-   CHECK_FALSE(bridge.enabled());
 }

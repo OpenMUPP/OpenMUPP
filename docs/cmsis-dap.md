@@ -429,7 +429,7 @@ The response is `81 00`. Another mode gives `81 FF`.
   SWD (`DAP_Connect` to SWD) does not change in any mode.
 - A mode change while JTAG is connected stops the old port and starts the new one at once.
   The TAP state and the IR of the new port are not known, as after `DAP_SWJ_Pins`.
-  The change to auto while JTAG is connected finds the target at once.
+  The change to auto keeps the port until the next `DAP_Connect`. Thus the OpenOCD `shutdown` causes no pin activity on the target.
 - The change from the TAP to the board port releases SWCLK and SWDIO, and resets the timer of the one-wire engine.
   The JTAG fast path uses the same pin (PB4) and DMA1 channel 3.
   The release goes in both directions: the `fini()` of the JTAG fast path clears the DMA requests of SPI1 and SPI2.

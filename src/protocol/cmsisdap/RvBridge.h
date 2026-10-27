@@ -7,8 +7,9 @@
 //
 // - Off: the real port.
 // - On: the TAP.
-// - Auto: init() (DAP_Connect to JTAG) finds the port, see detect(). Auto
-//   is the mode at power-up and after hostGone() (a USB reset).
+// - Auto: init() (DAP_Connect to JTAG) finds the port, see detect(). A
+//   change to auto keeps the port until then. Auto is the mode at power-up
+//   and after hostGone() (a USB reset).
 //
 // A mode change while the processor uses the port (after init(), before
 // fini()) ends the old port with fini() and starts the new one with init().

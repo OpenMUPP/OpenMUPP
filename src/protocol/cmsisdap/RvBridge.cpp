@@ -27,14 +27,17 @@ constexpr uint8_t readDpidr = dap::requestRead;
 } // namespace
 
 void RvBridge::setMode(BridgeMode mode) {
-   if(mode == mode_) {
+   mode_ = mode;
+   // Auto keeps the port until the next init(): no pin activity on the
+   // target, for example at the OpenOCD shutdown.
+   const bool on = mode == BridgeMode::On || (mode == BridgeMode::Auto && on_);
+   if(on == on_) {
       return;
    }
    if(active_) {
       port().fini();
    }
-   mode_ = mode;
-   on_ = mode == BridgeMode::On || (mode == BridgeMode::Auto && active_ && detect());
+   on_ = on;
    if(active_) {
       port().init();
    }
