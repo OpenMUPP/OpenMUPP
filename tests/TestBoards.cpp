@@ -1,8 +1,8 @@
 #include "board/VrefScale.h"
 #include "board/boards/Mini.h"
 #include "board/boards/OtherUse.h"
-#include "board/boards/StLinkV2MiniClone.h"
 #include "board/boards/StLinkV2.h"
+#include "board/boards/StLinkV2MiniClone.h"
 #include "board/boards/WeActH523.h"
 
 #include <doctest/doctest.h>
