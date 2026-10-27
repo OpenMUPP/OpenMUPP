@@ -402,7 +402,8 @@ The common file replaces the `jtag_init` proc of OpenOCD. The proc sends `cmsis-
 A TAP `setup` event is too late: OpenOCD sends it after the chain scan.
 An image without the bridge replies `ID_DAP_Invalid`. OpenOCD logs the cause of the failure.
 Then `init` stops with "The probe has no RISC-V bridge".
-The proc also adds `cmsis-dap cmd 0x81 0x03` to `pre_shutdown_commands`. Thus `shutdown` sets the stored mode before OpenOCD closes the adapter. A firmware without the stored mode replies `81 FF`, and OpenOCD ignores the error.
+The proc also adds `cmsis-dap cmd 0x81 0x02` and `cmsis-dap cmd 0x81 0x03` to `pre_shutdown_commands`. Thus `shutdown` sets auto and then the stored mode before OpenOCD closes the adapter.
+A firmware without the stored mode refuses `81 03`, and stays in auto. The change to auto keeps the port, so the first command causes no pin activity.
 Ctrl-C and SIGTERM also run `shutdown`.
 An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
 Set the stored mode with `python3 tools/vsl_rv_bridge.py stored`, or replug the probe.
@@ -419,6 +420,7 @@ The [bridge hardware test](#bridge-hardware-test) has the results of the three c
 The vendor command `ID_DAP_Vendor1` (`0x81`) sets the mode of the bridge: `81 00` off, `81 01` on, `81 02` auto.
 `81 03` sets the stored mode (see [Stored mode](#stored-mode)).
 With bit 7 of the mode set, the command also stores the mode: `81 80` off, `81 81` on, `81 82` auto.
+`81 83` gives `81 FF`.
 The response is `81 00`. Another mode gives `81 FF`.
 A failed store also gives `81 FF`, but the command still sets the mode.
 
@@ -458,7 +460,7 @@ python3 tools/vsl_rv_bridge.py stored
 ```
 
 The mode stays until a USB reset, a power cycle or the next `ID_DAP_Vendor1`.
-The OpenOCD configs send `81 03` at `shutdown` and after Ctrl-C, but not after an error in a `-c` command.
+The OpenOCD configs send `81 02` and `81 03` at `shutdown` and after Ctrl-C, but not after an error in a `-c` command.
 Thus probe-rs must not reset the USB device when it opens it. probe-rs 0.32.0 does not reset it ([Bridge hardware test](#bridge-hardware-test)).
 
 ### Stored mode
@@ -476,9 +478,11 @@ python3 tools/vsl_rv_bridge.py auto --store
 - A store of the stored mode does not write the flash.
 - A personality switch keeps the stored mode, and a store of the mode keeps the stored personality.
 - A page without a mode gives auto. This is true for a page of an older multi image: its records are the records of the auto mode.
-- A write stalls the CPU: about 50 µs on the STM32F103. Each 512 stores, the store also erases the page, and the CPU stalls up to 40 ms. The host sees a late response. Do not store the mode during a target session.
+- On the STM32F103, a write stalls the CPU for about 50 µs. Each 512 stores, the store also erases the page, and the CPU stalls up to 40 ms. The interrupts wait, so the host sees a late response, and the UART bridge can lose received bytes. Do not store the mode during a target session.
+- On the STM32H5, the page is in bank 2, so code in bank 1 does not stall during the write.
 - A firmware update keeps the page, as for the stored personality (see [Stored personality](firmware-update.md#stored-personality)). A mass erase erases it.
-- Limit: the first flash of an image with one personality finds old data in the page, for example code of an older, larger image. A word of that data can be a record by chance (12 of 65536 values). The image then starts with that mode until the next store.
+- Limit (STM32F103): the first flash of an image with one personality finds old data in the page, for example code of an older, larger image. A word of that data can be a record by chance (12 of 65536 values). The image then starts with that mode until the next store. On the STM32H5, a record also needs the other 112 bits of its flash word set, so this does not occur in practice.
+- The page keeps the personality of another image. Thus a store of the mode in an image with one personality keeps the stored personality of a multi image.
 
 ### Auto mode
 

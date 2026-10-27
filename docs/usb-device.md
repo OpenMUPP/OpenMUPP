@@ -169,7 +169,7 @@ The firmware changes the personality only with a reset.
 The firmware stores the personality in the last 1 KB flash page of the application area, at `0x0800FC00`.
 On the WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash), the page is the last 8 KB flash sector of bank 2, at `0x0803E000`.
 The linker script keeps this page out of the image.
-Thus a multi image has 1 KB (STM32F103) or 8 KB (STM32H5) less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
+Thus a multi image and an image with the RISC-V bridge have 1 KB (STM32F103) or 8 KB (STM32H5) less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
 When the page holds no personality, the image uses `VSL_DEFAULT_PERSONALITY`.
 The default is the first personality of the image in code order.
 `src/personality/PersonalityStore.h` has the page format.

@@ -78,6 +78,12 @@ class MainTest(unittest.TestCase):
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x80]))])
         self.assertIn("is off, stored", out)
 
+    def test_store_of_stored(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        with self.assertRaises(SystemExit):
+            self.run_main(["stored", "--store"], [device])
+        self.assertEqual(device.writes, [])
+
     def test_failed_store(self):
         device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0xFF])
         result, _, err = self.run_main(["on", "--store"], [device])

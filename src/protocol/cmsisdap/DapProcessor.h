@@ -231,7 +231,7 @@ enum class BridgeMode : uint8_t {
 
 // ID_DAP_Vendor1: this bit of the mode byte also stores the mode
 inline constexpr uint8_t bridgeStoreFlag = 0x80;
-// ID_DAP_Vendor1: this mode value sets the stored mode
+// ID_DAP_Vendor1: this mode value sets the stored mode. It takes no store flag.
 inline constexpr uint8_t bridgeStoredMode = 3;
 
 // The RISC-V bridge of ID_DAP_Vendor1 (RvBridge.h)

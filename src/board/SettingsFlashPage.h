@@ -15,7 +15,8 @@
 //
 // The flash controller stalls the CPU while it erases or writes: an erase
 // takes up to 40 ms on the STM32F1, a write about 50 us. Interrupts wait
-// for that time. The page is used at the start, before the reset of a
+// for that time, so the UART bridge can lose received bytes. On the STM32H5
+// the page is in bank 2: code in bank 1 does not stall. The page is used at the start, before the reset of a
 // personality switch, and for a stored bridge mode (ID_DAP_Vendor1 with
 // bit 7). The log erases the page once in 512 stores.
 

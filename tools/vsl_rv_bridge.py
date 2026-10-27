@@ -90,6 +90,8 @@ def main(argv=None, usb=None):
     parser.add_argument("mode", choices=tuple(MODES))
     parser.add_argument("--store", action="store_true", help="also store the mode: the mode at power-up and after a USB reset")
     args = parser.parse_args(argv)
+    if args.store and args.mode == "stored":
+        parser.error("the stored mode is stored already: use --store with off, on or auto")
     if usb is None:
         usb = vp.import_usb()
     devices = [device for name, device in vp.find_devices(usb, args.serial) if name == "cmsis-dap"]

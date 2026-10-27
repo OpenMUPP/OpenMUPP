@@ -451,7 +451,8 @@ bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
    }
    out.u8(command::vendor1);
    const auto code = static_cast<uint8_t>(value & ~bridgeStoreFlag);
-   if(code > bridgeStoredMode) {
+   // The stored mode is stored already: no store flag with it
+   if(code > bridgeStoredMode || value == (bridgeStoredMode | bridgeStoreFlag)) {
       out.u8(statusError);
       return true;
    }

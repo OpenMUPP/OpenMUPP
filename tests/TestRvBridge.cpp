@@ -48,7 +48,6 @@ class FakeJtagPort final : public protocol::JtagPort {
    uint8_t tdoFill{ 0 };
 };
 
-// Records the calls of the processor
 // The settings page of the stored mode: records the stores.
 class FakeModeStore final : public cmsisdap::BridgeModeStore {
    public:
@@ -61,6 +60,7 @@ class FakeModeStore final : public cmsisdap::BridgeModeStore {
    bool fail{ false };
 };
 
+// Records the calls of the processor
 class FakeBridge final : public cmsisdap::Bridge {
    public:
    void setMode(cmsisdap::BridgeMode mode) override {
@@ -363,6 +363,9 @@ TEST_CASE("RV bridge: ID_DAP_Vendor1 mode 3 sets the stored mode") {
    CHECK(d.run({ 0x81, 0x01 }) == Bytes{ 0x81, 0x00 });
    CHECK(d.run({ 0x81, 0x03 }) == Bytes{ 0x81, 0x00 });
    CHECK(bridge.modes == std::vector<Mode>{ Mode::On, Mode::Off });
+   // With the store flag: DAP_ERROR, no change
+   CHECK(d.run({ 0x81, 0x83 }) == Bytes{ 0x81, 0xFF });
+   CHECK(bridge.modes.size() == 2);
    CHECK(bridge.stores.empty());
 }
 
