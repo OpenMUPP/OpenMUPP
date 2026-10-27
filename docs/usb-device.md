@@ -36,7 +36,10 @@ The main loop also does not sleep while a debugger is connected (`DHCSR.C_DEBUGE
 On the STM32H5, the debugger reads zeros from flash, SRAM and the peripherals while the core sleeps.
 The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
-A board without a pull-up pin (ST-Link/V2) has a fixed pull-up.
+A board without a pull-up pin (the ST-Link/V2 and the ST-Link/V2 mini clone) has a fixed pull-up.
+On such an STM32F1 board, the firmware sets D+ (PA12) low for 20 ms before it starts the USB device.
+Thus the host sees a disconnect also after a reset by a debugger or a watchdog.
+Without this step, the host keeps the device of the old firmware and does not enumerate the new one.
 
 The Versaloon OUT endpoint `0x03` is double-buffered (system-stm32 `hw::UsbDevice`, "Double-buffered bulk OUT").
 The hardware receives the next packet of a command while the main loop handles the last packet.
@@ -467,17 +470,17 @@ OpenOCD then stops with an error.
 OpenOCD controls the reset lines SRST and TRST through the `GPIO` block (`src/protocol/versaloon/GpioBlock.h`).
 Each bit of a `u16` mask selects one pin of the debug connector:
 
-| Bit | Signal | Mini and OtherUse | ST-Link/V2 |
-|---|---|---|---|
-| `0x0001` | SRST | PB11 | PB0 |
-| `0x0002` | TRST | PB10 | none |
-| `0x0004` | USR1 | none | none |
-| `0x0008` | USR2 | none | none |
-| `0x0010` | TCK | PB13 | PA5 |
-| `0x0020` | TDO (input only) | PB14 | PA6 |
-| `0x0040` | TDI | PB15 | PA7 |
-| `0x0080` | RTCK (input only) | PA8 | none |
-| `0x0100` | TMS | PB4 out, PB6 in | PB14 |
+| Bit | Signal | Mini and OtherUse | ST-Link/V2 | ST-Link/V2 mini clone |
+|---|---|---|---|---|
+| `0x0001` | SRST | PB11 | PB0 | PB6 |
+| `0x0002` | TRST | PB10 | none | none |
+| `0x0004` | USR1 | none | none | none |
+| `0x0008` | USR2 | none | none | none |
+| `0x0010` | TCK | PB13 | PA5 | PA5 |
+| `0x0020` | TDO (input only) | PB14 | PA6 | PA6 (not on the header) |
+| `0x0040` | TDI | PB15 | PA7 | PA7 (not on the header) |
+| `0x0080` | RTCK (input only) | PA8 | none | none |
+| `0x0100` | TMS | PB4 out, PB6 in | PB14 | PB14 out, PB12 in |
 
 The sub-commands use port index 0. The values are `u16`, little-endian:
 

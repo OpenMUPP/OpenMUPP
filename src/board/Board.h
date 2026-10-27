@@ -1,8 +1,8 @@
 #pragma once
 
 // The board of this build: board::current. CMake defines one of
-// VSL_BOARD_MINI, VSL_BOARD_OTHERUSE, VSL_BOARD_STLINKV2 or
-// VSL_BOARD_WEACTH523 from BOARD.
+// VSL_BOARD_MINI, VSL_BOARD_OTHERUSE, VSL_BOARD_STLINKV2,
+// VSL_BOARD_STLINKV2MINICLONE or VSL_BOARD_WEACTH523 from BOARD.
 // The protocol and the engines read board data only through board::current.
 // With VSL_DEBUG_SWD, board::current is the debug variant of the board.
 
@@ -12,10 +12,12 @@
 #include "board/boards/OtherUse.h"
 #elif defined(VSL_BOARD_STLINKV2)
 #include "board/boards/StLinkV2.h"
+#elif defined(VSL_BOARD_STLINKV2MINICLONE)
+#include "board/boards/StLinkV2MiniClone.h"
 #elif defined(VSL_BOARD_WEACTH523)
 #include "board/boards/WeActH523.h"
 #else
-#error "No board selected: define VSL_BOARD_MINI, VSL_BOARD_OTHERUSE, VSL_BOARD_STLINKV2 or VSL_BOARD_WEACTH523"
+#error "No board selected: define VSL_BOARD_MINI, VSL_BOARD_OTHERUSE, VSL_BOARD_STLINKV2, VSL_BOARD_STLINKV2MINICLONE or VSL_BOARD_WEACTH523"
 #endif
 
 namespace board {
@@ -26,6 +28,8 @@ inline constexpr const Definition &selected = mini;
 inline constexpr const Definition &selected = otherUse;
 #elif defined(VSL_BOARD_STLINKV2)
 inline constexpr const Definition &selected = stLinkV2;
+#elif defined(VSL_BOARD_STLINKV2MINICLONE)
+inline constexpr const Definition &selected = stLinkV2MiniClone;
 #elif defined(VSL_BOARD_WEACTH523)
 inline constexpr const Definition &selected = weActH523;
 #endif

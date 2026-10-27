@@ -431,7 +431,7 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
    // The key gesture flashes all LEDs before the switch.
    if(const auto flash = personalitySwitch.indication(nowMs)) {
       board::setLed(board::Led::Power, *flash);
-      board::setLed(board::Led::State, *flash);
+      board::showState(*flash ? board::StateShow::Activity : board::StateShow::Idle);
       board::setLed(board::Led::Usb, *flash);
       return;
    }
@@ -443,8 +443,14 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
    errorLed.update(nowMs, probeErrorCount());
    board::setLed(board::Led::Power, targetPowerLed.isOn());
    // A probe error replaces the activity for some time (ErrorLed.h).
-   const bool stateOn = errorLed.isActive() ? errorLed.isOn() : activityLed.isOn();
-   board::setLed(board::Led::State, clockFromCrystal ? stateOn : clockFaultBlink.isOn(nowMs));
+   using board::StateShow;
+   StateShow show = activityLed.isOn() ? StateShow::Activity : StateShow::Idle;
+   if(!clockFromCrystal) {
+      show = clockFaultBlink.isOn(nowMs) ? StateShow::Fault : StateShow::Idle;
+   } else if(errorLed.isActive()) {
+      show = errorLed.isOn() ? StateShow::Fault : StateShow::Idle;
+   }
+   board::showState(show);
    board::setLed(board::Led::Usb, usbStack.isConfigured());
 }
 

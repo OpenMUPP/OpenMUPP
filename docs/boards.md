@@ -8,6 +8,8 @@ The README lists the supported boards.
 The board selects the MCU family of the dongle.
 The firmware knows two families: STM32F1 and STM32H5.
 The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB (family STM32F1).
+The ST-Link/V2 mini clone uses an STM32F103 compatible MCU, with the same family.
+The ST-Link/V2 mini clone has its own document with the measured pin map: [ST-Link/V2 mini clone](stlinkv2-mini-clone.md).
 CMSIS has one device define (`STM32F103xB`) for both parts.
 The WeAct STM32H523 core board uses an STM32H523CC (family STM32H5, see [WeAct STM32H523 core board](#weact-stm32h523-core-board)).
 
@@ -57,7 +59,7 @@ Some functions come from the pin map and the family, not from a separate field:
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
   The setting frees all debug port pins that the board uses, and keeps the rest.
   The Mini and the OtherUse use PA14 for an LED, so they disable the debug port.
-  The ST-Link/V2 keeps JTAG and SWD.
+  The ST-Link/V2 and the ST-Link/V2 mini clone keep JTAG and SWD.
   The debug port pins are the same on the two families.
   The STM32F103 frees the pins with `AFIO_MAPR.SWJ_CFG`.
   The STM32H5 has no AFIO. Its debug port pins are in AF0 after reset, and the GPIO mode of a pin frees the pin.
@@ -116,6 +118,20 @@ The power LED shows the target voltage, from the target supply or from the dongl
 A board without a working Vref sense keeps the power LED on all the time. This includes a board where the ADC calibration failed.
 The dongle has no idle indication of the firmware. An idle dongle with no target and no USB host has all LEDs off. A hung main loop shows the same.
 A continuous command stream gives a steady flicker on the state LED, because the LED stays off for at least 40 ms after each flash.
+
+A board can have two LEDs on the state pin, one to each supply (`stateTwoColour` in the board definition).
+One pin level lights one LED, and the other level lights the other LED.
+On such a board, the state LED works in a different way:
+
+| State | Pin | LEDs (ST-Link/V2 mini clone) |
+|---|---|---|
+| Idle | Asserted level | Blue on |
+| Activity: the flash of a command, or of the key gesture | Analog mode | Both off |
+| Fault: the flashes of a probe error or of a clock fault | The other level | Red on |
+
+Thus the dongle shows that the firmware runs: the idle state is a lit LED, not a dark one.
+The activity state uses the analog mode of the pin, not a digital input.
+With a digital input, the red LED of the mini clone glows a little. In analog mode, both LEDs are off.
 
 Three fault and event patterns replace the normal function:
 

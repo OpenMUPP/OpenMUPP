@@ -58,6 +58,17 @@
       }
     },
     {
+      "name": "board-stlinkv2miniclone",
+      "description": "Board stlinkv2miniclone",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "cacheVariables": {
+        "BOARD": "stlinkv2miniclone"
+      }
+    },
+    {
       "name": "board-weacth523",
       "description": "Board weacth523",
       "hidden": true,
@@ -322,6 +333,45 @@
       ]
     },
     {
+      "name": "stlinkv2miniclone",
+      "displayName": "ST-Link/V2 mini clone",
+      "inherits": [
+        "board-stlinkv2miniclone"
+      ]
+    },
+    {
+      "name": "stlinkv2miniclone-cmsis-dap",
+      "displayName": "ST-Link/V2 mini clone, CMSIS-DAP",
+      "inherits": [
+        "board-stlinkv2miniclone",
+        "personalities-cmsis-dap"
+      ]
+    },
+    {
+      "name": "stlinkv2miniclone-dual",
+      "displayName": "ST-Link/V2 mini clone, dual image",
+      "inherits": [
+        "board-stlinkv2miniclone",
+        "personalities-dual"
+      ]
+    },
+    {
+      "name": "stlinkv2miniclone-wch-link",
+      "displayName": "ST-Link/V2 mini clone, WCH-Link",
+      "inherits": [
+        "board-stlinkv2miniclone",
+        "personalities-wch-link"
+      ]
+    },
+    {
+      "name": "stlinkv2miniclone-triple",
+      "displayName": "ST-Link/V2 mini clone, triple image",
+      "inherits": [
+        "board-stlinkv2miniclone",
+        "personalities-triple"
+      ]
+    },
+    {
       "name": "weacth523",
       "displayName": "WeAct STM32H523",
       "inherits": [
@@ -454,6 +504,26 @@
     {
       "name": "stlinkv2-triple",
       "configurePreset": "stlinkv2-triple"
+    },
+    {
+      "name": "stlinkv2miniclone",
+      "configurePreset": "stlinkv2miniclone"
+    },
+    {
+      "name": "stlinkv2miniclone-cmsis-dap",
+      "configurePreset": "stlinkv2miniclone-cmsis-dap"
+    },
+    {
+      "name": "stlinkv2miniclone-dual",
+      "configurePreset": "stlinkv2miniclone-dual"
+    },
+    {
+      "name": "stlinkv2miniclone-wch-link",
+      "configurePreset": "stlinkv2miniclone-wch-link"
+    },
+    {
+      "name": "stlinkv2miniclone-triple",
+      "configurePreset": "stlinkv2miniclone-triple"
     },
     {
       "name": "weacth523",

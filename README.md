@@ -1,7 +1,7 @@
 # versaloon-NG
 
 versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini and the OtherUse.
-A build for an ST-Link/V2 clone also exists, but it has no hardware test (see [Boards](#boards)).
+A build for the ST-Link/V2 mini clone also exists, with a hardware test of the USB personalities, the LEDs and SWD to a target. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
 The port to the STM32H5 (the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
 
@@ -29,10 +29,11 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 |---|---|---|---|
 | `mini` | Versaloon Mini | 12 MHz | target |
 | `otheruse` | OtherUse | 12 MHz | target |
-| `stlinkv2` | ST-Link/V2 clone | 8 MHz | compile-only |
+| `stlinkv2` | ST-Link/V2, pin map of the official design | 8 MHz | compile-only |
+| `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | target, SWD only (no JTAG pins) |
 | `weacth523` | WeAct STM32H523 core board | 8 MHz | target, 3.3 V targets only |
 
-The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB.
+The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
 The WeAct STM32H523 core board uses an STM32H523CC.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
@@ -75,7 +76,7 @@ cmake --build --preset mini -j
 ```
 
 The build directory is `build/<preset>`, here `build/mini`.
-The presets `mini`, `otheruse` and `stlinkv2` build the Release images of one board.
+The presets `mini`, `otheruse`, `stlinkv2` and `stlinkv2miniclone` build the Release images of one board.
 A preset without a suffix builds the Versaloon personality.
 Add `-cmsis-dap`, `-dual`, `-wch-link` or `-triple` for the other personalities, for example `mini-cmsis-dap`.
 A `-dual` preset builds the multi image with the Versaloon and the CMSIS-DAP personalities.
@@ -101,7 +102,7 @@ cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
 cmake --build build/mini -j
 ```
 
-Use `-DBOARD=otheruse`, `-DBOARD=stlinkv2` or `-DBOARD=weacth523` for the other boards.
+Use `-DBOARD=otheruse`, `-DBOARD=stlinkv2`, `-DBOARD=stlinkv2miniclone` or `-DBOARD=weacth523` for the other boards.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
 
 The build links the same firmware into one or more application images.

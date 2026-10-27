@@ -2,6 +2,7 @@
 #include "board/boards/Mini.h"
 #include "board/boards/OtherUse.h"
 #include "board/boards/StLinkV2.h"
+#include "board/boards/StLinkV2MiniClone.h"
 #include "board/boards/WeActH523.h"
 
 #include <doctest/doctest.h>
@@ -117,6 +118,28 @@ TEST_CASE("ST-Link/V2 has an 8 MHz crystal and no JTAG fast path") {
    CHECK_FALSE(stLink.usbPullUp);
 }
 
+TEST_CASE("ST-Link/V2 mini clone has the measured pin map of the dongle") {
+   const Definition &clone = board::stLinkV2MiniClone;
+
+   CHECK(clone.name == "stlinkv2miniclone");
+   CHECK(clone.family == F1);
+   CHECK(clone.hseFrequency == 8'000'000);
+   CHECK(clone.hardwareId == 0x38);
+   // Header: CLK, DIO and RST. PB13 and PB5 are tied to them and stay inputs.
+   CHECK(clone.debug.tck == Pin{ Port::A, 5 });
+   CHECK(clone.debug.tmsOut == Pin{ Port::B, 14 });
+   // DIO: PB14 drives, PB12 reads with its pull-up
+   CHECK(clone.debug.tmsIn == Pin{ Port::B, 12 });
+   CHECK(clone.debug.srst == Pin{ Port::B, 6 });
+   CHECK(clone.leds.state == Signal{ { Port::A, 9 }, Active::High });
+   CHECK(clone.leds.stateTwoColour);
+   CHECK_FALSE(clone.hasJtagFastPath());
+   CHECK_FALSE(clone.powerSwitch);
+   CHECK_FALSE(clone.usbPullUp);
+   CHECK(board::swjConfig(clone) == board::SwjConfig::Full);
+   CHECK(board::withSwd(clone) == clone);
+}
+
 TEST_CASE("WeAct H523 has SWDIO next to SWCLK and the on-board LED and key") {
    const Definition &weAct = board::weActH523;
 
@@ -151,6 +174,7 @@ TEST_CASE("All boards are valid") {
    CHECK(board::isValid(board::mini));
    CHECK(board::isValid(board::otherUse));
    CHECK(board::isValid(board::stLinkV2));
+   CHECK(board::isValid(board::stLinkV2MiniClone));
    CHECK(board::isValid(board::weActH523));
 }
 
@@ -209,7 +233,7 @@ TEST_CASE("adcChannelOf gives the STM32F103 ADC channel of a pin") {
 }
 
 TEST_CASE("oneWireTimerOf gives a timer channel on the SWDIO output of each board") {
-   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2 }) {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2, board::stLinkV2MiniClone }) {
       CAPTURE(def.name);
       const auto timer = board::oneWireTimerOf(def.family, def.debug.tmsOut);
       REQUIRE(timer);
@@ -377,6 +401,33 @@ TEST_CASE("withSwd drops the LEDs on the SWD pins and keeps SWD on") {
    def = board::stLinkV2;
    def.key = Signal{ { Port::A, 14 }, Active::Low };
    CHECK(board::swjConfig(board::withSwd(def)) == board::SwjConfig::Disabled);
+}
+
+TEST_CASE("stateDriveOf drives one LED or two colours on one pin") {
+   using board::StateDrive;
+   using board::StateShow;
+   constexpr Signal highOn{ { Port::A, 9 }, Active::High };
+   constexpr Signal lowOn{ { Port::A, 15 }, Active::Low };
+
+   // One LED: on for activity and a fault, as before
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Idle) == StateDrive{ false, false });
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Activity) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Fault) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(lowOn, false, StateShow::Idle) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(lowOn, false, StateShow::Fault) == StateDrive{ false, false });
+
+   // Two colours: idle the asserted colour, a fault the other, activity off
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Idle) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Fault) == StateDrive{ false, false });
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Activity).off);
+   CHECK(board::stateDriveOf(lowOn, true, StateShow::Idle) == StateDrive{ false, false });
+}
+
+TEST_CASE("Only the mini clone has a two-colour state LED") {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2, board::weActH523 }) {
+      CAPTURE(def.name);
+      CHECK_FALSE(def.leds.stateTwoColour);
+   }
 }
 
 TEST_CASE("Signal::levelFor gives the pin level of the signal state") {

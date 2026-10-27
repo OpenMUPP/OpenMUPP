@@ -15,16 +15,20 @@
 #
 #   mini      Versaloon Mini
 #   otheruse  OtherUse
-#   stlinkv2  ST-Link/V2 clone (compile-only target)
+#   stlinkv2  ST-Link/V2, pin map of the official design (compile-only target)
+#   stlinkv2miniclone
+#             ST-Link/V2 mini clone, USB stick dongle
+#             (docs/stlinkv2-mini-clone.md)
 #   weacth523 WeAct STM32H523 core board (STM32H523CC)
 # The STM32F1 boards have an STM32F103x8 or an STM32F103xB. CMSIS has one
 # define (STM32F103xB) for both parts. The firmware uses only the 64 KB of
 # the STM32F103x8.
-set(VSL_BOARDS mini otheruse stlinkv2 weacth523)
+set(VSL_BOARDS mini otheruse stlinkv2 stlinkv2miniclone weacth523)
 #                         family  device      crystal  ldscript     flash
 set(VSL_BOARD_mini        STM32F1 STM32F103xB 12000000 mem-f103.ld  65536)
 set(VSL_BOARD_otheruse    STM32F1 STM32F103xB 12000000 mem-f103.ld  65536)
 set(VSL_BOARD_stlinkv2    STM32F1 STM32F103xB 8000000  mem-f103.ld  65536)
+set(VSL_BOARD_stlinkv2miniclone STM32F1 STM32F103xB 8000000  mem-f103.ld  65536)
 set(VSL_BOARD_weacth523   STM32H5 STM32H523xx 8000000  mem-h523xc.ld 262144)
 # Boards that versaloon-bootloader supports (cmake/Bootloader.cmake)
 set(VSL_BOOTLOADER_BOARDS mini otheruse)
