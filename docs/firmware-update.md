@@ -162,8 +162,18 @@ Thus a multi image keeps the stored personality in the last sector of bank 2, at
 ## Install the bootloader
 
 The ST-Link/V2 and the ST-Link/V2 mini clone use `versaloon-bootloader`.
-Their original firmware has readout protection: run `stm32f1x unlock 0` before you write the combined image.
+Their original firmware has read protection.
+Remove it before you write the combined image:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "init; reset halt; stm32f1x unlock 0; exit"
+```
+
 The unlock erases all of the flash.
+Then disconnect the power of the board, and connect it again.
+The read protection stays active until the next power-up.
+See [Read protection of the original firmware](stlinkv2-mini-clone.md#read-protection-of-the-original-firmware).
 
 The Mini and the OtherUse use one of two bootloaders:
 
@@ -200,7 +210,7 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
 `stm32f1x unlock 0` erases the option bytes and removes all write protection.
 The bootloader README has the full rules ("Flash protection").
 
-The legacy bootloader (tag `v1-legacy` of `versaloon-bootloader`) does not set write protection or readout protection.
+The legacy bootloader (tag `v1-legacy` of `versaloon-bootloader`) does not set write protection or read protection.
 Thus the debug probe can write the combined image over it without `stm32f1x unlock 0`.
 If the write fails, the option bytes of the board were changed: run `stm32f1x unlock 0` first.
 
