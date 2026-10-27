@@ -22,8 +22,8 @@ namespace {
 
 using Bytes = std::vector<uint8_t>;
 
-// The real JTAG port: records the calls. shift() gives TDO 0, or 0x55 in
-// each byte with a chain.
+// The real JTAG port: records the calls. shift() gives tdoFill in each TDO
+// byte: 0 for a TDO that stays low, 0xFF for the pull-up.
 class FakeJtagPort final : public protocol::JtagPort {
    public:
    void init() override {
@@ -38,16 +38,14 @@ class FakeJtagPort final : public protocol::JtagPort {
    }
    bool shift(uint32_t bitCount, art::span<const uint8_t>, art::span<const uint8_t>, art::span<uint8_t> tdo) override {
       calls.push_back("shift " + std::to_string(bitCount));
-      if(chain) {
-         for(auto &byte : tdo) {
-            byte = 0x55;
-         }
+      for(auto &byte : tdo) {
+         byte = tdoFill;
       }
       return true;
    }
 
    std::vector<std::string> calls;
-   bool chain{ false };
+   uint8_t tdoFill{ 0 };
 };
 
 // Records the calls of the processor
@@ -342,7 +340,7 @@ TEST_CASE("RV bridge: the processor reads the IDCODE of the TAP after the switch
 
 TEST_CASE("RV bridge: auto with a JTAG chain is the real port") {
    FakeJtagPort jtag;
-   jtag.chain = true;
+   jtag.tdoFill = 0x55;
    vsltest::FakeDapSwd swd;
    Wire w;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap };
@@ -412,10 +410,34 @@ TEST_CASE("RV bridge: auto finds the port again at each connect") {
    bridge.init();
    CHECK(bridge.enabled());
    bridge.fini();
-   jtag.chain = true;
+   jtag.tdoFill = 0x55;
    bridge.init();
    CHECK_FALSE(bridge.enabled());
    CHECK(jtag.calls.back() == "init");
+}
+
+TEST_CASE("RV bridge: auto with TDO high is no chain") {
+   FakeJtagPort jtag;
+   jtag.tdoFill = 0xFF;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap };
+   bridge.init();
+   // The SWD step runs: the JTAG step found no chain.
+   CHECK(swd.inits == 1);
+}
+
+TEST_CASE("RV bridge: auto finds a TAP on the real port by its IDCODE") {
+   // A second emulated TAP is the real port: it gives TDO by its state, so
+   // the scan must reach Shift-DR and read the IDCODE in its window.
+   Wire real;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   cmsisdap::RvBridge bridge{ real.tap, swd, w.tap };
+   bridge.init();
+   CHECK_FALSE(bridge.enabled());
+   CHECK(swd.inits == 0);
+   CHECK(real.tap.state() == cmsisdap::RvDtmTap::State::Idle);
 }
 
 TEST_CASE("RV bridge: auto while connected finds the port at once") {
