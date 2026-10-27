@@ -131,6 +131,7 @@ The default is `/usr`.
 | Preset | Board | Personalities (`VSL_PERSONALITIES`) | Build type |
 |---|---|---|---|
 | `mini-cmsis-dap`, `stlinkv2-cmsis-dap`, `stlinkv2miniclone-cmsis-dap` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap` | Release |
+| `mini-cmsis-dap-no-rv-bridge` | Mini | `cmsis-dap`, with `VSL_CMSIS_DAP_RV_BRIDGE=OFF` (tag `-cmsis-dap-no-rv-bridge`) | Release |
 | `mini-dual`, `stlinkv2-dual`, `stlinkv2miniclone-dual` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `cmsis-dap` | Debug |
 | `mini-wch-link`, `stlinkv2-wch-link`, `stlinkv2miniclone-wch-link` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `wch-link` | Release |
@@ -154,7 +155,7 @@ Before, they built `versaloon,cmsis-dap`, and the `-cmsis-dap-wch-link` presets 
 For the old dual image, add `-DVSL_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
-CI builds the `-cmsis-dap`, `-dual` and `-debug` presets.
+CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, and `mini-cmsis-dap-no-rv-bridge`.
 The other presets are for local builds only.
 CI uses these presets (see [Continuous integration](#continuous-integration)).
 
@@ -348,6 +349,8 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   "ST-Link/V2" is the ST-Link/V2 and the ST-Link/V2 mini clone.
   Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
   CI builds no image with the Versaloon personality.
+- `build-mini-cmsis-dap-no-rv-bridge`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF`, plus the size check.
+  This job keeps no artifacts.
 - `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
   The limit of the multi image is 8 KB smaller, because the last flash sector holds the stored personality.
 

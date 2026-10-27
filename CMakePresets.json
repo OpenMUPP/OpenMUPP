@@ -119,6 +119,20 @@
       }
     },
     {
+      "name": "personalities-cmsis-dap-no-rv-bridge",
+      "description": "CMSIS-DAP personality without the RISC-V DTM bridge",
+      "hidden": true,
+      "inherits": [
+        "personalities-cmsis-dap"
+      ],
+      "cacheVariables": {
+        "VSL_CMSIS_DAP_RV_BRIDGE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
+    {
       "name": "debug",
       "description": "Debug build: debug log on the serial port, SWD on",
       "hidden": true,
@@ -139,6 +153,14 @@
       "inherits": [
         "board-mini",
         "personalities-cmsis-dap"
+      ]
+    },
+    {
+      "name": "mini-cmsis-dap-no-rv-bridge",
+      "displayName": "Versaloon Mini, CMSIS-DAP without the RISC-V bridge",
+      "inherits": [
+        "board-mini",
+        "personalities-cmsis-dap-no-rv-bridge"
       ]
     },
     {
@@ -325,6 +347,10 @@
     {
       "name": "mini-cmsis-dap",
       "configurePreset": "mini-cmsis-dap"
+    },
+    {
+      "name": "mini-cmsis-dap-no-rv-bridge",
+      "configurePreset": "mini-cmsis-dap-no-rv-bridge"
     },
     {
       "name": "mini-dual",
