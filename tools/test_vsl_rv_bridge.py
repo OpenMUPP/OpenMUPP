@@ -15,9 +15,10 @@ from test_vsl_personality import FakeDevice, fake_usb  # noqa: E402
 
 
 class RequestTest(unittest.TestCase):
-    def test_on_and_off(self):
-        self.assertEqual(rb.bridge_request(True), bytes([0x81, 0x01]))
-        self.assertEqual(rb.bridge_request(False), bytes([0x81, 0x00]))
+    def test_modes(self):
+        self.assertEqual(rb.bridge_request("on"), bytes([0x81, 0x01]))
+        self.assertEqual(rb.bridge_request("off"), bytes([0x81, 0x00]))
+        self.assertEqual(rb.bridge_request("auto"), bytes([0x81, 0x02]))
 
 
 class CheckReplyTest(unittest.TestCase):
@@ -56,6 +57,13 @@ class MainTest(unittest.TestCase):
         device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
         self.assertEqual(self.run_main(["off"], [device])[0], 0)
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x00]))])
+
+    def test_auto(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        result, out, _ = self.run_main(["auto"], [device])
+        self.assertEqual(result, 0)
+        self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x02]))])
+        self.assertIn("is auto", out)
 
     def test_image_without_bridge(self):
         device = FakeDevice(0x0403, 0x9B3C, reply=[0xFF])

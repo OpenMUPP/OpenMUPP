@@ -190,12 +190,15 @@ class DapPlatform final : public cmsisdap::Platform {
 DapPlatform dapPlatform;
 cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
 #if defined(VSL_CMSIS_DAP_RV_BRIDGE)
-// The RISC-V bridge: ID_DAP_Vendor1 switches the JTAG port from the board
-// to the emulated RISC-V DTM on the debug wire engine.
+// The RISC-V bridge: the JTAG port is the port of the board or the
+// emulated RISC-V DTM on the debug wire engine. ID_DAP_Vendor1 sets the
+// mode; auto finds the port at DAP_Connect. In a multi image the wire pins
+// are separate objects from the ones of wch-link: only the active
+// personality sets them up.
 board::RvSwdPins dapRvSwdPins;
 wchlink::RvSwdTarget<board::RvSwdPins> dapRvTarget{ dapRvSwdPins, &serialService };
 cmsisdap::RvDtmTap dapRvTap{ dapRvTarget };
-cmsisdap::RvBridge dapRvBridge{ boardJtag, dapRvTap };
+cmsisdap::RvBridge dapRvBridge{ boardJtag, dapSwd, dapRvTap };
 #endif
 cmsisdap::Processor dapProcessor{ dapSwd,
                                   boardGpio,

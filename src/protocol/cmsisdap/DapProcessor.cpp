@@ -231,7 +231,7 @@ void Processor::hostGone() {
    responseFirst_ = 0;
    disconnect();
    if(bridge_ != nullptr) {
-      bridge_->enable(false);
+      bridge_->setMode(BridgeMode::Auto);
    }
    if(uart_ != nullptr) {
       uart_->hostGone();
@@ -445,16 +445,16 @@ bool Processor::switchPersonality(PacketReader &in, PacketWriter &out) {
 }
 
 bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
-   const uint8_t on = in.u8();
+   const uint8_t mode = in.u8();
    if(!in.ok()) {
       return false;
    }
    out.u8(command::vendor1);
-   if(on > 1) {
+   if(mode > static_cast<uint8_t>(BridgeMode::Auto)) {
       out.u8(statusError);
       return true;
    }
-   bridge_->enable(on == 1);
+   bridge_->setMode(static_cast<BridgeMode>(mode));
    // The other port has another TAP state and IR.
    jtag_.invalidate();
    out.u8(statusOk);

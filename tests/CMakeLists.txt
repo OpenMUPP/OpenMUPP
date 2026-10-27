@@ -74,6 +74,7 @@ add_executable(vsl-tests
         ../src/protocol/cmsisdap/DapJtag.cpp
         ../src/protocol/cmsisdap/DapProcessor.cpp
         ../src/protocol/cmsisdap/RvDtmTap.cpp
+        ../src/protocol/cmsisdap/RvBridge.cpp
         ../src/protocol/wchlink/WchLinkFlash.cpp
         ../src/protocol/wchlink/WchLinkProcessor.cpp
         ../src/protocol/versaloon/GpioBlock.cpp

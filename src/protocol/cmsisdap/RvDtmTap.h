@@ -126,6 +126,10 @@ class RvDtmTap final : public protocol::JtagPort {
    void pinsChanged() {
       attached_ = false;
    }
+   // The auto mode of the bridge (RvBridge.h): true when a target answers
+   // the connect on one of the wires. Releases the pins. The next DMI
+   // access connects again.
+   [[nodiscard]] bool probe();
    [[nodiscard]] bool setSpeed(uint32_t) override {
       return true;
    }

@@ -169,7 +169,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x22` | `DAP_UART_Control` | Enables, disables and flushes the receiver and the transmitter. |
 | `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
 | `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image without the bootloader entry replies `0xFF` to it. An image with one personality and without the bootloader entry replies `ID_DAP_Invalid` to each code. Only the `app-8k` image and the images of the STM32H5 have the bootloader entry. See [Multi image](usb-device.md#multi-image). |
-| `0x81` | `ID_DAP_Vendor1` | Only in an image with `VSL_CMSIS_DAP_RV_BRIDGE`: switches the RISC-V bridge, `[0x81][on u8]`, `1` on, `0` off. The response is `[0x81][status u8]`: `0` when the switch is done, `0xFF` for another value. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
+| `0x81` | `ID_DAP_Vendor1` | Only in an image with `VSL_CMSIS_DAP_RV_BRIDGE`: sets the mode of the RISC-V bridge, `[0x81][mode u8]`, `0` off, `1` on, `2` auto. The response is `[0x81][status u8]`: `0` when the mode is set, `0xFF` for another value. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
@@ -401,10 +401,10 @@ The common file replaces the `jtag_init` proc of OpenOCD. The proc sends `cmsis-
 A TAP `setup` event is too late: OpenOCD sends it after the chain scan.
 An image without the bridge replies `ID_DAP_Invalid`. OpenOCD logs the cause of the failure.
 Then `init` stops with "The probe has no RISC-V bridge".
-The proc also adds `cmsis-dap cmd 0x81 0x00` to `pre_shutdown_commands`. Thus `shutdown` switches the bridge off before OpenOCD closes the adapter.
+The proc also adds `cmsis-dap cmd 0x81 0x02` to `pre_shutdown_commands`. Thus `shutdown` sets the auto mode before OpenOCD closes the adapter.
 Ctrl-C and SIGTERM also run `shutdown`.
 An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
-Switch the bridge off with `python3 tools/vsl_rv_bridge.py off`, or replug the probe.
+Set the auto mode with `python3 tools/vsl_rv_bridge.py auto`, or replug the probe.
 The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
 The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (#110).
@@ -415,35 +415,74 @@ The [bridge hardware test](#bridge-hardware-test) has the results of the three c
 
 ### Bridge switch
 
-The vendor command `ID_DAP_Vendor1` (`0x81`) switches the bridge: `81 01` on, `81 00` off.
-The response is `81 00`.
+The vendor command `ID_DAP_Vendor1` (`0x81`) sets the mode of the bridge: `81 00` off, `81 01` on, `81 02` auto.
+The response is `81 00`. Another mode gives `81 FF`.
 
-- The bridge is off at power-up, after a USB reset and after `81 00`.
-  Then the JTAG commands use the JTAG port of the board, as in an image without the bridge.
-- When the bridge is on, `DAP_Connect` to JTAG, `DAP_JTAG_Sequence`, `DAP_SWJ_Sequence` and the JTAG transfers use the emulated TAP.
-  SWD (`DAP_Connect` to SWD) does not change.
-- A switch while JTAG is connected stops the old port and starts the new one at once.
+| Mode | JTAG port |
+|---|---|
+| Off | The JTAG port of the board, as in an image without the bridge. |
+| On | The emulated TAP. |
+| Auto | At each `DAP_Connect` to JTAG, the probe finds the target (see [Auto mode](#auto-mode)). |
+
+- The mode is auto at power-up and after a USB reset.
+- In the TAP, `DAP_Connect` to JTAG, `DAP_JTAG_Sequence`, `DAP_SWJ_Sequence` and the JTAG transfers use the emulated TAP.
+  SWD (`DAP_Connect` to SWD) does not change in any mode.
+- A mode change while JTAG is connected stops the old port and starts the new one at once.
   The TAP state and the IR of the new port are not known, as after `DAP_SWJ_Pins`.
-- The switch off releases SWCLK and SWDIO, and resets the timer of the one-wire engine.
+  The change to auto while JTAG is connected finds the target at once.
+- The change from the TAP to the board port releases SWCLK and SWDIO, and resets the timer of the one-wire engine.
   The JTAG fast path uses the same pin (PB4) and DMA1 channel 3.
   The release goes in both directions: the `fini()` of the JTAG fast path clears the DMA requests of SPI1 and SPI2.
   The one-wire timer shares DMA1 channel 3 (TIM3) or channel 5 (TIM1) with them.
   The `fini()` also removes the SPI1 remap. A disabled SPI1 with the remap still owns PB4 (MISO), and blocks the TIM3_CH1 output of the one-wire engine.
   A CH32V006 test on 2026-10-24 showed this: with the remap, the one-wire frames sent no bits after the line reset.
-- `DAP_SWJ_Clock` sets the TCK of the board port also while the bridge is on. The wire has its own clock: the high speed of the `wch-link` personality.
+- `DAP_SWJ_Clock` sets the TCK of the board port also while the TAP is the port. The wire has its own clock: the high speed of the `wch-link` personality.
 
 OpenOCD sends the command with `cmsis-dap cmd 0x81 0x01`.
-probe-rs cannot send a vendor command (#103, decision 7). Send the command with `tools/vsl_rv_bridge.py` before probe-rs starts:
+probe-rs cannot send a vendor command (#103, decision 7). In the auto mode, probe-rs needs no command:
+
+```sh
+probe-rs info --protocol jtag
+```
+
+To force the TAP, send the command with `tools/vsl_rv_bridge.py` before probe-rs starts:
 
 ```sh
 python3 tools/vsl_rv_bridge.py on
 probe-rs info --protocol jtag
-python3 tools/vsl_rv_bridge.py off
+python3 tools/vsl_rv_bridge.py auto
 ```
 
-The bridge stays on until a USB reset, a power cycle or `81 00`.
-The OpenOCD configs send `81 00` at `shutdown` and after Ctrl-C, but not after an error in a `-c` command.
+The mode stays until a USB reset, a power cycle or the next `ID_DAP_Vendor1`.
+The OpenOCD configs send `81 02` at `shutdown` and after Ctrl-C, but not after an error in a `-c` command.
 Thus probe-rs must not reset the USB device when it opens it. probe-rs 0.32.0 does not reset it ([Bridge hardware test](#bridge-hardware-test)).
+
+### Auto mode
+
+In the auto mode, `DAP_Connect` to JTAG finds the target before it starts the port.
+The steps are in this order. The first step that finds a target stops the search:
+
+1. JTAG: the probe goes to Test-Logic-Reset and shifts 64 bits through Shift-DR with TDI high.
+   A TDO that changes is a JTAG chain: the port is the JTAG port of the board.
+   A TDO that stays high (the pull-up) or low is no chain.
+2. SWD: the probe sends a line reset, the JTAG-to-SWD sequence and a line reset, then reads DPIDR.
+   An ACK OK is an SWD target: the port is the JTAG port of the board.
+   The probe then sends the SWD-to-JTAG sequence, so an SWJ-DP is in JTAG mode again.
+3. WCH: the probe does the [connect](#connect) on one wire, then on two wires.
+   A target that answers selects the emulated TAP.
+4. No target: the port is the JTAG port of the board.
+
+Each step releases its pins before the next step.
+The result stays until the next `DAP_Connect`, `DAP_Disconnect`, mode change or USB reset.
+Thus connect the target, and switch on its supply, before the host connects.
+
+- The detection uses the TCK of `DAP_SWJ_Clock`. The SWD step uses the SWD clock and the settings of the last `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure`.
+- The SWD step only runs when the JTAG step finds no chain.
+  The JTAG host can then not use an SWD target, so the switch to SWD and back does no harm.
+  The SWD step makes sure that the probe sends no WCH frames to an Arm target.
+- After the WCH step, the first DMI access does the connect again, as after `DAP_Connect` in the on mode.
+  The captures show that an attach at `DAP_Connect` passes (image B in [Connect](cmsis-dap-captures/README.md#connect)).
+- The JTAG and SWD steps toggle SWCLK and SWDIO before the WCH step. The hardware test of the auto mode is not done yet.
 
 ### Connect
 
