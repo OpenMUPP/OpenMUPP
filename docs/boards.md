@@ -7,7 +7,7 @@ The README lists the supported boards.
 
 The board selects the MCU family of the dongle.
 The firmware knows two families: STM32F1 and STM32H5.
-The Mini, the OtherUse and the ST-Link/V2 use an STM32F103x8 or STM32F103xB (family STM32F1).
+The Mini and the ST-Link/V2 use an STM32F103x8 or STM32F103xB (family STM32F1).
 The ST-Link/V2 mini clone uses an STM32F103 compatible MCU, with the same family.
 The ST-Link/V2 mini clone has its own document with the measured pin map: [ST-Link/V2 mini clone](stlinkv2-mini-clone.md).
 CMSIS has one device define (`STM32F103xB`) for both parts.
@@ -58,14 +58,14 @@ Some functions come from the pin map and the family, not from a separate field:
   The crystal pins are PD0 and PD1 on the STM32F103, and PH0 and PH1 on the STM32H5.
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
   The setting frees all debug port pins that the board uses, and keeps the rest.
-  The Mini and the OtherUse use PA14 for an LED, so they disable the debug port.
+  The Mini uses PA14 for an LED, so it disables the debug port.
   The ST-Link/V2 and the ST-Link/V2 mini clone keep JTAG and SWD.
   The debug port pins are the same on the two families.
   The STM32F103 frees the pins with `AFIO_MAPR.SWJ_CFG`.
   The STM32H5 has no AFIO. Its debug port pins are in AF0 after reset, and the GPIO mode of a pin frees the pin.
 - `board::withSwd()` gives the board of a debug build with `VSL_DEBUG_SWD`.
   It removes the LEDs on the SWD pins (PA13, PA14), so the debug port keeps SWD.
-  On the Mini and the OtherUse, the USB LED (PA14) is then not available.
+  On the Mini, the USB LED (PA14) is then not available.
 
 The build fails when a board definition is not valid.
 Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
@@ -91,7 +91,7 @@ This function does these steps:
    The STM32F1 runs at 72 MHz.
    The STM32H5 runs at 250 MHz, with the instruction cache on.
 2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
-   The Mini and the OtherUse disable the debug port. A debug probe can then connect only under reset.
+   The Mini disables the debug port. A debug probe can then connect only under reset.
    With `VSL_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
    Then a debug probe can run and step the firmware.
 3. It puts the board pins into a safe state:
@@ -155,7 +155,7 @@ The WCH-Link personality counts no probe errors, so it never shows the double fl
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
-A build with `VSL_DEBUG_SWD` has no USB LED on the Mini and the OtherUse.
+A build with `VSL_DEBUG_SWD` has no USB LED on the Mini.
 
 ## WeAct STM32H523 core board
 

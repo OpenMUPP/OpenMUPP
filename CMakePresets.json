@@ -142,15 +142,6 @@
       }
     },
     {
-      "name": "personalities-triple",
-      "description": "Multi image with all three personalities, Versaloon as default personality",
-      "hidden": true,
-      "cacheVariables": {
-        "VSL_PERSONALITIES": "versaloon,cmsis-dap,wch-link",
-        "VSL_DEFAULT_PERSONALITY": "versaloon"
-      }
-    },
-    {
       "name": "personalities-cmsis-dap-wch-link",
       "description": "Multi image with CMSIS-DAP and WCH-Link, CMSIS-DAP as default personality",
       "hidden": true,
@@ -200,10 +191,11 @@
     },
     {
       "name": "mini-debug",
-      "displayName": "Versaloon Mini, Debug",
+      "displayName": "Versaloon Mini, CMSIS-DAP, Debug",
       "inherits": [
         "debug",
-        "board-mini"
+        "board-mini",
+        "personalities-cmsis-dap"
       ]
     },
     {
@@ -228,14 +220,6 @@
       "inherits": [
         "board-mini",
         "personalities-wch-link-wch-id"
-      ]
-    },
-    {
-      "name": "mini-triple",
-      "displayName": "Versaloon Mini, triple image",
-      "inherits": [
-        "board-mini",
-        "personalities-triple"
       ]
     },
     {
@@ -286,14 +270,6 @@
       ]
     },
     {
-      "name": "otheruse-triple",
-      "displayName": "OtherUse, triple image",
-      "inherits": [
-        "board-otheruse",
-        "personalities-triple"
-      ]
-    },
-    {
       "name": "stlinkv2",
       "displayName": "ST-Link/V2",
       "inherits": [
@@ -325,11 +301,11 @@
       ]
     },
     {
-      "name": "stlinkv2-triple",
-      "displayName": "ST-Link/V2, triple image",
+      "name": "stlinkv2-cmsis-dap-wch-link",
+      "displayName": "ST-Link/V2, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-stlinkv2",
-        "personalities-triple"
+        "personalities-cmsis-dap-wch-link"
       ]
     },
     {
@@ -364,11 +340,11 @@
       ]
     },
     {
-      "name": "stlinkv2miniclone-triple",
-      "displayName": "ST-Link/V2 mini clone, triple image",
+      "name": "stlinkv2miniclone-cmsis-dap-wch-link",
+      "displayName": "ST-Link/V2 mini clone, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-stlinkv2miniclone",
-        "personalities-triple"
+        "personalities-cmsis-dap-wch-link"
       ]
     },
     {
@@ -403,11 +379,20 @@
       ]
     },
     {
+      "name": "weacth523-cmsis-dap-wch-link",
+      "displayName": "WeAct STM32H523 core board, CMSIS-DAP and WCH-Link",
+      "inherits": [
+        "board-weacth523",
+        "personalities-cmsis-dap-wch-link"
+      ]
+    },
+    {
       "name": "weacth523-debug",
-      "displayName": "WeAct STM32H523, Debug",
+      "displayName": "WeAct STM32H523, CMSIS-DAP, Debug",
       "inherits": [
         "debug",
-        "board-weacth523"
+        "board-weacth523",
+        "personalities-cmsis-dap"
       ]
     },
     {
@@ -454,10 +439,6 @@
       "configurePreset": "mini-wch-link-wch-id"
     },
     {
-      "name": "mini-triple",
-      "configurePreset": "mini-triple"
-    },
-    {
       "name": "mini-cmsis-dap-wch-link",
       "configurePreset": "mini-cmsis-dap-wch-link"
     },
@@ -482,10 +463,6 @@
       "configurePreset": "otheruse-wch-link"
     },
     {
-      "name": "otheruse-triple",
-      "configurePreset": "otheruse-triple"
-    },
-    {
       "name": "stlinkv2",
       "configurePreset": "stlinkv2"
     },
@@ -502,8 +479,8 @@
       "configurePreset": "stlinkv2-wch-link"
     },
     {
-      "name": "stlinkv2-triple",
-      "configurePreset": "stlinkv2-triple"
+      "name": "stlinkv2-cmsis-dap-wch-link",
+      "configurePreset": "stlinkv2-cmsis-dap-wch-link"
     },
     {
       "name": "stlinkv2miniclone",
@@ -522,8 +499,8 @@
       "configurePreset": "stlinkv2miniclone-wch-link"
     },
     {
-      "name": "stlinkv2miniclone-triple",
-      "configurePreset": "stlinkv2miniclone-triple"
+      "name": "stlinkv2miniclone-cmsis-dap-wch-link",
+      "configurePreset": "stlinkv2miniclone-cmsis-dap-wch-link"
     },
     {
       "name": "weacth523",
@@ -540,6 +517,10 @@
     {
       "name": "weacth523-wch-link",
       "configurePreset": "weacth523-wch-link"
+    },
+    {
+      "name": "weacth523-cmsis-dap-wch-link",
+      "configurePreset": "weacth523-cmsis-dap-wch-link"
     },
     {
       "name": "weacth523-debug",

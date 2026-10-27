@@ -2,7 +2,7 @@
 """Loopback test for the serial port (UART bridge) of the Versaloon dongle.
 
 Connect the UART TX pin to the UART RX pin of the dongle (PA9 to PA10 on the
-Mini and the OtherUse). The script sends a byte pattern at each line coding
+Mini). The script sends a byte pattern at each line coding
 and checks that the same bytes come back unchanged and in order.
 
 The default run covers all baud rates from 9600 to 2000000 baud, the data

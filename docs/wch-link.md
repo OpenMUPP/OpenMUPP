@@ -56,7 +56,7 @@ The vendor ID `1a86` belongs to WCH.
 Use this option only for personal use.
 Do not publish an image with this ID.
 The names of these image files have `-wch-link-wch-id` after the board.
-In a multi image, the tag ends with `-wch-id`, for example `-vsl+dap+wch-wch-id`.
+In a multi image, the tag ends with `-wch-id`, for example `-dap+wch-wch-id`.
 CI does not build this image.
 The option is only valid when `VSL_PERSONALITIES` has `wch-link`.
 
@@ -110,7 +110,6 @@ The size of the `standalone` image (Release build):
 | Board | Size | Limit |
 |---|---|---|
 | Mini | 22,156 bytes | 65,536 bytes |
-| OtherUse | 22,152 bytes | 65,536 bytes |
 | ST-Link/V2 | 22,124 bytes | 65,536 bytes |
 
 The `app-8k` image has the limit 57,344 bytes, and the `app-10k` image has the limit 55,296 bytes (see [Flash layout](firmware-update.md#flash-layout-and-size-limit)).
@@ -479,8 +478,8 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 | Status | Cause |
 |---|---|
 | `Wire` | The engine returned a flag: a parity error (two wires), a line that stays low (one wire), or a frame that the timer did not end correctly or did not start because the core clock is below 72 MHz (one wire, see [One-wire timer](#one-wire-timer)). |
-| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](wch-link-protocol.md#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini and the OtherUse, because the pull-up of the SWDIO input pin holds the line high. The ST-Link/V2 mini clone has the same pull-up, but this is not tested on hardware. On the ST-Link/V2, nothing holds the line high in a read bit (see [One-wire timer](#one-wire-timer)), so a read without a target can give other values. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
-| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini and the OtherUse: `abstractcs` reads `ffffffff` (`busy` 1). The ST-Link/V2 mini clone has the same pull-up (not tested on hardware). On the ST-Link/V2, it can end with another status. After a `Timeout`, read `dmstatus` to find a missing target. |
+| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](wch-link-protocol.md#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini, because the pull-up of the SWDIO input pin holds the line high. The ST-Link/V2 mini clone has the same pull-up, but this is not tested on hardware. On the ST-Link/V2, nothing holds the line high in a read bit (see [One-wire timer](#one-wire-timer)), so a read without a target can give other values. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
+| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini: `abstractcs` reads `ffffffff` (`busy` 1). The ST-Link/V2 mini clone has the same pull-up (not tested on hardware). On the ST-Link/V2, it can end with another status. After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
 | `Unsupported` | A byte access, or a half-word read, with the program buffer method. |
 | `Misaligned` | The address is not a multiple of the access width. The layer sends no frame. |
@@ -499,7 +498,7 @@ The pins on the dongle:
 
 | Board | SWCLK (TCK) | SWDIO output (TMS out) | SWDIO input (TMS in) | NRST (SRST) |
 |---|---|---|---|---|
-| Mini, OtherUse | PB13 | PB4 | PB6 | PB11 |
+| Mini | PB13 | PB4 | PB6 | PB11 |
 | ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
 | ST-Link/V2 mini clone | PA5 | PB14 | PB12 | PB6 |
 
@@ -516,14 +515,14 @@ Thus the engine releases a low SWDIO after the falling edge of SWCLK. The target
 #### One-wire timer
 
 The width of a low pulse is the value of the bit. Thus code cannot make the bits.
-On the OtherUse dongle, waits on the cycle counter gave a 1 of 120 to 530 ns, and the CH32V003 did not answer.
+On the Mini dongle, waits on the cycle counter gave a 1 of 120 to 530 ns, and the CH32V003 did not answer.
 Constants for the time of the code worked, but only for one board, one clock and one build.
 
 A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `src/board/BoardRvSwdH5.cpp` on the STM32H5). The engine (`src/rvswd/RvSwdEngine.h`) gives it the bits of a frame.
 
 | Board | SWDIO output | Timer channel | Update DMA | Sample channel and DMA |
 |---|---|---|---|---|
-| Mini, OtherUse | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
+| Mini | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
 | ST-Link/V2, ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | WeAct STM32H523 | PA6 | TIM3_CH1 (AF2) | TIM3_UP, GPDMA1 channel 3 | TIM3_CH3, GPDMA1 channel 4 |
 
@@ -542,7 +541,7 @@ The STM32H5 engine works as the STM32F1 engine, with these differences:
 - **Times.** The bits have the WCH-LinkE times: a 1 is low for 250 ns, a 0 is low for 860 ns, and the high level is 370 ns.
   The high level after bit 8 of a read is 750 ns. A read bit lasts 1.3 µs.
 - **Read bits.** In the turnaround after bit 8, the code switches SWDIO to open drain. The STM32F1 has no internal pull-up on an output pin.
-  On the Mini and the OtherUse, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 mini clone, the separate input pin is PB12. On the ST-Link/V2 (one SWDIO pin), nothing on the probe holds the line high in a read bit.
+  On the Mini, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 mini clone, the separate input pin is PB12. On the ST-Link/V2 (one SWDIO pin), nothing on the probe holds the line high in a read bit.
   The timer then drives the low pulse of 250 ns, and the target can hold the line low for a 0.
   The sample channel compares at 450 ns. Its DMA copies the input port (`IDR`) to RAM.
   The DMA reads 80 to 210 ns after the compare (measured), thus at 530 to 660 ns.
@@ -587,7 +586,7 @@ Setup:
 
 | Item | Value |
 |---|---|
-| Probe | OtherUse board, `wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` (USB ID `1a86:8010`) |
+| Probe | Mini board, `wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` (USB ID `1a86:8010`) |
 | Target | CH32V208WBU6 board, external power. SWDIO on PA13, SWCLK on PA14. |
 | Host | Linux, wlink 0.1.2 |
 | Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 0, SWCLK on channel 1 |
@@ -638,7 +637,7 @@ Results with the timer:
 ### CH32V208 with the timer image
 
 The two-wire engine did not change, but the probe now sets up TIM3 and DMA at each connect, and the connect tries one wire first with the timer.
-A second OtherUse probe (legacy bootloader, `app-10k` image) ran the CH32V208 items again:
+A second Mini probe (legacy bootloader, `app-10k` image) ran the CH32V208 items again:
 
 | Item | Result |
 |---|---|

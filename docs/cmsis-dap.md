@@ -34,7 +34,7 @@ The `cmsis-dap` image has these properties:
 - The CDC-ACM serial port, the UART bridge, the debug log and the LEDs are as in the Versaloon image.
 - The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
-  On the Mini and the OtherUse, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more. On the STM32H5 boards, it uses the fast path at a TCK of 3906 kHz or more.
+  On the Mini, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more. On the STM32H5 boards, it uses the fast path at a TCK of 3906 kHz or more.
 
 A `cmsis-dap` image has only this personality.
 A multi image has `cmsis-dap` and other personalities, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
@@ -47,7 +47,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - A JTAG chain has up to 8 devices. The IR length of a device is 1 to 32 bits.
 - On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
   Else the next scan has an extra TCK edge or a missing TCK edge.
-  The idle level is high on the boards with the SPI fast path (the Mini, the OtherUse and the STM32H5 boards), and low on the ST-Link/V2.
+  The idle level is high on the boards with the SPI fast path (the Mini and the STM32H5 boards), and low on the ST-Link/V2.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
 - No SWO.
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
@@ -315,7 +315,7 @@ A Versaloon-only image has no `RetryStop`.
 `DAP_Connect` with port 2 releases the SWD pins and starts the JTAG engine.
 The JTAG engine is the one of the Versaloon image (`board::BoardJtag`).
 On the boards with the fast path, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
-This starts at a TCK of 1125 kHz on the Mini and the OtherUse, and at 3906 kHz on the STM32H5 boards. The other bits, and the slower rates, use GPIO bit-bang.
+This starts at a TCK of 1125 kHz on the Mini, and at 3906 kHz on the STM32H5 boards. The other bits, and the slower rates, use GPIO bit-bang.
 `DAP_SWJ_Clock` sets TCK in kHz, rounded down, and at least 1 kHz.
 
 `DAP_JTAG_Configure` gives the device chain: the IR length of each device.
@@ -368,7 +368,7 @@ The CMake option `VSL_CMSIS_DAP_RV_BRIDGE` (default `OFF`) adds the bridge to th
 It needs `VSL_PERSONALITIES=cmsis-dap`: the configure step stops with an error for another set of personalities, also for a multi image.
 The STM32H5 boards also build the bridge. The bridge is not tested on them.
 The image tag ends with `-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-rv-bridge-app-10k-Release-<version>.bin`.
-The presets `mini-cmsis-dap-rv-bridge` and `otheruse-cmsis-dap-rv-bridge` set the option:
+The preset `mini-cmsis-dap-rv-bridge` sets the option:
 
 ```sh
 cmake --preset mini-cmsis-dap-rv-bridge
@@ -407,7 +407,7 @@ The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses t
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
 The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (#110).
 
-Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, OtherUse with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
+Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, Mini with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
 The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
 The [bridge hardware test](#bridge-hardware-test) has the results of the three configs.
 
@@ -503,16 +503,15 @@ OpenOCD would then repeat accesses that the target already ran, and a permanent 
 
 ### Bridge hardware test
 
-The hardware test (#109) has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the OtherUse.
+The hardware test (#109) has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the Mini.
 A last step checks the real JTAG port with an STM32F103 after the bridge was on.
-The Mini has almost the same hardware as the OtherUse, so this test does not include it.
 
-#### CH32V006 on the OtherUse
+#### CH32V006 on the Mini
 
 | Item | Value |
 |---|---|
 | Date | 2026-10-24 |
-| Probe | OtherUse, legacy bootloader, `otheruse-cmsis-dap-rv-bridge` `app-10k` image, `v0.11.0-130-g6487129` |
+| Probe | Mini, legacy bootloader, `mini-cmsis-dap-rv-bridge` `app-10k` image, `v0.11.0-130-g6487129` |
 | Target | CH32V006K8U6 on one wire, with its own supply |
 | OpenOCD | `0.12.0+dev-01355-gcba596a3e`, `ch32v00x-cmsis-dap.cfg` with `WORKAREASIZE` `0x2000` |
 | GDB | `riscv-none-elf-gdb` (xPack GCC 15.2.0-1) |
@@ -566,7 +565,7 @@ Thus the firmware takes about 300 µs for each DMI scan, and the wire uses only 
 `adapter speed` (100 kHz to 10 MHz) does not change the rate.
 The [CH32V006 rates on the WeAct STM32H523](#ch32v006-rates-on-the-weact-stm32h523) show the cause (#114).
 
-The rates with the fix, on 2026-10-26, with an OtherUse with `versaloon-bootloader` and `app-8k` images of `otheruse-cmsis-dap-rv-bridge`:
+The rates with the fix, on 2026-10-26, with a Mini with `versaloon-bootloader` and `app-8k` images of `mini-cmsis-dap-rv-bridge`:
 
 | Measurement | Before (`v0.12.0-60-gd7f95ac`) | After the fix |
 |---|---|---|
@@ -580,7 +579,7 @@ The rates with the fix, on 2026-10-26, with an OtherUse with `versaloon-bootload
 
 The data of the reads is the same before and after the fix, and `verify_image` passes after each `load_image`.
 
-#### CH32V003 on the OtherUse
+#### CH32V003 on the Mini
 
 The probe, OpenOCD, GDB and probe-rs are the same as for the CH32V006.
 
@@ -627,7 +626,7 @@ OpenOCD is about 4 times faster on the CH32V003 than on the CH32V006.
 On the CH32V003, it uses the program buffer. This test did not capture the USB packets of the CH32V003.
 The CH32V006 refuses the program buffer, so OpenOCD uses the abstract command there (see [OpenOCD configs](#openocd-configs)).
 
-#### CH32V208 on the OtherUse
+#### CH32V208 on the Mini
 
 The probe, OpenOCD, GDB and probe-rs are the same as for the CH32V006.
 
@@ -680,15 +679,15 @@ Rates, with the target at its reset clock:
 #### CH32V006 rates on the WeAct STM32H523
 
 This test looked for the firmware time of #114 on an STM32H5 board.
-It measured rates only, not the full test list of the OtherUse.
+It measured rates only, not the full test list of the Mini.
 
 | Item | Value |
 |---|---|
 | Date | 2026-10-25 |
 | Probe | WeAct STM32H523, `weacth523-cmsis-dap` with `-DVSL_CMSIS_DAP_RV_BRIDGE=ON`, standalone image. Before the fix: `v0.12.0-60-gd7f95ac` |
 | Target | CH32V006K8U6 on one wire, on the wiring of the [WeAct one-wire test](wch-link.md#ch32v006-on-the-weact-stm32h523-one-wire) |
-| OpenOCD | The same as for the CH32V006 on the OtherUse, `adapter serial` of the WeAct |
-| Profile | An OtherUse in CMSIS-DAP mode on the SWD port of the WeAct. pyOCD read `DWT_PCSR` (the PC sample register) during the OpenOCD run, without a halt of the core |
+| OpenOCD | The same as for the CH32V006 on the Mini, `adapter serial` of the WeAct |
+| Profile | A Mini in CMSIS-DAP mode on the SWD port of the WeAct. pyOCD read `DWT_PCSR` (the PC sample register) during the OpenOCD run, without a halt of the core |
 
 The profile before the fix:
 
@@ -793,7 +792,7 @@ This section has the SWD tests. The JTAG tests follow in [JTAG hardware test](#j
 Date: 2026-10-10.
 Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`). The build is `v0.2.0-63-g10d84fa-dirty`. The `-dirty` suffix is from the merge of `dev`, which was not committed at build time. The `src/` tree equals commit `75d93cd`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
 The same checks first ran on `v0.2.0-57-g59614cb` (before E6). All checks passed there too. Only the read speed differs (see below).
-Probe: OtherUse board.
+Probe: Mini board.
 Target: STM32F103ZET6 (512 KiB flash) on SWD.
 Host: Linux 6.18.55.
 Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4.1), probe-rs 0.32.0.
@@ -825,7 +824,7 @@ Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with E6):
 All runs passed (0 failures in 3 runs for each rate).
 Only the run before E6 includes 100 kHz and 500 kHz (write 9.75 s and 2.78 s, read 8.27 s and 1.77 s).
 
-The Versaloon personality (OtherUse board, same firmware version before E6, `vsllink` driver) gave these times:
+The Versaloon personality (Mini board, same firmware version before E6, `vsllink` driver) gave these times:
 
 | Clock | Write | Read |
 |---|---|---|
@@ -839,10 +838,10 @@ The read time with E6 is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon perso
 Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
 
 Maximum SWD clock: the untimed engine. In this test, it ran from 1.85 MHz. Since #118, it runs from 3 MHz (`maxClockHz` in `src/swd/SwdBitBang.h`).
-Its real rate depends on the code (2.42 to 2.7 MHz on the OtherUse, see [Clock pacing](clock-pacing.md)).
+Its real rate depends on the code (2.42 to 2.7 MHz on the Mini, see [Clock pacing](clock-pacing.md)).
 All runs passed up to this clock with the wiring of this test.
 A request above 3 MHz gives the same clock. A request from 1.85 MHz to 3 MHz now gives the timed engine at 1.3 to 1.56 MHz.
-This test used the OtherUse. On the STM32H5, all requests are timed: a request above 1.85 MHz gives a faster clock, up to 5.2 to 6.1 MHz (see [Clock pacing](clock-pacing.md#swd-pacer-on-the-stm32h5)).
+This test used the Mini. On the STM32H5, all requests are timed: a request above 1.85 MHz gives a faster clock, up to 5.2 to 6.1 MHz (see [Clock pacing](clock-pacing.md#swd-pacer-on-the-stm32h5)).
 
 Findings:
 
@@ -859,7 +858,7 @@ Findings:
 
 Date: 2026-10-11.
 Firmware: `dev` at `6fc6d8b` with E7 (JTAG). The build is `v0.2.0-101-g6fc6d8b`. The tree was clean. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality, `Release` build.
-Probe: OtherUse board. The image ran behind `versaloon-bootloader`.
+Probe: Mini board. The image ran behind `versaloon-bootloader`.
 Target: STM32F103ZET6 (512 KiB flash) on JTAG. The wiring is the one of the SWD test, with TDI, TDO and TMS added.
 Host: Linux 6.18.55.
 Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1.
@@ -928,7 +927,7 @@ pyOCD, OpenOCD and probe-rs do not use these commands, so the script sends them 
 It needs the pyusb Python package and Python 3.
 
 1. Write a `cmsis-dap` image or a multi image with `cmsis-dap`, and select the CMSIS-DAP personality.
-2. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini and the OtherUse).
+2. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini).
 3. Run the script:
 
 ```sh
@@ -953,7 +952,7 @@ python3 -m unittest discover -s tools -p "test_*.py"
 ```
 
 Status: the host tests pass. The hardware test passed on 2026-10-15.
-Probe: OtherUse board with the 10k bootloader, `app-10k` image of the `otheruse-cmsis-dap` preset, build `v0.9.0-42-g52e32da`.
+Probe: Mini board with the 10k bootloader, `app-10k` image of the `mini-cmsis-dap` preset, build `v0.9.0-42-g52e32da`.
 The UART TX pin was connected to the UART RX pin (PA9 to PA10).
 The run used `--serial-port /dev/ttyACM0`.
 All 70 cases passed: the baud rates from 57600 to 2000000 baud, each with the seven frame formats.

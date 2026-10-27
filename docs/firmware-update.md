@@ -1,6 +1,6 @@
 # Firmware update
 
-The Mini and the OtherUse run the firmware behind a bootloader: `versaloon-bootloader` (8 KB) or the legacy Versaloon bootloader (10 KB).
+The Mini runs the firmware behind a bootloader: `versaloon-bootloader` (8 KB) or the legacy Versaloon bootloader (10 KB).
 The ST-Link/V2 and the ST-Link/V2 mini clone run it behind `versaloon-bootloader`.
 See [Install the bootloader](#install-the-bootloader).
 `versaloon-bootloader` is a USB CDC serial port with the ID `0483:5740`.
@@ -16,7 +16,7 @@ To start `versaloon-bootloader`, use one of these methods:
 
 - Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the Versaloon personality has this command.
 - Send a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)). Each personality has a switch command.
-- On the Mini and the OtherUse: hold the key (PB9) down and reset the board.
+- On the Mini: hold the key (PB9) down and reset the board.
 - On the ST-Link/V2 mini clone: connect SWIM (header pin 3) to GND (header pin 5), then connect the board to USB (see [Bootloader](stlinkv2-mini-clone.md#bootloader)).
   The ST-Link/V2 has no key.
 
@@ -175,7 +175,7 @@ Then disconnect the power of the board, and connect it again.
 The read protection stays active until the next power-up.
 See [Read protection of the original firmware](stlinkv2-mini-clone.md#read-protection-of-the-original-firmware).
 
-The Mini and the OtherUse use one of two bootloaders:
+The Mini uses one of two bootloaders:
 
 - The legacy Versaloon bootloader uses 10 KB. The existing boards have it. It runs the `app-10k` image.
   Hold the key (PB9) down while you connect the board to USB to start it.
@@ -273,7 +273,7 @@ The firmware initializes its DATA and BSS sections. It does not use RAM content 
 
 ## Flash layout and size limit
 
-The OtherUse has an STM32F103C8 with 64 KB flash.
+The Mini can have an STM32F103C8 with 64 KB flash.
 The bootloader uses the start of the flash, and the application uses the rest:
 
 | Image | Bootloader | Application | Size limit | Size limit, multi image |

@@ -173,7 +173,7 @@ Then disconnect the power of the board, and connect it again.
 ## Hardware test
 
 Status: the test passed on 2026-10-26.
-Image: `stlinkv2miniclone-triple` preset (`VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`), `Release` build.
+Image: `stlinkv2miniclone` board with `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `Release` build.
 
 The test used the `app-8k` image behind `versaloon-bootloader`, in the combined image `versaloon-ng-with-bootloader.hex`.
 The `standalone` image has the same source code and clock setup, but nobody ran it on the board.

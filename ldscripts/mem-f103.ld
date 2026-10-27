@@ -1,5 +1,5 @@
 /*
- * Memory Spaces Definitions for STM32F103x8/xB (Versaloon Mini, OtherUse,
+ * Memory Spaces Definitions for STM32F103x8/xB (Versaloon Mini,
  * ST-Link/V2).
  *
  * The same script links all application images. CMake gives the start of
