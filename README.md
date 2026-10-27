@@ -115,7 +115,7 @@ Each image has a different start address:
 | `app-10k` | `0x08002800` | 54 KB | Behind the legacy 10 KB Versaloon bootloader of the existing boards. |
 
 The Mini and the OtherUse get all three images.
-The ST-Link/V2 has no bootloader, so it gets the `standalone` image only.
+The ST-Link/V2 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image. They never had the legacy bootloader, so they get no `app-10k` image.
 The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
 A multi image has less flash, because the end of the flash holds the stored personality.
 This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the STM32H5 board.
@@ -124,8 +124,8 @@ The build writes these files into the build directory:
 
 - `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-ng-app-10k.bin`.
 - `versaloon-bootloader/versaloon-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
-  Only the Mini and the OtherUse have a bootloader.
-- `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of the Mini and the OtherUse.
+  Only the STM32F1 boards have a bootloader: the Mini, the OtherUse, the ST-Link/V2 and the ST-Link/V2 mini clone.
+- `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
   It has `versaloon-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
   The `.bin` file has `0xFF` between the two.
 
@@ -141,6 +141,7 @@ Select the image for the bootloader on the board:
 |---|---|---|---|
 | Existing Mini or OtherUse | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
 | New Mini or OtherUse | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| ST-Link/V2 or ST-Link/V2 mini clone | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | Any board, debug probe | none | `standalone` | `0x08000000` |
 
 The images behind a bootloader have an application image header with a CRC32 (see [docs/firmware-update.md](docs/firmware-update.md#application-image-header)).
@@ -169,6 +170,7 @@ A new board needs `versaloon-bootloader` one time.
 An existing board can also change to it.
 Write the combined image with a debug probe on the SWD pins of the dongle MCU.
 It has the bootloader and the firmware, so one step is sufficient.
+On an ST-Link/V2 or a mini clone with its original firmware, remove the read protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
 For example, with OpenOCD:
 
 ```sh
@@ -183,7 +185,7 @@ To write a new bootloader over it, remove the write protection first (see [Insta
 
 To write the firmware through the bootloader, do these steps:
 
-1. Start the bootloader. Hold the key (PB9) down and reset the board, or send `VERSALOON_FW_UPDATE` or a switch command with the bootloader code `0xB0` (see [Bootloader code](docs/firmware-update.md#bootloader-code)).
+1. Start the bootloader. Send `VERSALOON_FW_UPDATE` or a switch command with the bootloader code `0xB0` (see [Bootloader code](docs/firmware-update.md#bootloader-code)), or use the key of the board (see [Start the bootloader](docs/firmware-update.md#start-the-bootloader)).
    A new serial port with the ID `0483:5740` shows, for example `/dev/ttyACM0`.
 2. Write the `.bin` file of the `app-8k` image with `stm32flash`, and start it:
 

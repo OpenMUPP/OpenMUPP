@@ -125,6 +125,31 @@ From the USB connector, the pads are:
 
 Connect a debug probe to these pads to write the firmware.
 
+## Bootloader
+
+The board runs the firmware behind `versaloon-bootloader` (board `stlinkv2miniclone` of the bootloader).
+Then you can update the firmware over USB, without the SWD pads.
+Write the combined image `versaloon-ng-with-bootloader.hex` one time with a debug probe on the SWD pads (see [Install the bootloader](firmware-update.md#install-the-bootloader)).
+Remove the read protection first (see [Read protection of the original firmware](#read-protection-of-the-original-firmware)).
+
+The bootloader starts in these conditions:
+
+1. The firmware sends a boot request (see [Start the bootloader](firmware-update.md#start-the-bootloader)).
+2. The application image is not valid.
+3. SWIM is connected to GND at the start. This is the key of the board.
+
+To start the bootloader with the key, do these steps:
+
+1. Disconnect the board from USB.
+2. Connect a wire from SWIM (header pin 3) to GND (header pin 5).
+3. Connect the board to USB. The bootloader starts.
+4. Remove the wire.
+
+The key also works when the application is valid but does not run.
+Thus a broken application does not need a debug probe.
+The SWIM pins (PB7 to PB11) have a pull-up on the board, so the key is released when no wire is connected.
+The firmware does not use the SWIM pin as a key.
+
 ## Read protection of the original firmware
 
 The original firmware has read protection level 1.
@@ -150,13 +175,8 @@ Then disconnect the power of the board, and connect it again.
 Status: the test passed on 2026-10-26.
 Image: `stlinkv2miniclone-triple` preset (`VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`), `Release` build.
 
-The test did not use the `standalone` image that this branch builds.
-It used the `app-8k` image behind `versaloon-bootloader`, in the combined image `versaloon-ng-with-bootloader.hex`.
-This image comes from the branch `feature/102-stlink-bootloader` (merge request !102), which has this branch merged in.
-The bootloader for this board comes from versaloon-bootloader merge request !11 (board `stlinkv2miniclone`, 8 MHz crystal).
-The two images have the same source code and clock setup.
-The differences are the start address (`0x08000000` or `0x08002000`) and the flash layout.
-Thus the results apply to the `standalone` image, but nobody ran that image on the board.
+The test used the `app-8k` image behind `versaloon-bootloader`, in the combined image `versaloon-ng-with-bootloader.hex`.
+The `standalone` image has the same source code and clock setup, but nobody ran it on the board.
 
 The image was written with SWD (OpenOCD `program`, with verify) through the SWD pads.
 
@@ -166,6 +186,11 @@ The image was written with SWD (OpenOCD `program`, with verify) through the SWD 
 | Switch Versaloon → CMSIS-DAP → WCH-Link → Versaloon with the switch request on EP0 | pass: `0403:9b3c`, `1209:0001`, `0483:a038` |
 | State LED, idle | pass: blue |
 | State LED, commands and probe errors (OpenOCD `vsllink`, no target) | pass: blue off on each command, red double flashes |
+| Write of the combined image with SWD after `stm32f1x unlock 0` | pass: verified |
+| `vsl_personality.py switch bootloader` (boot request) | pass: `0483:5740` with the product `Bootloader` |
+| `stm32flash -w versaloon-ng-app-8k.bin -v -S 0x08002000`, then `-g 0x08002000` | pass: write and verify, the firmware starts as `0483:a038` |
+| Key: SWIM to GND at power-up, with a valid application | pass: `0483:5740` |
+| Power-up without the SWIM wire | pass: the firmware starts |
 
 ### SWD test with a target
 

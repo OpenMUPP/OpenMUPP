@@ -76,7 +76,8 @@ set(PROJECT_INCLUDE_DIRS
 #   app-8k      8192    0x08002000, behind versaloon-bootloader (8 KB)
 #   app-10k     10240   0x08002800, behind the legacy Versaloon bootloader
 #                       (10 KB) of the existing boards
-# The boards in VSL_BOOTLOADER_BOARDS get all images. The other boards have
+# The boards in VSL_BOOTLOADER_BOARDS get standalone and app-8k, and the
+# boards in VSL_LEGACY_BOOTLOADER_BOARDS also app-10k. The other boards have
 # no bootloader and get the standalone image only.
 set(VSL_APP_OFFSET_standalone 0)
 set(VSL_APP_OFFSET_app-8k 8192)
@@ -122,8 +123,10 @@ if (CMAKE_CROSSCOMPILING)
         set(CMAKE_BUILD_TYPE Release)
     endif ()
 
-    if (BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
+    if (BOARD IN_LIST VSL_LEGACY_BOOTLOADER_BOARDS)
         set(VSL_APP_IMAGES standalone app-8k app-10k)
+    elseif (BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
+        set(VSL_APP_IMAGES standalone app-8k)
     else ()
         set(VSL_APP_IMAGES standalone)
     endif ()
@@ -353,9 +356,9 @@ if (CMAKE_CROSSCOMPILING)
     # The firmware must fit behind the legacy bootloader on all STM32F1 boards
     # (docs/firmware-update.md). A board without the app-10k image checks its
     # standalone image against the app-10k limit too. VSL_SKIP_IMAGES=app-10k
-    # on a board with a bootloader turns this check off. The legacy
-    # bootloader is STM32F1 only.
-    if (NOT BOARD IN_LIST VSL_BOOTLOADER_BOARDS AND "standalone" IN_LIST VSL_APP_IMAGES AND STM32_FAMILY STREQUAL "STM32F1")
+    # on a board with the legacy bootloader (VSL_LEGACY_BOOTLOADER_BOARDS)
+    # turns this check off. The legacy bootloader is STM32F1 only.
+    if (NOT BOARD IN_LIST VSL_LEGACY_BOOTLOADER_BOARDS AND "standalone" IN_LIST VSL_APP_IMAGES AND STM32_FAMILY STREQUAL "STM32F1")
         math(EXPR _limit "${VSL_FLASH_SIZE} - ${VSL_APP_OFFSET_app-10k} - ${VSL_SETTINGS_PAGE_SIZE}")
         string(APPEND _images_list "versaloon-ng-standalone.bin ${_limit}\n")
     endif ()

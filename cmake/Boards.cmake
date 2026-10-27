@@ -31,7 +31,10 @@ set(VSL_BOARD_stlinkv2    STM32F1 STM32F103xB 8000000  mem-f103.ld  65536)
 set(VSL_BOARD_stlinkv2miniclone STM32F1 STM32F103xB 8000000  mem-f103.ld  65536)
 set(VSL_BOARD_weacth523   STM32H5 STM32H523xx 8000000  mem-h523xc.ld 262144)
 # Boards that versaloon-bootloader supports (cmake/Bootloader.cmake)
-set(VSL_BOOTLOADER_BOARDS mini otheruse)
+set(VSL_BOOTLOADER_BOARDS mini otheruse stlinkv2 stlinkv2miniclone)
+# Boards that shipped with the legacy Versaloon bootloader (10 KB). Only
+# they get the app-10k image.
+set(VSL_LEGACY_BOOTLOADER_BOARDS mini otheruse)
 set(BOARD "mini" CACHE STRING "Board to build for: ${VSL_BOARDS}")
 set_property(CACHE BOARD PROPERTY STRINGS ${VSL_BOARDS})
 

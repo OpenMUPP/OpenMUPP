@@ -74,8 +74,8 @@ run-tool-tests:
 # the CDC port and SWD on. The job sets VSL_STRICT_SIZE, so the linker
 # script fails the link when an image does not fit; the size check reports
 # the size of each image in vsl-images.txt and fails on the same limit. The
-# default target also builds versaloon-bootloader for the Mini and the
-# OtherUse.
+# default target also builds versaloon-bootloader for the Mini, the
+# OtherUse and the ST-Link/V2 boards.
 .build-board-template:
   stage: build
   cache: *fetchcontent-cache
@@ -97,7 +97,7 @@ run-tool-tests:
   # Only the .hex and .bin files that a user writes, with the board, the
   # image, the build type and the version in the name (README "Build the
   # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link/V2
-  # has the standalone image only. No .elf, .map or bootloader-only files.
+  # boards have no app-10k image. No .elf, .map or bootloader-only files.
   # A tag of a multi image has a "+": encode it as %2B in a download URL.
   artifacts:
     name: "versaloon-ng-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"

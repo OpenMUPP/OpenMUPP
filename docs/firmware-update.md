@@ -1,6 +1,7 @@
 # Firmware update
 
 The Mini and the OtherUse run the firmware behind a bootloader: `versaloon-bootloader` (8 KB) or the legacy Versaloon bootloader (10 KB).
+The ST-Link/V2 and the ST-Link/V2 mini clone run it behind `versaloon-bootloader`.
 See [Install the bootloader](#install-the-bootloader).
 `versaloon-bootloader` is a USB CDC serial port with the ID `0483:5740`.
 It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
@@ -15,7 +16,9 @@ To start `versaloon-bootloader`, use one of these methods:
 
 - Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the Versaloon personality has this command.
 - Send a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)). Each personality has a switch command.
-- Hold the key (PB9) down and reset the board.
+- On the Mini and the OtherUse: hold the key (PB9) down and reset the board.
+- On the ST-Link/V2 mini clone: connect SWIM (header pin 3) to GND (header pin 5), then connect the board to USB (see [Bootloader](stlinkv2-mini-clone.md#bootloader)).
+  The ST-Link/V2 has no key.
 
 Only the `app-8k` image accepts the commands.
 On the STM32H5, the commands and the key start the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
@@ -79,7 +82,7 @@ The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 | Status | Meaning |
 |---|---|
 | `0x00` | Accepted. The firmware starts the bootloader. |
-| `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. On the STM32F1, the `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The ST-Link/V2 has only the `standalone` image. The firmware continues to run. |
+| `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. On the STM32F1, the `standalone` image has no bootloader. The legacy bootloader of the `app-10k` image does not know the boot request. The firmware continues to run. |
 
 The `standalone` image of the WeAct STM32H523 core board accepts the command and starts the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
 
@@ -158,6 +161,20 @@ Thus a multi image keeps the stored personality in the last sector of bank 2, at
 
 ## Install the bootloader
 
+The ST-Link/V2 and the ST-Link/V2 mini clone use `versaloon-bootloader`.
+Their original firmware has read protection.
+Remove it before you write the combined image:
+
+```sh
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+        -c "init; reset halt; stm32f1x unlock 0; exit"
+```
+
+The unlock erases all of the flash.
+Then disconnect the power of the board, and connect it again.
+The read protection stays active until the next power-up.
+See [Read protection of the original firmware](stlinkv2-mini-clone.md#read-protection-of-the-original-firmware).
+
 The Mini and the OtherUse use one of two bootloaders:
 
 - The legacy Versaloon bootloader uses 10 KB. The existing boards have it. It runs the `app-10k` image.
@@ -193,7 +210,7 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
 `stm32f1x unlock 0` erases the option bytes and removes all write protection.
 The bootloader README has the full rules ("Flash protection").
 
-The legacy bootloader (tag `v1-legacy` of `versaloon-bootloader`) does not set write protection or readout protection.
+The legacy bootloader (tag `v1-legacy` of `versaloon-bootloader`) does not set write protection or read protection.
 Thus the debug probe can write the combined image over it without `stm32f1x unlock 0`.
 If the write fails, the option bytes of the board were changed: run `stm32f1x unlock 0` first.
 
@@ -267,7 +284,7 @@ The bootloader uses the start of the flash, and the application uses the rest:
 
 The limits are hard limits for all boards.
 The firmware must also fit behind the legacy bootloader, because the existing boards need the `app-10k` image.
-Thus CI also checks the `standalone` image of the ST-Link/V2 against the `app-10k` limit (see [Continuous integration](development.md#continuous-integration)).
+Thus CI also checks the `standalone` image of the ST-Link/V2 and of the ST-Link/V2 mini clone against the `app-10k` limit (see [Continuous integration](development.md#continuous-integration)).
 
 - `ldscripts/mem-f103.ld` has the FLASH region from the start of the application to the end of the 64 KB. With `VSL_STRICT_SIZE=ON`, the link of an image fails when the application is too large. The CI build jobs set this option.
 - Without `VSL_STRICT_SIZE`, the build skips an image that is too large, and shows a warning (see [Images that do not fit](development.md#images-that-do-not-fit)).
