@@ -177,15 +177,21 @@ if (CMAKE_CROSSCOMPILING)
     # drops what an image does not use.
     set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
     set(_vsl_dropped_files ${VSL_PERSONALITY_DROPPED_SOURCES})
-    # The flash page of the stored personality: only in a multi image. It is
-    # at the end of the application area: one 1 KB flash page on the
-    # STM32F103, one 8 KB flash sector on the STM32H5.
-    if (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32F1")
+    # The settings page: the stored personality of a multi image and the
+    # stored mode of the RISC-V bridge. Only in a multi image and in an image
+    # with the bridge. It is at the end of the application area: one 1 KB
+    # flash page on the STM32F103, one 8 KB flash sector on the STM32H5.
+    if (VSL_PERSONALITY_COUNT GREATER 1 OR VSL_RV_BRIDGE)
+        set(_vsl_settings ON)
+    else ()
+        set(_vsl_settings OFF)
+    endif ()
+    if (_vsl_settings AND STM32_FAMILY STREQUAL "STM32F1")
         set(VSL_SETTINGS_PAGE_SIZE 1024)
-    elseif (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32H5")
+    elseif (_vsl_settings AND STM32_FAMILY STREQUAL "STM32H5")
         set(VSL_SETTINGS_PAGE_SIZE 8192)
-    elseif (VSL_PERSONALITY_COUNT GREATER 1)
-        message(FATAL_ERROR "Board ${BOARD}: a multi image (VSL_PERSONALITIES=${VSL_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have. Select one personality.")
+    elseif (_vsl_settings)
+        message(FATAL_ERROR "Board ${BOARD}: a multi image or the RISC-V bridge (VSL_PERSONALITIES=${VSL_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have.")
     else ()
         list(APPEND _vsl_dropped_files "src/board/SettingsFlashPage\\.cpp")
         set(VSL_SETTINGS_PAGE_SIZE 0)

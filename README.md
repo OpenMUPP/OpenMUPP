@@ -252,7 +252,7 @@ The Python scripts in `tools/` need Python 3.
 | Script | Function | Needs |
 |---|---|---|
 | `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. | `pyusb` |
-| `tools/vsl_rv_bridge.py` | `off`, `on` and `auto` set the mode of the RISC-V bridge of a CMSIS-DAP image. Auto is the mode after a USB reset (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). | `pyusb` |
+| `tools/vsl_rv_bridge.py` | `off`, `on`, `auto` and `stored` set the mode of the RISC-V bridge of a CMSIS-DAP image. `--store` also stores the mode: the mode after a USB reset and at power-up (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). | `pyusb` |
 | `tools/serial_loopback_test.py` | Tests the UART bridge with a loopback wire from TX to RX (see [docs/uart-bridge.md](docs/uart-bridge.md)). | `pyserial` |
 | `tools/dap_uart_loopback_test.py` | Tests the `DAP_UART_*` commands of the CMSIS-DAP personality with a loopback wire from TX to RX (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-hardware-test)). | `pyusb`, `pyserial` for `--serial-port` |
 | `tools/flash_benchmark.py` | Measures the flash speed with OpenOCD (see [docs/development.md](docs/development.md#flash-speed-benchmark)). | OpenOCD |

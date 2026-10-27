@@ -71,7 +71,8 @@ It then stops after 10 s with an error and a hint, also when the bootloader runs
 ### Stored personality
 
 A multi image stores its personality in the flash page at `0x0800FC00`.
-`stm32flash -w` erases only the pages of the image, so an update keeps the stored personality.
+An image with the RISC-V bridge stores the bridge mode in the same page (see [Stored mode](cmsis-dap.md#stored-mode)).
+`stm32flash -w` erases only the pages of the image, so an update keeps the stored personality and the stored mode.
 A mass erase of the flash also erases this page.
 The firmware then starts with its default personality.
 
@@ -276,7 +277,7 @@ The firmware initializes its DATA and BSS sections. It does not use RAM content 
 The Mini can have an STM32F103C8 with 64 KB flash.
 The bootloader uses the start of the flash, and the application uses the rest:
 
-| Image | Bootloader | Application | Size limit | Size limit, multi image |
+| Image | Bootloader | Application | Size limit | Size limit, multi image or RISC-V bridge |
 |---|---|---|---|---|
 | `standalone` | none | `0x08000000` | 64 KB | 63 KB |
 | `app-8k` | `versaloon-bootloader`, 8 KB | `0x08002000` | 56 KB | 55 KB |

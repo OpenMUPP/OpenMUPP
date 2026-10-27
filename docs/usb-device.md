@@ -173,6 +173,8 @@ Thus a multi image has 1 KB (STM32F103) or 8 KB (STM32H5) less flash than the ot
 When the page holds no personality, the image uses `VSL_DEFAULT_PERSONALITY`.
 The default is the first personality of the image in code order.
 `src/personality/PersonalityStore.h` has the page format.
+The record also holds the stored mode of the RISC-V bridge (see [Stored mode](cmsis-dap.md#stored-mode)).
+An image with the bridge has the page also with one personality.
 The page is a log of 16-bit records, so the firmware erases the page only one time in 512 switches.
 The STM32H5 writes the flash in 128-bit flash words with ECC (error correction code), and each flash word can be written only one time.
 Thus each record uses one flash word, and the sector also holds 512 records.

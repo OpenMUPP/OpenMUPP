@@ -43,6 +43,14 @@ void RvBridge::setMode(BridgeMode mode) {
    }
 }
 
+bool RvBridge::storeMode(BridgeMode mode) {
+   if(!store_.store(mode)) {
+      return false;
+   }
+   stored_ = mode;
+   return true;
+}
+
 bool RvBridge::detect() {
    if(jtagChain() || swdTarget()) {
       return false;
