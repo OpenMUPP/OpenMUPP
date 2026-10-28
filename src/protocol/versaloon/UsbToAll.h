@@ -36,20 +36,11 @@
 #include <cstdint>
 #include <optional>
 
+#include "protocol/Delay.h"
 #include "protocol/versaloon/CommandProcessor.h"
 #include "protocol/versaloon/UsbToXxx.h"
 
 namespace protocol {
-
-// Waits during a DELAY block.
-class Delay {
-   public:
-   virtual void microseconds(uint16_t us) = 0;
-   virtual void milliseconds(uint16_t ms) = 0;
-
-   protected:
-   ~Delay() = default;
-};
 
 class UsbToAll final : public UsbToXxxHandler {
    public:

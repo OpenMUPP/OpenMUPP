@@ -3,6 +3,7 @@
 #include "protocol/versaloon/PowerBlock.h"
 #include "protocol/versaloon/UsbToAll.h"
 
+#include "FakePower.h"
 #include "VersaloonBench.h"
 
 #include <doctest/doctest.h>
@@ -17,68 +18,7 @@ namespace {
 
 namespace block = protocol::block;
 using protocol::PowerBlock;
-
-// The rail of the target. With the switch off, the rail is at externalMv
-// (the supply of the target). With the switch on, it is at 3300 mV, or at
-// loadedMv when the target pulls it down.
-class FakePower final : public protocol::PowerHardware {
-   public:
-   [[nodiscard]] bool hasSwitch() const override {
-      return hasSwitchPin;
-   }
-
-   void setSwitch(bool on) override {
-      REQUIRE(hasSwitchPin);
-      isOn = on;
-      switches.push_back(on);
-   }
-
-   [[nodiscard]] bool hasSense() const override {
-      return hasSensePin;
-   }
-
-   [[nodiscard]] std::optional<uint16_t> senseMillivolts() override {
-      REQUIRE(hasSensePin);
-      ++senses;
-      if(failSense) {
-         return std::nullopt;
-      }
-      return isOn ? loadedMv.value_or(3300) : externalMv;
-   }
-
-   bool hasSwitchPin{ true };
-   bool hasSensePin{ true };
-   bool isOn{ false };
-   bool failSense{ false };
-   uint16_t externalMv{ 0 };
-   std::optional<uint16_t> loadedMv;
-   std::vector<bool> switches;
-   unsigned senses{ 0 };
-};
-
-// Records the delays and the state of the switch at each delay.
-class FakeDelay final : public protocol::Delay {
-   public:
-   explicit FakeDelay(const FakePower &power)
-      : power_(power) {
-   }
-
-   void microseconds(uint16_t) override {
-   }
-
-   void milliseconds(uint16_t ms) override {
-      delays.push_back({ ms, power_.isOn });
-   }
-
-   struct Delayed {
-      uint16_t ms;
-      bool switchOn;
-   };
-   std::vector<Delayed> delays;
-
-   private:
-   const FakePower &power_;
-};
+using protocol::TargetPower;
 
 using Bytes = std::vector<uint8_t>;
 
@@ -108,7 +48,8 @@ class Bench {
    public:
    Bench()
       : delay(hardware)
-      , block(hardware, delay)
+      , power(hardware, delay)
+      , block(power)
       , dispatcher(delay) {
       REQUIRE(dispatcher.add(block));
       dispatcher.setTargetVoltage(&block);
@@ -125,6 +66,7 @@ class Bench {
 
    FakePower hardware;
    FakeDelay delay;
+   TargetPower power;
    PowerBlock block;
    protocol::UsbToAll dispatcher;
 };
@@ -159,15 +101,15 @@ TEST_CASE("OUT 3300 switches the supply on, OUT 0 switches it off") {
    Bench bench;
    CHECK(bench.run(out(3300)) == Bytes{ ok });
    CHECK(bench.hardware.isOn);
-   CHECK(bench.block.isOn());
+   CHECK(bench.power.isOn());
    // The block waits for the rail before it checks it.
    REQUIRE(bench.delay.delays.size() == 1);
-   CHECK(bench.delay.delays[0].ms == PowerBlock::settleMs);
+   CHECK(bench.delay.delays[0].ms == TargetPower::settleMs);
    CHECK(bench.delay.delays[0].switchOn);
 
    CHECK(bench.run(out(0)) == Bytes{ ok });
    CHECK_FALSE(bench.hardware.isOn);
-   CHECK_FALSE(bench.block.isOn());
+   CHECK_FALSE(bench.power.isOn());
 }
 
 TEST_CASE("OUT in the state that the supply has already changes nothing") {
@@ -194,16 +136,16 @@ TEST_CASE("OUT accepts only 0 and 3300") {
 TEST_CASE("OUT 3300 refuses a target with its own supply") {
    Bench bench;
    // The threshold itself is not a supply.
-   bench.hardware.externalMv = PowerBlock::externalSupplyMillivolts + 1;
+   bench.hardware.externalMv = TargetPower::externalSupplyMillivolts + 1;
    CHECK(bench.run(out(3300)) == Bytes{ failed });
    CHECK(bench.hardware.switches.empty());
-   CHECK_FALSE(bench.block.isOn());
+   CHECK_FALSE(bench.power.isOn());
 
    bench.hardware.externalMv = 3300;
    CHECK(bench.run(out(3300)) == Bytes{ failed });
    CHECK(bench.hardware.switches.empty());
 
-   bench.hardware.externalMv = PowerBlock::externalSupplyMillivolts;
+   bench.hardware.externalMv = TargetPower::externalSupplyMillivolts;
    CHECK(bench.run(out(3300)) == Bytes{ ok });
    CHECK(bench.hardware.isOn);
 }
@@ -221,7 +163,7 @@ TEST_CASE("OUT 3300 switches off again when the rail does not come up") {
    CHECK(bench.run(out(3300)) == Bytes{ failed });
    CHECK(bench.hardware.switches == std::vector<bool>{ true, false });
    CHECK_FALSE(bench.hardware.isOn);
-   CHECK_FALSE(bench.block.isOn());
+   CHECK_FALSE(bench.power.isOn());
 }
 
 TEST_CASE("OUT 0 switches off with a sense that fails") {
@@ -292,13 +234,13 @@ TEST_CASE("poll() switches the supply off after the voltage stays low") {
    // The target pulls the rail down, for example with a short circuit.
    bench.hardware.loadedMv = 100;
    uint64_t now = 1000;
-   for(unsigned i = 1; i < PowerBlock::lowChecksToOff; ++i) {
-      bench.block.poll(now);
-      now += PowerBlock::pollIntervalMs;
-      CHECK(bench.block.isOn());
+   for(unsigned i = 1; i < TargetPower::lowChecksToOff; ++i) {
+      bench.power.poll(now);
+      now += TargetPower::pollIntervalMs;
+      CHECK(bench.power.isOn());
    }
-   bench.block.poll(now);
-   CHECK_FALSE(bench.block.isOn());
+   bench.power.poll(now);
+   CHECK_FALSE(bench.power.isOn());
    CHECK_FALSE(bench.hardware.isOn);
    // The sense now shows the target supply again, which is 0.
    CHECK(bench.hardware.switches == std::vector<bool>{ true, false });
@@ -310,30 +252,30 @@ TEST_CASE("poll() keeps the supply on when the voltage recovers") {
    uint64_t now = 1000;
    for(unsigned round = 0; round < 5; ++round) {
       bench.hardware.loadedMv = 100;
-      for(unsigned i = 1; i < PowerBlock::lowChecksToOff; ++i) {
-         bench.block.poll(now);
-         now += PowerBlock::pollIntervalMs;
+      for(unsigned i = 1; i < TargetPower::lowChecksToOff; ++i) {
+         bench.power.poll(now);
+         now += TargetPower::pollIntervalMs;
       }
       // A dip of the rail, for example when the target starts
       bench.hardware.loadedMv = std::nullopt;
-      bench.block.poll(now);
-      now += PowerBlock::pollIntervalMs;
+      bench.power.poll(now);
+      now += TargetPower::pollIntervalMs;
    }
-   CHECK(bench.block.isOn());
+   CHECK(bench.power.isOn());
 }
 
 TEST_CASE("poll() checks only each poll interval, and only while the supply is on") {
    Bench bench;
-   bench.block.poll(5000);
+   bench.power.poll(5000);
    CHECK(bench.hardware.senses == 0);
 
    REQUIRE(bench.run(out(3300)) == Bytes{ ok });
    const unsigned afterOut = bench.hardware.senses;
-   bench.block.poll(10'000);
+   bench.power.poll(10'000);
    CHECK(bench.hardware.senses == afterOut + 1);
-   bench.block.poll(10'000 + PowerBlock::pollIntervalMs - 1);
+   bench.power.poll(10'000 + TargetPower::pollIntervalMs - 1);
    CHECK(bench.hardware.senses == afterOut + 1);
-   bench.block.poll(10'000 + PowerBlock::pollIntervalMs);
+   bench.power.poll(10'000 + TargetPower::pollIntervalMs);
    CHECK(bench.hardware.senses == afterOut + 2);
 }
 
@@ -342,11 +284,11 @@ TEST_CASE("poll() ignores a failed measurement") {
    REQUIRE(bench.run(out(3300)) == Bytes{ ok });
    bench.hardware.failSense = true;
    uint64_t now = 1000;
-   for(unsigned i = 0; i < 3 * PowerBlock::lowChecksToOff; ++i) {
-      bench.block.poll(now);
-      now += PowerBlock::pollIntervalMs;
+   for(unsigned i = 0; i < 3 * TargetPower::lowChecksToOff; ++i) {
+      bench.power.poll(now);
+      now += TargetPower::pollIntervalMs;
    }
-   CHECK(bench.block.isOn());
+   CHECK(bench.power.isOn());
 }
 
 TEST_CASE("A low check before OUT 3300 does not count for the new supply") {
@@ -354,16 +296,16 @@ TEST_CASE("A low check before OUT 3300 does not count for the new supply") {
    REQUIRE(bench.run(out(3300)) == Bytes{ ok });
    bench.hardware.loadedMv = 100;
    uint64_t now = 1000;
-   for(unsigned i = 1; i < PowerBlock::lowChecksToOff; ++i) {
-      bench.block.poll(now);
-      now += PowerBlock::pollIntervalMs;
+   for(unsigned i = 1; i < TargetPower::lowChecksToOff; ++i) {
+      bench.power.poll(now);
+      now += TargetPower::pollIntervalMs;
    }
    REQUIRE(bench.run(out(0)) == Bytes{ ok });
    bench.hardware.loadedMv = std::nullopt;
    REQUIRE(bench.run(out(3300)) == Bytes{ ok });
    bench.hardware.loadedMv = 100;
-   bench.block.poll(now);
-   CHECK(bench.block.isOn());
+   bench.power.poll(now);
+   CHECK(bench.power.isOn());
 }
 
 TEST_CASE("GET_TVCC replies the voltage of the sense") {
@@ -382,7 +324,7 @@ TEST_CASE("A board without a power switch: OUT 0 is OK, OUT 3300 is not supporte
    CHECK(bench.run(out(0)) == Bytes{ ok });
    CHECK(bench.run(out(3300)) == Bytes{ notSupported });
    CHECK(bench.run(out(1234)) == Bytes{ invalidPara });
-   CHECK_FALSE(bench.block.isOn());
+   CHECK_FALSE(bench.power.isOn());
    // The sense still works.
    bench.hardware.externalMv = 3300;
    CHECK(bench.run(in()) == Bytes{ ok, 0xE4, 0x0C });
@@ -397,8 +339,8 @@ TEST_CASE("A board without a voltage sense switches without the checks and never
    CHECK(bench.run(out(3300)) == Bytes{ ok });
    CHECK(bench.hardware.isOn);
    CHECK(bench.delay.delays.empty());
-   bench.block.poll(1000);
-   bench.block.poll(2000);
+   bench.power.poll(1000);
+   bench.power.poll(2000);
    CHECK(bench.hardware.isOn);
    CHECK(bench.run(out(0)) == Bytes{ ok });
    CHECK_FALSE(bench.hardware.isOn);
@@ -412,7 +354,7 @@ TEST_CASE("A board with neither a switch nor a sense") {
    CHECK(bench.run(out(3300)) == Bytes{ notSupported });
    CHECK(bench.run(in()) == Bytes{ notSupported, 0x00, 0x00 });
    CHECK(bench.dispatcher.targetVoltage() == 0);
-   bench.block.poll(1000);
+   bench.power.poll(1000);
 }
 
 TEST_CASE("The POWER block is in the capability bitmap") {

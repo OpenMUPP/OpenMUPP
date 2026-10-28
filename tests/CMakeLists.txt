@@ -69,6 +69,7 @@ add_executable(vsl-tests
         TestWchLink.cpp
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
+        TestDapTargetPower.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
@@ -80,6 +81,7 @@ add_executable(vsl-tests
         ../src/protocol/versaloon/GpioBlock.cpp
         ../src/protocol/versaloon/JtagRawBlock.cpp
         ../src/protocol/versaloon/PowerBlock.cpp
+        ../src/protocol/TargetPower.cpp
         ../src/protocol/versaloon/SwdBlock.cpp
         ../src/protocol/versaloon/UsbToAll.cpp
         ../src/protocol/versaloon/UsbToXxx.cpp

@@ -152,7 +152,7 @@ The CMSIS-DAP image differs from the Versaloon image in these points:
 
 - It has no `VERSALOON_FW_UPDATE` command.
   Start the bootloader with `ID_DAP_Vendor0`, the switch request on EP0 or the key (see [Firmware update](firmware-update.md#bootloader-code)).
-- It has no target power switch and no `GET_TVCC`.
+- It has no `GET_TVCC`. `ID_DAP_Vendor2` switches the target power and reads the target voltage (see [Target power](cmsis-dap.md#target-power)).
 - JTAG uses the CMSIS-DAP JTAG commands instead of the `JTAG_RAW` block (see [JTAG](cmsis-dap.md#jtag)).
 
 The names of the image files have the text `-cmsis-dap` after the board name.
@@ -814,7 +814,8 @@ The switch is on when PB8 is driven low, and off when PB8 floats.
 The Vref sense is on PB0 (ADC1 channel 8) with a divider of 2.
 The firmware calculates the voltage from the mean of 8 conversions, with a 3.3 V ADC reference.
 
-The firmware protects the target and the adapter:
+The firmware protects the target and the adapter.
+`ID_DAP_Vendor2` of the CMSIS-DAP personality uses the same protections (`src/protocol/TargetPower.h`):
 
 - `OUT 3300` gives `FAILED` and keeps the supply off when the voltage is above 1.8 V.
   The target then has its own supply, and two supplies on one rail can do damage.
