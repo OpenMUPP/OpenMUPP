@@ -832,27 +832,27 @@ OpenOCD uses `interface/cmsis-dap.cfg` with its own TAP and target lines, not th
 | Item | Value |
 |---|---|
 | Date | 2026-10-28 |
-| Probes | OtherUse (`app-8k`) and Mini (`app-8k`), multi image `cmsis-dap,wch-link` with `VSL_WCH_LINK_WCH_USB_ID=ON`, commit `ec2e4c8` |
+| Probes | Two Minis, Mini 1 and Mini 2 (`app-8k`), multi image `cmsis-dap,wch-link` with `VSL_WCH_LINK_WCH_USB_ID=ON`, commit `ec2e4c8` |
 | Host | Linux, OpenOCD `0.12.0+dev-01355-gcba596a3e`, probe-rs 0.32.0, wlink |
 | TCK | 1000 kHz |
 
 | Target | Probe | Expected port | Result |
 |---|---|---|---|
-| CH32V006, one wire | OtherUse | Emulated TAP | Pass. probe-rs `info --protocol jtag` finds IDCODE `0x15653101` and reads `dmstatus`. OpenOCD examines the hart (`misa=0x40801014`) and reads the WCH registers `0x7c` to `0x7f` (`11038403`, `5aa58401`, `00000400`, `00600620`) |
-| CH32V208, two wires | OtherUse | Emulated TAP | Pass. OpenOCD examines the hart (`misa=0x40901105`), reads the chip ID `2080053c` and the flash size (160 KB), and writes and reads RAM. `wlink status` attaches before and after the session |
-| STM32F103, JTAG | OtherUse, Mini | Board port | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`) and examines the Cortex-M3. probe-rs reads memory with `--chip STM32F103RE` |
-| STM32F103, SWD only (no TDO) | Mini | Board port | Pass. The JTAG scan finds no chain and no emulated TAP. An SWD session after the auto connects reads DPIDR `0x1ba01477` |
-| STM32H523, SWD only | OtherUse | Board port | Pass. The JTAG scan finds no chain. An SWD session reads DPIDR `0x6ba02477` |
-| No target | OtherUse | Board port | Pass. The JTAG scan finds TDO low and no emulated TAP |
+| CH32V006, one wire | Mini 1 | Emulated TAP | Pass. probe-rs `info --protocol jtag` finds IDCODE `0x15653101` and reads `dmstatus`. OpenOCD examines the hart (`misa=0x40801014`) and reads the WCH registers `0x7c` to `0x7f` (`11038403`, `5aa58401`, `00000400`, `00600620`) |
+| CH32V208, two wires | Mini 1 | Emulated TAP | Pass. OpenOCD examines the hart (`misa=0x40901105`), reads the chip ID `2080053c` and the flash size (160 KB), and writes and reads RAM. `wlink status` attaches before and after the session |
+| STM32F103, JTAG | Mini 1, Mini 2 | Board port | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`) and examines the Cortex-M3. probe-rs reads memory with `--chip STM32F103RE` |
+| STM32F103, SWD only (no TDO) | Mini 2 | Board port | Pass. The JTAG scan finds no chain and no emulated TAP. An SWD session after the auto connects reads DPIDR `0x1ba01477` |
+| STM32H523, SWD only | Mini 1 | Board port | Pass. The JTAG scan finds no chain. An SWD session reads DPIDR `0x6ba02477` |
+| No target | Mini 1 | Board port | Pass. The JTAG scan finds TDO low and no emulated TAP |
 
 Time of `DAP_Connect` to JTAG at 1000 kHz, 5 runs each, measured on the host with pyusb:
 
 | Target | Auto | Off |
 |---|---|---|
-| STM32H523, SWD only (OtherUse) | 0.54 to 0.62 ms | 0.12 to 0.14 ms |
-| STM32F103, SWD only (Mini) | 0.52 to 0.55 ms | 0.11 to 0.15 ms |
-| SWD target that does not answer (OtherUse) | 3.14 to 3.18 ms | Not measured |
-| No target (OtherUse) | 0.24 to 0.38 ms | 0.11 to 0.18 ms |
+| STM32H523, SWD only (Mini 1) | 0.54 to 0.62 ms | 0.12 to 0.14 ms |
+| STM32F103, SWD only (Mini 2) | 0.52 to 0.55 ms | 0.11 to 0.15 ms |
+| SWD target that does not answer (Mini 1) | 3.14 to 3.18 ms | Not measured |
+| No target (Mini 1) | 0.24 to 0.38 ms | 0.11 to 0.18 ms |
 
 A logic analyzer capture of the SWD target that does not answer shows the steps of one connect, in this order:
 
