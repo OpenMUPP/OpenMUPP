@@ -50,7 +50,7 @@ vsl_personality(wch-link CODE 2 SHORT wch DEFINE VSL_WITH_WCH_LINK SOURCES
         "src/usb/WchLinkFunction\\.cpp" ${VSL_RV_WIRE_SOURCES})
 
 # The values of the deprecated VSL_PROTOCOL option
-set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
+set(VSL_PROTOCOLS versaloon cmsis-dap wch-link)
 
 # Declares the cache entries of the personality options. Both are empty by
 # default: empty VSL_PERSONALITIES is versaloon. Thus a value that is not
@@ -92,33 +92,19 @@ function(vsl_resolve_personalities)
             message(FATAL_ERROR "Set VSL_PERSONALITIES or the deprecated VSL_PROTOCOL, not both. "
                     "Remove VSL_PROTOCOL from the cache with -UVSL_PROTOCOL, or configure with --fresh.")
         endif ()
+        # The -dual presets now mean cmsis-dap,wch-link: no silent alias
+        if (VSL_PROTOCOL STREQUAL "dual")
+            message(FATAL_ERROR "VSL_PROTOCOL=dual is removed. Use -DVSL_PERSONALITIES=versaloon,cmsis-dap instead, "
+                    "and remove VSL_PROTOCOL and VSL_DEFAULT_PROTOCOL with -UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL.")
+        endif ()
         if (NOT VSL_PROTOCOL IN_LIST VSL_PROTOCOLS)
             message(FATAL_ERROR "Unknown VSL_PROTOCOL '${VSL_PROTOCOL}'. Supported protocols: ${VSL_PROTOCOLS}")
         endif ()
-        if (VSL_PROTOCOL STREQUAL "dual")
-            set(_set versaloon cmsis-dap)
-            if (NOT "${VSL_DEFAULT_PROTOCOL}" STREQUAL "")
-                if (NOT VSL_DEFAULT_PROTOCOL IN_LIST _set)
-                    message(FATAL_ERROR "Unknown VSL_DEFAULT_PROTOCOL '${VSL_DEFAULT_PROTOCOL}'. Supported: ${_set}")
-                endif ()
-                if (NOT "${_default}" STREQUAL "" AND NOT _default STREQUAL VSL_DEFAULT_PROTOCOL)
-                    message(FATAL_ERROR "Set VSL_DEFAULT_PERSONALITY or the deprecated VSL_DEFAULT_PROTOCOL, not both. "
-                            "Remove VSL_DEFAULT_PROTOCOL from the cache with -UVSL_DEFAULT_PROTOCOL.")
-                endif ()
-                set(_default "${VSL_DEFAULT_PROTOCOL}")
-            endif ()
-        else ()
-            set(_set "${VSL_PROTOCOL}")
-        endif ()
-        string(REPLACE ";" "," _set_text "${_set}")
-        set(_hint "-DVSL_PERSONALITIES=${_set_text}")
-        if (VSL_PROTOCOL STREQUAL "dual" AND NOT "${_default}" STREQUAL "")
-            string(APPEND _hint " -DVSL_DEFAULT_PERSONALITY=${_default}")
-        endif ()
-        message(DEPRECATION "VSL_PROTOCOL is deprecated. Use ${_hint} instead, "
+        set(_set "${VSL_PROTOCOL}")
+        message(DEPRECATION "VSL_PROTOCOL is deprecated. Use -DVSL_PERSONALITIES=${VSL_PROTOCOL} instead, "
                 "and remove VSL_PROTOCOL and VSL_DEFAULT_PROTOCOL with -UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL.")
     elseif (NOT "${VSL_DEFAULT_PROTOCOL}" STREQUAL "")
-        message(DEPRECATION "VSL_DEFAULT_PROTOCOL is deprecated, and ignored without VSL_PROTOCOL. "
+        message(DEPRECATION "VSL_DEFAULT_PROTOCOL is deprecated, and ignored. "
                 "Use VSL_DEFAULT_PERSONALITY, and remove VSL_DEFAULT_PROTOCOL with -UVSL_DEFAULT_PROTOCOL.")
     endif ()
 

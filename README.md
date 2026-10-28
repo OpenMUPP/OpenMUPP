@@ -233,7 +233,6 @@ This image has no serial port.
 
 A firmware image built with more than one personality is a multi image, for example `-DVSL_PERSONALITIES=cmsis-dap,wch-link`.
 `VSL_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
-The deprecated option `VSL_PROTOCOL=dual` builds the image with the Versaloon and the CMSIS-DAP personalities.
 To change the personality, send a switch command, or use the key.
 `tools/vsl_personality.py` sends the switch request on EP0 (see [Tools](#tools)).
 To use the key, hold it down for 3 s until all LEDs flash.

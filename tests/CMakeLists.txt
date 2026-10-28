@@ -163,12 +163,10 @@ vsl_personality_test(default-not-in-set-hint "-UVSL_DEFAULT_PERSONALITY"
         -DVSL_PERSONALITIES=cmsis-dap -DVSL_DEFAULT_PERSONALITY=versaloon)
 
 # The deprecated VSL_PROTOCOL: the same result as the new option, with a warning
-vsl_personality_test(protocol-warning "VSL_PROTOCOL is deprecated"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=cmsis-dap)
-vsl_personality_test(protocol-dual "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\]"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=versaloon)
-vsl_personality_test(protocol-dual-cmsis-dap "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\]"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=cmsis-dap)
+vsl_personality_test(protocol-warning "Use -DVSL_PERSONALITIES=cmsis-dap instead"
+        -DVSL_PROTOCOL=cmsis-dap)
+vsl_personality_test(protocol-dual "VSL_PROTOCOL=dual is removed"
+        -DVSL_PROTOCOL=dual)
 vsl_personality_test(protocol-wch-link "set=wch-link default=wch-link tag=\\[-wch-link\\]"
         -DVSL_PROTOCOL=wch-link -DVSL_DEFAULT_PROTOCOL=versaloon)
 vsl_personality_test(protocol-unknown "Unknown VSL_PROTOCOL 'triple'" -DVSL_PROTOCOL=triple)
@@ -176,12 +174,6 @@ vsl_personality_test(protocol-and-personalities "Set VSL_PERSONALITIES or the de
         -DVSL_PROTOCOL=cmsis-dap -DVSL_PERSONALITIES=cmsis-dap)
 vsl_personality_test(default-protocol-alone "VSL_DEFAULT_PROTOCOL is deprecated, and ignored"
         -DVSL_PERSONALITIES=versaloon -DVSL_DEFAULT_PROTOCOL=cmsis-dap)
-vsl_personality_test(default-protocol-unknown "Unknown VSL_DEFAULT_PROTOCOL 'wch-link'"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=wch-link)
-vsl_personality_test(default-protocol-and-personality "Set VSL_DEFAULT_PERSONALITY or the deprecated VSL_DEFAULT_PROTOCOL"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=versaloon -DVSL_DEFAULT_PERSONALITY=cmsis-dap)
-vsl_personality_test(default-protocol-and-personality-same "set=versaloon,cmsis-dap default=cmsis-dap"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=cmsis-dap -DVSL_DEFAULT_PERSONALITY=cmsis-dap)
 
 # The cache across configure runs: tests/cmake/fixture is configured in
 # one build directory again and again, in this order. Each step needs the
@@ -201,7 +193,7 @@ set(_vsl_fixture_previous vsl-cache-clean)
 # A first configure without options caches the empty defaults
 vsl_personality_cache_test(default "set=versaloon default=versaloon tag=\\[\\]")
 # Then the deprecated option in the same directory: no error
-vsl_personality_cache_test(protocol "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\]" -DVSL_PROTOCOL=dual)
+vsl_personality_cache_test(protocol "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\]" -DVSL_PROTOCOL=cmsis-dap)
 # The new option while VSL_PROTOCOL is still in the cache: an error
 vsl_personality_cache_test(both "not both" -DVSL_PERSONALITIES=cmsis-dap)
 # Removed from the cache: the new option works
