@@ -21,6 +21,7 @@
 #include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
 #include "protocol/Background.h"
+#include "protocol/TargetPower.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
@@ -114,6 +115,28 @@ bool isActive(Personality personality) {
 // The Vref sense and the target switch. The target power LED reads the
 // sense in every personality.
 board::BoardPower boardPower;
+
+#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
+
+// The DELAY block busy-waits: the main loop stops for the delay, up to
+// 32.767 s. The host waits for the reply in this time. The target power
+// busy-waits for the settle time of the rail.
+class BusyWaitDelay final : public protocol::Delay {
+   public:
+   void microseconds(uint16_t us) override {
+      delayuS(us);
+   }
+   void milliseconds(uint16_t ms) override {
+      delaymS(ms);
+   }
+};
+
+BusyWaitDelay busyWaitDelay;
+
+// The target supply of the POWER block and of ID_DAP_Vendor2
+protocol::TargetPower targetPower{ boardPower, busyWaitDelay };
+
+#endif
 
 // The bootloader entry of FW_UPDATE and of the bootloader code of the switch
 // commands, in every personality. On the STM32F1 only the app-8k image
@@ -274,25 +297,11 @@ void startDap() {
 #if defined(VSL_WITH_VERSALOON)
 
 // --- Versaloon --------------------------------------------------------
-// The DELAY block busy-waits: the main loop stops for the delay, up to
-// 32.767 s. The host waits for the reply in this time.
-class BusyWaitDelay final : public protocol::Delay {
-   public:
-   void microseconds(uint16_t us) override {
-      delayuS(us);
-   }
-   void milliseconds(uint16_t ms) override {
-      delaymS(ms);
-   }
-};
-
-BusyWaitDelay busyWaitDelay;
-
 protocol::UsbToAll usbToAll{ busyWaitDelay };
 protocol::GpioBlock gpioBlock{ boardGpio };
 protocol::JtagRawBlock jtagRawBlock{ boardJtag };
 protocol::SwdBlock swdBlock{ boardSwd };
-protocol::PowerBlock powerBlock{ boardPower, busyWaitDelay };
+protocol::PowerBlock powerBlock{ targetPower };
 const usb::UsbStack::VersaloonDeps versaloonDeps{
    .usbToXxx = &usbToAll,
 };
@@ -312,11 +321,6 @@ void startVersaloon() {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the POWER block");
    }
    usbToAll.setTargetVoltage(&powerBlock);
-}
-
-// Switches the target supply off when the rail drops
-void afterUsbPollVersaloon(uint64_t nowMs) {
-   powerBlock.poll(nowMs);
 }
 
 #endif
@@ -423,10 +427,10 @@ void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
 }
 
 void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
-#if defined(VSL_WITH_VERSALOON)
-   if(isActive(Personality::Versaloon)) {
-      afterUsbPollVersaloon(nowMs);
-   }
+#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
+   // Switches the target supply off when the rail drops. Only the active
+   // personality switches the supply on.
+   targetPower.poll(nowMs);
 #endif
 }
 

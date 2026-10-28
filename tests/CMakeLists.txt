@@ -80,6 +80,7 @@ add_executable(vsl-tests
         ../src/protocol/versaloon/GpioBlock.cpp
         ../src/protocol/versaloon/JtagRawBlock.cpp
         ../src/protocol/versaloon/PowerBlock.cpp
+        ../src/protocol/TargetPower.cpp
         ../src/protocol/versaloon/SwdBlock.cpp
         ../src/protocol/versaloon/UsbToAll.cpp
         ../src/protocol/versaloon/UsbToXxx.cpp
