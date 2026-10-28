@@ -248,7 +248,7 @@ A debug probe on the SWD header P3 can also write the `standalone` image at `0x0
 
 ### Hardware test
 
-`tools/probe_hw_test.py` tests the dual image on an STM32F1 target (see [Multi image hardware test](usb-device.md#multi-image-hardware-test)).
+`tools/probe_hw_test.py` tests the multi image with the Versaloon and the CMSIS-DAP personalities on an STM32F1 target (see [Multi image hardware test](usb-device.md#multi-image-hardware-test)).
 Connect TMS, TCK, TDI, TDO, TRST, SRST and GND to the JTAG connector of the target.
 Connect the wire from PA6 to PB12, and the wire from PB13 to PB3.
 Connect PA9 to PA10 for the UART loopback.
@@ -263,7 +263,7 @@ The test did not show which of the two signals is necessary.
 
 Status: the test passed on 2026-10-25 (work item #95).
 Probe: WeAct STM32H523 core board.
-Image: `weacth523-dual` preset (`VSL_PERSONALITIES=versaloon,cmsis-dap`), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
+Image: `VSL_PERSONALITIES=versaloon,cmsis-dap` (the `weacth523-dual` preset of that time), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
 Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
 Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
 
