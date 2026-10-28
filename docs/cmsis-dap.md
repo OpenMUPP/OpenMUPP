@@ -404,6 +404,7 @@ An image without the bridge replies `ID_DAP_Invalid`. OpenOCD logs the cause of 
 Then `init` stops with "The probe has no RISC-V bridge".
 The proc also adds `cmsis-dap cmd 0x81 0x02` and `cmsis-dap cmd 0x81 0x03` to `pre_shutdown_commands`. Thus `shutdown` sets auto and then the stored mode before OpenOCD closes the adapter.
 A firmware without the stored mode refuses `81 03`, and stays in auto. The change to auto keeps the port, so the first command causes no pin activity.
+A firmware without the auto mode (on and off only) refuses `81 02` and `81 03`, so the bridge stays on after `shutdown`. Use the configs with a firmware that has the stored mode.
 Ctrl-C and SIGTERM also run `shutdown`.
 An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
 Set the stored mode with `python3 tools/vsl_rv_bridge.py stored`, or replug the probe.
@@ -474,7 +475,7 @@ python3 tools/vsl_rv_bridge.py off --store
 python3 tools/vsl_rv_bridge.py auto --store
 ```
 
-- A command without bit 7 does not write the flash. Thus the OpenOCD configs, which send `81 01` and `81 03` in each session, do not wear the flash.
+- A command without bit 7 does not write the flash. Thus the OpenOCD configs, which send `81 01`, `81 02` and `81 03` in each session, do not wear the flash.
 - A store of the stored mode does not write the flash.
 - A personality switch keeps the stored mode, and a store of the mode keeps the stored personality.
 - A page without a mode gives auto. This is true for a page of an older multi image: its records are the records of the auto mode.
@@ -495,7 +496,7 @@ The steps are in this order. The first step that finds a target stops the search
 2. SWD: the probe sends a line reset, the JTAG-to-SWD sequence and a line reset, then reads DPIDR.
    An ACK OK is an SWD target: the port is the JTAG port of the board.
    The probe then sends the SWD-to-JTAG sequence, so an SWJ-DP is in JTAG mode again.
-3. WCH: the probe does the [connect](#connect) on one wire, then on two wires.
+3. WCH: the probe does the [connect](#connect), first on the wire of the last connect (one wire after the start), then on the other wire.
    A target that answers selects the emulated TAP.
 4. No target: the port is the JTAG port of the board.
 
