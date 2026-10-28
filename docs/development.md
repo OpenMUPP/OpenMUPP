@@ -47,7 +47,6 @@ These options select the board, the personality and the debug features:
 | `VSL_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `VSL_PERSONALITIES`. Empty: the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `VSL_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
 | `VSL_CMSIS_DAP_RV_BRIDGE` | `OFF` | Only with `VSL_PERSONALITIES=cmsis-dap`: add the RISC-V bridge to the CMSIS-DAP personality. The vendor command `ID_DAP_Vendor1` then switches the JTAG port to an emulated RISC-V DTM on the WCH debug wire (see [cmsis-dap.md](cmsis-dap.md#risc-v-dtm-bridge)). On the STM32H5 boards, only the OpenOCD rates of the bridge are measured (WeAct STM32H523, see [cmsis-dap.md](cmsis-dap.md#ch32v006-rates-on-the-weact-stm32h523)). |
-| `VSL_PROTOCOL`, `VSL_DEFAULT_PROTOCOL` | not set | Deprecated. Use `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`. The build changes `VSL_PROTOCOL=dual` to `VSL_PERSONALITIES=versaloon,cmsis-dap`, and each other value to the personality with the same name. Then it shows a deprecation warning. With `VSL_PROTOCOL=dual` only, `VSL_DEFAULT_PROTOCOL` becomes `VSL_DEFAULT_PERSONALITY`. With the other values of `VSL_PROTOCOL`, the build ignores `VSL_DEFAULT_PROTOCOL`. Without `VSL_PROTOCOL`, the build ignores `VSL_DEFAULT_PROTOCOL` and shows a deprecation warning. Do not set `VSL_PROTOCOL` and `VSL_PERSONALITIES` together. To remove the old options from the cache of a build directory, use `-UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL`. The presets now set `VSL_PERSONALITIES`, so an old build directory of a preset can stop with an error. Then configure it again with `cmake --preset <name> --fresh`. |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_LTO` | `ON` in a `Release` build, else `OFF` | Link-time optimisation (LTO) of the firmware and of the libraries. The images are about 13 % smaller. The option sets `CMAKE_INTERPROCEDURAL_OPTIMIZATION`. CMake then makes the libraries with `gcc-ar` and `gcc-ranlib`, because `ar` and `ranlib` give no symbol index for LTO objects. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
@@ -68,19 +67,16 @@ The tag after the board in the file name tells the personalities of the image:
 - With `VSL_WCH_LINK_WCH_USB_ID=ON`, the tag ends with `-wch-id`, for example `-wch-link-wch-id`.
 - With `VSL_CMSIS_DAP_RV_BRIDGE=ON`, the tag ends with `-rv-bridge`: `-cmsis-dap-rv-bridge`.
 
-| `VSL_PERSONALITIES` | `VSL_DEFAULT_PERSONALITY` | Tag | Old tag (`VSL_PROTOCOL`) |
-|---|---|---|---|
-| `versaloon` | - | none | none |
-| `cmsis-dap` | - | `-cmsis-dap` | `-cmsis-dap` |
-| `wch-link` | - | `-wch-link` | `-wch-link` |
-| `versaloon,cmsis-dap` | `versaloon` | `-vsl+dap` | `-dual` |
-| `versaloon,cmsis-dap` | `cmsis-dap` | `-dap+vsl` | `-dual-cmsis-dap` |
-| `versaloon,cmsis-dap,wch-link` | `versaloon` | `-vsl+dap+wch` | - |
-| `cmsis-dap,wch-link` | `cmsis-dap` | `-dap+wch` | - |
-| `cmsis-dap,wch-link` | `wch-link` | `-wch+dap` | - |
-
-The tags of the dual images changed: `-dual` is now `-vsl+dap`, and `-dual-cmsis-dap` is now `-dap+vsl`.
-This is also true when you build with the deprecated `VSL_PROTOCOL=dual`.
+| `VSL_PERSONALITIES` | `VSL_DEFAULT_PERSONALITY` | Tag |
+|---|---|---|
+| `versaloon` | - | none |
+| `cmsis-dap` | - | `-cmsis-dap` |
+| `wch-link` | - | `-wch-link` |
+| `versaloon,cmsis-dap` | `versaloon` | `-vsl+dap` |
+| `versaloon,cmsis-dap` | `cmsis-dap` | `-dap+vsl` |
+| `versaloon,cmsis-dap,wch-link` | `versaloon` | `-vsl+dap+wch` |
+| `cmsis-dap,wch-link` | `cmsis-dap` | `-dap+wch` |
+| `cmsis-dap,wch-link` | `wch-link` | `-wch+dap` |
 
 ### Images that do not fit
 
@@ -135,20 +131,17 @@ The default is `/usr`.
 | Preset | Board | Personalities (`VSL_PERSONALITIES`) | Build type |
 |---|---|---|---|
 | `mini-cmsis-dap`, `stlinkv2-cmsis-dap`, `stlinkv2miniclone-cmsis-dap` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap` | Release |
-| `mini-cmsis-dap-wch-link`, `stlinkv2-cmsis-dap-wch-link`, `stlinkv2miniclone-cmsis-dap-wch-link` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
+| `mini-dual`, `stlinkv2-dual`, `stlinkv2miniclone-dual` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-cmsis-dap-rv-bridge` | Mini | `cmsis-dap`, with `VSL_CMSIS_DAP_RV_BRIDGE=ON` | Release |
 | `mini-debug` | Mini | `cmsis-dap` | Debug |
 | `mini-wch-link`, `stlinkv2-wch-link`, `stlinkv2miniclone-wch-link` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
 | `mini`, `stlinkv2`, `stlinkv2miniclone` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `versaloon` | Release |
-| `mini-dual`, `stlinkv2-dual`, `stlinkv2miniclone-dual` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
-| `mini-dual-cmsis-dap` | Mini | `versaloon,cmsis-dap`, with `VSL_DEFAULT_PERSONALITY=cmsis-dap` (tag `-dap+vsl`) | Release |
 | `weacth523-cmsis-dap` | WeAct STM32H523 core board | `cmsis-dap` | Release |
-| `weacth523-cmsis-dap-wch-link` | WeAct STM32H523 core board | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
+| `weacth523-dual` | WeAct STM32H523 core board | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `weacth523-debug` | WeAct STM32H523 core board | `cmsis-dap` | Debug |
 | `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
 | `weacth523` | WeAct STM32H523 core board | `versaloon` | Release |
-| `weacth523-dual` | WeAct STM32H523 core board | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
@@ -157,9 +150,12 @@ A preset with a suffix also inherits the hidden `personalities-<suffix>` preset.
 The `personalities-*` presets set `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`.
 They are for the common sets of personalities.
 For another set, add `-DVSL_PERSONALITIES=<list>` to a preset.
+The `-dual` presets build `cmsis-dap,wch-link`.
+Before, they built `versaloon,cmsis-dap`, and the `-cmsis-dap-wch-link` presets built `cmsis-dap,wch-link`.
+For the old dual image, add `-DVSL_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
-CI builds the `-cmsis-dap`, `-cmsis-dap-wch-link` and `-debug` presets, and `mini-cmsis-dap-rv-bridge`.
+CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, and `mini-cmsis-dap-rv-bridge`.
 The other presets are for local builds only.
 CI uses these presets (see [Continuous integration](#continuous-integration)).
 
@@ -342,20 +338,20 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   The jobs for the STM32F1 boards also build `versaloon-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini with the CMSIS-DAP personality (debug log on the serial port, SWD on), plus the size check.
 - `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
-  GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -cmsis-dap-wch-link, -dap+wch]`.
+  GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -dual, -dap+wch]`.
   It builds the preset `<board><suffix>` (see [CMake presets](#cmake-presets)).
 
   | Personalities | Suffix | Tag | Boards |
   |---|---|---|---|
   | `cmsis-dap` | `-cmsis-dap` | `-cmsis-dap` | ST-Link/V2 (the Mini is `build-mini`) |
-  | `cmsis-dap,wch-link` | `-cmsis-dap-wch-link` | `-dap+wch` | Mini, ST-Link/V2 |
+  | `cmsis-dap,wch-link` | `-dual` | `-dap+wch` | Mini, ST-Link/V2 |
 
   "ST-Link/V2" is the ST-Link/V2 and the ST-Link/V2 mini clone.
   Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
   CI builds no image with the Versaloon personality.
 - `build-mini-cmsis-dap-rv-bridge`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=ON`, plus the size check.
   This job keeps no artifacts.
-- `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-cmsis-dap-wch-link` and `weacth523-debug`, plus the size check.
+- `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
   The limit of the multi image is 8 KB smaller, because the last flash sector holds the stored personality.
 
 The build jobs of the Mini and the WeAct STM32H523 core board run in each pipeline.

@@ -116,7 +116,7 @@ The `app-8k` image has the limit 57,344 bytes, and the `app-10k` image has the l
 Each image uses less than half of its limit.
 CI checks each image against its limit (`ci/check-size.sh`).
 
-For comparison, the Versaloon image of the Mini has 27,168 bytes, the CMSIS-DAP image 31,480 bytes, and the dual image 37,660 bytes.
+For comparison, the Versaloon image of the Mini has 27,168 bytes, the CMSIS-DAP image 31,480 bytes, and the dual image with Versaloon and CMSIS-DAP 37,660 bytes.
 
 ### Combined image
 

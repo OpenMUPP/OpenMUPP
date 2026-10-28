@@ -79,19 +79,18 @@ The presets `mini`, `stlinkv2` and `stlinkv2miniclone` build the Release images 
 The suffix of the preset selects the personalities:
 
 - `-cmsis-dap`: the CMSIS-DAP personality, for example `mini-cmsis-dap`.
-- `-cmsis-dap-wch-link`: the multi image with the CMSIS-DAP and the WCH-Link personalities. CMSIS-DAP is the default personality.
+- `-dual`: the multi image with the CMSIS-DAP and the WCH-Link personalities. CMSIS-DAP is the default personality.
 - `-wch-link`: the WCH-Link personality.
 - No suffix: the Versaloon personality.
-- `-dual`: the multi image with the Versaloon and the CMSIS-DAP personalities.
 
-The CI builds only the `-cmsis-dap` and the `-cmsis-dap-wch-link` images.
+The CI builds only the `-cmsis-dap` and the `-dual` images.
 The Versaloon personality is for old tools only: use CMSIS-DAP for a new setup.
-For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,wch-link` (see [CMake options](docs/development.md#cmake-options)).
+For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap` for the old dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/development.md#cmake-options)).
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality.
-The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-cmsis-dap-wch-link`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
+The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
@@ -234,7 +233,6 @@ This image has no serial port.
 
 A firmware image built with more than one personality is a multi image, for example `-DVSL_PERSONALITIES=cmsis-dap,wch-link`.
 `VSL_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
-The deprecated option `VSL_PROTOCOL=dual` builds the image with the Versaloon and the CMSIS-DAP personalities.
 To change the personality, send a switch command, or use the key.
 `tools/vsl_personality.py` sends the switch request on EP0 (see [Tools](#tools)).
 To use the key, hold it down for 3 s until all LEDs flash.

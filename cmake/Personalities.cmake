@@ -49,14 +49,8 @@ vsl_personality(wch-link CODE 2 SHORT wch DEFINE VSL_WITH_WCH_LINK SOURCES
         "src/protocol/wchlink/WchLinkFlash\\.cpp" "src/protocol/wchlink/WchLinkProcessor\\.cpp"
         "src/usb/WchLinkFunction\\.cpp" ${VSL_RV_WIRE_SOURCES})
 
-# The values of the deprecated VSL_PROTOCOL option
-set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
-
 # Declares the cache entries of the personality options. Both are empty by
-# default: empty VSL_PERSONALITIES is versaloon. Thus a value that is not
-# empty always comes from the user, and vsl_resolve_personalities() can find
-# VSL_PERSONALITIES and the deprecated VSL_PROTOCOL set together, also in a
-# build directory that has cached the default.
+# default: empty VSL_PERSONALITIES is versaloon.
 function(vsl_personality_options)
     set(VSL_PERSONALITIES "" CACHE STRING
             "USB personalities of the image, a list with ';' or ','. Empty: versaloon. Supported: ${VSL_ALL_PERSONALITIES}")
@@ -69,8 +63,6 @@ endfunction()
 #                            a comma-separated list. Empty: versaloon.
 #   VSL_DEFAULT_PERSONALITY  the personality when no personality is stored.
 #                            Empty: the first one in canonical order.
-#   VSL_PROTOCOL, VSL_DEFAULT_PROTOCOL
-#                            deprecated aliases, see below
 #   VSL_WCH_LINK_WCH_USB_ID  the USB ID of WCH for the WCH-Link personality
 #   VSL_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality
 #   VSL_DEBUG_CDC            the debug log on the CDC port
@@ -85,42 +77,6 @@ endfunction()
 function(vsl_resolve_personalities)
     set(_set "${VSL_PERSONALITIES}")
     set(_default "${VSL_DEFAULT_PERSONALITY}")
-
-    # VSL_PROTOCOL is a deprecated alias for one release (#79, decision Q1)
-    if (NOT "${VSL_PROTOCOL}" STREQUAL "")
-        if (NOT "${_set}" STREQUAL "")
-            message(FATAL_ERROR "Set VSL_PERSONALITIES or the deprecated VSL_PROTOCOL, not both. "
-                    "Remove VSL_PROTOCOL from the cache with -UVSL_PROTOCOL, or configure with --fresh.")
-        endif ()
-        if (NOT VSL_PROTOCOL IN_LIST VSL_PROTOCOLS)
-            message(FATAL_ERROR "Unknown VSL_PROTOCOL '${VSL_PROTOCOL}'. Supported protocols: ${VSL_PROTOCOLS}")
-        endif ()
-        if (VSL_PROTOCOL STREQUAL "dual")
-            set(_set versaloon cmsis-dap)
-            if (NOT "${VSL_DEFAULT_PROTOCOL}" STREQUAL "")
-                if (NOT VSL_DEFAULT_PROTOCOL IN_LIST _set)
-                    message(FATAL_ERROR "Unknown VSL_DEFAULT_PROTOCOL '${VSL_DEFAULT_PROTOCOL}'. Supported: ${_set}")
-                endif ()
-                if (NOT "${_default}" STREQUAL "" AND NOT _default STREQUAL VSL_DEFAULT_PROTOCOL)
-                    message(FATAL_ERROR "Set VSL_DEFAULT_PERSONALITY or the deprecated VSL_DEFAULT_PROTOCOL, not both. "
-                            "Remove VSL_DEFAULT_PROTOCOL from the cache with -UVSL_DEFAULT_PROTOCOL.")
-                endif ()
-                set(_default "${VSL_DEFAULT_PROTOCOL}")
-            endif ()
-        else ()
-            set(_set "${VSL_PROTOCOL}")
-        endif ()
-        string(REPLACE ";" "," _set_text "${_set}")
-        set(_hint "-DVSL_PERSONALITIES=${_set_text}")
-        if (VSL_PROTOCOL STREQUAL "dual" AND NOT "${_default}" STREQUAL "")
-            string(APPEND _hint " -DVSL_DEFAULT_PERSONALITY=${_default}")
-        endif ()
-        message(DEPRECATION "VSL_PROTOCOL is deprecated. Use ${_hint} instead, "
-                "and remove VSL_PROTOCOL and VSL_DEFAULT_PROTOCOL with -UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL.")
-    elseif (NOT "${VSL_DEFAULT_PROTOCOL}" STREQUAL "")
-        message(DEPRECATION "VSL_DEFAULT_PROTOCOL is deprecated, and ignored without VSL_PROTOCOL. "
-                "Use VSL_DEFAULT_PERSONALITY, and remove VSL_DEFAULT_PROTOCOL with -UVSL_DEFAULT_PROTOCOL.")
-    endif ()
 
     # Commas instead of ';', because ';' is awkward in a shell and in a preset
     string(REPLACE "," ";" _set "${_set}")
