@@ -269,10 +269,11 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   uart::dapUart(),
                                   bootloader,
 #if defined(VSL_CMSIS_DAP_RV_BRIDGE)
-                                  &dapRvBridge };
+                                  &dapRvBridge,
 #else
-                                  nullptr };
+                                  nullptr,
 #endif
+                                  &targetPower };
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
 // string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one

@@ -179,7 +179,8 @@ Processor::Processor(DapSwd &swd,
                      personality::PersonalitySwitch *personalitySwitch,
                      DapUart *uart,
                      boot::BootloaderEntry *bootloader,
-                     Bridge *bridge)
+                     Bridge *bridge,
+                     protocol::TargetPower *power)
    : swd_(swd)
    , jtag_(jtag)
    , gpio_(gpio)
@@ -188,7 +189,8 @@ Processor::Processor(DapSwd &swd,
    , personalitySwitch_(personalitySwitch)
    , uart_(uart)
    , bootloader_(bootloader)
-   , bridge_(bridge) {
+   , bridge_(bridge)
+   , power_(power) {
    if(jtag_.available()) {
       info_.capabilities = static_cast<uint16_t>(info_.capabilities | capability::jtag);
    }
@@ -387,6 +389,12 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       }
       out.u8(command::invalid);
       return true;
+   case command::vendor2:
+      if(power_ != nullptr) {
+         return targetPower(in, out);
+      }
+      out.u8(command::invalid);
+      return true;
    case command::executeCommands:
    case command::queueCommands:
       if(!nested) {
@@ -462,6 +470,45 @@ bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
    jtag_.invalidate();
    const bool stored = (value & bridgeStoreFlag) == 0 || bridge_->storeMode(mode);
    out.u8(stored ? statusOk : statusError);
+   return true;
+}
+
+// [0x82][op u8] -> [0x82][status u8][mV u16]
+bool Processor::targetPower(PacketReader &in, PacketWriter &out) {
+   const uint8_t op = in.u8();
+   // The room before the switch: a response that does not fit changes
+   // nothing.
+   if(!in.ok() || out.room() < 4) {
+      return false;
+   }
+   constexpr uint8_t opOff = 0;
+   constexpr uint8_t opOn = 1;
+   constexpr uint8_t opRead = 2;
+   constexpr uint8_t statusRefused = 1;
+   uint8_t status = statusOk;
+   if(op == opOn) {
+      switch(power_->switchOn()) {
+      case protocol::TargetPower::Result::Ok:
+         break;
+      case protocol::TargetPower::Result::Refused:
+         status = statusRefused;
+         break;
+      case protocol::TargetPower::Result::NotSupported:
+         status = statusError;
+         break;
+      }
+   } else if(op == opOff) {
+      if(power_->hardware().hasSwitch()) {
+         power_->switchOff();
+      } else {
+         status = statusError;
+      }
+   } else if(op != opRead) {
+      status = statusError;
+   }
+   out.u8(command::vendor2);
+   out.u8(status);
+   out.u16(power_->millivolts());
    return true;
 }
 

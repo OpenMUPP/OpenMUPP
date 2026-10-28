@@ -55,7 +55,6 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
-- No target power switch and no Vref sense in this personality.
 - The LEDs show the target power, the command activity, the probe errors and the USB state. `DAP_HostStatus` does not change them. See [boards.md](boards.md#start-up-and-leds).
 - The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs passed on JTAG at 1000 kHz in the multi image test (see [usb-device.md](usb-device.md#multi-image-hardware-test)). Windows (also the driverless WinUSB binding), the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
 
@@ -170,6 +169,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
 | `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image without the bootloader entry replies `0xFF` to it. An image with one personality and without the bootloader entry replies `ID_DAP_Invalid` to each code. Only the `app-8k` image and the images of the STM32H5 have the bootloader entry. See [Multi image](usb-device.md#multi-image). |
 | `0x81` | `ID_DAP_Vendor1` | Only in an image with `VSL_CMSIS_DAP_RV_BRIDGE`: sets the mode of the RISC-V bridge, `[0x81][mode u8]`, `0` off, `1` on, `2` auto, `3` the stored mode. Bit 7 of the mode also stores the mode. The response is `[0x81][status u8]`: `0` when the mode is set, `0xFF` for another value or a failed store. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
+| `0x82` | `ID_DAP_Vendor2` | Switches the 3.3 V supply of the target and reads the target voltage (Vref): `[0x82][op u8]`. Op `0` switches the supply off, `1` switches it on, `2` only reads. The response is `[0x82][status u8][mV u16]`. See [Target power](#target-power). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
@@ -221,6 +221,49 @@ The other commands of the packet run, for example in `DAP_ExecuteCommands`.
 
 When the host goes away, the transport calls `hostGone()`.
 It disconnects, releases the pins, and drops the queued packets and the responses that the transport did not send.
+
+
+## Target power
+
+The vendor command `ID_DAP_Vendor2` (`0x82`) switches the 3.3 V supply of the target, as the `POWER` block of the Versaloon personality does (see [POWER block](usb-device.md#power-block)).
+Both use the same protections (`src/protocol/TargetPower.h`).
+
+| Request | Operation |
+|---|---|
+| `82 00` | Switch the supply off. |
+| `82 01` | Switch the supply on, with the protections. |
+| `82 02` | No change. Only read the voltage. |
+
+The response is `[0x82][status u8][mV u16]`:
+
+| Status | Meaning |
+|---|---|
+| `0x00` | Done. |
+| `0x01` | Refused: a protection keeps the supply off (see below). |
+| `0xFF` | Not supported: op `0` or `1` on a board without a power switch, or an op that is not `0`, `1` or `2`. |
+
+`mV` is the target voltage after the operation, little-endian.
+It is 0 when the board has no Vref sense or the measurement fails.
+
+`82 01` is refused, and the supply stays off, in these cases:
+
+- The voltage is above 1.8 V. The target then has its own supply.
+- The firmware cannot measure the voltage.
+- The voltage is not above 1.8 V 10 ms after the switch-on. The rail then has a short circuit or an overload, and the firmware switches the supply off again.
+
+A board without a Vref sense switches on without these checks.
+While the supply is on, the main loop switches it off when the voltage stays low, as in the Versaloon personality.
+
+The supply is off at power-up.
+It stays on when the host goes away, so that a tool can switch the target on and then end.
+
+Send the command with OpenOCD, for example a power cycle of the target:
+
+```
+cmsis-dap cmd 0x82 0x00
+sleep 200
+cmsis-dap cmd 0x82 0x01
+```
 
 ## UART commands
 

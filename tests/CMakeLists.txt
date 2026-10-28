@@ -69,6 +69,7 @@ add_executable(vsl-tests
         TestWchLink.cpp
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
+        TestDapTargetPower.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
