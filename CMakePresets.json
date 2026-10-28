@@ -89,19 +89,10 @@
     },
     {
       "name": "personalities-dual",
-      "description": "Dual image, Versaloon as default personality",
+      "description": "Dual image with CMSIS-DAP and WCH-Link, CMSIS-DAP as default personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PERSONALITIES": "versaloon,cmsis-dap",
-        "VSL_DEFAULT_PERSONALITY": "versaloon"
-      }
-    },
-    {
-      "name": "personalities-dual-cmsis-dap",
-      "description": "Dual image, CMSIS-DAP as default personality",
-      "hidden": true,
-      "cacheVariables": {
-        "VSL_PERSONALITIES": "versaloon,cmsis-dap",
+        "VSL_PERSONALITIES": "cmsis-dap,wch-link",
         "VSL_DEFAULT_PERSONALITY": "cmsis-dap"
       }
     },
@@ -142,15 +133,6 @@
       }
     },
     {
-      "name": "personalities-cmsis-dap-wch-link",
-      "description": "Multi image with CMSIS-DAP and WCH-Link, CMSIS-DAP as default personality",
-      "hidden": true,
-      "cacheVariables": {
-        "VSL_PERSONALITIES": "cmsis-dap,wch-link",
-        "VSL_DEFAULT_PERSONALITY": "cmsis-dap"
-      }
-    },
-    {
       "name": "debug",
       "description": "Debug build: debug log on the serial port, SWD on",
       "hidden": true,
@@ -183,7 +165,7 @@
     },
     {
       "name": "mini-dual",
-      "displayName": "Versaloon Mini, dual image",
+      "displayName": "Versaloon Mini, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-mini",
         "personalities-dual"
@@ -196,14 +178,6 @@
         "debug",
         "board-mini",
         "personalities-cmsis-dap"
-      ]
-    },
-    {
-      "name": "mini-dual-cmsis-dap",
-      "displayName": "Versaloon Mini, dual image, CMSIS-DAP default",
-      "inherits": [
-        "board-mini",
-        "personalities-dual-cmsis-dap"
       ]
     },
     {
@@ -220,14 +194,6 @@
       "inherits": [
         "board-mini",
         "personalities-wch-link-wch-id"
-      ]
-    },
-    {
-      "name": "mini-cmsis-dap-wch-link",
-      "displayName": "Versaloon Mini, CMSIS-DAP and WCH-Link",
-      "inherits": [
-        "board-mini",
-        "personalities-cmsis-dap-wch-link"
       ]
     },
     {
@@ -255,7 +221,7 @@
     },
     {
       "name": "otheruse-dual",
-      "displayName": "OtherUse, dual image",
+      "displayName": "OtherUse, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-otheruse",
         "personalities-dual"
@@ -286,7 +252,7 @@
     },
     {
       "name": "stlinkv2-dual",
-      "displayName": "ST-Link/V2, dual image",
+      "displayName": "ST-Link/V2, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-stlinkv2",
         "personalities-dual"
@@ -298,14 +264,6 @@
       "inherits": [
         "board-stlinkv2",
         "personalities-wch-link"
-      ]
-    },
-    {
-      "name": "stlinkv2-cmsis-dap-wch-link",
-      "displayName": "ST-Link/V2, CMSIS-DAP and WCH-Link",
-      "inherits": [
-        "board-stlinkv2",
-        "personalities-cmsis-dap-wch-link"
       ]
     },
     {
@@ -325,7 +283,7 @@
     },
     {
       "name": "stlinkv2miniclone-dual",
-      "displayName": "ST-Link/V2 mini clone, dual image",
+      "displayName": "ST-Link/V2 mini clone, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-stlinkv2miniclone",
         "personalities-dual"
@@ -337,14 +295,6 @@
       "inherits": [
         "board-stlinkv2miniclone",
         "personalities-wch-link"
-      ]
-    },
-    {
-      "name": "stlinkv2miniclone-cmsis-dap-wch-link",
-      "displayName": "ST-Link/V2 mini clone, CMSIS-DAP and WCH-Link",
-      "inherits": [
-        "board-stlinkv2miniclone",
-        "personalities-cmsis-dap-wch-link"
       ]
     },
     {
@@ -364,7 +314,7 @@
     },
     {
       "name": "weacth523-dual",
-      "displayName": "WeAct STM32H523, dual image",
+      "displayName": "WeAct STM32H523, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-weacth523",
         "personalities-dual"
@@ -376,14 +326,6 @@
       "inherits": [
         "board-weacth523",
         "personalities-wch-link"
-      ]
-    },
-    {
-      "name": "weacth523-cmsis-dap-wch-link",
-      "displayName": "WeAct STM32H523 core board, CMSIS-DAP and WCH-Link",
-      "inherits": [
-        "board-weacth523",
-        "personalities-cmsis-dap-wch-link"
       ]
     },
     {
@@ -427,20 +369,12 @@
       "configurePreset": "mini-debug"
     },
     {
-      "name": "mini-dual-cmsis-dap",
-      "configurePreset": "mini-dual-cmsis-dap"
-    },
-    {
       "name": "mini-wch-link",
       "configurePreset": "mini-wch-link"
     },
     {
       "name": "mini-wch-link-wch-id",
       "configurePreset": "mini-wch-link-wch-id"
-    },
-    {
-      "name": "mini-cmsis-dap-wch-link",
-      "configurePreset": "mini-cmsis-dap-wch-link"
     },
     {
       "name": "otheruse",
@@ -479,10 +413,6 @@
       "configurePreset": "stlinkv2-wch-link"
     },
     {
-      "name": "stlinkv2-cmsis-dap-wch-link",
-      "configurePreset": "stlinkv2-cmsis-dap-wch-link"
-    },
-    {
       "name": "stlinkv2miniclone",
       "configurePreset": "stlinkv2miniclone"
     },
@@ -499,10 +429,6 @@
       "configurePreset": "stlinkv2miniclone-wch-link"
     },
     {
-      "name": "stlinkv2miniclone-cmsis-dap-wch-link",
-      "configurePreset": "stlinkv2miniclone-cmsis-dap-wch-link"
-    },
-    {
       "name": "weacth523",
       "configurePreset": "weacth523"
     },
@@ -517,10 +443,6 @@
     {
       "name": "weacth523-wch-link",
       "configurePreset": "weacth523-wch-link"
-    },
-    {
-      "name": "weacth523-cmsis-dap-wch-link",
-      "configurePreset": "weacth523-cmsis-dap-wch-link"
     },
     {
       "name": "weacth523-debug",

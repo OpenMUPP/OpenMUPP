@@ -151,7 +151,7 @@ build:
       # the stored personality, so each image limit of a multi image is 1 KB
       # smaller.
       - BOARD: [mini, stlinkv2, stlinkv2miniclone]
-        VARIANT: -cmsis-dap-wch-link
+        VARIANT: -dual
         PROTOCOL_TAG: -dap+wch
 
 # WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash): the same
@@ -171,7 +171,7 @@ build-weacth523:
         VARIANT: -cmsis-dap
         PROTOCOL_TAG: -cmsis-dap
       - BOARD: weacth523
-        VARIANT: -cmsis-dap-wch-link
+        VARIANT: -dual
         PROTOCOL_TAG: -dap+wch
       - BOARD: weacth523
         VARIANT: -debug

@@ -189,7 +189,7 @@ This section gives the measurements on the STM32H5 at 250 MHz (#94).
 
 ### Setup
 
-- Probe: WeAct STM32H523 (STM32H523CCU6 at 250 MHz), the `weacth523-dual` image.
+- Probe: WeAct STM32H523 (STM32H523CCU6 at 250 MHz), the `weacth523-dual` image of that time (`versaloon,cmsis-dap`).
 - Target: STM32F103ZET6 on the 20-pin JTAG header, at its reset clock (8 MHz HSI).
 - Logic analyzer: Saleae Logic Pro 8 at 500 MS/s (2 ns resolution), TMS and SWDIO on channel 4, TCK and SWCLK on channel 5.
   A glitch filter of 20 ns is on channel 5.
