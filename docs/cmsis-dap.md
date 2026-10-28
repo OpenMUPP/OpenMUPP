@@ -510,7 +510,7 @@ Thus connect the target, and switch on its supply, before the host connects.
   A dormant or multidrop SW-DP (for example the RP2040) does not answer it, and gets the WCH frames.
 - After the WCH step, the first DMI access does the connect again, as after `DAP_Connect` in the on mode.
   The captures show that an attach at `DAP_Connect` passes (image B in [Connect](cmsis-dap-captures/README.md#connect)).
-- The JTAG and SWD steps toggle SWCLK and SWDIO before the WCH step. The hardware test of the auto mode is not done yet.
+- The JTAG and SWD steps toggle SWCLK and SWDIO before the WCH step. The CH32V006 and the CH32V208 still connect after them (see [Auto mode hardware test](#auto-mode-hardware-test)).
 
 ### Connect
 
@@ -821,6 +821,55 @@ Note: a switch while JTAG is connected starts the new port with an unknown TAP s
 OpenOCD does not know this. Probably it uses the IR of the target from before the switch. The test did not capture the scans to confirm this.
 `jtag arp_init` resets the TAPs and scans the chain again. After it, OpenOCD and the target agree again.
 The configs in `etc/openocd/` switch the bridge only before the chain scan and at `shutdown`, so they do not have this problem.
+
+#### Auto mode hardware test
+
+This step checks the port that the [auto mode](#auto-mode) selects for each type of target.
+No tool sends `ID_DAP_Vendor1` in the sessions: `vsl_rv_bridge.py auto` sets the mode before each step.
+OpenOCD uses `interface/cmsis-dap.cfg` with its own TAP and target lines, not the configs in `etc/openocd/`, because these configs send `81 01`.
+
+| Item | Value |
+|---|---|
+| Date | 2026-10-28 |
+| Probes | OtherUse (`app-8k`) and Mini (`app-8k`), multi image `cmsis-dap,wch-link` with `VSL_WCH_LINK_WCH_USB_ID=ON`, commit `ec2e4c8` |
+| Host | Linux, OpenOCD `0.12.0+dev-01355-gcba596a3e`, probe-rs 0.32.0, wlink |
+| TCK | 1000 kHz |
+
+| Target | Probe | Expected port | Result |
+|---|---|---|---|
+| CH32V006, one wire | OtherUse | Emulated TAP | Pass. probe-rs `info --protocol jtag` finds IDCODE `0x15653101` and reads `dmstatus`. OpenOCD examines the hart (`misa=0x40801014`) and reads the WCH registers `0x7c` to `0x7f` (`11038403`, `5aa58401`, `00000400`, `00600620`) |
+| CH32V208, two wires | OtherUse | Emulated TAP | Pass. OpenOCD examines the hart (`misa=0x40901105`), reads the chip ID `2080053c` and the flash size (160 KB), and writes and reads RAM. `wlink status` attaches before and after the session |
+| STM32F103, JTAG | OtherUse, Mini | Board port | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`) and examines the Cortex-M3. probe-rs reads memory with `--chip STM32F103RE` |
+| STM32F103, SWD only (no TDO) | Mini | Board port | Pass. The JTAG scan finds no chain and no emulated TAP. An SWD session after the auto connects reads DPIDR `0x1ba01477` |
+| STM32H523, SWD only | OtherUse | Board port | Pass. The JTAG scan finds no chain. An SWD session reads DPIDR `0x6ba02477` |
+| No target | OtherUse | Board port | Pass. The JTAG scan finds TDO low and no emulated TAP |
+
+Time of `DAP_Connect` to JTAG at 1000 kHz, 5 runs each, measured on the host with pyusb:
+
+| Target | Auto | Off |
+|---|---|---|
+| STM32H523, SWD only (OtherUse) | 0.54 to 0.62 ms | 0.12 to 0.14 ms |
+| STM32F103, SWD only (Mini) | 0.52 to 0.55 ms | 0.11 to 0.15 ms |
+| SWD target that does not answer (OtherUse) | 3.14 to 3.18 ms | Not measured |
+| No target (OtherUse) | 0.24 to 0.38 ms | 0.11 to 0.18 ms |
+
+A logic analyzer capture of the SWD target that does not answer shows the steps of one connect, in this order:
+
+1. The JTAG step: 75 TCK clocks.
+2. The SWD step: 136 bits of JTAG-to-SWD, then the DPIDR read. The target does not give an ACK OK.
+3. The WCH step: frames on two wires, then about 2 ms later three frames on one wire.
+
+Thus a connect that runs the WCH step takes about 3 ms.
+The SWD-only connects of 0.5 ms have no time for the WCH step: the search stops at the SWD step.
+No capture of these connects confirms this.
+The connect without a target takes less time than the connect with an SWD target. The cause is not known, because no capture of it exists.
+
+Notes:
+
+1. probe-rs `info` without `--chip` cannot identify the CH32V006, the CH32V208 or the STM32F103 ("The connected chip could not automatically be determined"). The scan of the chain passes before this message.
+2. OpenOCD `scan_chain` without a target stops with an assertion (`buf_get_u32: Assertion 'num >= 1 && num <= 32' failed`). The same occurs with the bridge off, so the cause is OpenOCD with a chain of only zeros.
+3. On the CH32V208, `resume` fails (`dmstatus=0x00000c82`) and `pc` reads `0x00000000`. This also occurs with the bridge on, so the auto mode does not cause it (#122).
+4. A bad SWD connection to the STM32H523 gave DPIDR `0xfffe053f`, and later no answer. Then the SWD step finds no target, and the WCH step sends its frames to the STM32H523. This agrees with the [auto mode](#auto-mode) rules.
 
 ## Tests
 
