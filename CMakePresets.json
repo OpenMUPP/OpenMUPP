@@ -173,11 +173,11 @@
     },
     {
       "name": "mini-debug",
-      "displayName": "Versaloon Mini, CMSIS-DAP, Debug",
+      "displayName": "Versaloon Mini, CMSIS-DAP without the RISC-V bridge, Debug",
       "inherits": [
         "debug",
         "board-mini",
-        "personalities-cmsis-dap"
+        "personalities-cmsis-dap-no-rv-bridge"
       ]
     },
     {

@@ -133,7 +133,7 @@ The default is `/usr`.
 | `mini-cmsis-dap`, `stlinkv2-cmsis-dap`, `stlinkv2miniclone-cmsis-dap` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap` | Release |
 | `mini-cmsis-dap-no-rv-bridge` | Mini | `cmsis-dap`, with `VSL_CMSIS_DAP_RV_BRIDGE=OFF` (tag `-cmsis-dap-no-rv-bridge`) | Release |
 | `mini-dual`, `stlinkv2-dual`, `stlinkv2miniclone-dual` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
-| `mini-debug` | Mini | `cmsis-dap` | Debug |
+| `mini-debug` | Mini | `cmsis-dap`, with `VSL_CMSIS_DAP_RV_BRIDGE=OFF`: with the bridge, the `app-8k` and `app-10k` images do not fit (tag `-cmsis-dap-no-rv-bridge`) | Debug |
 | `mini-wch-link`, `stlinkv2-wch-link`, `stlinkv2miniclone-wch-link` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
 | `mini`, `stlinkv2`, `stlinkv2miniclone` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `versaloon` | Release |
@@ -336,7 +336,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `build-mini`: release build of all images of the Mini with the `mini-cmsis-dap` preset, plus the size check of each image in `vsl-images.txt`.
   The build jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
   The jobs for the STM32F1 boards also build `versaloon-bootloader` and the combined image for the board.
-- `build-mini-debug`: debug build of the Mini with the CMSIS-DAP personality (debug log on the serial port, SWD on), plus the size check.
+- `build-mini-debug`: debug build of the Mini with the CMSIS-DAP personality without the RISC-V bridge (debug log on the serial port, SWD on), plus the size check.
 - `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
   GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -dual, -dap+wch]`.
   It builds the preset `<board><suffix>` (see [CMake presets](#cmake-presets)).
