@@ -134,7 +134,6 @@ An image with more than one personality is a multi image (see [Multi image](#mul
 It also has `personality/` and `board/SettingsFlashPage.cpp`.
 `VSL_DEFAULT_PERSONALITY` selects the personality of a multi image when no personality is stored.
 `cmake/Personalities.cmake` has the table of the personalities (see [Add a personality](development.md#add-a-personality)).
-The deprecated option `VSL_PROTOCOL` (`versaloon`, `cmsis-dap` or `wch-link`) still works for one release (see [CMake options](development.md#cmake-options)).
 
 The option defines `VSL_WITH_VERSALOON`, `VSL_WITH_CMSIS_DAP` or `VSL_WITH_WCH_LINK` for each personality in the image.
 A multi image also gets `VSL_MULTI_PERSONALITY` and `VSL_DEFAULT_PERSONALITY=<code>`.
