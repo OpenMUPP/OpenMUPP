@@ -122,7 +122,7 @@ Each image has a different start address:
 The Mini gets all three images.
 The ST-Link/V2 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image. They never had the legacy bootloader, so they get no `app-10k` image.
 The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
-A multi image has less flash, because the end of the flash holds the stored personality.
+A multi image or an image with the RISC-V bridge has less flash, because the end of the flash holds the stored personality and the bridge mode.
 This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the STM32H5 board.
 
 The build writes these files into the build directory:

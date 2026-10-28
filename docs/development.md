@@ -347,12 +347,12 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   | `cmsis-dap,wch-link` | `-dual` | `-dap+wch` | Mini, ST-Link/V2 |
 
   "ST-Link/V2" is the ST-Link/V2 and the ST-Link/V2 mini clone.
-  Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
+  Each limit of a multi image or an image with the RISC-V bridge is 1 KB smaller, because the last flash page holds the stored personality and the bridge mode.
   CI builds no image with the Versaloon personality.
 - `build-mini-cmsis-dap-no-rv-bridge`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF`, plus the size check.
   This job keeps no artifacts.
 - `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
-  The limit of the multi image is 8 KB smaller, because the last flash sector holds the stored personality.
+  The limit of a multi image or an image with the RISC-V bridge is 8 KB smaller, because the last flash sector holds the stored personality and the bridge mode.
 
 The build jobs of the Mini and the WeAct STM32H523 core board run in each pipeline.
 The build jobs of the ST-Link/V2 boards are manual: start them in the pipeline view of GitLab.

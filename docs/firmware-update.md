@@ -158,7 +158,7 @@ On Linux, `dfu-util` needs access to the device.
 `etc/70-versaloon-bootloader.rules` has a udev rule for `0483:df11` (see [Bootloader code](#bootloader-code)).
 
 The write erases only the sectors of the image.
-Thus a multi image keeps the stored personality in the last sector of bank 2, at `0x0803E000` on the STM32H523CC.
+Thus a multi image or an image with the RISC-V bridge keeps the stored personality and the bridge mode in the last sector of bank 2, at `0x0803E000` on the STM32H523CC.
 
 ## Install the bootloader
 
