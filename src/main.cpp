@@ -46,11 +46,13 @@
 #include "protocol/versaloon/SwdBlock.h"
 #include "protocol/versaloon/UsbToAll.h"
 #endif
+#if defined(VSL_MULTI_PERSONALITY) || defined(VSL_CMSIS_DAP_RV_BRIDGE)
+#include "board/SettingsFlashPage.h"
+#include "personality/PersonalityStore.h"
+#endif
 #if defined(VSL_MULTI_PERSONALITY)
 #include "board/BoardPins.h"
-#include "board/SettingsFlashPage.h"
 #include "personality/KeyGesture.h"
-#include "personality/PersonalityStore.h"
 #include "personality/PersonalitySwitch.h"
 #endif
 
@@ -190,12 +192,37 @@ class DapPlatform final : public cmsisdap::Platform {
 DapPlatform dapPlatform;
 cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
 #if defined(VSL_CMSIS_DAP_RV_BRIDGE)
-// The RISC-V bridge: ID_DAP_Vendor1 switches the JTAG port from the board
-// to the emulated RISC-V DTM on the debug wire engine.
+// The RISC-V bridge: the JTAG port is the port of the board or the
+// emulated RISC-V DTM on the debug wire engine. ID_DAP_Vendor1 sets the
+// mode and can store it; auto finds the port at DAP_Connect. In a multi image the wire pins
+// are separate objects from the ones of wch-link: only the active
+// personality sets them up.
 board::RvSwdPins dapRvSwdPins;
 wchlink::RvSwdTarget<board::RvSwdPins> dapRvTarget{ dapRvSwdPins, &serialService };
 cmsisdap::RvDtmTap dapRvTap{ dapRvTarget };
-cmsisdap::RvBridge dapRvBridge{ boardJtag, dapRvTap };
+
+static_assert(static_cast<uint8_t>(cmsisdap::BridgeMode::Auto) == personality::bridgeModeAuto &&
+              static_cast<uint8_t>(cmsisdap::BridgeMode::Auto) + 1 == personality::bridgeModes,
+              "the bridge modes of the settings page");
+
+// The stored mode of the bridge: in the settings page, with the personality.
+// A store stalls the CPU during the flash write, see board/SettingsFlashPage.h.
+class BridgeModeFlash final : public cmsisdap::BridgeModeStore {
+   public:
+   static cmsisdap::BridgeMode load() {
+      board::SettingsFlashPage page;
+      const auto settings = personality::PersonalityStore{ page }.loadSettings();
+      return static_cast<cmsisdap::BridgeMode>(settings ? settings->bridgeMode : personality::bridgeModeAuto);
+   }
+
+   bool store(cmsisdap::BridgeMode mode) override {
+      board::SettingsFlashPage page;
+      return personality::PersonalityStore{ page }.storeBridgeMode(static_cast<uint8_t>(mode), activePersonality);
+   }
+};
+
+BridgeModeFlash dapRvModeStore;
+cmsisdap::RvBridge dapRvBridge{ boardJtag, dapSwd, dapRvTap, dapRvModeStore, BridgeModeFlash::load() };
 #endif
 cmsisdap::Processor dapProcessor{ dapSwd,
                                   boardGpio,

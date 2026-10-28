@@ -13,11 +13,14 @@ namespace {
 
 constexpr std::size_t slotCount = SettingsFlashPage::sizeBytes / sizeof(uint16_t);
 
+// The HSI was on before unlock()
+bool hsiWasOn = false;
+
 // Unlocks the flash controller. The flash controller needs the HSI on to
 // erase and write (RM0008 3.3.3). The system clock runs from the PLL, so
-// the HSI can be off. The HSI stays on after the write: a reset always
-// follows the write.
+// the HSI can be off. finish() turns it off again.
 void unlock() {
+   hsiWasOn = (RCC->CR & RCC_CR_HSION) != 0;
    RCC->CR |= RCC_CR_HSION;
    while((RCC->CR & RCC_CR_HSIRDY) == 0) {
    }
@@ -38,6 +41,9 @@ bool finish(uint32_t operation) {
    FLASH->CR &= ~operation;
    FLASH->SR = FLASH_SR_EOP | FLASH_SR_PGERR | FLASH_SR_WRPRTERR;
    FLASH->CR |= FLASH_CR_LOCK;
+   if(!hsiWasOn) {
+      RCC->CR &= ~RCC_CR_HSION;
+   }
    return ok;
 }
 

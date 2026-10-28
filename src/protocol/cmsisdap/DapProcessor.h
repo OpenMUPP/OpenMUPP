@@ -67,13 +67,18 @@
 //   without a bootloader. Without a personality switch (an image with one
 //   personality) and without a bootloader, the command replies
 //   ID_DAP_Invalid.
-// - ID_DAP_Vendor1 [0x81][on u8] -> [0x81][status u8] switches the RISC-V
-//   bridge (RvBridge.h): 1 on, 0 off. On, DAP_Connect to JTAG and the JTAG
-//   commands use the emulated TAP, and the TAP state and IR are not known.
-//   The status is DAP_OK (0), or DAP_ERROR (0xFF) for another value.
-//   Without a bridge, the command replies ID_DAP_Invalid. hostGone()
-//   switches the bridge off. DAP_SWJ_Pins with SWCLK or SWDIO selected
-//   tells the bridge that the pins changed (Bridge::pinsChanged()).
+// - ID_DAP_Vendor1 [0x81][mode u8] -> [0x81][status u8] sets the mode of
+//   the RISC-V bridge (RvBridge.h): 0 off, 1 on, 2 auto, 3 the stored
+//   mode (bridgeStoredMode). On, DAP_Connect to
+//   JTAG and the JTAG commands use the emulated TAP, and the TAP state and
+//   IR are not known. Auto finds the port at each DAP_Connect to JTAG. With
+//   bit 7 (bridgeStoreFlag) set, the command also stores the mode: it is
+//   then the mode at power-up and after hostGone(). The status is DAP_OK
+//   (0), or DAP_ERROR (0xFF) for another value and for a failed store. A
+//   failed store still sets the mode. Without a bridge, the command replies
+//   ID_DAP_Invalid. hostGone() sets the stored mode.
+//   DAP_SWJ_Pins with SWCLK or SWDIO selected tells the bridge that the
+//   pins changed (Bridge::pinsChanged()).
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -217,10 +222,26 @@ class Platform {
    ~Platform() = default;
 };
 
+// The modes of the RISC-V bridge: the values of ID_DAP_Vendor1
+enum class BridgeMode : uint8_t {
+   Off = 0,
+   On = 1,
+   Auto = 2,
+};
+
+// ID_DAP_Vendor1: this bit of the mode byte also stores the mode
+inline constexpr uint8_t bridgeStoreFlag = 0x80;
+// ID_DAP_Vendor1: this mode value sets the stored mode. It takes no store flag.
+inline constexpr uint8_t bridgeStoredMode = 3;
+
 // The RISC-V bridge of ID_DAP_Vendor1 (RvBridge.h)
 class Bridge {
    public:
-   virtual void enable(bool on) = 0;
+   virtual void setMode(BridgeMode mode) = 0;
+   // Stores the mode of the power-up and of hostGone(). False when the
+   // store failed: the stored mode then stays.
+   virtual bool storeMode(BridgeMode mode) = 0;
+   [[nodiscard]] virtual BridgeMode storedMode() const = 0;
    // DAP_SWJ_Pins drove SWCLK or SWDIO.
    virtual void pinsChanged() = 0;
 

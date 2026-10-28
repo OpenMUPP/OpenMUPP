@@ -231,7 +231,7 @@ void Processor::hostGone() {
    responseFirst_ = 0;
    disconnect();
    if(bridge_ != nullptr) {
-      bridge_->enable(false);
+      bridge_->setMode(bridge_->storedMode());
    }
    if(uart_ != nullptr) {
       uart_->hostGone();
@@ -445,19 +445,23 @@ bool Processor::switchPersonality(PacketReader &in, PacketWriter &out) {
 }
 
 bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
-   const uint8_t on = in.u8();
+   const uint8_t value = in.u8();
    if(!in.ok()) {
       return false;
    }
    out.u8(command::vendor1);
-   if(on > 1) {
+   const auto code = static_cast<uint8_t>(value & ~bridgeStoreFlag);
+   // The stored mode is stored already: no store flag with it
+   if(code > bridgeStoredMode || value == (bridgeStoredMode | bridgeStoreFlag)) {
       out.u8(statusError);
       return true;
    }
-   bridge_->enable(on == 1);
+   const auto mode = code == bridgeStoredMode ? bridge_->storedMode() : static_cast<BridgeMode>(code);
+   bridge_->setMode(mode);
    // The other port has another TAP state and IR.
    jtag_.invalidate();
-   out.u8(statusOk);
+   const bool stored = (value & bridgeStoreFlag) == 0 || bridge_->storeMode(mode);
+   out.u8(stored ? statusOk : statusError);
    return true;
 }
 

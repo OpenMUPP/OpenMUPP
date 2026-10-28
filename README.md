@@ -89,7 +89,7 @@ For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example 
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
-`mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality.
+`mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality and without the RISC-V bridge. With the bridge, the Debug image does not fit behind a bootloader.
 The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 `cmake --list-presets` shows all presets.
 [docs/development.md](docs/development.md#cmake-presets) describes them.
@@ -122,7 +122,7 @@ Each image has a different start address:
 The Mini gets all three images.
 The ST-Link/V2 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image. They never had the legacy bootloader, so they get no `app-10k` image.
 The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
-A multi image has less flash, because the end of the flash holds the stored personality.
+A multi image or an image with the RISC-V bridge has less flash, because the end of the flash holds the stored personality and the bridge mode.
 This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the STM32H5 board.
 
 The build writes these files into the build directory:
@@ -252,7 +252,7 @@ The Python scripts in `tools/` need Python 3.
 | Script | Function | Needs |
 |---|---|---|
 | `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. | `pyusb` |
-| `tools/vsl_rv_bridge.py` | `on` and `off` switch the RISC-V bridge of a CMSIS-DAP image with `VSL_CMSIS_DAP_RV_BRIDGE`, for example before probe-rs starts (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). | `pyusb` |
+| `tools/vsl_rv_bridge.py` | `off`, `on`, `auto` and `stored` set the mode of the RISC-V bridge of a CMSIS-DAP image. `--store` also stores the mode: the mode after a USB reset and at power-up (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). | `pyusb` |
 | `tools/serial_loopback_test.py` | Tests the UART bridge with a loopback wire from TX to RX (see [docs/uart-bridge.md](docs/uart-bridge.md)). | `pyserial` |
 | `tools/dap_uart_loopback_test.py` | Tests the `DAP_UART_*` commands of the CMSIS-DAP personality with a loopback wire from TX to RX (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-hardware-test)). | `pyusb`, `pyserial` for `--serial-port` |
 | `tools/flash_benchmark.py` | Measures the flash speed with OpenOCD (see [docs/development.md](docs/development.md#flash-speed-benchmark)). | OpenOCD |

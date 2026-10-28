@@ -74,6 +74,7 @@ add_executable(vsl-tests
         ../src/protocol/cmsisdap/DapJtag.cpp
         ../src/protocol/cmsisdap/DapProcessor.cpp
         ../src/protocol/cmsisdap/RvDtmTap.cpp
+        ../src/protocol/cmsisdap/RvBridge.cpp
         ../src/protocol/wchlink/WchLinkFlash.cpp
         ../src/protocol/wchlink/WchLinkProcessor.cpp
         ../src/protocol/versaloon/GpioBlock.cpp
@@ -124,28 +125,31 @@ function(vsl_personality_test name regex)
 endfunction()
 
 vsl_personality_test(default "set=versaloon default=versaloon tag=\\[\\] defines=VSL_WITH_VERSALOON\n")
-vsl_personality_test(cmsis-dap "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\] defines=VSL_WITH_CMSIS_DAP\n"
+vsl_personality_test(cmsis-dap "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\] defines=VSL_WITH_CMSIS_DAP,VSL_CMSIS_DAP_RV_BRIDGE\n"
         -DVSL_PERSONALITIES=cmsis-dap)
 vsl_personality_test(wch-link "set=wch-link default=wch-link tag=\\[-wch-link\\] defines=VSL_WITH_WCH_LINK\n"
         -DVSL_PERSONALITIES=wch-link)
 vsl_personality_test(wch-link-wch-id "tag=\\[-wch-link-wch-id\\] defines=VSL_WITH_WCH_LINK,VSL_WCH_LINK_WCH_USB_ID\n"
         -DVSL_PERSONALITIES=wch-link -DVSL_WCH_LINK_WCH_USB_ID=ON)
-vsl_personality_test(rv-bridge "tag=\\[-cmsis-dap-rv-bridge\\] defines=VSL_WITH_CMSIS_DAP,VSL_CMSIS_DAP_RV_BRIDGE\n"
-        -DVSL_PERSONALITIES=cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
-vsl_personality_test(rv-bridge-multi "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap"
-        -DVSL_PERSONALITIES=versaloon,cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
-vsl_personality_test(rv-bridge-wch-link "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap"
+vsl_personality_test(no-rv-bridge "tag=\\[-cmsis-dap-no-rv-bridge\\] defines=VSL_WITH_CMSIS_DAP\n"
+        -DVSL_PERSONALITIES=cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=OFF)
+vsl_personality_test(rv-bridge-multi "tag=\\[-vsl\\+dap\\] defines=.*,VSL_CMSIS_DAP_RV_BRIDGE\n"
+        -DVSL_PERSONALITIES=versaloon,cmsis-dap)
+vsl_personality_test(no-rv-bridge-multi "tag=\\[-vsl\\+dap-no-rv-bridge\\] defines=.*VSL_DEFAULT_PERSONALITY=0\n"
+        -DVSL_PERSONALITIES=versaloon,cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=OFF)
+# Ignored without cmsis-dap
+vsl_personality_test(rv-bridge-wch-link "tag=\\[-wch-link\\] defines=VSL_WITH_WCH_LINK\n"
         -DVSL_PERSONALITIES=wch-link -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
 # A CMake list, in any order: the result is in canonical order
-vsl_personality_test(list "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0\n"
+vsl_personality_test(list "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0,VSL_CMSIS_DAP_RV_BRIDGE\n"
         "-DVSL_PERSONALITIES=cmsis-dap$<SEMICOLON>versaloon")
-vsl_personality_test(dap-default "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\] .*VSL_DEFAULT_PERSONALITY=1\n"
+vsl_personality_test(dap-default "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\] .*VSL_DEFAULT_PERSONALITY=1,VSL_CMSIS_DAP_RV_BRIDGE\n"
         -DVSL_PERSONALITIES=versaloon,cmsis-dap -DVSL_DEFAULT_PERSONALITY=cmsis-dap)
-vsl_personality_test(triple "set=versaloon,cmsis-dap,wch-link default=versaloon tag=\\[-vsl\\+dap\\+wch\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_WITH_WCH_LINK,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0\n"
+vsl_personality_test(triple "set=versaloon,cmsis-dap,wch-link default=versaloon tag=\\[-vsl\\+dap\\+wch\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_WITH_WCH_LINK,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0,VSL_CMSIS_DAP_RV_BRIDGE\n"
         "-DVSL_PERSONALITIES=wch-link, versaloon ,cmsis-dap")
-vsl_personality_test(dap-wch "set=cmsis-dap,wch-link default=wch-link tag=\\[-wch\\+dap\\] .*VSL_DEFAULT_PERSONALITY=2\n"
+vsl_personality_test(dap-wch "set=cmsis-dap,wch-link default=wch-link tag=\\[-wch\\+dap\\] .*VSL_DEFAULT_PERSONALITY=2,VSL_CMSIS_DAP_RV_BRIDGE\n"
         -DVSL_PERSONALITIES=cmsis-dap,wch-link -DVSL_DEFAULT_PERSONALITY=wch-link)
-vsl_personality_test(multi-wch-id "tag=\\[-dap\\+wch-wch-id\\] .*VSL_WCH_LINK_WCH_USB_ID\n"
+vsl_personality_test(multi-wch-id "tag=\\[-dap\\+wch-wch-id\\] .*VSL_WCH_LINK_WCH_USB_ID,VSL_CMSIS_DAP_RV_BRIDGE\n"
         -DVSL_PERSONALITIES=cmsis-dap,wch-link -DVSL_WCH_LINK_WCH_USB_ID=ON)
 vsl_personality_test(duplicate "set=versaloon,cmsis-dap default=versaloon"
         -DVSL_PERSONALITIES=versaloon,cmsis-dap,versaloon)

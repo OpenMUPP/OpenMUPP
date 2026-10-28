@@ -20,9 +20,10 @@
  *
  * __vsl_settings_size (CMake: -Wl,--defsym) keeps the last bytes of the
  * flash out of the FLASH region. A multi image (more than one personality
- * in VSL_PERSONALITIES) keeps one 1 KB page there for the stored
- * personality, at __vsl_settings_start (src/board/SettingsFlashPage.h).
- * The other images keep 0 bytes.
+ * in VSL_PERSONALITIES) and an image with the RISC-V bridge keep one 1 KB
+ * page there for the stored personality and bridge mode, at
+ * __vsl_settings_start (src/board/SettingsFlashPage.h). The other images
+ * keep 0 bytes.
  *
  * RAM: 20 KB at 0x20000000. The first 0x100 bytes of RAM are kept free for
  * the copy of the vector table that Interrupt::connectHandler() of

@@ -178,7 +178,7 @@ The board and the target must have a common ground.
 
 The firmware on the board has these limits:
 
-- The personalities Versaloon, CMSIS-DAP and WCH-Link, alone or in a multi image. A multi image keeps the last 8 KB flash sector of bank 2 for the stored personality (see [Multi image](usb-device.md#multi-image)).
+- The personalities Versaloon, CMSIS-DAP and WCH-Link, alone or in a multi image. A multi image or an image with the RISC-V bridge keeps the last 8 KB flash sector of bank 2 for the stored personality and the bridge mode (see [Multi image](usb-device.md#multi-image)).
 - A one-wire target (WCH-Link, CH32V00x) needs an external pull-up of 2.2 kΩ from SWDIO to 3.3 V. The internal pull-ups are too slow for the read bits (see [One-wire timer](wch-link.md#one-wire-timer)).
 - Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE`, the bootloader code `0xB0` and the key at the reset start the ROM USB DFU (see [STM32H5: ROM USB DFU](firmware-update.md#stm32h5-rom-usb-dfu)).
 - The JTAG fast path needs a wire from PB13 to PB3 (see [Wiring to the target](#wiring-to-the-target)).

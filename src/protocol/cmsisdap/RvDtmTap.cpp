@@ -161,6 +161,15 @@ bool RvDtmTap::connect() {
    return false;
 }
 
+bool RvDtmTap::probe() {
+   fini();
+   const bool found = connect();
+   if(found) {
+      target_.detach();
+   }
+   return found;
+}
+
 void RvDtmTap::fini() {
    if(attached_) {
       target_.detach();

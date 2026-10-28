@@ -110,10 +110,10 @@ vsl_personality_options()
 option(VSL_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-link personality, for personal use only" OFF)
 
 # The RISC-V bridge of the CMSIS-DAP personality (docs/cmsis-dap.md, "RISC-V
-# DTM bridge"): ID_DAP_Vendor1 switches the JTAG port to an emulated RISC-V
-# DTM on the WCH debug wire. Only in an image with the single personality
-# cmsis-dap.
-option(VSL_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality (VSL_PERSONALITIES=cmsis-dap only)" OFF)
+# DTM bridge"): the JTAG port can be an emulated RISC-V DTM on the WCH debug
+# wire. In each image with cmsis-dap, also in a multi image. An image without
+# cmsis-dap ignores the option.
+option(VSL_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality" ON)
 
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
@@ -177,15 +177,21 @@ if (CMAKE_CROSSCOMPILING)
     # drops what an image does not use.
     set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
     set(_vsl_dropped_files ${VSL_PERSONALITY_DROPPED_SOURCES})
-    # The flash page of the stored personality: only in a multi image. It is
-    # at the end of the application area: one 1 KB flash page on the
-    # STM32F103, one 8 KB flash sector on the STM32H5.
-    if (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32F1")
+    # The settings page: the stored personality of a multi image and the
+    # stored mode of the RISC-V bridge. Only in a multi image and in an image
+    # with the bridge. It is at the end of the application area: one 1 KB
+    # flash page on the STM32F103, one 8 KB flash sector on the STM32H5.
+    if (VSL_PERSONALITY_COUNT GREATER 1 OR VSL_RV_BRIDGE)
+        set(_vsl_settings ON)
+    else ()
+        set(_vsl_settings OFF)
+    endif ()
+    if (_vsl_settings AND STM32_FAMILY STREQUAL "STM32F1")
         set(VSL_SETTINGS_PAGE_SIZE 1024)
-    elseif (VSL_PERSONALITY_COUNT GREATER 1 AND STM32_FAMILY STREQUAL "STM32H5")
+    elseif (_vsl_settings AND STM32_FAMILY STREQUAL "STM32H5")
         set(VSL_SETTINGS_PAGE_SIZE 8192)
-    elseif (VSL_PERSONALITY_COUNT GREATER 1)
-        message(FATAL_ERROR "Board ${BOARD}: a multi image (VSL_PERSONALITIES=${VSL_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have. Select one personality.")
+    elseif (_vsl_settings)
+        message(FATAL_ERROR "Board ${BOARD}: a multi image or the RISC-V bridge (VSL_PERSONALITIES=${VSL_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have.")
     else ()
         list(APPEND _vsl_dropped_files "src/board/SettingsFlashPage\\.cpp")
         set(VSL_SETTINGS_PAGE_SIZE 0)
@@ -255,7 +261,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", RISC-V bridge: " ${VSL_CMSIS_DAP_RV_BRIDGE} ", strict size: " ${VSL_STRICT_SIZE} ", LTO: " ${VSL_LTO} ")")
+    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", RISC-V bridge: " ${VSL_RV_BRIDGE} ", strict size: " ${VSL_STRICT_SIZE} ", LTO: " ${VSL_LTO} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program

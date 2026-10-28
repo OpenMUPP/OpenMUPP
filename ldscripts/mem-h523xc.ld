@@ -3,9 +3,10 @@
  *
  * The board has only the standalone image (CMakeLists.txt): no bootloader,
  * __vsl_app_offset is 0. __vsl_flash_slack and __vsl_settings_size work as
- * in mem-f103.ld. A multi image keeps the last 8 KB sector of bank 2 for
- * the stored personality (src/board/SettingsFlashPage.h): __vsl_settings_size
- * is 8 KB. The other images keep 0 bytes.
+ * in mem-f103.ld. A multi image and an image with the RISC-V bridge keep
+ * the last 8 KB sector of bank 2 for the stored personality and bridge mode
+ * (src/board/SettingsFlashPage.h): __vsl_settings_size is 8 KB. The other
+ * images keep 0 bytes.
  *
  * FLASH: 256 KB at 0x08000000 (two banks of 128 KB, 8 KB sectors).
  * RAM: SRAM1 (128 KB), SRAM2 (80 KB) and SRAM3 (64 KB) are contiguous at

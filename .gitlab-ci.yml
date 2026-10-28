@@ -126,13 +126,14 @@ build-mini:
     VARIANT: -cmsis-dap
     PROTOCOL_TAG: -cmsis-dap
 
-# The CMSIS-DAP personality with the debug log on the CDC port
+# The CMSIS-DAP personality with the debug log on the CDC port. Without the
+# RISC-V bridge: with it, the Debug image does not fit behind a bootloader.
 build-mini-debug:
   extends: .build-board-template
   variables:
     BOARD: mini
     VARIANT: -debug
-    PROTOCOL_TAG: -cmsis-dap
+    PROTOCOL_TAG: -cmsis-dap-no-rv-bridge
     BUILD_TYPE: Debug
 
 # The release images: the CMSIS-DAP image and the multi image with the
@@ -178,12 +179,13 @@ build-weacth523:
         PROTOCOL_TAG: -cmsis-dap
         BUILD_TYPE: Debug
 
-# VSL_PERSONALITIES=cmsis-dap with the RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE,
-# #103). Build and size check only, no artifacts.
-build-mini-cmsis-dap-rv-bridge:
+# VSL_PERSONALITIES=cmsis-dap without the RISC-V bridge
+# (VSL_CMSIS_DAP_RV_BRIDGE=OFF): the only build of the image without the
+# bridge. Build and size check only, no artifacts.
+build-mini-cmsis-dap-no-rv-bridge:
   extends: .build-board-template
   variables:
     BOARD: mini
-    VARIANT: -cmsis-dap-rv-bridge
-    PROTOCOL_TAG: -cmsis-dap-rv-bridge
+    VARIANT: -cmsis-dap-no-rv-bridge
+    PROTOCOL_TAG: -cmsis-dap-no-rv-bridge
   artifacts: null
