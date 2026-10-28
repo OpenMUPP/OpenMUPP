@@ -257,7 +257,12 @@ While the supply is on, the main loop switches it off when the voltage stays low
 The supply is off at power-up.
 It stays on when the host goes away, so that a tool can switch the target on and then end.
 
-Send the command with OpenOCD, for example a power cycle of the target:
+After `82 00`, the rail capacitance can keep the voltage above 1.8 V for some time.
+An `82 01` in this time is refused, because the firmware sees a target with its own supply.
+Thus, before `82 01`, wait until `82 02` gives a voltage below 1.8 V.
+
+Send the command with OpenOCD, for example a power cycle of the target.
+The 200 ms wait is not tested on hardware:
 
 ```
 cmsis-dap cmd 0x82 0x00
@@ -946,6 +951,9 @@ They also run `ID_DAP_Vendor1` through the processor, the store flag, the stored
 `tests/TestDapUart.cpp` runs `uart::DapUartChannel` with the real CDC-ACM function, the UART bridge and a fake UART.
 The tests cover the owner switch, the frame formats, the receiver and transmitter control, the status bits and the buffer limits.
 They also run the `DAP_UART_*` commands and `DAP_Info` through the processor.
+
+`tests/TestDapTargetPower.cpp` runs `ID_DAP_Vendor2` through the processor, on the fake power switch and voltage sense of `tests/FakePower.h`.
+The tests cover off, on and read, each protection, a board without a switch or a sense, an unknown op, the host that goes away, and a response that does not fit.
 
 ## Hardware test
 
