@@ -20,7 +20,7 @@ The WeAct STM32H523 core board uses an STM32H523CC (family STM32H5, see [WeAct S
 | Family | `STM32_FAMILY` of system-stm32. The toolchain file `cmake/gcc_arm.cmake` sets the CPU flags from it. |
 | Device | `STM32_DEVICE` of system-stm32, the CMSIS device define. |
 | Crystal | `SYSTEM_STM32_HSE_VALUE` of system-stm32, in Hz. 0 is a board without a crystal. |
-| Linker script | The memory linker script in `ldscripts/`, for example `mem-f103.ld`. |
+| Linker script | The memory linker script in `ldscripts/` of system-stm32, for example `mem-F103x8.ld`. |
 | Flash | The flash size in bytes. The size limit of each application image comes from it. The STM32F1 boards use 64 KB, the flash of the STM32F103x8. |
 
 `CMakeLists.txt` reads `cmake/Boards.cmake` before `project()`.
