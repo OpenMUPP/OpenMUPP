@@ -52,8 +52,8 @@ In an existing clone, run `git submodule update --init --recursive`.
 The submodules are:
 
 - `libArT`: core library (streams, logging, USB device stack).
-- `system-stm32`: start-up code, CMSIS and peripheral drivers. The `dev` branch has the STM32F1 and the STM32H5 support.
-- `libart-stm32`: STM32 adapters for libArT. The `dev` branch has the STM32F1 and the STM32H5 support.
+- `system-stm32`: start-up code, CMSIS and peripheral drivers. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/system-stm32.
+- `libart-stm32`: STM32 adapters for libArT. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/libart-stm32.
 - `versaloon-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
 
 ## Requirements
