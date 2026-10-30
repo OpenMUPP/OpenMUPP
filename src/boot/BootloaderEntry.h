@@ -1,7 +1,8 @@
 #pragma once
 
-// Entry into versaloon-bootloader from the running firmware. Hardware-independent:
-// the host unit tests check it.
+// Entry into the bootloader from the running firmware: versaloon-bootloader
+// on the STM32F1, the ROM bootloader (USB DFU) on the STM32H5.
+// Hardware-independent: the host unit tests check it.
 //
 // These commands call request(): VERSALOON_FW_UPDATE, and the personality
 // switch commands with bootloaderCode instead of a personality code
@@ -10,12 +11,17 @@
 // calls isDue() with the uptime. isDue() becomes true replyDelayMs after
 // the first isDue() call that sees the request, so the host has time to read
 // the reply. Then the main loop calls boot::enterBootloader()
-// (boot/Bootloader.h), which writes bootRequest to BKP->DR1 and resets.
+// (boot/Bootloader.h), which writes bootRequest to a backup register and
+// resets.
 //
 // Contract with versaloon-bootloader (tools/versaloon-bootloader, README
 // "Start the bootloader from the application"): after a reset with
 // bootRequest in BKP->DR1, the bootloader clears the register and stays in
 // bootloader mode. The next reset starts the application again.
+//
+// On the STM32H5, the firmware itself reads bootRequest in TAMP->BKP0R
+// after the reset, clears it and jumps to the ROM bootloader
+// (boot::startRomBootloaderOnRequest()).
 
 #include <cstdint>
 #include <optional>
@@ -24,13 +30,15 @@
 
 namespace boot {
 
-// The value in BKP->DR1 that keeps the bootloader in bootloader mode.
+// The value in BKP->DR1 that keeps the bootloader in bootloader mode. The
+// STM32H5 uses the same value in TAMP->BKP0R.
 // The bootloader defines the same value (boot::bootRequest in
 // src/boot/BootDecision.h of versaloon-bootloader).
 inline constexpr uint16_t bootRequest = 0xB007;
 
-// Only the app-8k image enters the bootloader (hasBootloaderEntry in
-// src/main.cpp). The other images refuse FW_UPDATE and bootloaderCode.
+// Only the app-8k image of the STM32F1 and the standalone image of the
+// STM32H5 enter the bootloader (hasBootloaderEntry in src/main.cpp). The
+// other images refuse FW_UPDATE and bootloaderCode.
 
 // The code in the personality switch commands that starts the bootloader
 // instead of a personality. It is outside the personality codes.

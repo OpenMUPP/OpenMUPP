@@ -127,7 +127,7 @@ class VerdictTest(unittest.TestCase):
 class ArgsTest(unittest.TestCase):
     def test_defaults(self):
         args = hw.parse_args([])
-        self.assertEqual((args.swd_speeds, args.jtag_speeds, args.skip), ([1000, 2000], [1000, 9000], []))
+        self.assertEqual((args.swd_speeds, args.jtag_speeds, args.skip), ([1000, 2000, 4000], [1000, 9000], []))
 
     def test_skip(self):
         self.assertEqual(hw.parse_skip("probe-rs, uart"), ["probe-rs", "uart"])

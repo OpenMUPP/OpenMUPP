@@ -37,26 +37,20 @@ vsl_personality(versaloon CODE 0 SHORT vsl DEFINE VSL_WITH_VERSALOON SOURCES
 #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
 vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE VSL_WITH_CMSIS_DAP SOURCES
         "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
-        "src/protocol/cmsisdap/RvDtmTap\\.cpp"
+        "src/protocol/cmsisdap/RvDtmTap\\.cpp" "src/protocol/cmsisdap/RvBridge\\.cpp"
         "src/usb/CmsisDapFunction\\.cpp")
 #   wch-link   the WCH-Link interface of wlink and minichlink: the dongle
 #              debugs a WCH RISC-V target (CH32V) over the two-wire or the
 #              one-wire debug interface. It has no serial port.
 # The RISC-V debug wire engine: the wch-link personality, and the RISC-V
-# bridge of cmsis-dap (VSL_CMSIS_DAP_RV_BRIDGE)
+# bridge of cmsis-dap (VSL_CMSIS_DAP_RV_BRIDGE, on by default)
 set(VSL_RV_WIRE_SOURCES "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp")
 vsl_personality(wch-link CODE 2 SHORT wch DEFINE VSL_WITH_WCH_LINK SOURCES
         "src/protocol/wchlink/WchLinkFlash\\.cpp" "src/protocol/wchlink/WchLinkProcessor\\.cpp"
         "src/usb/WchLinkFunction\\.cpp" ${VSL_RV_WIRE_SOURCES})
 
-# The values of the deprecated VSL_PROTOCOL option
-set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
-
 # Declares the cache entries of the personality options. Both are empty by
-# default: empty VSL_PERSONALITIES is versaloon. Thus a value that is not
-# empty always comes from the user, and vsl_resolve_personalities() can find
-# VSL_PERSONALITIES and the deprecated VSL_PROTOCOL set together, also in a
-# build directory that has cached the default.
+# default: empty VSL_PERSONALITIES is versaloon.
 function(vsl_personality_options)
     set(VSL_PERSONALITIES "" CACHE STRING
             "USB personalities of the image, a list with ';' or ','. Empty: versaloon. Supported: ${VSL_ALL_PERSONALITIES}")
@@ -69,10 +63,9 @@ endfunction()
 #                            a comma-separated list. Empty: versaloon.
 #   VSL_DEFAULT_PERSONALITY  the personality when no personality is stored.
 #                            Empty: the first one in canonical order.
-#   VSL_PROTOCOL, VSL_DEFAULT_PROTOCOL
-#                            deprecated aliases, see below
 #   VSL_WCH_LINK_WCH_USB_ID  the USB ID of WCH for the WCH-Link personality
-#   VSL_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality
+#   VSL_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality.
+#                            Not defined: ON. Ignored without cmsis-dap.
 #   VSL_DEBUG_CDC            the debug log on the CDC port
 # Sets these variables in the caller:
 #   VSL_PERSONALITY_SET         the personalities, in canonical order
@@ -82,45 +75,10 @@ endfunction()
 #   VSL_PERSONALITY_DROPPED_SOURCES
 #                               the source regexes of the other personalities
 #   VSL_IMAGE_TAG               the tag after the board in the file names
+#   VSL_RV_BRIDGE               ON when the image has the RISC-V bridge
 function(vsl_resolve_personalities)
     set(_set "${VSL_PERSONALITIES}")
     set(_default "${VSL_DEFAULT_PERSONALITY}")
-
-    # VSL_PROTOCOL is a deprecated alias for one release (#79, decision Q1)
-    if (NOT "${VSL_PROTOCOL}" STREQUAL "")
-        if (NOT "${_set}" STREQUAL "")
-            message(FATAL_ERROR "Set VSL_PERSONALITIES or the deprecated VSL_PROTOCOL, not both. "
-                    "Remove VSL_PROTOCOL from the cache with -UVSL_PROTOCOL, or configure with --fresh.")
-        endif ()
-        if (NOT VSL_PROTOCOL IN_LIST VSL_PROTOCOLS)
-            message(FATAL_ERROR "Unknown VSL_PROTOCOL '${VSL_PROTOCOL}'. Supported protocols: ${VSL_PROTOCOLS}")
-        endif ()
-        if (VSL_PROTOCOL STREQUAL "dual")
-            set(_set versaloon cmsis-dap)
-            if (NOT "${VSL_DEFAULT_PROTOCOL}" STREQUAL "")
-                if (NOT VSL_DEFAULT_PROTOCOL IN_LIST _set)
-                    message(FATAL_ERROR "Unknown VSL_DEFAULT_PROTOCOL '${VSL_DEFAULT_PROTOCOL}'. Supported: ${_set}")
-                endif ()
-                if (NOT "${_default}" STREQUAL "" AND NOT _default STREQUAL VSL_DEFAULT_PROTOCOL)
-                    message(FATAL_ERROR "Set VSL_DEFAULT_PERSONALITY or the deprecated VSL_DEFAULT_PROTOCOL, not both. "
-                            "Remove VSL_DEFAULT_PROTOCOL from the cache with -UVSL_DEFAULT_PROTOCOL.")
-                endif ()
-                set(_default "${VSL_DEFAULT_PROTOCOL}")
-            endif ()
-        else ()
-            set(_set "${VSL_PROTOCOL}")
-        endif ()
-        string(REPLACE ";" "," _set_text "${_set}")
-        set(_hint "-DVSL_PERSONALITIES=${_set_text}")
-        if (VSL_PROTOCOL STREQUAL "dual" AND NOT "${_default}" STREQUAL "")
-            string(APPEND _hint " -DVSL_DEFAULT_PERSONALITY=${_default}")
-        endif ()
-        message(DEPRECATION "VSL_PROTOCOL is deprecated. Use ${_hint} instead, "
-                "and remove VSL_PROTOCOL and VSL_DEFAULT_PROTOCOL with -UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL.")
-    elseif (NOT "${VSL_DEFAULT_PROTOCOL}" STREQUAL "")
-        message(DEPRECATION "VSL_DEFAULT_PROTOCOL is deprecated, and ignored without VSL_PROTOCOL. "
-                "Use VSL_DEFAULT_PERSONALITY, and remove VSL_DEFAULT_PROTOCOL with -UVSL_DEFAULT_PROTOCOL.")
-    endif ()
 
     # Commas instead of ';', because ';' is awkward in a shell and in a preset
     string(REPLACE "," ";" _set "${_set}")
@@ -163,10 +121,19 @@ function(vsl_resolve_personalities)
         message(FATAL_ERROR "VSL_WCH_LINK_WCH_USB_ID needs wch-link in VSL_PERSONALITIES.")
     endif ()
     # The bridge uses the pins and the timer of the wire engine in the JTAG
-    # port of CMSIS-DAP. A multi image would share them with other
-    # personalities: not supported (#103, decision 4).
-    if (VSL_CMSIS_DAP_RV_BRIDGE AND NOT _personalities STREQUAL "cmsis-dap")
-        message(FATAL_ERROR "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap (VSL_PERSONALITIES=cmsis-dap), not ${_personalities}.")
+    # port of CMSIS-DAP. In a multi image only the active personality sets
+    # them up (src/main.cpp, isActive()), so each image with cmsis-dap can
+    # have the bridge.
+    if (NOT DEFINED VSL_CMSIS_DAP_RV_BRIDGE OR VSL_CMSIS_DAP_RV_BRIDGE)
+        set(_bridge ON)
+    else ()
+        set(_bridge OFF)
+    endif ()
+    set(_bridge_off_tag "")
+    if (NOT "cmsis-dap" IN_LIST _personalities)
+        set(_bridge OFF)
+    elseif (NOT _bridge)
+        set(_bridge_off_tag "-no-rv-bridge")
     endif ()
     # The log goes to the CDC port. In a multi image the log is silent while
     # the WCH-Link personality is active.
@@ -190,7 +157,7 @@ function(vsl_resolve_personalities)
     if (VSL_WCH_LINK_WCH_USB_ID)
         list(APPEND _defines VSL_WCH_LINK_WCH_USB_ID)
     endif ()
-    if (VSL_CMSIS_DAP_RV_BRIDGE)
+    if (_bridge)
         list(APPEND _defines VSL_CMSIS_DAP_RV_BRIDGE)
         list(REMOVE_ITEM _dropped ${VSL_RV_WIRE_SOURCES})
     endif ()
@@ -216,9 +183,8 @@ function(vsl_resolve_personalities)
     if (VSL_WCH_LINK_WCH_USB_ID)
         string(APPEND _tag "-wch-id")
     endif ()
-    if (VSL_CMSIS_DAP_RV_BRIDGE)
-        string(APPEND _tag "-rv-bridge")
-    endif ()
+    # The bridge is the default: only an image without it has a tag
+    string(APPEND _tag "${_bridge_off_tag}")
 
     set(VSL_PERSONALITY_SET ${_personalities} PARENT_SCOPE)
     set(VSL_PERSONALITY_COUNT ${_count} PARENT_SCOPE)
@@ -227,4 +193,5 @@ function(vsl_resolve_personalities)
     set(VSL_PERSONALITY_DEFINES ${_defines} PARENT_SCOPE)
     set(VSL_PERSONALITY_DROPPED_SOURCES ${_dropped} PARENT_SCOPE)
     set(VSL_IMAGE_TAG "${_tag}" PARENT_SCOPE)
+    set(VSL_RV_BRIDGE ${_bridge} PARENT_SCOPE)
 endfunction()

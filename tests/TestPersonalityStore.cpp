@@ -2,9 +2,11 @@
 
 #include <array>
 #include <doctest/doctest.h>
+#include <vector>
 
 using personality::Personality;
 using personality::PersonalityStore;
+using personality::Settings;
 
 namespace {
 
@@ -132,18 +134,36 @@ TEST_CASE("The code check rejects a repeated code and a code that is too large")
    CHECK_FALSE(personality::hasValidCodes(art::span<const Personality>(tooLarge.data(), tooLarge.size())));
 }
 
-TEST_CASE("The records of four personalities are distinct and none is a subset of another") {
-   for(uint8_t x = 0; x < personality::maxPersonalities; ++x) {
-      CHECK(__builtin_popcount(PersonalityStore::recordOfCode(x)) == 8);
-      for(uint8_t y = 0; y < personality::maxPersonalities; ++y) {
+TEST_CASE("The records of all settings are distinct and none is a subset of another") {
+   std::vector<uint16_t> records;
+   for(uint8_t code = 0; code < personality::maxPersonalities; ++code) {
+      for(uint8_t mode = 0; mode < personality::bridgeModes; ++mode) {
+         records.push_back(PersonalityStore::recordOfCode(code, mode));
+      }
+   }
+   for(std::size_t x = 0; x < records.size(); ++x) {
+      CHECK(__builtin_popcount(records[x]) == 8);
+      CHECK(records[x] != PersonalityStore::erasedSlot);
+      for(std::size_t y = 0; y < records.size(); ++y) {
          if(x != y) {
-            const uint16_t rx = PersonalityStore::recordOfCode(x);
-            const uint16_t ry = PersonalityStore::recordOfCode(y);
-            CHECK(rx != ry);
-            CHECK((rx & ry) != ry);
+            CHECK(records[x] != records[y]);
+            CHECK((records[x] & records[y]) != records[y]);
          }
       }
    }
+}
+
+TEST_CASE("The records of the older images are the records of the bridge mode auto") {
+   CHECK(PersonalityStore::recordOfCode(0) == 0xA55A);
+   CHECK(PersonalityStore::recordOfCode(1) == 0x5AA5);
+   CHECK(PersonalityStore::recordOfCode(2) == 0x3CC3);
+   CHECK(PersonalityStore::recordOfCode(3) == 0xC33C);
+   CHECK(PersonalityStore::recordOfCode(1, personality::bridgeModeAuto) == 0x5AA5);
+
+   FakeFlashPage page;
+   page.content[0] = 0x5AA5;
+   const PersonalityStore store{ page };
+   CHECK(store.loadSettings() == Settings{ Personality::CmsisDap, personality::bridgeModeAuto });
 }
 
 TEST_CASE("An erased page has no stored personality") {
@@ -288,4 +308,60 @@ TEST_CASE("A flash error fails the store") {
       CHECK(page.programs == 0);
       CHECK(store.load() == Personality::Versaloon);
    }
+}
+
+TEST_CASE("The bridge mode is stored with the personality") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+   constexpr uint8_t off = 0;
+   constexpr uint8_t on = 1;
+
+   // An empty page: the personality of the image
+   CHECK(store.storeBridgeMode(on, Personality::CmsisDap));
+   CHECK(store.loadSettings() == Settings{ Personality::CmsisDap, on });
+   CHECK(page.content[0] == PersonalityStore::recordOf(Personality::CmsisDap, on));
+
+   // A switch keeps the bridge mode
+   CHECK(store.store(Personality::Versaloon));
+   CHECK(store.loadSettings() == Settings{ Personality::Versaloon, on });
+
+   // A bridge mode keeps the stored personality, not the active one
+   CHECK(store.storeBridgeMode(off, Personality::CmsisDap));
+   CHECK(store.loadSettings() == Settings{ Personality::Versaloon, off });
+   CHECK(store.load() == Personality::Versaloon);
+
+   // The same mode again writes nothing
+   const int programs = page.programs;
+   CHECK(store.storeBridgeMode(off, Personality::CmsisDap));
+   CHECK(page.programs == programs);
+}
+
+TEST_CASE("The bridge mode of a personality that is not in the image is loaded and kept") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+   // Code 3 is in no image: as a personality of another image
+   constexpr uint8_t other = 3;
+   REQUIRE_FALSE(personality::fromCode(other).has_value());
+   page.content[0] = PersonalityStore::recordOfCode(other, 0);
+
+   REQUIRE(store.loadSettings().has_value());
+   CHECK(store.loadSettings()->bridgeMode == 0);
+   CHECK_FALSE(store.load().has_value());
+
+   // The store of a mode keeps the personality of the other image
+   CHECK(store.storeBridgeMode(1, Personality::CmsisDap));
+   CHECK(page.content[1] == PersonalityStore::recordOfCode(other, 1));
+}
+
+TEST_CASE("A cut record of a bridge mode is no stored settings") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+   REQUIRE(store.store(Personality::CmsisDap));
+   page.content[1] = static_cast<uint16_t>(PersonalityStore::recordOf(Personality::CmsisDap, 0) | 0x0100);
+
+   CHECK_FALSE(store.loadSettings().has_value());
+   // The next store writes after the cut record, with the default personality
+   CHECK(store.storeBridgeMode(0, Personality::CmsisDap));
+   CHECK(page.content[2] == PersonalityStore::recordOf(Personality::CmsisDap, 0));
+   CHECK(page.erases == 0);
 }

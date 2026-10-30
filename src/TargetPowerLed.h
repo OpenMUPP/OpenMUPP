@@ -13,7 +13,7 @@
 
 class TargetPowerLed {
    public:
-   // The same level as protocol::PowerBlock::externalSupplyMillivolts: a
+   // The same level as protocol::TargetPower::externalSupplyMillivolts: a
    // voltage above it is a live supply.
    static constexpr uint16_t onAboveMillivolts = 1800;
    static constexpr uint16_t offBelowMillivolts = 1500;

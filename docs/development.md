@@ -23,15 +23,18 @@ An image that does not fit its limit has no `.hex` and `.bin` files, and no copi
 
 All images use the same object files.
 Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
-One linker script of the board links all images. The STM32F1 boards use `ldscripts/mem-f103.ld` (see [MCU family](boards.md#mcu-family)).
-CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
+One memory linker script of the board links all images. The scripts are in `ldscripts/` of system-stm32. The STM32F1 boards use `mem-F103x8.ld` (see [MCU family](boards.md#mcu-family)).
+CMake gives it the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
+The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
+For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
 
-For the Mini and the OtherUse, the build also makes `versaloon-bootloader` for the same board.
+For the STM32F1 boards (`VSL_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `versaloon-bootloader` for the same board.
 The target is `versaloon-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
-There is no bootloader for the ST-Link/V2, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
+Only the boards with the legacy bootloader (`VSL_LEGACY_BOOTLOADER_BOARDS`: the Mini) get the `app-10k` image.
+There is no bootloader for the WeAct STM32H523 core board, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
 
 ## CMake options
 
@@ -41,12 +44,11 @@ These options select the board, the personality and the debug features:
 | Option | Default | Description |
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [the README](../README.md#boards)). |
-| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the Mini and the OtherUse. |
+| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the STM32F1 boards. |
 | `VSL_PERSONALITIES` | empty (`versaloon`) | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `0403:9b3c` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
 | `VSL_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `VSL_PERSONALITIES`. Empty: the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `VSL_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
-| `VSL_CMSIS_DAP_RV_BRIDGE` | `OFF` | Only with `VSL_PERSONALITIES=cmsis-dap`, on an STM32F1 board: add the RISC-V bridge to the CMSIS-DAP personality. The vendor command `ID_DAP_Vendor1` then switches the JTAG port to an emulated RISC-V DTM on the WCH debug wire (see [cmsis-dap.md](cmsis-dap.md#risc-v-dtm-bridge)). |
-| `VSL_PROTOCOL`, `VSL_DEFAULT_PROTOCOL` | not set | Deprecated. Use `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`. The build changes `VSL_PROTOCOL=dual` to `VSL_PERSONALITIES=versaloon,cmsis-dap`, and each other value to the personality with the same name. Then it shows a deprecation warning. With `VSL_PROTOCOL=dual` only, `VSL_DEFAULT_PROTOCOL` becomes `VSL_DEFAULT_PERSONALITY`. With the other values of `VSL_PROTOCOL`, the build ignores `VSL_DEFAULT_PROTOCOL`. Without `VSL_PROTOCOL`, the build ignores `VSL_DEFAULT_PROTOCOL` and shows a deprecation warning. Do not set `VSL_PROTOCOL` and `VSL_PERSONALITIES` together. To remove the old options from the cache of a build directory, use `-UVSL_PROTOCOL -UVSL_DEFAULT_PROTOCOL`. The presets now set `VSL_PERSONALITIES`, so an old build directory of a preset can stop with an error. Then configure it again with `cmake --preset <name> --fresh`. |
+| `VSL_CMSIS_DAP_RV_BRIDGE` | `ON` | Add the RISC-V bridge to the CMSIS-DAP personality, also in a multi image. The JTAG port can then be an emulated RISC-V DTM on the WCH debug wire. In the auto mode, the probe finds the target at `DAP_Connect`. The vendor command `ID_DAP_Vendor1` sets the mode and can store it (see [cmsis-dap.md](cmsis-dap.md#risc-v-dtm-bridge)). The stored mode needs the settings page, so an image with the bridge has 1 KB (STM32F103) or 8 KB (STM32H5) less flash. An image without `cmsis-dap` ignores the option. A build directory with `OFF` in its cache keeps `OFF`: use `--fresh` or `-DVSL_CMSIS_DAP_RV_BRIDGE=ON`. On the STM32H5 boards, only the OpenOCD rates of the bridge are measured (WeAct STM32H523, see [cmsis-dap.md](cmsis-dap.md#ch32v006-rates-on-the-weact-stm32h523)). |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `VSL_LTO` | `ON` in a `Release` build, else `OFF` | Link-time optimisation (LTO) of the firmware and of the libraries. The images are about 13 % smaller. The option sets `CMAKE_INTERPROCEDURAL_OPTIMIZATION`. CMake then makes the libraries with `gcc-ar` and `gcc-ranlib`, because `ar` and `ranlib` give no symbol index for LTO objects. |
 | `VSL_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
@@ -65,24 +67,22 @@ The tag after the board in the file name tells the personalities of the image:
   The default personality comes first, then the other ones in the order `versaloon`, `cmsis-dap`, `wch-link`.
   The short names are `vsl` (`versaloon`), `dap` (`cmsis-dap`) and `wch` (`wch-link`).
 - With `VSL_WCH_LINK_WCH_USB_ID=ON`, the tag ends with `-wch-id`, for example `-wch-link-wch-id`.
-- With `VSL_CMSIS_DAP_RV_BRIDGE=ON`, the tag ends with `-rv-bridge`: `-cmsis-dap-rv-bridge`.
+- An image with `cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF` has a tag that ends with `-no-rv-bridge`, for example `-cmsis-dap-no-rv-bridge` or `-vsl+dap-no-rv-bridge`.
 
-| `VSL_PERSONALITIES` | `VSL_DEFAULT_PERSONALITY` | Tag | Old tag (`VSL_PROTOCOL`) |
-|---|---|---|---|
-| `versaloon` | - | none | none |
-| `cmsis-dap` | - | `-cmsis-dap` | `-cmsis-dap` |
-| `wch-link` | - | `-wch-link` | `-wch-link` |
-| `versaloon,cmsis-dap` | `versaloon` | `-vsl+dap` | `-dual` |
-| `versaloon,cmsis-dap` | `cmsis-dap` | `-dap+vsl` | `-dual-cmsis-dap` |
-| `versaloon,cmsis-dap,wch-link` | `versaloon` | `-vsl+dap+wch` | - |
-| `cmsis-dap,wch-link` | `wch-link` | `-wch+dap` | - |
-
-The tags of the dual images changed: `-dual` is now `-vsl+dap`, and `-dual-cmsis-dap` is now `-dap+vsl`.
-This is also true when you build with the deprecated `VSL_PROTOCOL=dual`.
+| `VSL_PERSONALITIES` | `VSL_DEFAULT_PERSONALITY` | Tag |
+|---|---|---|
+| `versaloon` | - | none |
+| `cmsis-dap` | - | `-cmsis-dap` |
+| `wch-link` | - | `-wch-link` |
+| `versaloon,cmsis-dap` | `versaloon` | `-vsl+dap` |
+| `versaloon,cmsis-dap` | `cmsis-dap` | `-dap+vsl` |
+| `versaloon,cmsis-dap,wch-link` | `versaloon` | `-vsl+dap+wch` |
+| `cmsis-dap,wch-link` | `cmsis-dap` | `-dap+wch` |
+| `cmsis-dap,wch-link` | `wch-link` | `-wch+dap` |
 
 ### Images that do not fit
 
-Each image has a flash limit: the flash behind its bootloader, without the settings page of a multi image.
+Each image has a flash limit: the flash behind its bootloader, without the settings page of a multi image or an image with the RISC-V bridge.
 `vsl-images.txt` lists the limits.
 Some sets of personalities do not fit each image, for example the Debug build of `versaloon,cmsis-dap,wch-link`.
 The size of an image is only known after the link.
@@ -90,7 +90,7 @@ Thus a post-build step, `cmake/ImageSize.cmake`, compares the `.bin` file of eac
 
 With `VSL_STRICT_SIZE=OFF`, the build skips an image that does not fit:
 
-- The FLASH region of the linker script is 64 KB larger (`__vsl_flash_slack`), so the link does not fail.
+- The FLASH region of the linker script (`__flash_length`) is 64 KB larger (`VSL_FLASH_SLACK`), so the link does not fail.
 - The post-build step removes the `.hex` and `.bin` files of the image and their copies, and shows a CMake warning.
 - The build continues and makes the other images.
 - When the build skips the `app-8k` image, it also skips the combined image (`cmake/CombinedImage.cmake`).
@@ -132,31 +132,33 @@ The default is `/usr`.
 
 | Preset | Board | Personalities (`VSL_PERSONALITIES`) | Build type |
 |---|---|---|---|
-| `mini`, `otheruse`, `stlinkv2` | Mini, OtherUse, ST-Link/V2 | `versaloon` | Release |
-| `mini-cmsis-dap`, `otheruse-cmsis-dap`, `stlinkv2-cmsis-dap` | Mini, OtherUse, ST-Link/V2 | `cmsis-dap` | Release |
-| `mini-cmsis-dap-rv-bridge`, `otheruse-cmsis-dap-rv-bridge` | Mini, OtherUse | `cmsis-dap`, with `VSL_CMSIS_DAP_RV_BRIDGE=ON` | Release |
-| `mini-dual`, `otheruse-dual`, `stlinkv2-dual` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
-| `mini-dual-cmsis-dap` | Mini | `versaloon,cmsis-dap`, with `VSL_DEFAULT_PERSONALITY=cmsis-dap` (tag `-dap+vsl`) | Release |
-| `mini-wch-link`, `otheruse-wch-link`, `stlinkv2-wch-link` | Mini, OtherUse, ST-Link/V2 | `wch-link` | Release |
+| `mini-cmsis-dap`, `stlinkv2-cmsis-dap`, `stlinkv2miniclone-cmsis-dap` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap` | Release |
+| `mini-cmsis-dap-no-rv-bridge` | Mini | `cmsis-dap`, with `VSL_CMSIS_DAP_RV_BRIDGE=OFF` (tag `-cmsis-dap-no-rv-bridge`) | Release |
+| `mini-dual`, `stlinkv2-dual`, `stlinkv2miniclone-dual` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
+| `mini-debug` | Mini | `cmsis-dap`, with `VSL_CMSIS_DAP_RV_BRIDGE=OFF`: with the bridge, the `app-8k` and `app-10k` images do not fit (tag `-cmsis-dap-no-rv-bridge`) | Debug |
+| `mini-wch-link`, `stlinkv2-wch-link`, `stlinkv2miniclone-wch-link` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `VSL_WCH_LINK_WCH_USB_ID=ON` | Release |
-| `mini-triple`, `otheruse-triple`, `stlinkv2-triple` | Mini, OtherUse, ST-Link/V2 | `versaloon,cmsis-dap,wch-link` (tag `-vsl+dap+wch`) | Release |
-| `mini-cmsis-dap-wch-link` | Mini | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
-| `mini-debug` | Mini | `versaloon` | Debug |
-| `nucleoh533` | NUCLEO-H533RE | `versaloon` | Release |
-| `nucleoh533-cmsis-dap` | NUCLEO-H533RE | `cmsis-dap` | Release |
-| `nucleoh533-dual` | NUCLEO-H533RE | `versaloon,cmsis-dap` (tag `-vsl+dap`) | Release |
-| `nucleoh533-debug` | NUCLEO-H533RE | `versaloon` | Debug |
+| `mini`, `stlinkv2`, `stlinkv2miniclone` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `versaloon` | Release |
+| `weacth523-cmsis-dap` | WeAct STM32H523 core board | `cmsis-dap` | Release |
+| `weacth523-dual` | WeAct STM32H523 core board | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
+| `weacth523-debug` | WeAct STM32H523 core board | `cmsis-dap` | Debug |
+| `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
+| `weacth523` | WeAct STM32H523 core board | `versaloon` | Release |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
 Each firmware preset inherits a hidden `board-<board>` preset.
 A preset with a suffix also inherits the hidden `personalities-<suffix>` preset.
 The `personalities-*` presets set `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALITY`.
-They are for the sets of personalities that CI builds.
+They are for the common sets of personalities.
 For another set, add `-DVSL_PERSONALITIES=<list>` to a preset.
+The `-dual` presets build `cmsis-dap,wch-link`.
+Before, they built `versaloon,cmsis-dap`, and the `-cmsis-dap-wch-link` presets built `cmsis-dap,wch-link`.
+For the old dual image, add `-DVSL_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
-CI builds each firmware preset, except `mini-wch-link-wch-id` and `otheruse-cmsis-dap-rv-bridge`.
+CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, and `mini-cmsis-dap-no-rv-bridge`.
+The other presets are for local builds only.
 CI uses these presets (see [Continuous integration](#continuous-integration)).
 
 Add a preset for a local setup in `CMakeUserPresets.json`.
@@ -179,7 +181,7 @@ This example inherits the `mini` preset and sets another toolchain:
 ## Unit tests
 
 The unit tests use doctest and run on the host.
-They check the board definitions, the LED patterns (activity, probe error, target power, clock fault and the flashes of the personality switch), the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry, the Versaloon command protocol, the `USB_TO_ALL` dispatcher, the `GPIO` block (with the release of SRST and TRST when the host goes away), the `JTAG_RAW` block, the JTAG bit-bang engine (on mock pins), the JTAG fast path (on a mock SPI, compared with the bit-bang engine), the `SWD` block, the SWD request and parity encoding, the SWD bit-bang engine (on mock pins with a mock target), the CMSIS-DAP command processor (on the SWD bit-bang engine, on the JTAG engines with a mock JTAG-DP, and on the emulated TAP of the RISC-V bridge, see [cmsis-dap.md](cmsis-dap.md#tests)), the `POWER` block (on a fake power switch and a fake voltage sense), and the Vref scale.
+They check the board definitions, the LED patterns (activity, probe error, target power, clock fault and the flashes of the personality switch), the version, the USB descriptors, the log sink, the line coding map of the UART bridge, the bootloader entry, the Versaloon command protocol, the `USB_TO_ALL` dispatcher, the `GPIO` block (with the release of SRST and TRST when the host goes away), the `JTAG_RAW` block, the JTAG bit-bang engine (on mock pins), the JTAG fast path (on a mock SPI, compared with the bit-bang engine), the `SWD` block, the SWD request and parity encoding, the SWD bit-bang engine (on mock pins with a mock target), the CMSIS-DAP command processor (on the SWD bit-bang engine, on the JTAG engines with a mock JTAG-DP, and on the emulated TAP of the RISC-V bridge, see [cmsis-dap.md](cmsis-dap.md#tests)), the `POWER` block and `ID_DAP_Vendor2` (on a fake power switch and a fake voltage sense), and the Vref scale.
 The USB tests also run the descriptors and the Versaloon function on the libArT USB device stack, with the fake USB controller of libArT.
 The same tests run the descriptors and the function of the CMSIS-DAP personality, and check that its packet memory fits 512 bytes.
 They also check the BOS and the MS OS 2.0 descriptor set, and run the requests of Windows for them.
@@ -292,7 +294,7 @@ It also exits with code 1 when a run in one of the files failed.
 The default speeds are 1000, 4500 and 9000 kHz for JTAG, and 250 and 2000 kHz for SWD.
 At 1000 kHz, JTAG uses bit-bang. At 4500 and 9000 kHz, JTAG uses the SPI fast path.
 The OpenOCD `vsllink` driver has fixed SWD steps: 250 kHz gives 235 kHz SWCLK, and 2000 kHz gives the fastest SWCLK (1.85 MHz in the table).
-At this setting, the firmware does not time SWCLK. A logic analyzer measured 1.845 MHz on the Versaloon Mini, see [SWD block](usb-device.md#swd-block).
+At this setting, the firmware does not time SWCLK. A logic analyzer measured 2.42 to 2.7 MHz on the Mini. The rate changes with the code layout, see [Clock pacing](clock-pacing.md).
 All requests from 235 to 1849 kHz give 235 kHz.
 These options change the run:
 
@@ -333,45 +335,41 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
-- `build-mini`: release build of all images of the Mini with the `mini` preset, plus the size check of each image in `vsl-images.txt`.
+- `build-mini`: release build of all images of the Mini with the `mini-cmsis-dap` preset, plus the size check of each image in `vsl-images.txt`.
   The build jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
-  The jobs for the Mini and the OtherUse also build `versaloon-bootloader` and the combined image for the board.
-- `build-mini-debug`: debug build of the Mini (debug log on the serial port, SWD on), plus the size check.
+  The jobs for the STM32F1 boards also build `versaloon-bootloader` and the combined image for the board.
+- `build-mini-debug`: debug build of the Mini with the CMSIS-DAP personality without the RISC-V bridge (debug log on the serial port, SWD on), plus the size check.
 - `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
-  GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -triple, -vsl+dap+wch]` or `build: [otheruse]`.
+  GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -dual, -dap+wch]`.
   It builds the preset `<board><suffix>` (see [CMake presets](#cmake-presets)).
 
   | Personalities | Suffix | Tag | Boards |
   |---|---|---|---|
-  | `versaloon` | - | - | OtherUse, ST-Link/V2 |
-  | `cmsis-dap` | `-cmsis-dap` | `-cmsis-dap` | Mini, OtherUse, ST-Link/V2 |
-  | `wch-link` | `-wch-link` | `-wch-link` | Mini, OtherUse, ST-Link/V2 |
-  | `versaloon,cmsis-dap` | `-dual` | `-vsl+dap` | Mini, OtherUse, ST-Link/V2 |
-  | `versaloon,cmsis-dap`, default `cmsis-dap` | `-dual-cmsis-dap` | `-dap+vsl` | Mini |
-  | `versaloon,cmsis-dap,wch-link` | `-triple` | `-vsl+dap+wch` | Mini, OtherUse, ST-Link/V2 |
+  | `cmsis-dap` | `-cmsis-dap` | `-cmsis-dap` | ST-Link/V2 (the Mini is `build-mini`) |
+  | `cmsis-dap,wch-link` | `-dual` | `-dap+wch` | Mini, ST-Link/V2 |
 
-  Each limit of a multi image is 1 KB smaller, because the last flash page holds the stored personality.
-- `build-mini-cmsis-dap-wch-link`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap,wch-link`, plus the size check.
+  "ST-Link/V2" is the ST-Link/V2 and the ST-Link/V2 mini clone.
+  Each limit of a multi image or an image with the RISC-V bridge is 1 KB smaller, because the last flash page holds the stored personality and the bridge mode.
+  CI builds no image with the Versaloon personality.
+- `build-mini-cmsis-dap-no-rv-bridge`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF`, plus the size check.
   This job keeps no artifacts.
-- `build-mini-cmsis-dap-rv-bridge`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=ON`, plus the size check.
-  This job keeps no artifacts.
-- `build-nucleoh533`: a `parallel:matrix` job with the presets `nucleoh533`, `nucleoh533-cmsis-dap`, `nucleoh533-dual` and `nucleoh533-debug`, plus the size check.
-  The limit of the dual image is 8 KB smaller, because the last flash sector holds the stored personality.
+- `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
+  The limit of a multi image or an image with the RISC-V bridge is 8 KB smaller, because the last flash sector holds the stored personality and the bridge mode.
 
-The build jobs of the Mini and the NUCLEO-H533RE run in each pipeline.
-The build jobs of the OtherUse and the ST-Link/V2 are manual: start them in the pipeline view of GitLab.
+The build jobs of the Mini and the WeAct STM32H523 core board run in each pipeline.
+The build jobs of the ST-Link/V2 boards are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
 The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
-`build-mini`, `build-nucleoh533` and `run-unit-tests` update the cache, and the other jobs only read it.
-`build-nucleoh533` has its own cache key, because the STM32H5 needs other CMSIS packages.
+`build-mini`, `build-weacth523` and `run-unit-tests` update the cache, and the other jobs only read it.
+`build-weacth523` has its own cache key, because the STM32H5 needs other CMSIS packages.
 In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
 Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
-The Mini and the OtherUse have the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
-The ST-Link/V2 has the `standalone` image only.
+The Mini has the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
+The ST-Link/V2 and the ST-Link/V2 mini clone have the `standalone`, `app-8k` and `with-bootloader` images.
 The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
 The tag of a multi image has a `+`, also in the name of the artifact archive and of the matrix job.
 In a URL, encode the full job name, for example in a link to `/-/jobs/artifacts/<ref>/download?job=<job>`.

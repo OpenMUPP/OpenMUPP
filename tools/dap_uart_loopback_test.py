@@ -2,7 +2,7 @@
 """Loopback test for the DAP_UART_* commands of the CMSIS-DAP personality.
 
 Connect the UART TX pin to the UART RX pin of the dongle (PA9 to PA10 on the
-Mini and the OtherUse). The script takes the UART from the CDC-ACM serial
+Mini). The script takes the UART from the CDC-ACM serial
 port with DAP_UART_Transport, and sends a byte pattern at each frame format
 with DAP_UART_Transfer. It checks that the same bytes come back unchanged
 and in order, and that the status reports no lost data and no framing or

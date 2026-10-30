@@ -4,8 +4,8 @@
 
 #if defined(STM32F1)
 
-// The start of the page (ldscripts/mem-f103.ld)
-extern "C" const uint16_t __vsl_settings_start[];
+// The start of the page: the reserved flash at the end (system-stm32 mem-F103x8.ld)
+extern "C" const uint16_t __flash_reserved_start[];
 
 namespace board {
 
@@ -13,11 +13,14 @@ namespace {
 
 constexpr std::size_t slotCount = SettingsFlashPage::sizeBytes / sizeof(uint16_t);
 
+// The HSI was on before unlock()
+bool hsiWasOn = false;
+
 // Unlocks the flash controller. The flash controller needs the HSI on to
 // erase and write (RM0008 3.3.3). The system clock runs from the PLL, so
-// the HSI can be off. The HSI stays on after the write: a reset always
-// follows the write.
+// the HSI can be off. finish() turns it off again.
 void unlock() {
+   hsiWasOn = (RCC->CR & RCC_CR_HSION) != 0;
    RCC->CR |= RCC_CR_HSION;
    while((RCC->CR & RCC_CR_HSIRDY) == 0) {
    }
@@ -38,19 +41,22 @@ bool finish(uint32_t operation) {
    FLASH->CR &= ~operation;
    FLASH->SR = FLASH_SR_EOP | FLASH_SR_PGERR | FLASH_SR_WRPRTERR;
    FLASH->CR |= FLASH_CR_LOCK;
+   if(!hsiWasOn) {
+      RCC->CR &= ~RCC_CR_HSION;
+   }
    return ok;
 }
 
 } // namespace
 
 art::span<const uint16_t> SettingsFlashPage::slots() const {
-   return { __vsl_settings_start, slotCount };
+   return { __flash_reserved_start, slotCount };
 }
 
 bool SettingsFlashPage::erase() {
    unlock();
    FLASH->CR |= FLASH_CR_PER;
-   FLASH->AR = reinterpret_cast<uint32_t>(__vsl_settings_start);
+   FLASH->AR = reinterpret_cast<uint32_t>(__flash_reserved_start);
    FLASH->CR |= FLASH_CR_STRT;
    if(!finish(FLASH_CR_PER)) {
       return false;
@@ -70,7 +76,7 @@ bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
    unlock();
    FLASH->CR |= FLASH_CR_PG;
    // The flash takes a 16-bit write while PG is set.
-   auto *const slot = const_cast<volatile uint16_t *>(&__vsl_settings_start[index]);
+   auto *const slot = const_cast<volatile uint16_t *>(&__flash_reserved_start[index]);
    *slot = value;
    return finish(FLASH_CR_PG) && *slot == value;
 }
@@ -84,8 +90,8 @@ bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
 
 #include "personality/FlashWordSlot.h"
 
-// The start of the sector (ldscripts/mem-h533.ld)
-extern "C" const personality::FlashWord __vsl_settings_start[];
+// The start of the sector: the reserved flash at the end (system-stm32 mem-H523xC.ld)
+extern "C" const personality::FlashWord __flash_reserved_start[];
 
 namespace board {
 
@@ -94,7 +100,6 @@ namespace {
 using personality::FlashWord;
 
 constexpr std::size_t slotCount = SettingsFlashPage::sizeBytes / personality::flashWordBytes;
-constexpr uint32_t bankBytes = 256 * 1024; // STM32H523/H533: two banks of 256 KB
 constexpr uint32_t errorFlags = FLASH_SR_WRPERR | FLASH_SR_PGSERR | FLASH_SR_STRBERR | FLASH_SR_INCERR;
 constexpr uint32_t clearFlags =
 FLASH_CCR_CLR_EOP | FLASH_CCR_CLR_WRPERR | FLASH_CCR_CLR_PGSERR | FLASH_CCR_CLR_STRBERR | FLASH_CCR_CLR_INCERR;
@@ -107,22 +112,28 @@ std::array<uint16_t, slotCount> view{};
 volatile bool readingSector = false;
 volatile bool eccError = false;
 
+// Two banks: 2 x 256 KB on the xE parts, 2 x 128 KB on the xC parts. CMSIS
+// reads the flash size from the flash size data register (RM0481 67.2).
+uint32_t bankBytes() {
+   return FLASH_BANK_SIZE;
+}
+
 uint32_t sectorOffset() {
-   return reinterpret_cast<uint32_t>(__vsl_settings_start) - FLASH_BASE;
+   return reinterpret_cast<uint32_t>(__flash_reserved_start) - FLASH_BASE;
 }
 
 // The physical bank of the sector is bank 2. With SWAP_BANK, the address is in
 // the other bank.
 bool inPhysicalBank2() {
    const bool swapped = (FLASH->OPTSR_CUR & FLASH_OPTSR_SWAP_BANK) != 0;
-   return (sectorOffset() >= bankBytes) != swapped;
+   return (sectorOffset() >= bankBytes()) != swapped;
 }
 
 // The slot that FLASH_ECCCORR or FLASH_ECCDETR points to, slotCount when the
 // address is not in the sector. ADDR_ECC counts flash words from the start
 // of the bank (16 bits: 1 MB banks, RM0481 table 88).
 std::size_t eccSlot(uint32_t eccRegister) {
-   const uint32_t first = (sectorOffset() % bankBytes) / personality::flashWordBytes;
+   const uint32_t first = (sectorOffset() % bankBytes()) / personality::flashWordBytes;
    const uint32_t word = eccRegister & FLASH_ECCR_ADDR_ECC;
    const bool bank2 = (eccRegister & FLASH_ECCR_BK_ECC) != 0;
    if(bank2 != inPhysicalBank2() || word < first || word >= first + slotCount) {
@@ -139,7 +150,7 @@ void clearEccCorrection() {
 }
 
 FlashWord readWord(std::size_t index) {
-   const auto *const source = reinterpret_cast<const volatile uint32_t *>(&__vsl_settings_start[index]);
+   const auto *const source = reinterpret_cast<const volatile uint32_t *>(&__flash_reserved_start[index]);
    clearEccCorrection();
    eccError = false;
    readingSector = true;
@@ -206,7 +217,7 @@ art::span<const uint16_t> SettingsFlashPage::slots() const {
 bool SettingsFlashPage::erase() {
    // BKSEL selects the physical bank
    const bool bank2 = inPhysicalBank2();
-   const uint32_t sector = (sectorOffset() % bankBytes) / FLASH_SECTOR_SIZE;
+   const uint32_t sector = (sectorOffset() % bankBytes()) / FLASH_SECTOR_SIZE;
    unlock();
    FLASH->NSCR = (FLASH->NSCR & ~(FLASH_CR_SNB | FLASH_CR_BKSEL)) | FLASH_CR_SER | (sector << FLASH_CR_SNB_Pos) |
                  (bank2 ? FLASH_CR_BKSEL : 0U);
@@ -230,7 +241,7 @@ bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
    FLASH->NSCR |= FLASH_CR_PG;
    // The fourth 32-bit write fills the 128-bit write buffer and starts the write
    const FlashWord word = personality::flashWordOf(value);
-   auto *const target = reinterpret_cast<volatile uint32_t *>(const_cast<FlashWord *>(&__vsl_settings_start[index]));
+   auto *const target = reinterpret_cast<volatile uint32_t *>(const_cast<FlashWord *>(&__flash_reserved_start[index]));
    for(std::size_t i = 0; i < word.size(); ++i) {
       target[i] = word[i];
    }

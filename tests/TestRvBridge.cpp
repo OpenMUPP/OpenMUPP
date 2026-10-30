@@ -22,7 +22,8 @@ namespace {
 
 using Bytes = std::vector<uint8_t>;
 
-// The real JTAG port: records the calls. shift() gives TDO 0.
+// The real JTAG port: records the calls. shift() gives tdoFill in each TDO
+// byte: 0 for a TDO that stays low, 0xFF for the pull-up.
 class FakeJtagPort final : public protocol::JtagPort {
    public:
    void init() override {
@@ -35,25 +36,55 @@ class FakeJtagPort final : public protocol::JtagPort {
       calls.push_back("speed " + std::to_string(kHz));
       return true;
    }
-   bool shift(uint32_t bitCount, art::span<const uint8_t>, art::span<const uint8_t>, art::span<uint8_t>) override {
+   bool shift(uint32_t bitCount, art::span<const uint8_t>, art::span<const uint8_t>, art::span<uint8_t> tdo) override {
       calls.push_back("shift " + std::to_string(bitCount));
+      for(auto &byte : tdo) {
+         byte = tdoFill;
+      }
       return true;
    }
 
    std::vector<std::string> calls;
+   uint8_t tdoFill{ 0 };
+};
+
+// The settings page of the stored mode: records the stores.
+class FakeModeStore final : public cmsisdap::BridgeModeStore {
+   public:
+   bool store(cmsisdap::BridgeMode mode) override {
+      stores.push_back(mode);
+      return !fail;
+   }
+
+   std::vector<cmsisdap::BridgeMode> stores;
+   bool fail{ false };
 };
 
 // Records the calls of the processor
 class FakeBridge final : public cmsisdap::Bridge {
    public:
-   void enable(bool on) override {
-      enables.push_back(on);
+   void setMode(cmsisdap::BridgeMode mode) override {
+      modes.push_back(mode);
+   }
+   bool storeMode(cmsisdap::BridgeMode mode) override {
+      stores.push_back(mode);
+      if(failStore) {
+         return false;
+      }
+      stored = mode;
+      return true;
+   }
+   [[nodiscard]] cmsisdap::BridgeMode storedMode() const override {
+      return stored;
    }
    void pinsChanged() override {
       ++pinChanges;
    }
 
-   std::vector<bool> enables;
+   std::vector<cmsisdap::BridgeMode> modes;
+   std::vector<cmsisdap::BridgeMode> stores;
+   cmsisdap::BridgeMode stored{ cmsisdap::BridgeMode::Auto };
+   bool failStore{ false };
    int pinChanges{ 0 };
 };
 
@@ -152,10 +183,14 @@ void dmiRead(protocol::JtagPort &port) {
 
 } // namespace
 
-TEST_CASE("RV bridge: the real JTAG port is the default") {
+TEST_CASE("RV bridge: off is the real JTAG port") {
    FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
    Wire w;
-   cmsisdap::RvBridge bridge{ jtag, w.tap };
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   CHECK(bridge.mode() == cmsisdap::BridgeMode::Auto);
+   bridge.setMode(cmsisdap::BridgeMode::Off);
    CHECK_FALSE(bridge.enabled());
    bridge.init();
    shift(bridge, Bits(8, false));
@@ -166,10 +201,13 @@ TEST_CASE("RV bridge: the real JTAG port is the default") {
 
 TEST_CASE("RV bridge: the switch ends the port in use and starts the other one") {
    FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
    Wire w;
-   cmsisdap::RvBridge bridge{ jtag, w.tap };
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.setMode(cmsisdap::BridgeMode::Off);
    bridge.init();
-   bridge.enable(true);
+   bridge.setMode(cmsisdap::BridgeMode::On);
    CHECK(bridge.enabled());
    CHECK(jtag.calls == std::vector<std::string>{ "init", "fini" });
    CHECK(readIdcode(bridge) == cmsisdap::rvDtm::idcode);
@@ -179,7 +217,7 @@ TEST_CASE("RV bridge: the switch ends the port in use and starts the other one")
    dmiRead(bridge);
    REQUIRE(w.pins.accesses.size() == 4);
    const int finis = w.pins.finis;
-   bridge.enable(false);
+   bridge.setMode(cmsisdap::BridgeMode::Off);
    CHECK(w.pins.finis == finis + 1);
    CHECK(jtag.calls == std::vector<std::string>{ "init", "fini", "init" });
    shift(bridge, Bits(8, false));
@@ -188,34 +226,40 @@ TEST_CASE("RV bridge: the switch ends the port in use and starts the other one")
 
 TEST_CASE("RV bridge: a switch without a connection starts no port") {
    FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
    Wire w;
-   cmsisdap::RvBridge bridge{ jtag, w.tap };
-   bridge.enable(true);
-   bridge.enable(true);
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.setMode(cmsisdap::BridgeMode::On);
+   bridge.setMode(cmsisdap::BridgeMode::On);
    CHECK(jtag.calls.empty());
    bridge.init();
    CHECK(jtag.calls.empty());
    CHECK(readIdcode(bridge) == cmsisdap::rvDtm::idcode);
    bridge.fini();
-   bridge.enable(false);
+   bridge.setMode(cmsisdap::BridgeMode::Off);
    CHECK(jtag.calls.empty());
 }
 
 TEST_CASE("RV bridge: the real port gets each speed") {
    FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
    Wire w;
-   cmsisdap::RvBridge bridge{ jtag, w.tap };
-   bridge.enable(true);
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.setMode(cmsisdap::BridgeMode::On);
    CHECK(bridge.setSpeed(500));
-   bridge.enable(false);
+   bridge.setMode(cmsisdap::BridgeMode::Off);
    CHECK(jtag.calls == std::vector<std::string>{ "speed 500" });
 }
 
 TEST_CASE("RV bridge: pinsChanged() makes the TAP connect again") {
    FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
    Wire w;
-   cmsisdap::RvBridge bridge{ jtag, w.tap };
-   bridge.enable(true);
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.setMode(cmsisdap::BridgeMode::On);
    bridge.init();
    readIdcode(bridge);
    dmiRead(bridge);
@@ -263,28 +307,109 @@ TEST_CASE("RV bridge: ID_DAP_Vendor1 without a bridge is an unknown command") {
    CHECK(d.run({ 0x81, 0x01 }) == Bytes{ 0xFF });
 }
 
-TEST_CASE("RV bridge: ID_DAP_Vendor1 switches the bridge") {
+TEST_CASE("RV bridge: ID_DAP_Vendor1 sets the mode of the bridge") {
+   using Mode = cmsisdap::BridgeMode;
    FakeBridge bridge;
    Dap d(&bridge);
    CHECK(d.run({ 0x81, 0x01 }) == Bytes{ 0x81, 0x00 });
    CHECK(d.run({ 0x81, 0x00 }) == Bytes{ 0x81, 0x00 });
-   CHECK(bridge.enables == std::vector<bool>{ true, false });
-   // Another value: DAP_ERROR, no switch
-   CHECK(d.run({ 0x81, 0x02 }) == Bytes{ 0x81, 0xFF });
-   CHECK(bridge.enables.size() == 2);
+   CHECK(d.run({ 0x81, 0x02 }) == Bytes{ 0x81, 0x00 });
+   CHECK(bridge.modes == std::vector<Mode>{ Mode::On, Mode::Off, Mode::Auto });
+   // Another value: DAP_ERROR, no change
+   CHECK(d.run({ 0x81, 0x04 }) == Bytes{ 0x81, 0xFF });
+   CHECK(bridge.modes.size() == 3);
    // Too short
    CHECK(d.run({ 0x81 }) == Bytes{ 0xFF });
-   CHECK(bridge.enables.size() == 2);
+   CHECK(bridge.modes.size() == 3);
 }
 
-TEST_CASE("RV bridge: hostGone() switches the bridge off") {
+TEST_CASE("RV bridge: hostGone() sets the stored mode") {
    FakeBridge bridge;
    Dap d(&bridge);
    d.dap.hostGone();
-   CHECK(bridge.enables == std::vector<bool>{ false });
-   // A suspend keeps the bridge.
+   CHECK(bridge.modes == std::vector<cmsisdap::BridgeMode>{ cmsisdap::BridgeMode::Auto });
+   // A suspend keeps the mode.
    d.dap.release();
-   CHECK(bridge.enables.size() == 1);
+   CHECK(bridge.modes.size() == 1);
+   bridge.stored = cmsisdap::BridgeMode::Off;
+   d.dap.hostGone();
+   CHECK(bridge.modes.back() == cmsisdap::BridgeMode::Off);
+}
+
+TEST_CASE("RV bridge: ID_DAP_Vendor1 with bit 7 sets and stores the mode") {
+   using Mode = cmsisdap::BridgeMode;
+   FakeBridge bridge;
+   Dap d(&bridge);
+   CHECK(d.run({ 0x81, 0x81 }) == Bytes{ 0x81, 0x00 });
+   CHECK(d.run({ 0x81, 0x80 }) == Bytes{ 0x81, 0x00 });
+   CHECK(d.run({ 0x81, 0x82 }) == Bytes{ 0x81, 0x00 });
+   CHECK(bridge.modes == std::vector<Mode>{ Mode::On, Mode::Off, Mode::Auto });
+   CHECK(bridge.stores == std::vector<Mode>{ Mode::On, Mode::Off, Mode::Auto });
+   // Without bit 7: no store
+   CHECK(d.run({ 0x81, 0x01 }) == Bytes{ 0x81, 0x00 });
+   CHECK(bridge.stores.size() == 3);
+   // Another value: DAP_ERROR, no change, no store
+   CHECK(d.run({ 0x81, 0x84 }) == Bytes{ 0x81, 0xFF });
+   CHECK(d.run({ 0x81, 0x42 }) == Bytes{ 0x81, 0xFF });
+   CHECK(bridge.modes.size() == 4);
+   CHECK(bridge.stores.size() == 3);
+}
+
+TEST_CASE("RV bridge: ID_DAP_Vendor1 mode 3 sets the stored mode") {
+   using Mode = cmsisdap::BridgeMode;
+   FakeBridge bridge;
+   bridge.stored = Mode::Off;
+   Dap d(&bridge);
+   CHECK(d.run({ 0x81, 0x01 }) == Bytes{ 0x81, 0x00 });
+   CHECK(d.run({ 0x81, 0x03 }) == Bytes{ 0x81, 0x00 });
+   CHECK(bridge.modes == std::vector<Mode>{ Mode::On, Mode::Off });
+   // With the store flag: DAP_ERROR, no change
+   CHECK(d.run({ 0x81, 0x83 }) == Bytes{ 0x81, 0xFF });
+   CHECK(bridge.modes.size() == 2);
+   CHECK(bridge.stores.empty());
+}
+
+TEST_CASE("RV bridge: a failed store gives DAP_ERROR and still sets the mode") {
+   using Mode = cmsisdap::BridgeMode;
+   FakeBridge bridge;
+   bridge.failStore = true;
+   Dap d(&bridge);
+   CHECK(d.run({ 0x81, 0x81 }) == Bytes{ 0x81, 0xFF });
+   CHECK(bridge.modes == std::vector<Mode>{ Mode::On });
+   CHECK(bridge.storedMode() == Mode::Auto);
+}
+
+TEST_CASE("RV bridge: the stored mode is the mode of the start") {
+   FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::On };
+   CHECK(bridge.mode() == cmsisdap::BridgeMode::On);
+   CHECK(bridge.storedMode() == cmsisdap::BridgeMode::On);
+   CHECK(bridge.enabled());
+   // On: no detection, the TAP is the port
+   bridge.init();
+   CHECK(jtag.calls.empty());
+   CHECK(readIdcode(bridge) == cmsisdap::rvDtm::idcode);
+   CHECK(modes.stores.empty());
+}
+
+TEST_CASE("RV bridge: storeMode() writes the store and keeps the mode") {
+   using Mode = cmsisdap::BridgeMode;
+   FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, Mode::Auto };
+   CHECK(bridge.storeMode(Mode::Off));
+   CHECK(bridge.storedMode() == Mode::Off);
+   CHECK(bridge.mode() == Mode::Auto);
+   CHECK(modes.stores == std::vector<Mode>{ Mode::Off });
+   // A failed store keeps the stored mode
+   modes.fail = true;
+   CHECK_FALSE(bridge.storeMode(Mode::On));
+   CHECK(bridge.storedMode() == Mode::Off);
 }
 
 TEST_CASE("RV bridge: DAP_SWJ_Pins on SWCLK or SWDIO tells the bridge") {
@@ -301,8 +426,11 @@ TEST_CASE("RV bridge: DAP_SWJ_Pins on SWCLK or SWDIO tells the bridge") {
 
 TEST_CASE("RV bridge: the processor reads the IDCODE of the TAP after the switch") {
    FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
    Wire w;
-   cmsisdap::RvBridge bridge{ jtag, w.tap };
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.setMode(cmsisdap::BridgeMode::Off);
    Dap d(&bridge, &bridge);
    // DAP_Connect to JTAG on the real port
    CHECK(d.run({ 0x02, 0x02 }) == Bytes{ 0x02, 0x02 });
@@ -319,4 +447,137 @@ TEST_CASE("RV bridge: the processor reads the IDCODE of the TAP after the switch
    CHECK(jtag.calls.back() == "init");
    CHECK(d.run({ 0x03 }) == Bytes{ 0x03, 0x00 });
    CHECK(jtag.calls.back() == "fini");
+}
+
+TEST_CASE("RV bridge: auto with a JTAG chain is the real port") {
+   FakeJtagPort jtag;
+   jtag.tdoFill = 0x55;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.init();
+   CHECK_FALSE(bridge.enabled());
+   // The scan, then the port for the host. No SWD and no wire.
+   CHECK(jtag.calls == std::vector<std::string>{ "init", "shift 75", "fini", "init" });
+   CHECK(swd.inits == 0);
+   CHECK(w.pins.inits == 0);
+}
+
+TEST_CASE("RV bridge: auto with an SWD target is the real port") {
+   FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.init();
+   CHECK_FALSE(bridge.enabled());
+   CHECK(jtag.calls == std::vector<std::string>{ "init", "shift 75", "fini", "init" });
+   // JTAG-to-SWD, DPIDR, then back to JTAG. The pins are released.
+   CHECK(swd.sequences == std::vector<uint16_t>{ 136, 80 });
+   CHECK(swd.transfers == 1);
+   CHECK(swd.finis == swd.inits);
+   CHECK(w.pins.inits == 0);
+}
+
+TEST_CASE("RV bridge: auto with a WCH target is the TAP") {
+   FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
+   swd.ack = cmsisdap::dap::ackNone;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.init();
+   CHECK(bridge.enabled());
+   CHECK(jtag.calls == std::vector<std::string>{ "init", "shift 75", "fini" });
+   CHECK(swd.sequences == std::vector<uint16_t>{ 136 });
+   CHECK(swd.finis == swd.inits);
+   // The probe released the wire. The first DMI access connects again.
+   CHECK(w.pins.finis == w.pins.inits);
+   CHECK(readIdcode(bridge) == cmsisdap::rvDtm::idcode);
+   const std::size_t accesses = w.pins.accesses.size();
+   dmiRead(bridge);
+   CHECK(w.pins.accesses.size() == accesses + 4);
+   CHECK(w.pins.accesses[accesses].address == 0x7e);
+}
+
+TEST_CASE("RV bridge: auto without a target is the real port") {
+   FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
+   swd.ack = cmsisdap::dap::ackNone;
+   Wire w;
+   w.pins.present = false;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.init();
+   CHECK_FALSE(bridge.enabled());
+   CHECK(jtag.calls == std::vector<std::string>{ "init", "shift 75", "fini", "init" });
+   CHECK(w.pins.inits > 0);
+   CHECK(w.pins.finis == w.pins.inits);
+}
+
+TEST_CASE("RV bridge: auto finds the port again at each connect") {
+   FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
+   swd.ack = cmsisdap::dap::ackNone;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.init();
+   CHECK(bridge.enabled());
+   bridge.fini();
+   jtag.tdoFill = 0x55;
+   bridge.init();
+   CHECK_FALSE(bridge.enabled());
+   CHECK(jtag.calls.back() == "init");
+}
+
+TEST_CASE("RV bridge: auto while connected keeps the port") {
+   FakeJtagPort jtag;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.setMode(cmsisdap::BridgeMode::On);
+   bridge.init();
+   dmiRead(bridge);
+   const int finis = w.pins.finis;
+   // As at the OpenOCD shutdown: no detection, no pin activity
+   bridge.setMode(cmsisdap::BridgeMode::Auto);
+   CHECK(bridge.enabled());
+   CHECK(jtag.calls.empty());
+   CHECK(swd.inits == 0);
+   CHECK(w.pins.finis == finis);
+   // From off: the real port stays
+   bridge.setMode(cmsisdap::BridgeMode::Off);
+   bridge.setMode(cmsisdap::BridgeMode::Auto);
+   CHECK_FALSE(bridge.enabled());
+   CHECK(jtag.calls == std::vector<std::string>{ "init" });
+   CHECK(swd.inits == 0);
+}
+
+TEST_CASE("RV bridge: auto with TDO high is no chain") {
+   FakeJtagPort jtag;
+   jtag.tdoFill = 0xFF;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.init();
+   // The SWD step runs: the JTAG step found no chain.
+   CHECK(swd.inits == 1);
+}
+
+TEST_CASE("RV bridge: auto finds a TAP on the real port by its IDCODE") {
+   // A second emulated TAP is the real port: it gives TDO by its state, so
+   // the scan must reach Shift-DR and read the IDCODE in its window.
+   Wire real;
+   vsltest::FakeDapSwd swd;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ real.tap, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   bridge.init();
+   CHECK_FALSE(bridge.enabled());
+   CHECK(swd.inits == 0);
+   CHECK(real.tap.state() == cmsisdap::RvDtmTap::State::Idle);
 }

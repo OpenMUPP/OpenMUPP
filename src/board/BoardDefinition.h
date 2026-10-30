@@ -153,25 +153,31 @@ constexpr std::optional<uint8_t> adcChannelOf(Family family, Pin pin) {
 }
 
 // One wire (SDI) of the WCH-Link personality: a timer makes the bits on
-// the SWDIO output pin (board/BoardRvSwd.cpp). The output channel is on
-// the pin; the sample channel has no pin output. The DMA1 channels serve
-// the update event and the sample compare of the timer.
+// the SWDIO output pin (board/BoardRvSwd.cpp, board/BoardRvSwdH5.cpp). The
+// output channel is on the pin; the sample channel has no pin output. The
+// DMA channels serve the update event and the sample compare of the timer:
+// DMA1 channels on the STM32F103, GPDMA1 channels on the STM32H5 (the
+// GPDMA request comes from the timer and the channel).
 struct OneWireTimer {
    uint8_t timer;         // TIMn
    uint8_t channel;       // output channel, 1-4
    bool complementary;    // the pin is TIMn_CHxN
    bool partialRemap;     // AFIO TIM3_REMAP partial remap
    uint8_t sampleChannel; // 1-4
-   uint8_t updateDma;     // DMA1 channel of TIMn_UP
-   uint8_t sampleDma;     // DMA1 channel of the sample channel
+   uint8_t updateDma;     // DMA channel of TIMn_UP
+   uint8_t sampleDma;     // DMA channel of the sample channel
 };
 
-// The timer of a SWDIO output pin on the STM32F103 (RM0008 9.3.7 and
-// table 78). Empty when the pin has no supported timer channel.
-// The STM32H5 has no one-wire engine yet (GPDMA instead of DMA1, #98), so
-// it gets no timer.
+// The timer of a SWDIO output pin: RM0008 9.3.7 and table 78 (STM32F103),
+// DS14540 table 14 (STM32H5). Empty when the pin has no supported timer
+// channel.
 constexpr std::optional<OneWireTimer> oneWireTimerOf(Family family, Pin tmsOut) {
-   if(family != Family::Stm32F1) {
+   if(family == Family::Stm32H5) {
+      // TIM3_CH1 (AF2), TIM3_CH3 samples. GPDMA1 channels 3 and 4: the JTAG
+      // fast path uses channels 0 to 2.
+      if(tmsOut == Pin{ Port::A, 6 }) {
+         return OneWireTimer{ 3, 1, false, false, 3, 3, 4 };
+      }
       return std::nullopt;
    }
    // TIM3_CH1 (partial remap); TIM3_UP on DMA1 ch3, TIM3_CH3 on ch2
@@ -198,16 +204,43 @@ struct Leds {
    std::optional<Signal> power;
    std::optional<Signal> state;
    std::optional<Signal> usb;
+   // Two LEDs on the state pin, one to each supply: the asserted level
+   // lights one colour, the other level the other colour (stateDriveOf()).
+   bool stateTwoColour = false;
 
    constexpr bool operator==(const Leds &) const = default;
 };
+
+// What the state LED shows (docs/boards.md, "Start-up and LEDs").
+enum class StateShow : uint8_t { Idle, Activity, Fault };
+
+struct StateDrive {
+   bool off;   // analog mode: no LED is on
+   bool level; // output level when not off
+   constexpr bool operator==(const StateDrive &) const = default;
+};
+
+// The pin drive of the state LED. One LED: off when idle, on for activity
+// and a fault. Two colours: idle lights the asserted colour, a fault the
+// other colour, and activity sets the pin to analog mode. A floating
+// digital input lets one LED glow (measured on the mini clone); analog
+// mode switches both off.
+constexpr StateDrive stateDriveOf(Signal state, bool twoColour, StateShow show) {
+   if(!twoColour) {
+      return { false, state.levelFor(show != StateShow::Idle) };
+   }
+   if(show == StateShow::Activity) {
+      return { true, false };
+   }
+   return { false, state.levelFor(show == StateShow::Idle) };
+}
 
 struct Definition {
    std::string_view name;
    // Crystal, Hz. 0: the board has no crystal (STM32H5 only, USB then runs
    // from the HSI48 with the CRS).
    uint32_t hseFrequency : 28;
-   // In the word of the crystal: a definition stays 68 bytes. The firmware
+   // In the word of the crystal, so the family adds no byte. The firmware
    // keeps board::current in flash (BoardGpio reads the debug pins).
    Family family : 4;
    uint8_t hardwareId; // reply of VERSALOON_GET_HARDWARE

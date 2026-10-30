@@ -2,17 +2,13 @@
 
 namespace protocol {
 
-PowerBlock::PowerBlock(PowerHardware &hardware, Delay &delay)
+PowerBlock::PowerBlock(TargetPower &power)
    : SubCommandBlock(block::power)
-   , hardware_(hardware)
-   , delay_(delay) {
+   , power_(power) {
 }
 
 uint16_t PowerBlock::millivolts() {
-   if(!hardware_.hasSense()) {
-      return 0;
-   }
-   return hardware_.senseMillivolts().value_or(0);
+   return power_.millivolts();
 }
 
 void PowerBlock::runSubCommand(const SubCommand &command, Reply &reply) {
@@ -34,11 +30,12 @@ void PowerBlock::runSubCommand(const SubCommand &command, Reply &reply) {
       slot->setStatus(out(command.payload));
       return;
    case subcommand::in: {
-      if(!hardware_.hasSense()) {
+      auto &hardware = power_.hardware();
+      if(!hardware.hasSense()) {
          slot->setStatus(Status::CmdNotSupport);
          return;
       }
-      const auto value = hardware_.senseMillivolts();
+      const auto value = hardware.senseMillivolts();
       if(!value) {
          slot->setStatus(Status::Failed);
          return;
@@ -53,80 +50,27 @@ void PowerBlock::runSubCommand(const SubCommand &command, Reply &reply) {
    }
 }
 
-void PowerBlock::poll(uint64_t nowMs) {
-   if(!on_ || !hardware_.hasSense() || nowMs - lastCheckMs_ < pollIntervalMs) {
-      return;
-   }
-   lastCheckMs_ = nowMs;
-   const auto live = isLive();
-   // A failed measurement says nothing about the rail.
-   if(!live) {
-      return;
-   }
-   lowChecks_ = *live ? 0 : lowChecks_ + 1;
-   if(lowChecks_ >= lowChecksToOff) {
-      switchOff();
-   }
-}
-
 Status PowerBlock::out(art::span<const uint8_t> payload) {
    if(payload.size() != 2) {
       return Status::InvalidPara;
    }
    switch(getU16(payload, 0)) {
    case 0:
-      switchOff();
+      power_.switchOff();
       return Status::Ok;
    case supplyMillivolts:
-      return switchOn();
+      switch(power_.switchOn()) {
+      case TargetPower::Result::Ok:
+         return Status::Ok;
+      case TargetPower::Result::Refused:
+         return Status::Failed;
+      case TargetPower::Result::NotSupported:
+         return Status::CmdNotSupport;
+      }
+      return Status::Failed;
    default:
       return Status::InvalidPara;
    }
-}
-
-Status PowerBlock::switchOn() {
-   if(!hardware_.hasSwitch()) {
-      return Status::CmdNotSupport;
-   }
-   if(on_) {
-      return Status::Ok;
-   }
-   if(!hardware_.hasSense()) {
-      hardware_.setSwitch(true);
-      on_ = true;
-      return Status::Ok;
-   }
-   // The voltage at the Vref pin is the target supply, as long as the
-   // switch is off.
-   const auto external = isLive();
-   if(!external || *external) {
-      return Status::Failed;
-   }
-   hardware_.setSwitch(true);
-   on_ = true;
-   lowChecks_ = 0;
-   delay_.milliseconds(settleMs);
-   const auto live = isLive();
-   if(!live || !*live) {
-      switchOff();
-      return Status::Failed;
-   }
-   return Status::Ok;
-}
-
-void PowerBlock::switchOff() {
-   if(on_) {
-      hardware_.setSwitch(false);
-      on_ = false;
-   }
-}
-
-std::optional<bool> PowerBlock::isLive() {
-   const auto value = hardware_.senseMillivolts();
-   if(!value) {
-      return std::nullopt;
-   }
-   return *value > externalSupplyMillivolts;
 }
 
 } // namespace protocol

@@ -23,6 +23,7 @@
 //                               0x21 DAP_UART_Transfer
 //   0x80 ID_DAP_Vendor0         0x22 DAP_UART_Control
 //   0x81 ID_DAP_Vendor1         0x23 DAP_UART_Status
+//   0x82 ID_DAP_Vendor2
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
 // DAP.c): posted AP reads, RDBUFF at the end of a read sequence, a read of
@@ -67,13 +68,25 @@
 //   without a bootloader. Without a personality switch (an image with one
 //   personality) and without a bootloader, the command replies
 //   ID_DAP_Invalid.
-// - ID_DAP_Vendor1 [0x81][on u8] -> [0x81][status u8] switches the RISC-V
-//   bridge (RvBridge.h): 1 on, 0 off. On, DAP_Connect to JTAG and the JTAG
-//   commands use the emulated TAP, and the TAP state and IR are not known.
-//   The status is DAP_OK (0), or DAP_ERROR (0xFF) for another value.
-//   Without a bridge, the command replies ID_DAP_Invalid. hostGone()
-//   switches the bridge off. DAP_SWJ_Pins with SWCLK or SWDIO selected
-//   tells the bridge that the pins changed (Bridge::pinsChanged()).
+// - ID_DAP_Vendor1 [0x81][mode u8] -> [0x81][status u8] sets the mode of
+//   the RISC-V bridge (RvBridge.h): 0 off, 1 on, 2 auto, 3 the stored
+//   mode (bridgeStoredMode). On, DAP_Connect to
+//   JTAG and the JTAG commands use the emulated TAP, and the TAP state and
+//   IR are not known. Auto finds the port at each DAP_Connect to JTAG. With
+//   bit 7 (bridgeStoreFlag) set, the command also stores the mode: it is
+//   then the mode at power-up and after hostGone(). The status is DAP_OK
+//   (0), or DAP_ERROR (0xFF) for another value and for a failed store. A
+//   failed store still sets the mode. Without a bridge, the command replies
+//   ID_DAP_Invalid. hostGone() sets the stored mode.
+//   DAP_SWJ_Pins with SWCLK or SWDIO selected tells the bridge that the
+//   pins changed (Bridge::pinsChanged()).
+// - ID_DAP_Vendor2 [0x82][op u8] -> [0x82][status u8][mV u16] switches the
+//   3.3 V target supply (protocol/TargetPower.h): op 0 off, 1 on, 2 only
+//   read. The status is 0 (done), 1 (a protection refused the switch-on),
+//   or 0xFF: op 0 or 1 on a board without a power switch, or another op.
+//   mV is the target voltage after the operation, 0 without a sense or
+//   when the measurement fails. Without a TargetPower, the command replies
+//   ID_DAP_Invalid. hostGone() keeps the supply on.
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -112,6 +125,7 @@
 
 #include "protocol/GpioPins.h"
 #include "protocol/JtagPort.h"
+#include "protocol/TargetPower.h"
 #include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
 #include "protocol/cmsisdap/DapUart.h"
@@ -153,6 +167,7 @@ inline constexpr uint8_t uartControl = 0x22;
 inline constexpr uint8_t uartStatus = 0x23;
 inline constexpr uint8_t vendor0 = 0x80;
 inline constexpr uint8_t vendor1 = 0x81;
+inline constexpr uint8_t vendor2 = 0x82;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
 inline constexpr uint8_t invalid = 0xFF;
@@ -217,10 +232,26 @@ class Platform {
    ~Platform() = default;
 };
 
+// The modes of the RISC-V bridge: the values of ID_DAP_Vendor1
+enum class BridgeMode : uint8_t {
+   Off = 0,
+   On = 1,
+   Auto = 2,
+};
+
+// ID_DAP_Vendor1: this bit of the mode byte also stores the mode
+inline constexpr uint8_t bridgeStoreFlag = 0x80;
+// ID_DAP_Vendor1: this mode value sets the stored mode. It takes no store flag.
+inline constexpr uint8_t bridgeStoredMode = 3;
+
 // The RISC-V bridge of ID_DAP_Vendor1 (RvBridge.h)
 class Bridge {
    public:
-   virtual void enable(bool on) = 0;
+   virtual void setMode(BridgeMode mode) = 0;
+   // Stores the mode of the power-up and of hostGone(). False when the
+   // store failed: the stored mode then stays.
+   virtual bool storeMode(BridgeMode mode) = 0;
+   [[nodiscard]] virtual BridgeMode storedMode() const = 0;
    // DAP_SWJ_Pins drove SWCLK or SWDIO.
    virtual void pinsChanged() = 0;
 
@@ -249,7 +280,8 @@ class Processor final : private TransferAbort {
    // commands. The constructor only stores the uart pointer, so the object
    // can be constructed later. bootloader: nullptr for an image without a
    // bootloader. bridge: nullptr for an image without the RISC-V bridge;
-   // else the bridge is also the jtag port.
+   // else the bridge is also the jtag port. power: nullptr for no
+   // ID_DAP_Vendor2.
    Processor(DapSwd &swd,
              protocol::GpioPins &gpio,
              Platform &platform,
@@ -258,7 +290,8 @@ class Processor final : private TransferAbort {
              personality::PersonalitySwitch *personalitySwitch = nullptr,
              DapUart *uart = nullptr,
              boot::BootloaderEntry *bootloader = nullptr,
-             Bridge *bridge = nullptr);
+             Bridge *bridge = nullptr,
+             protocol::TargetPower *power = nullptr);
 
    [[nodiscard]] bool canSubmit() const {
       return requests_ + responses_ < packetCount;
@@ -345,6 +378,7 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool executeCommands(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool switchPersonality(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool switchBridge(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool targetPower(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartCommand(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
 
@@ -367,6 +401,7 @@ class Processor final : private TransferAbort {
    DapUart *uart_;
    boot::BootloaderEntry *bootloader_;
    Bridge *bridge_;
+   protocol::TargetPower *power_;
 
    Port port_{ Port::None };
    // Also the idle cycles and the WAIT retries of JTAG

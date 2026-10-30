@@ -7,7 +7,7 @@
 #             flags of each family.
 #   device    STM32_DEVICE, the CMSIS device define
 #   crystal   HSE crystal in Hz, 0 for a board without a crystal
-#   ldscript  memory linker script in ldscripts/
+#   ldscript  memory linker script in ldscripts/ of system-stm32
 #   flash     flash size in bytes. The size limit of the application images
 #             comes from it (CMakeLists.txt).
 # The family and the crystal must be the same as in the board definition
@@ -15,19 +15,26 @@
 #
 #   mini      Versaloon Mini
 #   otheruse  OtherUse
-#   stlinkv2  ST-Link/V2 clone (compile-only target)
-#   nucleoh533 NUCLEO-H533RE
+#   stlinkv2  ST-Link/V2, pin map of the official design (compile-only target)
+#   stlinkv2miniclone
+#             ST-Link/V2 mini clone, USB stick dongle
+#             (docs/stlinkv2-mini-clone.md)
+#   weacth523 WeAct STM32H523 core board (STM32H523CC)
 # The STM32F1 boards have an STM32F103x8 or an STM32F103xB. CMSIS has one
 # define (STM32F103xB) for both parts. The firmware uses only the 64 KB of
 # the STM32F103x8.
-set(VSL_BOARDS mini otheruse stlinkv2 nucleoh533)
-#                         family  device      crystal  ldscript     flash
-set(VSL_BOARD_mini        STM32F1 STM32F103xB 12000000 mem-f103.ld  65536)
-set(VSL_BOARD_otheruse    STM32F1 STM32F103xB 12000000 mem-f103.ld  65536)
-set(VSL_BOARD_stlinkv2    STM32F1 STM32F103xB 8000000  mem-f103.ld  65536)
-set(VSL_BOARD_nucleoh533  STM32H5 STM32H533xx 24000000 mem-h533.ld  524288)
+set(VSL_BOARDS mini otheruse stlinkv2 stlinkv2miniclone weacth523)
+#                         family  device      crystal  ldscript      flash
+set(VSL_BOARD_mini        STM32F1 STM32F103xB 12000000 mem-F103x8.ld 65536)
+set(VSL_BOARD_otheruse    STM32F1 STM32F103xB 12000000 mem-F103x8.ld 65536)
+set(VSL_BOARD_stlinkv2    STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
+set(VSL_BOARD_stlinkv2miniclone STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
+set(VSL_BOARD_weacth523   STM32H5 STM32H523xx 8000000  mem-H523xC.ld 262144)
 # Boards that versaloon-bootloader supports (cmake/Bootloader.cmake)
-set(VSL_BOOTLOADER_BOARDS mini otheruse)
+set(VSL_BOOTLOADER_BOARDS mini otheruse stlinkv2 stlinkv2miniclone)
+# Boards that shipped with the legacy Versaloon bootloader (10 KB). Only
+# they get the app-10k image.
+set(VSL_LEGACY_BOOTLOADER_BOARDS mini otheruse)
 set(BOARD "mini" CACHE STRING "Board to build for: ${VSL_BOARDS}")
 set_property(CACHE BOARD PROPERTY STRINGS ${VSL_BOARDS})
 

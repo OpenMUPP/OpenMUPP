@@ -56,7 +56,7 @@ The vendor ID `1a86` belongs to WCH.
 Use this option only for personal use.
 Do not publish an image with this ID.
 The names of these image files have `-wch-link-wch-id` after the board.
-In a multi image, the tag ends with `-wch-id`, for example `-vsl+dap+wch-wch-id`.
+In a multi image, the tag ends with `-wch-id`, for example `-dap+wch-wch-id`.
 CI does not build this image.
 The option is only valid when `VSL_PERSONALITIES` has `wch-link`.
 
@@ -110,14 +110,13 @@ The size of the `standalone` image (Release build):
 | Board | Size | Limit |
 |---|---|---|
 | Mini | 22,156 bytes | 65,536 bytes |
-| OtherUse | 22,152 bytes | 65,536 bytes |
 | ST-Link/V2 | 22,124 bytes | 65,536 bytes |
 
 The `app-8k` image has the limit 57,344 bytes, and the `app-10k` image has the limit 55,296 bytes (see [Flash layout](firmware-update.md#flash-layout-and-size-limit)).
 Each image uses less than half of its limit.
 CI checks each image against its limit (`ci/check-size.sh`).
 
-For comparison, the Versaloon image of the Mini has 27,168 bytes, the CMSIS-DAP image 31,480 bytes, and the dual image 37,660 bytes.
+For comparison, the Versaloon image of the Mini has 27,168 bytes, the CMSIS-DAP image 31,480 bytes, and the dual image with Versaloon and CMSIS-DAP 37,660 bytes.
 
 ### Combined image
 
@@ -479,8 +478,8 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 | Status | Cause |
 |---|---|
 | `Wire` | The engine returned a flag: a parity error (two wires), a line that stays low (one wire), or a frame that the timer did not end correctly or did not start because the core clock is below 72 MHz (one wire, see [One-wire timer](#one-wire-timer)). |
-| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](wch-link-protocol.md#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini and the OtherUse, because the pull-up of the SWDIO input pin holds the line high. On the ST-Link/V2, nothing holds the line high in a read bit (see [One-wire timer](#one-wire-timer)), so a read without a target can give other values. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
-| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini and the OtherUse: `abstractcs` reads `ffffffff` (`busy` 1). On the ST-Link/V2, it can end with another status. After a `Timeout`, read `dmstatus` to find a missing target. |
+| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](wch-link-protocol.md#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini, because the pull-up of the SWDIO input pin holds the line high. The ST-Link/V2 mini clone has the same pull-up, but this is not tested on hardware. On the ST-Link/V2, nothing holds the line high in a read bit (see [One-wire timer](#one-wire-timer)), so a read without a target can give other values. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
+| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini: `abstractcs` reads `ffffffff` (`busy` 1). The ST-Link/V2 mini clone has the same pull-up (not tested on hardware). On the ST-Link/V2, it can end with another status. After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
 | `Unsupported` | A byte access, or a half-word read, with the program buffer method. |
 | `Misaligned` | The address is not a multiple of the access width. The layer sends no frame. |
@@ -499,32 +498,50 @@ The pins on the dongle:
 
 | Board | SWCLK (TCK) | SWDIO output (TMS out) | SWDIO input (TMS in) | NRST (SRST) |
 |---|---|---|---|---|
-| Mini, OtherUse | PB13 | PB4 | PB6 | PB11 |
+| Mini | PB13 | PB4 | PB6 | PB11 |
 | ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
+| ST-Link/V2 mini clone | PA5 | PB14 | PB12 | PB6 |
 
 The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
+
+#### Two-wire release
+
+The WCH-LinkE releases SWDIO after the rising edge of SWCLK in bits 10 and 48 (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
+Its pull-up is weak: a released line rises slowly, to 1.5 to 1.9 V before the falling edge (analog capture). Thus the target sees no start or stop condition.
+A strong pull-up, as the 2.2 kΩ pull-up for one wire (see [One-wire timer](#one-wire-timer)), raises a released SWDIO at once.
+When SWDIO is low there, the rise comes while SWCLK is high, and the target sees a stop condition (CH32V208 on the WeAct STM32H523).
+Thus the engine releases a low SWDIO after the falling edge of SWCLK. The target then drives bit 11 or bit 49 low, and the line stays low. A high SWDIO is still released after the rising edge.
 
 #### One-wire timer
 
 The width of a low pulse is the value of the bit. Thus code cannot make the bits.
-On the OtherUse dongle, waits on the cycle counter gave a 1 of 120 to 530 ns, and the CH32V003 did not answer.
+On the Mini dongle, waits on the cycle counter gave a 1 of 120 to 530 ns, and the CH32V003 did not answer.
 Constants for the time of the code worked, but only for one board, one clock and one build.
 
-A hardware timer makes each edge (`src/board/BoardRvSwd.cpp`). The engine (`src/rvswd/RvSwdEngine.h`) gives it the bits of a frame.
+A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `src/board/BoardRvSwdH5.cpp` on the STM32H5). The engine (`src/rvswd/RvSwdEngine.h`) gives it the bits of a frame.
 
 | Board | SWDIO output | Timer channel | Update DMA | Sample channel and DMA |
 |---|---|---|---|---|
-| Mini, OtherUse | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
-| ST-Link/V2 (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
+| Mini | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
+| ST-Link/V2, ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
+| WeAct STM32H523 | PA6 | TIM3_CH1 (AF2) | TIM3_UP, GPDMA1 channel 3 | TIM3_CH3, GPDMA1 channel 4 |
 
-`board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz).
+`board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz on the STM32F1, 250 MHz on the STM32H5).
+The JTAG fast path of the STM32H5 uses GPDMA1 channels 0 to 2, thus the one-wire engine uses channels 3 and 4.
+
+The STM32H5 engine works as the STM32F1 engine, with these differences:
+
+- `TIM3_DCR.DBSS` selects the update event as the source of the burst. The value 0 is reserved.
+- A GPDMA channel counts bytes, and gets the timer request from `REQSEL`.
+- The pin changes between output, alternate function and input in `MODER`, and to open drain in `OTYPER`. `PUPDR` keeps the pull-up in all modes.
+- The end period is 262 µs (65536 ticks at 250 MHz). This is long enough to stop the counter.
 
 - **Edges.** The timer runs in PWM mode 1 with an inverted output: low for CCR ticks, then high until ARR.
   On each update event, a DMA burst writes ARR and the CCRs of the next bit. No code runs between two bits.
 - **Times.** The bits have the WCH-LinkE times: a 1 is low for 250 ns, a 0 is low for 860 ns, and the high level is 370 ns.
   The high level after bit 8 of a read is 750 ns. A read bit lasts 1.3 µs.
 - **Read bits.** In the turnaround after bit 8, the code switches SWDIO to open drain. The STM32F1 has no internal pull-up on an output pin.
-  On the Mini and the OtherUse, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 (one SWDIO pin), nothing on the probe holds the line high in a read bit.
+  On the Mini, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 mini clone, the separate input pin is PB12. On the ST-Link/V2 (one SWDIO pin), nothing on the probe holds the line high in a read bit.
   The timer then drives the low pulse of 250 ns, and the target can hold the line low for a 0.
   The sample channel compares at 450 ns. Its DMA copies the input port (`IDR`) to RAM.
   The DMA reads 80 to 210 ns after the compare (measured), thus at 530 to 660 ns.
@@ -541,6 +558,10 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp`). The engine (`src/
 The line after a release: a capture with analog input (target side) shows the rise after a 1 of the target. The line goes from 0.3 V to 3.07 V in about 120 ns (10 to 90 %).
 Thus the target, or a strong pull-up on the target side, drives the line high. The STM32F1 pull-up (30 to 50 kΩ) cannot give that rise.
 At the sample point, the line is at 3.06 V. While the probe drives the line low alone, the line is at 0.3 V. This shows a series resistance between the probe and the target.
+
+On the WeAct STM32H523 with a CH32V006, nothing on the target side drives the line high.
+With only the internal pull-ups (PA6 and PB12, about 40 kΩ each), the line is at about 1.1 V 420 ns after a release. The input does not see a high level in time, and no read bit is correct.
+An external pull-up of 2.2 kΩ to 3.3 V fixes this. A read bit of a 1 needs the line high about 150 ns after the target releases it, so the time constant must be about 160 ns or less.
 
 ## Hardware test
 
@@ -565,7 +586,7 @@ Setup:
 
 | Item | Value |
 |---|---|
-| Probe | OtherUse board, `wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` (USB ID `1a86:8010`) |
+| Probe | Mini board, `wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` (USB ID `1a86:8010`) |
 | Target | CH32V208WBU6 board, external power. SWDIO on PA13, SWCLK on PA14. |
 | Host | Linux, wlink 0.1.2 |
 | Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 0, SWCLK on channel 1 |
@@ -616,7 +637,7 @@ Results with the timer:
 ### CH32V208 with the timer image
 
 The two-wire engine did not change, but the probe now sets up TIM3 and DMA at each connect, and the connect tries one wire first with the timer.
-A second OtherUse probe (legacy bootloader, `app-10k` image) ran the CH32V208 items again:
+A second Mini probe (legacy bootloader, `app-10k` image) ran the CH32V208 items again:
 
 | Item | Result |
 |---|---|
@@ -630,6 +651,57 @@ A second OtherUse probe (legacy bootloader, `app-10k` image) ran the CH32V208 it
 First, the memory reads failed at random points with both images (with and without the timer).
 The cause was the wiring between the probe and the target: after a new wiring, all items passed.
 The first probe also gave more failures than the second probe. Its wiring is not checked.
+
+### CH32V006 on the WeAct STM32H523 (one wire)
+
+Work item #98 tests the one-wire engine of the STM32H5.
+
+| Item | Value |
+|---|---|
+| Probe | WeAct STM32H523, `weacth523-wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` |
+| Target | CH32V006K8U6. SWIO on SWDIO (PB12, with the wire from PA6). |
+| Pull-up | 2.2 kΩ from SWDIO to 3.3 V |
+| Host | Linux, wlink 0.1.3, minichlink |
+| Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 4 |
+
+Results:
+
+| Item | Result |
+|---|---|
+| Wire times | The low pulses are 250 to 260 ns and 860 to 870 ns, the high level is 370 to 380 ns, and the turnaround is 750 ns. These are the WCH-LinkE times. |
+| Without the external pull-up | Failed. `wlink status` gives the error frame `81 55 01 01` (see [One-wire timer](#one-wire-timer)). |
+| `wlink status` | Passed. wlink shows the chip ID `0x00600620` and 62 KB flash. |
+| `wlink dump`, `wlink regs` | Passed. |
+| `wlink flash` | Passed. A dump of the 4 KB image is the same as the image. |
+| `wlink erase` | Passed. The flash then reads `0xff`. |
+| `minichlink -i`, `-r`, `-w` | Passed. A read after a write of 2 KB is the same as the image. |
+
+### CH32V208 on the WeAct STM32H523 (two wires)
+
+| Item | Value |
+|---|---|
+| Probe | WeAct STM32H523, `weacth523-wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` |
+| Target | CH32V208WBU6 board, external power. SWDIO on PA13, SWCLK on PA14. |
+| Pull-up | 2.2 kΩ from SWDIO to 3.3 V (the pull-up of the one-wire test) |
+| Host | Linux, wlink 0.1.3, minichlink |
+| Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 4, SWCLK on channel 5 |
+
+The first tests failed for two reasons:
+
+- **The release in bit 10.** Each read with a request parity bit of 0 failed. The pull-up raised SWDIO while SWCLK was high, and the target saw a stop condition (see [Two-wire release](#two-wire-release)). The engine now releases a low SWDIO after the falling edge.
+- **The cable.** SWDIO and SWCLK were next to each other in a flat cable of about 20 cm, with one GND wire. Each SWDIO edge put a pulse of 4 to 6 ns on SWCLK, and about one read in 1000 failed. GND conductors between the signals in the flat cable fixed this.
+
+Results after the two fixes:
+
+| Item | Result |
+|---|---|
+| `wlink status` | Passed, 20 of 20 runs. wlink shows the chip ID `0x2080053c` and 160 KB flash. |
+| `wlink dump` | Passed. Three dumps of the full flash take 10.4 s each, and they are the same. |
+| `wlink halt`, `regs`, `resume`, `reset` | Passed. |
+| `wlink erase` | Passed, 0.16 s. The flash then reads `0xe339e339`. |
+| `wlink flash` | Passed. A program of 160 KB takes 24.3 s, and a dump after it is the same as the image. |
+| `wlink protect`, `wlink unprotect` | Passed. A protected dump reads `0xff`. After the unprotect, the flash is erased, and the option bytes are the same as in the first test. |
+| `minichlink -i`, `-r`, `-w` | Passed. A write of 160 KB takes 26.6 s. A read of 160 KB takes 5.4 s, and it is the same as the image. Three wlink dumps after the write are the same as the image. |
 
 Open items:
 

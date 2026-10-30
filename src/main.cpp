@@ -21,6 +21,7 @@
 #include "boot/BootloaderEntry.h"
 #include "debug/DebugLog.h"
 #include "protocol/Background.h"
+#include "protocol/TargetPower.h"
 #include "uart/SerialBridge.h"
 #include "usb/UsbStack.h"
 
@@ -46,11 +47,13 @@
 #include "protocol/versaloon/SwdBlock.h"
 #include "protocol/versaloon/UsbToAll.h"
 #endif
+#if defined(VSL_MULTI_PERSONALITY) || defined(VSL_CMSIS_DAP_RV_BRIDGE)
+#include "board/SettingsFlashPage.h"
+#include "personality/PersonalityStore.h"
+#endif
 #if defined(VSL_MULTI_PERSONALITY)
 #include "board/BoardPins.h"
-#include "board/SettingsFlashPage.h"
 #include "personality/KeyGesture.h"
-#include "personality/PersonalityStore.h"
 #include "personality/PersonalitySwitch.h"
 #endif
 
@@ -113,10 +116,33 @@ bool isActive(Personality personality) {
 // sense in every personality.
 board::BoardPower boardPower;
 
+#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
+
+// The DELAY block busy-waits: the main loop stops for the delay, up to
+// 32.767 s. The host waits for the reply in this time. The target power
+// busy-waits for the settle time of the rail.
+class BusyWaitDelay final : public protocol::Delay {
+   public:
+   void microseconds(uint16_t us) override {
+      delayuS(us);
+   }
+   void milliseconds(uint16_t ms) override {
+      delaymS(ms);
+   }
+};
+
+BusyWaitDelay busyWaitDelay;
+
+// The target supply of the POWER block and of ID_DAP_Vendor2
+protocol::TargetPower targetPower{ boardPower, busyWaitDelay };
+
+#endif
+
 // The bootloader entry of FW_UPDATE and of the bootloader code of the switch
-// commands, in every personality. Only the app-8k image enters the
-// bootloader, behind versaloon-bootloader. CMake defines
-// VSL_HAS_BOOTLOADER_ENTRY for this file of that image only
+// commands, in every personality. On the STM32F1 only the app-8k image
+// enters the bootloader, behind versaloon-bootloader. On the STM32H5 the
+// standalone image enters the ROM bootloader. CMake defines
+// VSL_HAS_BOOTLOADER_ENTRY for this file of these images only
 // (vsl_add_app_image() in CMakeLists.txt). The other sources are shared by
 // all images and compiled without the define, so the value is here and not
 // in a shared header.
@@ -189,12 +215,37 @@ class DapPlatform final : public cmsisdap::Platform {
 DapPlatform dapPlatform;
 cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
 #if defined(VSL_CMSIS_DAP_RV_BRIDGE)
-// The RISC-V bridge: ID_DAP_Vendor1 switches the JTAG port from the board
-// to the emulated RISC-V DTM on the debug wire engine.
+// The RISC-V bridge: the JTAG port is the port of the board or the
+// emulated RISC-V DTM on the debug wire engine. ID_DAP_Vendor1 sets the
+// mode and can store it; auto finds the port at DAP_Connect. In a multi image the wire pins
+// are separate objects from the ones of wch-link: only the active
+// personality sets them up.
 board::RvSwdPins dapRvSwdPins;
 wchlink::RvSwdTarget<board::RvSwdPins> dapRvTarget{ dapRvSwdPins, &serialService };
 cmsisdap::RvDtmTap dapRvTap{ dapRvTarget };
-cmsisdap::RvBridge dapRvBridge{ boardJtag, dapRvTap };
+
+static_assert(static_cast<uint8_t>(cmsisdap::BridgeMode::Auto) == personality::bridgeModeAuto &&
+              static_cast<uint8_t>(cmsisdap::BridgeMode::Auto) + 1 == personality::bridgeModes,
+              "the bridge modes of the settings page");
+
+// The stored mode of the bridge: in the settings page, with the personality.
+// A store stalls the CPU during the flash write, see board/SettingsFlashPage.h.
+class BridgeModeFlash final : public cmsisdap::BridgeModeStore {
+   public:
+   static cmsisdap::BridgeMode load() {
+      board::SettingsFlashPage page;
+      const auto settings = personality::PersonalityStore{ page }.loadSettings();
+      return static_cast<cmsisdap::BridgeMode>(settings ? settings->bridgeMode : personality::bridgeModeAuto);
+   }
+
+   bool store(cmsisdap::BridgeMode mode) override {
+      board::SettingsFlashPage page;
+      return personality::PersonalityStore{ page }.storeBridgeMode(static_cast<uint8_t>(mode), activePersonality);
+   }
+};
+
+BridgeModeFlash dapRvModeStore;
+cmsisdap::RvBridge dapRvBridge{ boardJtag, dapSwd, dapRvTap, dapRvModeStore, BridgeModeFlash::load() };
 #endif
 cmsisdap::Processor dapProcessor{ dapSwd,
                                   boardGpio,
@@ -218,10 +269,11 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   uart::dapUart(),
                                   bootloader,
 #if defined(VSL_CMSIS_DAP_RV_BRIDGE)
-                                  &dapRvBridge };
+                                  &dapRvBridge,
 #else
-                                  nullptr };
+                                  nullptr,
 #endif
+                                  &targetPower };
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
 // string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one
@@ -246,25 +298,11 @@ void startDap() {
 #if defined(VSL_WITH_VERSALOON)
 
 // --- Versaloon --------------------------------------------------------
-// The DELAY block busy-waits: the main loop stops for the delay, up to
-// 32.767 s. The host waits for the reply in this time.
-class BusyWaitDelay final : public protocol::Delay {
-   public:
-   void microseconds(uint16_t us) override {
-      delayuS(us);
-   }
-   void milliseconds(uint16_t ms) override {
-      delaymS(ms);
-   }
-};
-
-BusyWaitDelay busyWaitDelay;
-
 protocol::UsbToAll usbToAll{ busyWaitDelay };
 protocol::GpioBlock gpioBlock{ boardGpio };
 protocol::JtagRawBlock jtagRawBlock{ boardJtag };
 protocol::SwdBlock swdBlock{ boardSwd };
-protocol::PowerBlock powerBlock{ boardPower, busyWaitDelay };
+protocol::PowerBlock powerBlock{ targetPower };
 const usb::UsbStack::VersaloonDeps versaloonDeps{
    .usbToXxx = &usbToAll,
 };
@@ -284,11 +322,6 @@ void startVersaloon() {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the POWER block");
    }
    usbToAll.setTargetVoltage(&powerBlock);
-}
-
-// Switches the target supply off when the rail drops
-void afterUsbPollVersaloon(uint64_t nowMs) {
-   powerBlock.poll(nowMs);
 }
 
 #endif
@@ -383,7 +416,7 @@ void startProtocol() {
 }
 
 void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
-   // Only the app-8k image links boot::enterBootloader() (an STM32F1 board)
+   // Only the images with the bootloader entry link boot::enterBootloader()
    if constexpr(hasBootloaderEntry) {
       if(bootloaderEntry.isDue(nowMs)) {
          boot::enterBootloader();
@@ -395,10 +428,10 @@ void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
 }
 
 void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
-#if defined(VSL_WITH_VERSALOON)
-   if(isActive(Personality::Versaloon)) {
-      afterUsbPollVersaloon(nowMs);
-   }
+#if defined(VSL_WITH_VERSALOON) || defined(VSL_WITH_CMSIS_DAP)
+   // Switches the target supply off when the rail drops. Only the active
+   // personality switches the supply on.
+   targetPower.poll(nowMs);
 #endif
 }
 
@@ -430,7 +463,7 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
    // The key gesture flashes all LEDs before the switch.
    if(const auto flash = personalitySwitch.indication(nowMs)) {
       board::setLed(board::Led::Power, *flash);
-      board::setLed(board::Led::State, *flash);
+      board::showState(*flash ? board::StateShow::Activity : board::StateShow::Idle);
       board::setLed(board::Led::Usb, *flash);
       return;
    }
@@ -442,9 +475,25 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
    errorLed.update(nowMs, probeErrorCount());
    board::setLed(board::Led::Power, targetPowerLed.isOn());
    // A probe error replaces the activity for some time (ErrorLed.h).
-   const bool stateOn = errorLed.isActive() ? errorLed.isOn() : activityLed.isOn();
-   board::setLed(board::Led::State, clockFromCrystal ? stateOn : clockFaultBlink.isOn(nowMs));
+   using board::StateShow;
+   StateShow show = activityLed.isOn() ? StateShow::Activity : StateShow::Idle;
+   if(!clockFromCrystal) {
+      show = clockFaultBlink.isOn(nowMs) ? StateShow::Fault : StateShow::Idle;
+   } else if(errorLed.isActive()) {
+      show = errorLed.isOn() ? StateShow::Fault : StateShow::Idle;
+   }
+   board::showState(show);
    board::setLed(board::Led::Usb, usbStack.isConfigured());
+}
+
+// On the STM32H5, a debugger reads zeros from the memory bus while the
+// core sleeps in WFI, and DBGMCU_CR has no DBG_SLEEP bit (#115).
+bool isDebuggerConnected() {
+#if defined(DCB)
+   return (DCB->DHCSR & DCB_DHCSR_C_DEBUGEN_Msk) != 0;
+#else
+   return (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) != 0;
+#endif
 }
 
 } // namespace
@@ -489,7 +538,7 @@ int main() {
       // armed again). With the interrupts masked, an interrupt still ends
       // the WFI, and its handler runs after __enable_irq().
       __disable_irq();
-      if(!clockFromCrystal || !usbStack.hasPendingEvents()) {
+      if(!isDebuggerConnected() && (!clockFromCrystal || !usbStack.hasPendingEvents())) {
          __WFI();
       }
       __enable_irq();

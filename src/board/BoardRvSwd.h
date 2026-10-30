@@ -5,7 +5,8 @@
 // (board/BoardSwd.h): SWCLK is the TCK pin, SWDIO the TMS pins. The
 // one-wire interface of the CH32V00x uses SWDIO only. The idle level of
 // SWCLK is low, and the interrupt lock is PRIMASK. A one-wire frame runs
-// on the timer of board::oneWireTimerOf() with two DMA1 channels.
+// on the timer of board::oneWireTimerOf() with two DMA channels
+// (BoardRvSwd.cpp on the STM32F1, BoardRvSwdH5.cpp on the STM32H5).
 
 #include <cmsis_device.h>
 #include <cstdint>

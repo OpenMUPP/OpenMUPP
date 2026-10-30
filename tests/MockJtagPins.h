@@ -67,6 +67,7 @@ class MockJtagPins {
          return;
       }
       tck_ = level;
+      time += edgeDelayCycles;
       tckChanged_ = time;
       edges.push_back(time);
       if(level) {
@@ -116,6 +117,9 @@ class MockJtagPins {
    // Starts near the wrap of the counter.
    uint32_t time{ 0xFFFFFF00u };
    uint32_t rtckLag{ 3 };
+   // The engine code between the end of a wait and the edge (the TDO read
+   // and the pin write on the probe): time added before each TCK edge
+   uint32_t edgeDelayCycles{ 0 };
    bool rtckStuck{ false };
    std::vector<uint32_t> edges;
    std::vector<RisingEdge> rising;
