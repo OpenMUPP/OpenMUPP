@@ -12,5 +12,5 @@
 	branch = main
 [submodule "dependencies/versaloon-bootloader"]
 	path = dependencies/versaloon-bootloader
-	url = ssh://git@gitlab.vandertogt.org:3022/tools/versaloon-bootloader.git
+	url = ssh://git@gitlab.vandertogt.org:3022/embedded-projects/versaloon-bootloader.git
 	branch = master
