@@ -187,7 +187,7 @@ The Mini uses one of two bootloaders:
   Hold the key (PB9) down while you connect the board to USB to start it.
   It does not know the boot request, so `VERSALOON_FW_UPDATE` does not start it.
 - `openmupp-bootloader` uses 8 KB. It runs the `app-8k` image.
-  The submodule `dependencies/openmupp-bootloader` has its source (https://gitlab.vandertogt.org/embedded-projects/versaloon-bootloader).
+  The submodule `dependencies/openmupp-bootloader` has its source (https://gitlab.vandertogt.org/embedded-projects/openmupp-bootloader).
 
 A board with the legacy bootloader can continue to use it.
 To change a board to `openmupp-bootloader`, write the new bootloader one time with a debug probe.
