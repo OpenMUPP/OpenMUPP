@@ -1,4 +1,4 @@
-# versaloon-bootloader (dependencies/versaloon-bootloader) for the board of
+# versaloon-bootloader (dependencies/openmupp-bootloader) for the board of
 # the build. It uses the first 8 KB of the flash. The app-8k image is linked
 # behind it (CMakeLists.txt, VSL_APP_IMAGES).
 #
@@ -20,7 +20,7 @@ set(VSL_BOOTLOADER_DIR "${CMAKE_CURRENT_BINARY_DIR}/versaloon-bootloader")
 # Adds the target versaloon-bootloader, which builds the bootloader for
 # BOARD into VSL_BOOTLOADER_DIR.
 function(vsl_add_bootloader)
-    set(_src_dir "${PROJECT_SOURCE_DIR}/dependencies/versaloon-bootloader")
+    set(_src_dir "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader")
     if (NOT EXISTS "${_src_dir}/CMakeLists.txt")
         message(FATAL_ERROR "versaloon-bootloader not found in ${_src_dir}. Run: git submodule update --init --recursive, "
                 "or set -DVSL_BUILD_BOOTLOADER=OFF")

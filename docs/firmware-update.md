@@ -187,7 +187,7 @@ The Mini uses one of two bootloaders:
   Hold the key (PB9) down while you connect the board to USB to start it.
   It does not know the boot request, so `VERSALOON_FW_UPDATE` does not start it.
 - `versaloon-bootloader` uses 8 KB. It runs the `app-8k` image.
-  The submodule `dependencies/versaloon-bootloader` has its source (https://gitlab.vandertogt.org/embedded-projects/versaloon-bootloader).
+  The submodule `dependencies/openmupp-bootloader` has its source (https://gitlab.vandertogt.org/embedded-projects/versaloon-bootloader).
 
 A board with the legacy bootloader can continue to use it.
 To change a board to `versaloon-bootloader`, write the new bootloader one time with a debug probe.
@@ -263,7 +263,7 @@ The `standalone` image has no header.
 To check an image, use the stamp tool with the start address:
 
 ```sh
-dependencies/versaloon-bootloader/tools/vsl-stamp-image.py --check versaloon-ng-app-8k.bin --base 0x08002000
+dependencies/openmupp-bootloader/tools/vsl-stamp-image.py --check versaloon-ng-app-8k.bin --base 0x08002000
 ```
 
 ## Start-up behind the bootloader

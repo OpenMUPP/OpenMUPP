@@ -82,7 +82,7 @@ set(PROJECT_INCLUDE_DIRS
 set(VSL_APP_OFFSET_standalone 0)
 set(VSL_APP_OFFSET_app-8k 8192)
 set(VSL_APP_OFFSET_app-10k 10240)
-# Build versaloon-bootloader (dependencies/versaloon-bootloader, cmake/Bootloader.cmake)
+# Build versaloon-bootloader (dependencies/openmupp-bootloader, cmake/Bootloader.cmake)
 # for the board. Only for boards that the bootloader supports.
 option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 # An image that does not fit its flash limit: OFF skips the image with a
@@ -292,7 +292,7 @@ if (CMAKE_CROSSCOMPILING)
     # The application image header (magic, length, CRC32) of
     # versaloon-bootloader. The bootloader starts only an image with a valid
     # header. The tool is in the bootloader submodule.
-    set(_vsl_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/versaloon-bootloader/cmake/VslStampImage.cmake")
+    set(_vsl_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader/cmake/VslStampImage.cmake")
     if ("app-8k" IN_LIST VSL_APP_IMAGES OR "app-10k" IN_LIST VSL_APP_IMAGES)
         if (NOT EXISTS "${_vsl_stamp_cmake}")
             message(FATAL_ERROR "${_vsl_stamp_cmake} not found. The images behind a bootloader need it. "
