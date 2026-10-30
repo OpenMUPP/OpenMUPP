@@ -235,7 +235,7 @@ To write the firmware, do these steps:
 4. Write the `standalone` image with `dfu-util`:
 
    ```sh
-   dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D versaloon-ng-standalone.bin
+   dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D openmupp-standalone.bin
    ```
 
 5. Disconnect the board and connect it again. The firmware starts.

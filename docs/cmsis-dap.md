@@ -24,7 +24,7 @@ cmake --build build/mini-dap -j
 
 The default value is `versaloon`.
 The default image does not change.
-The build then writes `versaloon-ng-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
+The build then writes `openmupp-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
 All boards build with this value.
 
@@ -418,7 +418,7 @@ In a multi image, only the active personality sets up the pins and the timer of 
 An image without `cmsis-dap` ignores the option.
 An image with the bridge has the settings page, also an image with one personality: 1 KB less flash on the STM32F103, 8 KB less on the STM32H5 (see [Stored mode](#stored-mode)).
 The STM32H5 boards also build the bridge. The bridge is not tested on them.
-The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-no-rv-bridge-app-10k-Release-<version>.bin`.
+The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `openmupp-mini-cmsis-dap-no-rv-bridge-app-10k-Release-<version>.bin`.
 The `cmsis-dap` and `dual` presets build the bridge:
 
 ```sh

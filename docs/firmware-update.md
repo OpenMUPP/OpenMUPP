@@ -147,7 +147,7 @@ If the jump fails on a board, set the boot address in the option bytes instead.
 2. Write the `.bin` file of the `standalone` image at `0x08000000`:
 
    ```sh
-   dfu-util -a 0 -s 0x08000000:leave -D versaloon-ng-standalone.bin
+   dfu-util -a 0 -s 0x08000000:leave -D openmupp-standalone.bin
    ```
 
 3. With `:leave`, the bootloader starts the firmware after the write.
@@ -156,7 +156,7 @@ If the jump fails on a board, set the boot address in the option bytes instead.
 STM32CubeProgrammer can also write the firmware through the ROM DFU:
 
 ```sh
-STM32_Programmer_CLI -c port=usb1 -w versaloon-ng-standalone.bin 0x08000000 -v -s 0x08000000
+STM32_Programmer_CLI -c port=usb1 -w openmupp-standalone.bin 0x08000000 -v -s 0x08000000
 ```
 
 On Linux, `dfu-util` needs access to the device.
@@ -193,13 +193,13 @@ A board with the legacy bootloader can continue to use it.
 To change a board to `openmupp-bootloader`, write the new bootloader one time with a debug probe.
 Then write the `app-8k` image, or write the combined image to do both in one step.
 
-The firmware build makes the combined image `versaloon-ng-with-bootloader.hex` (see [Build the firmware](../README.md#build-the-firmware)).
+The firmware build makes the combined image `openmupp-with-bootloader.hex` (see [Build the firmware](../README.md#build-the-firmware)).
 It has the bootloader at `0x08000000` and the `app-8k` image at `0x08002000`.
 Write it with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-ng-with-bootloader.hex verify reset exit"
+        -c "program openmupp-with-bootloader.hex verify reset exit"
 ```
 
 The build also makes the bootloader image alone, `openmupp-bootloader/openmupp-bootloader-<board>.hex`.
@@ -228,9 +228,9 @@ If the write fails, the option bytes of the board were changed: run `stm32f1x un
 
    ```sh
    # openmupp-bootloader (8 KB)
-   stm32flash -w versaloon-ng-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
+   stm32flash -w openmupp-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
    # legacy bootloader (10 KB)
-   stm32flash -w versaloon-ng-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
+   stm32flash -w openmupp-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Reset the board, or disconnect it and connect it again. The firmware starts.
@@ -263,7 +263,7 @@ The `standalone` image has no header.
 To check an image, use the stamp tool with the start address:
 
 ```sh
-dependencies/openmupp-bootloader/tools/vsl-stamp-image.py --check versaloon-ng-app-8k.bin --base 0x08002000
+dependencies/openmupp-bootloader/tools/vsl-stamp-image.py --check openmupp-app-8k.bin --base 0x08002000
 ```
 
 ## Start-up behind the bootloader

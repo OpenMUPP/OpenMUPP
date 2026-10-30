@@ -7,15 +7,15 @@ This document is for developers of the firmware: build outputs, CMake options, C
 The README shows how to build the firmware.
 The build writes these files into the build directory:
 
-- `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
+- `openmupp-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
   The README lists the images and their start addresses.
 - Copies of the `.hex` and `.bin` files with the board, the image, the build type and the version in the name.
-  An example is `versaloon-ng-mini-app-8k-Release-v0.1.0.hex`.
+  An example is `openmupp-mini-app-8k-Release-v0.1.0.hex`.
   The tag after the board tells the personalities of the image (see [Image names](#image-names)).
-  An example is `versaloon-ng-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
-- `versaloon-ng-<image>.map`, the linker map of each image.
+  An example is `openmupp-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
+- `openmupp-<image>.map`, the linker map of each image.
 - `openmupp-bootloader/openmupp-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
-- `versaloon-ng-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
+- `openmupp-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
   `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
 - `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 

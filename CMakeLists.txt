@@ -32,7 +32,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/generate_version.cmake")
 # project(): the toolchain file takes the CPU flags from STM32_FAMILY.
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Boards.cmake")
 
-project(versaloon-ng
+project(openmupp
         LANGUAGES C CXX ASM
         VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}"
 )
@@ -267,7 +267,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building versaloon-ng version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", RISC-V bridge: " ${VSL_RV_BRIDGE} ", strict size: " ${VSL_STRICT_SIZE} ", LTO: " ${VSL_LTO} ")")
+    MESSAGE(STATUS "Building openmupp version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", RISC-V bridge: " ${VSL_RV_BRIDGE} ", strict size: " ${VSL_STRICT_SIZE} ", LTO: " ${VSL_LTO} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program
@@ -278,7 +278,7 @@ if (CMAKE_CROSSCOMPILING)
     # for it. No other source may use the define.
     set(VSL_SHARED_SOURCES ${VSL_FIRMWARE_SOURCES})
     list(FILTER VSL_SHARED_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
-    add_library(versaloon-ng-objects OBJECT ${VSL_SHARED_SOURCES})
+    add_library(openmupp-objects OBJECT ${VSL_SHARED_SOURCES})
     # The JTAG, SWD and RISC-V debug wire engines are instantiated in these
     # files (see board/BoardJtag.h, board/BoardSwd.h and board/BoardRvSwd.h).
     # They use -O2 instead of -Os. It comes after the -Os of
@@ -286,8 +286,8 @@ if (CMAKE_CROSSCOMPILING)
     set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardJtagFastH5.cpp
             src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp src/board/BoardRvSwdH5.cpp PROPERTIES COMPILE_OPTIONS -O2)
     # Apply unified build configuration
-    target_link_libraries(versaloon-ng-objects PUBLIC art-build-config art::core art::stm32 system-stm32)
-    target_include_directories(versaloon-ng-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
+    target_link_libraries(openmupp-objects PUBLIC art-build-config art::core art::stm32 system-stm32)
+    target_include_directories(openmupp-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
 
     # The application image header (magic, length, CRC32) of
     # openmupp-bootloader. The bootloader starts only an image with a valid
@@ -302,13 +302,13 @@ if (CMAKE_CROSSCOMPILING)
     endif ()
 
     # Links the application image <image> (one of VSL_APP_IMAGES) as the
-    # target versaloon-ng-<image>.elf. The build directory gets
-    # versaloon-ng-<image>.hex and .bin, and a copy with the board,
+    # target openmupp-<image>.elf. The build directory gets
+    # openmupp-<image>.hex and .bin, and a copy with the board,
     # the build type and the version in the name. An image behind a
     # bootloader gets the application image header.
     function(vsl_add_app_image image)
-        set(_target versaloon-ng-${image}.elf)
-        set(_name versaloon-ng-${image})
+        set(_target openmupp-${image}.elf)
+        set(_name openmupp-${image})
         set(_offset ${VSL_APP_OFFSET_${image}})
         math(EXPR _limit "${VSL_FLASH_SIZE} - ${_offset} - ${VSL_SETTINGS_PAGE_SIZE}")
         set(VSL_APP_LIMIT_${image} ${_limit} PARENT_SCOPE)
@@ -319,7 +319,7 @@ if (CMAKE_CROSSCOMPILING)
         # system-stm32 is an OBJECT library (start-up code, vector table).
         # CMake adds the objects of an OBJECT library only to the target
         # that links it directly, so each image links the libraries again.
-        target_link_libraries(${_target} PUBLIC versaloon-ng-objects art::core art::stm32 system-stm32)
+        target_link_libraries(${_target} PUBLIC openmupp-objects art::core art::stm32 system-stm32)
         target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit} -Wl,-Map,${_name}.map)
         # FW_UPDATE enters the bootloader only behind openmupp-bootloader.
         # The legacy bootloader of app-10k does not know the boot request
@@ -335,7 +335,7 @@ if (CMAKE_CROSSCOMPILING)
         ADD_DUMP_TARGET(${_target})
         PRINT_SIZE_OF_TARGETS(${_target})
 
-        set(_file versaloon-ng-${BOARD}${VSL_IMAGE_TAG}-${image}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
+        set(_file openmupp-${BOARD}${VSL_IMAGE_TAG}-${image}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
         if (_offset EQUAL 0)
             add_custom_command(TARGET ${_target} POST_BUILD
                     COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:${_target}> ${_name}.hex
@@ -363,7 +363,7 @@ if (CMAKE_CROSSCOMPILING)
     set(_images_list "")
     foreach (_image ${VSL_APP_IMAGES})
         vsl_add_app_image(${_image})
-        string(APPEND _images_list "versaloon-ng-${_image}.bin ${VSL_APP_LIMIT_${_image}}\n")
+        string(APPEND _images_list "openmupp-${_image}.bin ${VSL_APP_LIMIT_${_image}}\n")
     endforeach ()
     # The firmware must fit behind the legacy bootloader on all STM32F1 boards
     # (docs/firmware-update.md). A board without the app-10k image checks its
@@ -372,7 +372,7 @@ if (CMAKE_CROSSCOMPILING)
     # turns this check off. The legacy bootloader is STM32F1 only.
     if (NOT BOARD IN_LIST VSL_LEGACY_BOOTLOADER_BOARDS AND "standalone" IN_LIST VSL_APP_IMAGES AND STM32_FAMILY STREQUAL "STM32F1")
         math(EXPR _limit "${VSL_FLASH_SIZE} - ${VSL_APP_OFFSET_app-10k} - ${VSL_SETTINGS_PAGE_SIZE}")
-        string(APPEND _images_list "versaloon-ng-standalone.bin ${_limit}\n")
+        string(APPEND _images_list "openmupp-standalone.bin ${_limit}\n")
     endif ()
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_images_list}")
 
@@ -387,8 +387,8 @@ if (CMAKE_CROSSCOMPILING)
         # one file from 0x08000000, for a new board and a debug probe. The
         # gap between the two is 0xFF (tools/vsl_combine_images.py).
         find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
-        set(_name versaloon-ng-with-bootloader)
-        set(_file versaloon-ng-${BOARD}${VSL_IMAGE_TAG}-with-bootloader-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
+        set(_name openmupp-with-bootloader)
+        set(_file openmupp-${BOARD}${VSL_IMAGE_TAG}-with-bootloader-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
         # cmake/CombinedImage.cmake skips the combined image when the build
         # skipped the app-8k image. The app-8k .bin file is not in DEPENDS:
         # it can be missing. The .elf file of the app-8k image is.
@@ -397,17 +397,17 @@ if (CMAKE_CROSSCOMPILING)
                 COMMAND ${CMAKE_COMMAND} -DPYTHON=${Python3_EXECUTABLE}
                     -DTOOL=${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py
                     -DBOOTLOADER=${VSL_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin
-                    -DAPP=versaloon-ng-app-8k.bin -DAPP_OFFSET=${VSL_APP_OFFSET_app-8k}
+                    -DAPP=openmupp-app-8k.bin -DAPP_OFFSET=${VSL_APP_OFFSET_app-8k}
                     -DIMAGE=${_name} -DCOPY=${_file}
                     -P ${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake
-                DEPENDS openmupp-bootloader versaloon-ng-app-8k.elf
+                DEPENDS openmupp-bootloader openmupp-app-8k.elf
                     "${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py"
                     "${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake"
                     "${VSL_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin"
                 BYPRODUCTS ${_file}.hex ${_file}.bin
                 COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin"
                 VERBATIM)
-        add_custom_target(versaloon-ng-with-bootloader ALL DEPENDS ${_name}.bin ${_name}.hex)
+        add_custom_target(openmupp-with-bootloader ALL DEPENDS ${_name}.bin ${_name}.hex)
         # The combined image ends where the app-8k image ends: its limit is the
         # flash without the settings page.
         math(EXPR _limit "${VSL_FLASH_SIZE} - ${VSL_SETTINGS_PAGE_SIZE}")

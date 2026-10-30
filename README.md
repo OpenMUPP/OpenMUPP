@@ -127,10 +127,10 @@ This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector
 
 The build writes these files into the build directory:
 
-- `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-ng-app-10k.bin`.
+- `openmupp-<image>.elf`, `.hex` and `.bin` for each image, for example `openmupp-app-10k.bin`.
 - `openmupp-bootloader/openmupp-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
   Only the STM32F1 boards have a bootloader: the Mini, the ST-Link/V2 and the ST-Link/V2 mini clone.
-- `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
+- `openmupp-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
   It has `openmupp-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
   The `.bin` file has `0xFF` between the two.
 
@@ -162,7 +162,7 @@ To write the firmware, do these steps:
 2. Write the `.bin` file of the `app-10k` image with `stm32flash`:
 
    ```sh
-   stm32flash -w versaloon-ng-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
+   stm32flash -w openmupp-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Disconnect the board and connect it again. The firmware starts.
@@ -180,7 +180,7 @@ For example, with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-ng-with-bootloader.hex verify reset exit"
+        -c "program openmupp-with-bootloader.hex verify reset exit"
 ```
 
 To write only the bootloader, use `openmupp-bootloader/openmupp-bootloader-<board>.hex` in the same command.
@@ -195,7 +195,7 @@ To write the firmware through the bootloader, do these steps:
 2. Write the `.bin` file of the `app-8k` image with `stm32flash`, and start it:
 
    ```sh
-   stm32flash -w versaloon-ng-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
+   stm32flash -w openmupp-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
    ```
 
 ### Board without a bootloader
@@ -204,7 +204,7 @@ Write the `standalone` image with a debug probe, for example with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-ng-standalone.hex verify reset exit"
+        -c "program openmupp-standalone.hex verify reset exit"
 ```
 
 On the STM32F1 boards, the `standalone` image refuses `VERSALOON_FW_UPDATE`.
