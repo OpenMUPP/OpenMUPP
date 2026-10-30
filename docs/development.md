@@ -7,15 +7,15 @@ This document is for developers of the firmware: build outputs, CMake options, C
 The README shows how to build the firmware.
 The build writes these files into the build directory:
 
-- `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
+- `openmupp-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
   The README lists the images and their start addresses.
 - Copies of the `.hex` and `.bin` files with the board, the image, the build type and the version in the name.
-  An example is `versaloon-ng-mini-app-8k-Release-v0.1.0.hex`.
+  An example is `openmupp-mini-app-8k-Release-v0.1.0.hex`.
   The tag after the board tells the personalities of the image (see [Image names](#image-names)).
-  An example is `versaloon-ng-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
-- `versaloon-ng-<image>.map`, the linker map of each image.
-- `versaloon-bootloader/versaloon-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
-- `versaloon-ng-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
+  An example is `openmupp-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
+- `openmupp-<image>.map`, the linker map of each image.
+- `openmupp-bootloader/openmupp-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
+- `openmupp-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
   `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
 - `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 
@@ -28,8 +28,8 @@ CMake gives it the start of the application with `-Wl,--defsym=__flash_offset=<b
 The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
 For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
 
-For the STM32F1 boards (`VSL_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `versaloon-bootloader` for the same board.
-The target is `versaloon-bootloader`.
+For the STM32F1 boards (`VSL_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `openmupp-bootloader` for the same board.
+The target is `openmupp-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
@@ -44,7 +44,7 @@ These options select the board, the personality and the debug features:
 | Option | Default | Description |
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [the README](../README.md#boards)). |
-| `VSL_BUILD_BOOTLOADER` | `ON` | Build `versaloon-bootloader` for the board. Only for the STM32F1 boards. |
+| `VSL_BUILD_BOOTLOADER` | `ON` | Build `openmupp-bootloader` for the board. Only for the STM32F1 boards. |
 | `VSL_PERSONALITIES` | empty (`versaloon`) | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `0403:9b3c` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
 | `VSL_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `VSL_PERSONALITIES`. Empty: the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `VSL_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `VSL_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
@@ -337,7 +337,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
 - `build-mini`: release build of all images of the Mini with the `mini-cmsis-dap` preset, plus the size check of each image in `vsl-images.txt`.
   The build jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
-  The jobs for the STM32F1 boards also build `versaloon-bootloader` and the combined image for the board.
+  The jobs for the STM32F1 boards also build `openmupp-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini with the CMSIS-DAP personality without the RISC-V bridge (debug log on the serial port, SWD on), plus the size check.
 - `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
   GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -dual, -dap+wch]`.

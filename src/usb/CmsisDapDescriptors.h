@@ -107,13 +107,13 @@ desc::interfaceDescriptor(desc::InterfaceFields{ cdcDataInterface, 0, desc::clas
                           desc::endpoint(cdcDataInEndpoint, art::usb::EndpointType::Bulk, cdcDataPacketSize)));
 
 inline constexpr auto languageDescriptor = desc::languages(desc::kLanguageEnglishUs);
-inline constexpr auto manufacturerDescriptor = desc::stringDescriptor(u"Versaloon");
+inline constexpr auto manufacturerDescriptor = desc::stringDescriptor(u"OpenMUPP");
 // pyOCD looks for "CMSIS-DAP" in the product string.
-inline constexpr auto productDescriptor = desc::stringDescriptor(u"Versaloon CMSIS-DAP");
-inline constexpr auto serialPortDescriptor = desc::stringDescriptor(u"Versaloon serial port");
+inline constexpr auto productDescriptor = desc::stringDescriptor(u"OpenMUPP CMSIS-DAP");
+inline constexpr auto serialPortDescriptor = desc::stringDescriptor(u"OpenMUPP serial port");
 // A CMSIS-DAP v2 interface is the vendor interface with "CMSIS-DAP" in this
 // string.
-inline constexpr auto interfaceStringDescriptor = desc::stringDescriptor(u"Versaloon CMSIS-DAP v2");
+inline constexpr auto interfaceStringDescriptor = desc::stringDescriptor(u"OpenMUPP CMSIS-DAP v2");
 
 // The MS OS 2.0 descriptor set: WinUSB for interface 0 only. The device
 // has one configuration, so the function subset follows the set header

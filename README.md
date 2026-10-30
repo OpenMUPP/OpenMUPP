@@ -1,7 +1,10 @@
-# versaloon-NG
+# OpenMUPP
 
-versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini.
-A build for the ST-Link/V2 mini clone also exists, with a hardware test of the USB personalities, the LEDs and SWD to a target. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
+OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is firmware for USB debug probes.
+The firmware debugs and programs target chips of more than one architecture: Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
+The boards today use an STM32F103 or compatible chip (the Versaloon Mini and the ST-Link/V2 boards) or an STM32H5 chip.
+The former name of this project is versaloon-ng (also versaloon-NG or versaloon-next-gen).
+A build for the ST-Link/V2 mini clone exists, with a hardware test of the USB personalities, the LEDs and SWD to a target. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
 The port to the STM32H5 (the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
 
@@ -54,11 +57,11 @@ The submodules are:
 - `libArT`: core library (streams, logging, USB device stack).
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/system-stm32.
 - `libart-stm32`: STM32 adapters for libArT. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/libart-stm32.
-- `versaloon-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
+- `openmupp-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
 
 ## Requirements
 
-- CMake 3.20 or later. The `versaloon-bootloader` build and the CMake presets (`CMakePresets.json`) need CMake 3.21 or later.
+- CMake 3.20 or later. The `openmupp-bootloader` build and the CMake presets (`CMakePresets.json`) need CMake 3.21 or later.
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
@@ -116,7 +119,7 @@ Each image has a different start address:
 | Image | Start address | Flash for the application | Use |
 |---|---|---|---|
 | `standalone` | `0x08000000` | 64 KB | No bootloader. Write it with a debug probe. |
-| `app-8k` | `0x08002000` | 56 KB | Behind the new 8 KB `versaloon-bootloader`. |
+| `app-8k` | `0x08002000` | 56 KB | Behind the new 8 KB `openmupp-bootloader`. |
 | `app-10k` | `0x08002800` | 54 KB | Behind the legacy 10 KB Versaloon bootloader of the existing boards. |
 
 The Mini gets all three images.
@@ -127,11 +130,11 @@ This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector
 
 The build writes these files into the build directory:
 
-- `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-ng-app-10k.bin`.
-- `versaloon-bootloader/versaloon-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
+- `openmupp-<image>.elf`, `.hex` and `.bin` for each image, for example `openmupp-app-10k.bin`.
+- `openmupp-bootloader/openmupp-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
   Only the STM32F1 boards have a bootloader: the Mini, the ST-Link/V2 and the ST-Link/V2 mini clone.
-- `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
-  It has `versaloon-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
+- `openmupp-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
+  It has `openmupp-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
   The `.bin` file has `0xFF` between the two.
 
 See [docs/development.md](docs/development.md#build-outputs) for all build outputs.
@@ -145,12 +148,12 @@ Select the image for the bootloader on the board:
 | Board | Bootloader | Image | Start address |
 |---|---|---|---|
 | Existing Mini | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
-| New Mini | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
-| ST-Link/V2 or ST-Link/V2 mini clone | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| New Mini | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| ST-Link/V2 or ST-Link/V2 mini clone | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | Any board, debug probe | none | `standalone` | `0x08000000` |
 
 The images behind a bootloader have an application image header with a CRC32 (see [docs/firmware-update.md](docs/firmware-update.md#application-image-header)).
-`versaloon-bootloader` starts only an image with a valid header.
+`openmupp-bootloader` starts only an image with a valid header.
 
 ### Board with the legacy bootloader
 
@@ -162,16 +165,16 @@ To write the firmware, do these steps:
 2. Write the `.bin` file of the `app-10k` image with `stm32flash`:
 
    ```sh
-   stm32flash -w versaloon-ng-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
+   stm32flash -w openmupp-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Disconnect the board and connect it again. The firmware starts.
 
 The `app-10k` image refuses `VERSALOON_FW_UPDATE`, because the legacy bootloader does not know the boot request.
 
-### Board with versaloon-bootloader
+### Board with openmupp-bootloader
 
-A new board needs `versaloon-bootloader` one time.
+A new board needs `openmupp-bootloader` one time.
 An existing board can also change to it.
 Write the combined image with a debug probe on the SWD pins of the dongle MCU.
 It has the bootloader and the firmware, so one step is sufficient.
@@ -180,12 +183,12 @@ For example, with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-ng-with-bootloader.hex verify reset exit"
+        -c "program openmupp-with-bootloader.hex verify reset exit"
 ```
 
-To write only the bootloader, use `versaloon-bootloader/versaloon-bootloader-<board>.hex` in the same command.
+To write only the bootloader, use `openmupp-bootloader/openmupp-bootloader-<board>.hex` in the same command.
 
-`versaloon-bootloader` write-protects its 8 KB area.
+`openmupp-bootloader` write-protects its 8 KB area.
 To write a new bootloader over it, remove the write protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
 
 To write the firmware through the bootloader, do these steps:
@@ -195,7 +198,7 @@ To write the firmware through the bootloader, do these steps:
 2. Write the `.bin` file of the `app-8k` image with `stm32flash`, and start it:
 
    ```sh
-   stm32flash -w versaloon-ng-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
+   stm32flash -w openmupp-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
    ```
 
 ### Board without a bootloader
@@ -204,7 +207,7 @@ Write the `standalone` image with a debug probe, for example with OpenOCD:
 
 ```sh
 openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program versaloon-ng-standalone.hex verify reset exit"
+        -c "program openmupp-standalone.hex verify reset exit"
 ```
 
 On the STM32F1 boards, the `standalone` image refuses `VERSALOON_FW_UPDATE`.
@@ -223,11 +226,11 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
 
-A firmware image built with `-DVSL_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `Versaloon CMSIS-DAP`.
+A firmware image built with `-DVSL_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `OpenMUPP CMSIS-DAP`.
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 The serial port works as in the default image.
 
-A firmware image built with `-DVSL_PERSONALITIES=wch-link` shows as a USB device with the ID `1209:0001` and the product name `Versaloon WCH-Link`.
+A firmware image built with `-DVSL_PERSONALITIES=wch-link` shows as a USB device with the ID `1209:0001` and the product name `OpenMUPP WCH-Link`.
 The host tools `wlink` and `minichlink` find the probe if it has the ID `1a86:8010` (see [docs/wch-link.md](docs/wch-link.md#use-the-probe)).
 This image has no serial port.
 
@@ -251,7 +254,7 @@ The Python scripts in `tools/` need Python 3.
 
 | Script | Function | Needs |
 |---|---|---|
-| `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. | `pyusb` |
+| `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. `--id VID:PID` selects a dongle by its USB ID. | `pyusb` |
 | `tools/vsl_rv_bridge.py` | `off`, `on`, `auto` and `stored` set the mode of the RISC-V bridge of a CMSIS-DAP image. `--store` also stores the mode: the mode after a USB reset and at power-up (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). | `pyusb` |
 | `tools/serial_loopback_test.py` | Tests the UART bridge with a loopback wire from TX to RX (see [docs/uart-bridge.md](docs/uart-bridge.md)). | `pyserial` |
 | `tools/dap_uart_loopback_test.py` | Tests the `DAP_UART_*` commands of the CMSIS-DAP personality with a loopback wire from TX to RX (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-hardware-test)). | `pyusb`, `pyserial` for `--serial-port` |

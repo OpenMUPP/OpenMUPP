@@ -140,7 +140,7 @@ protocol::TargetPower targetPower{ boardPower, busyWaitDelay };
 
 // The bootloader entry of FW_UPDATE and of the bootloader code of the switch
 // commands, in every personality. On the STM32F1 only the app-8k image
-// enters the bootloader, behind versaloon-bootloader. On the STM32H5 the
+// enters the bootloader, behind openmupp-bootloader. On the STM32H5 the
 // standalone image enters the ROM bootloader. CMake defines
 // VSL_HAS_BOOTLOADER_ENTRY for this file of these images only
 // (vsl_add_app_image() in CMakeLists.txt). The other sources are shared by
@@ -182,8 +182,8 @@ wchlink::Processor wchProcessor{ wchTarget, wchPlatform };
 // --- CMSIS-DAP --------------------------------------------------------
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
 // processor keeps a pointer to the serial number text.
-constexpr const char *dapVendor = "Versaloon";
-constexpr const char *dapProduct = "Versaloon CMSIS-DAP";
+constexpr const char *dapVendor = "OpenMUPP";
+constexpr const char *dapProduct = "OpenMUPP CMSIS-DAP";
 
 std::array<char, 2 * hw::Uid::SizeBytes + 1> dapSerialNumber{};
 
@@ -505,7 +505,7 @@ int main() {
 
    debug::startLog();
    // The board names are string literals, so name.data() ends with a NUL.
-   LOG_INFO(debug::appLog, "versaloon-ng %s, board %s", versionString, board::current.name.data());
+   LOG_INFO(debug::appLog, "openmupp %s, board %s", versionString, board::current.name.data());
    startProtocol();
 
    // USB needs the 48 MHz clock from the PLL. Without the crystal the

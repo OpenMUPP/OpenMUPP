@@ -69,9 +69,10 @@ STEP_PATTERNS = {
     "read": re.compile(r"dumped (\d+) bytes in (\d+(?:\.\d+)?)s"),
 }
 # The vsllink driver logs the GET_INFO text of the firmware, and then the
-# USB_TO_XXX abilities. Without the abilities line, take a Versaloon line.
+# USB_TO_XXX abilities. Without the abilities line, take an OpenMUPP line, or
+# a Versaloon line of older firmware, but not the library line of OpenOCD.
 FIRMWARE_PATTERN = re.compile(r"Info : (.*)\n.*USB_TO_XXX abilities")
-FIRMWARE_FALLBACK_PATTERN = re.compile(r"Info : (.*versaloon.*)", re.IGNORECASE)
+FIRMWARE_FALLBACK_PATTERN = re.compile(r"Info : ((?!Versaloon Library).*(?:openmupp|versaloon).*)", re.IGNORECASE)
 CLOCK_PATTERN = re.compile(r"target clock: (.*)")
 
 

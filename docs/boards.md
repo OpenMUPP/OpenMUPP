@@ -154,7 +154,7 @@ Thus a short double flash at the connection is not always a problem.
 The WCH-Link personality counts no probe errors, so it never shows the double flash.
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
-The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
+The bootloader (openmupp-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `VSL_DEBUG_SWD` has no USB LED on the Mini.
 
 ## WeAct STM32H523 core board
@@ -235,7 +235,7 @@ To write the firmware, do these steps:
 4. Write the `standalone` image with `dfu-util`:
 
    ```sh
-   dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D versaloon-ng-standalone.bin
+   dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D openmupp-standalone.bin
    ```
 
 5. Disconnect the board and connect it again. The firmware starts.
