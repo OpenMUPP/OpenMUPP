@@ -1,10 +1,10 @@
-# udev rules for the wch-link personality of versaloon-NG (docs/wch-link.md).
+# udev rules for the wch-link personality of OpenMUPP (docs/wch-link.md).
 # They give a normal user access to the probe. Copy this file to
 # /etc/udev/rules.d/, run "udevadm control --reload", and plug in the probe again.
 
 # The number is below 73: systemd applies the uaccess tag in 73-seat-late.rules.
 # Default image: the test ID of pid.codes. Many devices share it, so the rule
 # also checks the product string.
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="Versaloon WCH-Link", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP WCH-Link", MODE="0660", TAG+="uaccess"
 # Image built with VSL_WCH_LINK_WCH_USB_ID: the ID of WCH. Real WCH-Link probes use it too.
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="8010", MODE="0660", TAG+="uaccess"

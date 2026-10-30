@@ -1,6 +1,6 @@
-# Makes the combined image of versaloon-bootloader and the app-8k image, in
+# Makes the combined image of openmupp-bootloader and the app-8k image, in
 # script mode. CMakeLists.txt runs it as the command of the target
-# versaloon-ng-with-bootloader.
+# openmupp-with-bootloader.
 #
 #   cmake -DPYTHON=<python3> -DTOOL=<vsl_combine_images.py> -DBOOTLOADER=<bin>
 #         -DAPP=<bin> -DAPP_OFFSET=<bytes> -DIMAGE=<name> -DCOPY=<name>

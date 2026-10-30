@@ -74,7 +74,7 @@ run-tool-tests:
 # the CDC port and SWD on. The job sets VSL_STRICT_SIZE, so the linker
 # script fails the link when an image does not fit; the size check reports
 # the size of each image in vsl-images.txt and fails on the same limit. The
-# default target also builds versaloon-bootloader for the Mini and the
+# default target also builds openmupp-bootloader for the Mini and the
 # ST-Link/V2 boards.
 .build-board-template:
   stage: build
@@ -100,10 +100,10 @@ run-tool-tests:
   # boards have no app-10k image. No .elf, .map or bootloader-only files.
   # A tag of a multi image has a "+": encode it as %2B in a download URL.
   artifacts:
-    name: "versaloon-ng-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
+    name: "openmupp-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
     paths:
-      - build/${BOARD}${VARIANT}/versaloon-ng-${BOARD}*.hex
-      - build/${BOARD}${VARIANT}/versaloon-ng-${BOARD}*.bin
+      - build/${BOARD}${VARIANT}/openmupp-${BOARD}*.hex
+      - build/${BOARD}${VARIANT}/openmupp-${BOARD}*.bin
 
 # Only the Mini jobs run on every pipeline. The jobs of the other boards are
 # manual, except on a tag, where all jobs run. A manual job allows failure,

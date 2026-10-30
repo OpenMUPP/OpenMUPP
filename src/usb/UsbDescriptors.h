@@ -108,10 +108,10 @@ desc::interfaceDescriptor(desc::InterfaceFields{ cdcDataInterface, 0, desc::clas
                           desc::endpoint(cdcDataInEndpoint, art::usb::EndpointType::Bulk, cdcDataPacketSize)));
 
 inline constexpr auto languageDescriptor = desc::languages(desc::kLanguageEnglishUs);
-inline constexpr auto manufacturerDescriptor = desc::stringDescriptor(u"Versaloon");
+inline constexpr auto manufacturerDescriptor = desc::stringDescriptor(u"OpenMUPP");
 // OpenOCD (vsllink) looks for "Versaloon" in the product string.
 inline constexpr auto productDescriptor = desc::stringDescriptor(u"Versaloon");
-inline constexpr auto serialPortDescriptor = desc::stringDescriptor(u"Versaloon serial port");
+inline constexpr auto serialPortDescriptor = desc::stringDescriptor(u"OpenMUPP serial port");
 
 // The serial number string: the 96-bit chip UID in hexadecimal, 24 digits.
 inline constexpr std::size_t uidBytes = 12;

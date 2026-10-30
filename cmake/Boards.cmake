@@ -30,7 +30,7 @@ set(VSL_BOARD_otheruse    STM32F1 STM32F103xB 12000000 mem-F103x8.ld 65536)
 set(VSL_BOARD_stlinkv2    STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
 set(VSL_BOARD_stlinkv2miniclone STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
 set(VSL_BOARD_weacth523   STM32H5 STM32H523xx 8000000  mem-H523xC.ld 262144)
-# Boards that versaloon-bootloader supports (cmake/Bootloader.cmake)
+# Boards that openmupp-bootloader supports (cmake/Bootloader.cmake)
 set(VSL_BOOTLOADER_BOARDS mini otheruse stlinkv2 stlinkv2miniclone)
 # Boards that shipped with the legacy Versaloon bootloader (10 KB). Only
 # they get the app-10k image.
