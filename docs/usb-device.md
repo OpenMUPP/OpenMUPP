@@ -389,7 +389,8 @@ The common commands are:
 | `SWITCH_PERSONALITY` | `[0x0E][personality u8]` | `[status u8]`. The personality is the code of a personality in the image (see [Multi image](#multi-image)), or the bootloader code `0xB0`. Status `0`: the firmware accepts the switch. Status `1`: the firmware refuses it (see below). |
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
-The version text has the form `versaloon-ng <version>, board <board>`.
+The version text has the form `openmupp <version>, board <board>`.
+Firmware before the rename uses `versaloon-ng` in place of `openmupp`.
 
 `SWITCH_PERSONALITY` changes the USB personality of a multi image (see [Multi image](#multi-image)).
 The firmware sends the reply, stores the personality and resets.
