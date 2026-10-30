@@ -71,7 +71,7 @@ It then stops after 10 s with an error and a hint, also when the bootloader runs
 The tool tells about each device with a known ID whose strings it cannot read.
 The message gives the ID, the bus and the address of the device.
 If you see this message, install the udev rules in `etc/`.
-You can also select the dongle by its ID, without the product string check: `python3 tools/vsl_personality.py --id 1209:0001 switch bootloader`.
+The option `--id` does not fix this: the tool must open the device to send the request.
 
 ### Stored personality
 

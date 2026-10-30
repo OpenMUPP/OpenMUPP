@@ -217,6 +217,7 @@ The tool finds the dongle by the VID:PID of each personality.
 This also works for a dongle with a custom ID.
 The tool takes the personality from the ID when it knows the ID.
 For an unknown ID, give it with `--active versaloon|cmsis-dap|wch-link`.
+The tool still needs access to the device, so `--id` does not replace the udev rules.
 Without `--active`, the switch request on EP0 still works, but the fallback command for old firmware does not.
 After a switch, the tool waits for the target personality at its standard IDs.
 For the WCH-Link personality, it also compares the product string with `Versaloon WCH-Link`.

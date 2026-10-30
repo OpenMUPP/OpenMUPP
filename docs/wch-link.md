@@ -38,7 +38,8 @@ The `wch-link` image has these properties:
   Without access to the device, the tool cannot read it.
   The tool then tells you the ID, the bus and the address of the device, and it points to `etc/70-versaloon-wch-link.rules`.
   Copy this file to `/etc/udev/rules.d/` to fix the access.
-  To skip the product string check, use `--id`, for example `python3 tools/vsl_personality.py --id 1209:0001 switch versaloon`.
+  `--id` does not give access.
+  Use it for a dongle with a USB ID or a product string that the tool does not know, for example `python3 tools/vsl_personality.py --id 1234:5678 --active wch-link switch versaloon`.
   The `wch-link` image has only one personality, so it stalls the switch request on EP0.
   While the WCH-Link personality is active, the image has no serial port, and the debug log of a `Debug` build is silent.
 
