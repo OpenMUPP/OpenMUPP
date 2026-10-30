@@ -58,14 +58,25 @@
       }
     },
     {
-      "name": "board-nucleoh533",
-      "description": "Board nucleoh533",
+      "name": "board-stlinkv2miniclone",
+      "description": "Board stlinkv2miniclone",
       "hidden": true,
       "inherits": [
         "base"
       ],
       "cacheVariables": {
-        "BOARD": "nucleoh533"
+        "BOARD": "stlinkv2miniclone"
+      }
+    },
+    {
+      "name": "board-weacth523",
+      "description": "Board weacth523",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "cacheVariables": {
+        "BOARD": "weacth523"
       }
     },
     {
@@ -78,19 +89,10 @@
     },
     {
       "name": "personalities-dual",
-      "description": "Dual image, Versaloon as default personality",
+      "description": "Dual image with CMSIS-DAP and WCH-Link, CMSIS-DAP as default personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PERSONALITIES": "versaloon,cmsis-dap",
-        "VSL_DEFAULT_PERSONALITY": "versaloon"
-      }
-    },
-    {
-      "name": "personalities-dual-cmsis-dap",
-      "description": "Dual image, CMSIS-DAP as default personality",
-      "hidden": true,
-      "cacheVariables": {
-        "VSL_PERSONALITIES": "versaloon,cmsis-dap",
+        "VSL_PERSONALITIES": "cmsis-dap,wch-link",
         "VSL_DEFAULT_PERSONALITY": "cmsis-dap"
       }
     },
@@ -117,8 +119,8 @@
       }
     },
     {
-      "name": "personalities-cmsis-dap-rv-bridge",
-      "description": "CMSIS-DAP personality with the RISC-V DTM bridge",
+      "name": "personalities-cmsis-dap-no-rv-bridge",
+      "description": "CMSIS-DAP personality without the RISC-V DTM bridge",
       "hidden": true,
       "inherits": [
         "personalities-cmsis-dap"
@@ -126,26 +128,8 @@
       "cacheVariables": {
         "VSL_CMSIS_DAP_RV_BRIDGE": {
           "type": "BOOL",
-          "value": "ON"
+          "value": "OFF"
         }
-      }
-    },
-    {
-      "name": "personalities-triple",
-      "description": "Multi image with all three personalities, Versaloon as default personality",
-      "hidden": true,
-      "cacheVariables": {
-        "VSL_PERSONALITIES": "versaloon,cmsis-dap,wch-link",
-        "VSL_DEFAULT_PERSONALITY": "versaloon"
-      }
-    },
-    {
-      "name": "personalities-cmsis-dap-wch-link",
-      "description": "Multi image with CMSIS-DAP and WCH-Link, CMSIS-DAP as default personality",
-      "hidden": true,
-      "cacheVariables": {
-        "VSL_PERSONALITIES": "cmsis-dap,wch-link",
-        "VSL_DEFAULT_PERSONALITY": "cmsis-dap"
       }
     },
     {
@@ -172,16 +156,16 @@
       ]
     },
     {
-      "name": "mini-cmsis-dap-rv-bridge",
-      "displayName": "Versaloon Mini, CMSIS-DAP with the RISC-V bridge",
+      "name": "mini-cmsis-dap-no-rv-bridge",
+      "displayName": "Versaloon Mini, CMSIS-DAP without the RISC-V bridge",
       "inherits": [
         "board-mini",
-        "personalities-cmsis-dap-rv-bridge"
+        "personalities-cmsis-dap-no-rv-bridge"
       ]
     },
     {
       "name": "mini-dual",
-      "displayName": "Versaloon Mini, dual image",
+      "displayName": "Versaloon Mini, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-mini",
         "personalities-dual"
@@ -189,18 +173,11 @@
     },
     {
       "name": "mini-debug",
-      "displayName": "Versaloon Mini, Debug",
+      "displayName": "Versaloon Mini, CMSIS-DAP without the RISC-V bridge, Debug",
       "inherits": [
         "debug",
-        "board-mini"
-      ]
-    },
-    {
-      "name": "mini-dual-cmsis-dap",
-      "displayName": "Versaloon Mini, dual image, CMSIS-DAP default",
-      "inherits": [
         "board-mini",
-        "personalities-dual-cmsis-dap"
+        "personalities-cmsis-dap-no-rv-bridge"
       ]
     },
     {
@@ -220,22 +197,6 @@
       ]
     },
     {
-      "name": "mini-triple",
-      "displayName": "Versaloon Mini, triple image",
-      "inherits": [
-        "board-mini",
-        "personalities-triple"
-      ]
-    },
-    {
-      "name": "mini-cmsis-dap-wch-link",
-      "displayName": "Versaloon Mini, CMSIS-DAP and WCH-Link",
-      "inherits": [
-        "board-mini",
-        "personalities-cmsis-dap-wch-link"
-      ]
-    },
-    {
       "name": "otheruse",
       "displayName": "OtherUse",
       "inherits": [
@@ -251,16 +212,8 @@
       ]
     },
     {
-      "name": "otheruse-cmsis-dap-rv-bridge",
-      "displayName": "OtherUse, CMSIS-DAP with the RISC-V bridge",
-      "inherits": [
-        "board-otheruse",
-        "personalities-cmsis-dap-rv-bridge"
-      ]
-    },
-    {
       "name": "otheruse-dual",
-      "displayName": "OtherUse, dual image",
+      "displayName": "OtherUse, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-otheruse",
         "personalities-dual"
@@ -272,14 +225,6 @@
       "inherits": [
         "board-otheruse",
         "personalities-wch-link"
-      ]
-    },
-    {
-      "name": "otheruse-triple",
-      "displayName": "OtherUse, triple image",
-      "inherits": [
-        "board-otheruse",
-        "personalities-triple"
       ]
     },
     {
@@ -299,7 +244,7 @@
     },
     {
       "name": "stlinkv2-dual",
-      "displayName": "ST-Link/V2, dual image",
+      "displayName": "ST-Link/V2, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-stlinkv2",
         "personalities-dual"
@@ -314,42 +259,74 @@
       ]
     },
     {
-      "name": "stlinkv2-triple",
-      "displayName": "ST-Link/V2, triple image",
+      "name": "stlinkv2miniclone",
+      "displayName": "ST-Link/V2 mini clone",
       "inherits": [
-        "board-stlinkv2",
-        "personalities-triple"
+        "board-stlinkv2miniclone"
       ]
     },
     {
-      "name": "nucleoh533",
-      "displayName": "NUCLEO-H533RE",
+      "name": "stlinkv2miniclone-cmsis-dap",
+      "displayName": "ST-Link/V2 mini clone, CMSIS-DAP",
       "inherits": [
-        "board-nucleoh533"
-      ]
-    },
-    {
-      "name": "nucleoh533-cmsis-dap",
-      "displayName": "NUCLEO-H533RE, CMSIS-DAP",
-      "inherits": [
-        "board-nucleoh533",
+        "board-stlinkv2miniclone",
         "personalities-cmsis-dap"
       ]
     },
     {
-      "name": "nucleoh533-dual",
-      "displayName": "NUCLEO-H533RE, dual image",
+      "name": "stlinkv2miniclone-dual",
+      "displayName": "ST-Link/V2 mini clone, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
-        "board-nucleoh533",
+        "board-stlinkv2miniclone",
         "personalities-dual"
       ]
     },
     {
-      "name": "nucleoh533-debug",
-      "displayName": "NUCLEO-H533RE, Debug",
+      "name": "stlinkv2miniclone-wch-link",
+      "displayName": "ST-Link/V2 mini clone, WCH-Link",
+      "inherits": [
+        "board-stlinkv2miniclone",
+        "personalities-wch-link"
+      ]
+    },
+    {
+      "name": "weacth523",
+      "displayName": "WeAct STM32H523",
+      "inherits": [
+        "board-weacth523"
+      ]
+    },
+    {
+      "name": "weacth523-cmsis-dap",
+      "displayName": "WeAct STM32H523, CMSIS-DAP",
+      "inherits": [
+        "board-weacth523",
+        "personalities-cmsis-dap"
+      ]
+    },
+    {
+      "name": "weacth523-dual",
+      "displayName": "WeAct STM32H523, dual image, CMSIS-DAP and WCH-Link",
+      "inherits": [
+        "board-weacth523",
+        "personalities-dual"
+      ]
+    },
+    {
+      "name": "weacth523-wch-link",
+      "displayName": "WeAct STM32H523, WCH-Link",
+      "inherits": [
+        "board-weacth523",
+        "personalities-wch-link"
+      ]
+    },
+    {
+      "name": "weacth523-debug",
+      "displayName": "WeAct STM32H523, CMSIS-DAP, Debug",
       "inherits": [
         "debug",
-        "board-nucleoh533"
+        "board-weacth523",
+        "personalities-cmsis-dap"
       ]
     },
     {
@@ -372,8 +349,8 @@
       "configurePreset": "mini-cmsis-dap"
     },
     {
-      "name": "mini-cmsis-dap-rv-bridge",
-      "configurePreset": "mini-cmsis-dap-rv-bridge"
+      "name": "mini-cmsis-dap-no-rv-bridge",
+      "configurePreset": "mini-cmsis-dap-no-rv-bridge"
     },
     {
       "name": "mini-dual",
@@ -384,24 +361,12 @@
       "configurePreset": "mini-debug"
     },
     {
-      "name": "mini-dual-cmsis-dap",
-      "configurePreset": "mini-dual-cmsis-dap"
-    },
-    {
       "name": "mini-wch-link",
       "configurePreset": "mini-wch-link"
     },
     {
       "name": "mini-wch-link-wch-id",
       "configurePreset": "mini-wch-link-wch-id"
-    },
-    {
-      "name": "mini-triple",
-      "configurePreset": "mini-triple"
-    },
-    {
-      "name": "mini-cmsis-dap-wch-link",
-      "configurePreset": "mini-cmsis-dap-wch-link"
     },
     {
       "name": "otheruse",
@@ -412,20 +377,12 @@
       "configurePreset": "otheruse-cmsis-dap"
     },
     {
-      "name": "otheruse-cmsis-dap-rv-bridge",
-      "configurePreset": "otheruse-cmsis-dap-rv-bridge"
-    },
-    {
       "name": "otheruse-dual",
       "configurePreset": "otheruse-dual"
     },
     {
       "name": "otheruse-wch-link",
       "configurePreset": "otheruse-wch-link"
-    },
-    {
-      "name": "otheruse-triple",
-      "configurePreset": "otheruse-triple"
     },
     {
       "name": "stlinkv2",
@@ -444,24 +401,40 @@
       "configurePreset": "stlinkv2-wch-link"
     },
     {
-      "name": "stlinkv2-triple",
-      "configurePreset": "stlinkv2-triple"
+      "name": "stlinkv2miniclone",
+      "configurePreset": "stlinkv2miniclone"
     },
     {
-      "name": "nucleoh533",
-      "configurePreset": "nucleoh533"
+      "name": "stlinkv2miniclone-cmsis-dap",
+      "configurePreset": "stlinkv2miniclone-cmsis-dap"
     },
     {
-      "name": "nucleoh533-cmsis-dap",
-      "configurePreset": "nucleoh533-cmsis-dap"
+      "name": "stlinkv2miniclone-dual",
+      "configurePreset": "stlinkv2miniclone-dual"
     },
     {
-      "name": "nucleoh533-dual",
-      "configurePreset": "nucleoh533-dual"
+      "name": "stlinkv2miniclone-wch-link",
+      "configurePreset": "stlinkv2miniclone-wch-link"
     },
     {
-      "name": "nucleoh533-debug",
-      "configurePreset": "nucleoh533-debug"
+      "name": "weacth523",
+      "configurePreset": "weacth523"
+    },
+    {
+      "name": "weacth523-cmsis-dap",
+      "configurePreset": "weacth523-cmsis-dap"
+    },
+    {
+      "name": "weacth523-dual",
+      "configurePreset": "weacth523-dual"
+    },
+    {
+      "name": "weacth523-wch-link",
+      "configurePreset": "weacth523-wch-link"
+    },
+    {
+      "name": "weacth523-debug",
+      "configurePreset": "weacth523-debug"
     },
     {
       "name": "host-tests",

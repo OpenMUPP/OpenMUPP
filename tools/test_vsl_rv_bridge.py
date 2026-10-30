@@ -15,9 +15,16 @@ from test_vsl_personality import FakeDevice, fake_usb  # noqa: E402
 
 
 class RequestTest(unittest.TestCase):
-    def test_on_and_off(self):
-        self.assertEqual(rb.bridge_request(True), bytes([0x81, 0x01]))
-        self.assertEqual(rb.bridge_request(False), bytes([0x81, 0x00]))
+    def test_modes(self):
+        self.assertEqual(rb.bridge_request("on"), bytes([0x81, 0x01]))
+        self.assertEqual(rb.bridge_request("off"), bytes([0x81, 0x00]))
+        self.assertEqual(rb.bridge_request("auto"), bytes([0x81, 0x02]))
+        self.assertEqual(rb.bridge_request("stored"), bytes([0x81, 0x03]))
+
+    def test_store(self):
+        self.assertEqual(rb.bridge_request("off", store=True), bytes([0x81, 0x80]))
+        self.assertEqual(rb.bridge_request("on", store=True), bytes([0x81, 0x81]))
+        self.assertEqual(rb.bridge_request("auto", store=True), bytes([0x81, 0x82]))
 
 
 class CheckReplyTest(unittest.TestCase):
@@ -56,6 +63,32 @@ class MainTest(unittest.TestCase):
         device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
         self.assertEqual(self.run_main(["off"], [device])[0], 0)
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x00]))])
+
+    def test_auto(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        result, out, _ = self.run_main(["auto"], [device])
+        self.assertEqual(result, 0)
+        self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x02]))])
+        self.assertIn("is auto", out)
+
+    def test_store_option(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        result, out, _ = self.run_main(["off", "--store"], [device])
+        self.assertEqual(result, 0)
+        self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x80]))])
+        self.assertIn("is off, stored", out)
+
+    def test_store_of_stored(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        with self.assertRaises(SystemExit):
+            self.run_main(["stored", "--store"], [device])
+        self.assertEqual(device.writes, [])
+
+    def test_failed_store(self):
+        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0xFF])
+        result, _, err = self.run_main(["on", "--store"], [device])
+        self.assertEqual(result, 1)
+        self.assertIn("failed store", err)
 
     def test_image_without_bridge(self):
         device = FakeDevice(0x0403, 0x9B3C, reply=[0xFF])

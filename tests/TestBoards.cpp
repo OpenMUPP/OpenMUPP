@@ -1,8 +1,9 @@
 #include "board/VrefScale.h"
 #include "board/boards/Mini.h"
-#include "board/boards/NucleoH533.h"
 #include "board/boards/OtherUse.h"
 #include "board/boards/StLinkV2.h"
+#include "board/boards/StLinkV2MiniClone.h"
+#include "board/boards/WeActH523.h"
 
 #include <doctest/doctest.h>
 
@@ -18,9 +19,8 @@ namespace {
 constexpr Family F1 = Family::Stm32F1;
 constexpr Family H5 = Family::Stm32H5;
 
-// An STM32H5 board with the pin map of the NUCLEO-H533RE port (#89). It
-// tests the STM32H5 rules until the first STM32H5 board is in
-// src/board/boards/.
+// An STM32H5 test board with a 24 MHz crystal and the TCK link on PB3. It
+// tests the STM32H5 rules apart from the board definitions.
 constexpr Definition h5Board{
    .name = "h5-test",
    .hseFrequency = 24'000'000,
@@ -118,40 +118,64 @@ TEST_CASE("ST-Link/V2 has an 8 MHz crystal and no JTAG fast path") {
    CHECK_FALSE(stLink.usbPullUp);
 }
 
-TEST_CASE("NUCLEO-H533RE has the pin map of the H5 probe board") {
-   const Definition &nucleo = board::nucleoH533;
+TEST_CASE("ST-Link/V2 mini clone has the measured pin map of the dongle") {
+   const Definition &clone = board::stLinkV2MiniClone;
 
-   CHECK(nucleo.name == "nucleoh533");
-   CHECK(nucleo.family == board::Family::Stm32H5);
-   CHECK(nucleo.hseFrequency == 24'000'000);
-   CHECK(nucleo.debug.tck == Pin{ Port::B, 13 });
-   CHECK(nucleo.debug.tdi == Pin{ Port::B, 15 });
-   CHECK(nucleo.debug.tdo == Pin{ Port::B, 14 });
-   CHECK(nucleo.debug.tmsOut == Pin{ Port::A, 6 });
-   CHECK(nucleo.debug.tmsIn == Pin{ Port::A, 7 });
-   CHECK(nucleo.debug.trst == Pin{ Port::B, 4 });
-   CHECK(nucleo.debug.srst == Pin{ Port::B, 10 });
-   CHECK(nucleo.debug.rtck == Pin{ Port::A, 0 });
-   CHECK(nucleo.uart == board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } });
-   CHECK(nucleo.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 1 });
-   // LD2 and B1. PA5 is LD2, so the TCK link of the fast path is PB3.
-   CHECK(nucleo.leds.state == Signal{ { Port::A, 5 }, Active::High });
-   CHECK_FALSE(nucleo.leds.power);
-   CHECK_FALSE(nucleo.leds.usb);
-   CHECK(nucleo.key == Signal{ { Port::C, 13 }, Active::High });
-   CHECK_FALSE(nucleo.hasJtagFastPath());
-   CHECK_FALSE(nucleo.powerSwitch);
-   CHECK_FALSE(nucleo.usbPullUp);
-   // PB4 (NJTRST) is TRST: the debug port keeps SWD for the on-board ST-LINK
-   CHECK(board::swjConfig(nucleo) == board::SwjConfig::NoJtag);
-   CHECK(board::withSwd(nucleo) == nucleo);
+   CHECK(clone.name == "stlinkv2miniclone");
+   CHECK(clone.family == F1);
+   CHECK(clone.hseFrequency == 8'000'000);
+   CHECK(clone.hardwareId == 0x38);
+   // Header: CLK, DIO and RST. PB13 and PB5 are tied to them and stay inputs.
+   CHECK(clone.debug.tck == Pin{ Port::A, 5 });
+   CHECK(clone.debug.tmsOut == Pin{ Port::B, 14 });
+   // DIO: PB14 drives, PB12 reads with its pull-up
+   CHECK(clone.debug.tmsIn == Pin{ Port::B, 12 });
+   CHECK(clone.debug.srst == Pin{ Port::B, 6 });
+   CHECK(clone.leds.state == Signal{ { Port::A, 9 }, Active::High });
+   CHECK(clone.leds.stateTwoColour);
+   CHECK_FALSE(clone.hasJtagFastPath());
+   CHECK_FALSE(clone.powerSwitch);
+   CHECK_FALSE(clone.usbPullUp);
+   CHECK(board::swjConfig(clone) == board::SwjConfig::Full);
+   CHECK(board::withSwd(clone) == clone);
+}
+
+TEST_CASE("WeAct H523 has SWDIO next to SWCLK and the on-board LED and key") {
+   const Definition &weAct = board::weActH523;
+
+   CHECK(weAct.name == "weacth523");
+   CHECK(weAct.family == board::Family::Stm32H5);
+   CHECK(weAct.hseFrequency == 8'000'000);
+   // Header P2 pins 1 to 7: SWDIO, SWCLK, TDO, TDI, RTCK, TX, RX
+   CHECK(weAct.debug.tmsIn == Pin{ Port::B, 12 });
+   CHECK(weAct.debug.tck == Pin{ Port::B, 13 });
+   CHECK(weAct.debug.tdo == Pin{ Port::B, 14 });
+   CHECK(weAct.debug.tdi == Pin{ Port::B, 15 });
+   CHECK(weAct.debug.rtck == Pin{ Port::A, 8 });
+   CHECK(weAct.uart == board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } });
+   // SPI1 MISO of the fast path, with a wire to PB12
+   CHECK(weAct.debug.tmsOut == Pin{ Port::A, 6 });
+   CHECK(weAct.debug.trst == Pin{ Port::B, 4 });
+   CHECK(weAct.debug.srst == Pin{ Port::B, 5 });
+   CHECK(weAct.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 1 });
+   CHECK(weAct.leds.state == Signal{ { Port::C, 13 }, Active::Low });
+   CHECK_FALSE(weAct.leds.power);
+   CHECK_FALSE(weAct.leds.usb);
+   CHECK(weAct.key == Signal{ { Port::A, 0 }, Active::Low });
+   REQUIRE(weAct.hasJtagFastPath());
+   CHECK(weAct.jtagFastPath->tckLink == Pin{ Port::B, 3 });
+   CHECK_FALSE(weAct.powerSwitch);
+   CHECK_FALSE(weAct.usbPullUp);
+   CHECK(board::swjConfig(weAct) == board::SwjConfig::NoJtag);
+   CHECK(board::withSwd(weAct) == weAct);
 }
 
 TEST_CASE("All boards are valid") {
    CHECK(board::isValid(board::mini));
    CHECK(board::isValid(board::otherUse));
    CHECK(board::isValid(board::stLinkV2));
-   CHECK(board::isValid(board::nucleoH533));
+   CHECK(board::isValid(board::stLinkV2MiniClone));
+   CHECK(board::isValid(board::weActH523));
 }
 
 TEST_CASE("isValid rejects pin conflicts") {
@@ -209,7 +233,7 @@ TEST_CASE("adcChannelOf gives the STM32F103 ADC channel of a pin") {
 }
 
 TEST_CASE("oneWireTimerOf gives a timer channel on the SWDIO output of each board") {
-   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2 }) {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2, board::stLinkV2MiniClone }) {
       CAPTURE(def.name);
       const auto timer = board::oneWireTimerOf(def.family, def.debug.tmsOut);
       REQUIRE(timer);
@@ -244,10 +268,18 @@ TEST_CASE("adcChannelOf gives the STM32H5 ADC channel of a pin") {
    CHECK_FALSE(board::adcChannelOf(H5, { Port::H, 0 }));
 }
 
-TEST_CASE("The STM32H5 has no one-wire timer yet") {
+TEST_CASE("The STM32H5 one-wire timer is TIM3_CH1 on PA6") {
    CHECK(board::oneWireTimerOf(F1, { Port::B, 4 }));
    CHECK_FALSE(board::oneWireTimerOf(H5, { Port::B, 4 }));
-   CHECK_FALSE(board::oneWireTimerOf(H5, h5Board.debug.tmsOut));
+   const auto timer = board::oneWireTimerOf(H5, h5Board.debug.tmsOut);
+   REQUIRE(timer);
+   CHECK(timer->timer == 3);
+   CHECK(timer->channel == 1);
+   CHECK(timer->sampleChannel == 3);
+   // The JTAG fast path uses GPDMA1 channels 0 to 2
+   CHECK(timer->updateDma >= 3);
+   CHECK(timer->sampleDma >= 3);
+   CHECK(timer->updateDma != timer->sampleDma);
 }
 
 TEST_CASE("The reserved crystal pins depend on the family") {
@@ -369,6 +401,33 @@ TEST_CASE("withSwd drops the LEDs on the SWD pins and keeps SWD on") {
    def = board::stLinkV2;
    def.key = Signal{ { Port::A, 14 }, Active::Low };
    CHECK(board::swjConfig(board::withSwd(def)) == board::SwjConfig::Disabled);
+}
+
+TEST_CASE("stateDriveOf drives one LED or two colours on one pin") {
+   using board::StateDrive;
+   using board::StateShow;
+   constexpr Signal highOn{ { Port::A, 9 }, Active::High };
+   constexpr Signal lowOn{ { Port::A, 15 }, Active::Low };
+
+   // One LED: on for activity and a fault, as before
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Idle) == StateDrive{ false, false });
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Activity) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(highOn, false, StateShow::Fault) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(lowOn, false, StateShow::Idle) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(lowOn, false, StateShow::Fault) == StateDrive{ false, false });
+
+   // Two colours: idle the asserted colour, a fault the other, activity off
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Idle) == StateDrive{ false, true });
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Fault) == StateDrive{ false, false });
+   CHECK(board::stateDriveOf(highOn, true, StateShow::Activity).off);
+   CHECK(board::stateDriveOf(lowOn, true, StateShow::Idle) == StateDrive{ false, false });
+}
+
+TEST_CASE("Only the mini clone has a two-colour state LED") {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV2, board::weActH523 }) {
+      CAPTURE(def.name);
+      CHECK_FALSE(def.leds.stateTwoColour);
+   }
 }
 
 TEST_CASE("Signal::levelFor gives the pin level of the signal state") {

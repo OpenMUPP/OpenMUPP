@@ -32,10 +32,10 @@ bool JtagDp::select(uint8_t index) {
    return true;
 }
 
+// put() and run() clear only the bytes of the scan: a clear of all buffers
+// for each sequence took as long as the DMI frame of the RISC-V bridge
+// (#114).
 void JtagDp::start() {
-   tdi_.fill(0);
-   tms_.fill(0);
-   tdo_.fill(0);
    bits_ = 0;
 }
 
@@ -44,6 +44,10 @@ void JtagDp::put(uint32_t value, uint32_t count, bool tms) {
    for(uint32_t i = 0; i < count && bits_ < maxScanBits; ++i) {
       const std::size_t byte = bits_ / 8;
       const auto mask = static_cast<uint8_t>(1u << (bits_ % 8));
+      if(mask == 1u) {
+         tdi_[byte] = 0;
+         tms_[byte] = 0;
+      }
       if(i < 32 && ((value >> i) & 1u) != 0) {
          tdi_[byte] = static_cast<uint8_t>(tdi_[byte] | mask);
       }
@@ -65,6 +69,7 @@ void JtagDp::putOnes(uint32_t count, bool tms) {
 
 bool JtagDp::run() {
    const std::size_t bytes = protocol::jtagRaw::byteCount(bits_);
+   std::fill_n(tdo_.begin(), bytes, 0);
    return port_->shift(bits_, { tdi_.data(), bytes }, { tms_.data(), bytes }, { tdo_.data(), bytes });
 }
 
@@ -215,15 +220,27 @@ bool JtagDp::readIdcode(uint32_t &value) {
 
 bool JtagDp::sequence(uint8_t bitCount, bool tms, art::span<const uint8_t> tdi, art::span<uint8_t> tdo) {
    invalidate();
-   start();
-   for(uint32_t done = 0; done < bitCount; done += 8) {
-      put(tdi[done / 8], std::min<uint32_t>(8, bitCount - done), tms);
+   // Byte copies, not put(): a copy bit by bit and the scan buffers took
+   // longer than the DMI scan of the RISC-V bridge (#114). The bits above
+   // bitCount are 0, as with put().
+   const std::size_t bytes = protocol::jtagRaw::byteCount(bitCount);
+   std::array<uint8_t, 8> tdiBytes{};
+   std::array<uint8_t, 8> tmsBytes{};
+   std::array<uint8_t, 8> tdoBytes{};
+   std::copy_n(tdi.begin(), bytes, tdiBytes.begin());
+   if(bitCount % 8 != 0) {
+      tdiBytes[bytes - 1] = static_cast<uint8_t>(tdiBytes[bytes - 1] & ((1u << (bitCount % 8)) - 1u));
    }
-   if(!run()) {
+   if(tms) {
+      std::fill_n(tmsBytes.begin(), bytes, 0xFF);
+      if(bitCount % 8 != 0) {
+         tmsBytes[bytes - 1] = static_cast<uint8_t>((1u << (bitCount % 8)) - 1u);
+      }
+   }
+   if(!port_->shift(bitCount, { tdiBytes.data(), bytes }, { tmsBytes.data(), bytes }, { tdoBytes.data(), bytes })) {
       return false;
    }
-   const std::size_t bytes = protocol::jtagRaw::byteCount(bitCount);
-   std::copy_n(tdo_.begin(), std::min(bytes, tdo.size()), tdo.begin());
+   std::copy_n(tdoBytes.begin(), std::min(bytes, tdo.size()), tdo.begin());
    return true;
 }
 

@@ -54,7 +54,8 @@ class FakeDapSwd final : public cmsisdap::DapSwd {
    }
    void apply(const cmsisdap::SwdSettings &) override {
    }
-   void sequenceOut(uint16_t, art::span<const uint8_t>) override {
+   void sequenceOut(uint16_t bitCount, art::span<const uint8_t>) override {
+      sequences.push_back(bitCount);
    }
    void sequenceIn(uint16_t, art::span<uint8_t>) override {
    }
@@ -64,7 +65,7 @@ class FakeDapSwd final : public cmsisdap::DapSwd {
          onTransfer();
       }
       data = 0;
-      return cmsisdap::dap::ackOk;
+      return ack;
    }
    void setAbort(const cmsisdap::TransferAbort &) override {
    }
@@ -72,6 +73,10 @@ class FakeDapSwd final : public cmsisdap::DapSwd {
    int inits{ 0 };
    int finis{ 0 };
    int transfers{ 0 };
+   // The bit counts of sequenceOut()
+   std::vector<uint16_t> sequences;
+   // The acknowledge of each transfer
+   uint8_t ack{ cmsisdap::dap::ackOk };
    std::function<void()> onTransfer;
 };
 

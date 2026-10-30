@@ -213,7 +213,9 @@ TEST_CASE("RVSWD two wires: SWCLK timing of the capture") {
    for(const Rate rate : { Rate{ rvswd::lowClockHz, 2090 }, Rate{ rvswd::highClockHz, 1100 } }) {
       CAPTURE(rate.hz);
       Bench bench(Wire::Two);
-      bench.pins.swclkEdgeCycles = rvswd::loopOverheadCycles;
+      // The loop code of the engine after each edge. The pacer keeps the
+      // rate.
+      bench.pins.swclkEdgeCycles = 24;
       bench.engine.setClockHz(rate.hz);
       bench.pins.risingEdges.clear();
       bench.pins.lineEdges.clear();
@@ -222,12 +224,7 @@ TEST_CASE("RVSWD two wires: SWCLK timing of the capture") {
       // The clock before the start condition and bits 1-53
       const std::vector<uint32_t> &edges = bench.pins.risingEdges;
       REQUIRE(edges.size() == 54);
-      // The mock adds the loop code at each SWCLK edge. The phases without
-      // loop code (the conditions and the longer low phases) wait for the
-      // full half period, so the mock makes them longer: up to 15 % at the
-      // low rate, 30 % at the high rate (the loop code is 24 of 40 cycles).
-      const double slack = rate.hz == rvswd::lowClockHz ? 1.15 : 1.30;
-      const auto near = [slack](double ns, double expected) { return ns >= 0.95 * expected && ns <= slack * expected; };
+      const auto near = [](double ns, double expected) { return ns >= 0.95 * expected && ns <= 1.05 * expected; };
       for(std::size_t bit = 2; bit <= 53; ++bit) {
          CAPTURE(bit);
          const double period = nsOf(edges[bit] - edges[bit - 1]);
@@ -255,6 +252,32 @@ TEST_CASE("RVSWD two wires: SWCLK timing of the capture") {
       if(rate.hz == rvswd::lowClockHz) {
          CHECK(nsOf(conditions[1].time - conditions[0].time) == doctest::Approx(115'100).epsilon(0.03));
       }
+   }
+}
+
+TEST_CASE("RVSWD two wires: one start and one stop condition for each parity") {
+   // A release of a low SWDIO while SWCLK is high lets the pull-up make a
+   // stop condition (CH32V208 with a 2.2 kOhm pull-up). Request parity 0
+   // and 1 (bit 10), and data parity 0 and 1 (bit 48 of a write).
+   struct Frame {
+      uint8_t address;
+      bool write;
+      uint32_t data;
+   };
+   for(const Frame frame : { Frame{ 0x11, false, 0 }, Frame{ 0x10, false, 0 }, Frame{ 0x10, true, 0x3 },
+                             Frame{ 0x10, true, 0x1 }, Frame{ 0x11, true, 0x3 }, Frame{ 0x11, true, 0x1 } }) {
+      CAPTURE(frame.address);
+      CAPTURE(frame.write);
+      CAPTURE(frame.data);
+      Bench bench(Wire::Two);
+      bench.pins.registers[frame.address] = 0x0000'0382;
+      const int starts = bench.pins.starts;
+      const int stops = bench.pins.stops;
+      uint32_t data = 0;
+      CHECK((frame.write ? bench.engine.write(frame.address, frame.data) : bench.engine.read(frame.address, data)) == 0);
+      bench.checkIdle();
+      CHECK(bench.pins.starts - starts == 1);
+      CHECK(bench.pins.stops - stops == 1);
    }
 }
 

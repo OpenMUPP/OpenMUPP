@@ -34,6 +34,7 @@ add_executable(vsl-tests
         TestTargetPowerLed.cpp
         TestUptimeMicros.cpp
         TestIntDiv.cpp
+        TestClockPacer.cpp
         TestUsbDescriptors.cpp
         TestUsbEnumeration.cpp
         TestCmsisDapDescriptors.cpp
@@ -68,16 +69,19 @@ add_executable(vsl-tests
         TestWchLink.cpp
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
+        TestDapTargetPower.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
         ../src/protocol/cmsisdap/DapProcessor.cpp
         ../src/protocol/cmsisdap/RvDtmTap.cpp
+        ../src/protocol/cmsisdap/RvBridge.cpp
         ../src/protocol/wchlink/WchLinkFlash.cpp
         ../src/protocol/wchlink/WchLinkProcessor.cpp
         ../src/protocol/versaloon/GpioBlock.cpp
         ../src/protocol/versaloon/JtagRawBlock.cpp
         ../src/protocol/versaloon/PowerBlock.cpp
+        ../src/protocol/TargetPower.cpp
         ../src/protocol/versaloon/SwdBlock.cpp
         ../src/protocol/versaloon/UsbToAll.cpp
         ../src/protocol/versaloon/UsbToXxx.cpp
@@ -123,28 +127,31 @@ function(vsl_personality_test name regex)
 endfunction()
 
 vsl_personality_test(default "set=versaloon default=versaloon tag=\\[\\] defines=VSL_WITH_VERSALOON\n")
-vsl_personality_test(cmsis-dap "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\] defines=VSL_WITH_CMSIS_DAP\n"
+vsl_personality_test(cmsis-dap "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\] defines=VSL_WITH_CMSIS_DAP,VSL_CMSIS_DAP_RV_BRIDGE\n"
         -DVSL_PERSONALITIES=cmsis-dap)
 vsl_personality_test(wch-link "set=wch-link default=wch-link tag=\\[-wch-link\\] defines=VSL_WITH_WCH_LINK\n"
         -DVSL_PERSONALITIES=wch-link)
 vsl_personality_test(wch-link-wch-id "tag=\\[-wch-link-wch-id\\] defines=VSL_WITH_WCH_LINK,VSL_WCH_LINK_WCH_USB_ID\n"
         -DVSL_PERSONALITIES=wch-link -DVSL_WCH_LINK_WCH_USB_ID=ON)
-vsl_personality_test(rv-bridge "tag=\\[-cmsis-dap-rv-bridge\\] defines=VSL_WITH_CMSIS_DAP,VSL_CMSIS_DAP_RV_BRIDGE\n"
-        -DVSL_PERSONALITIES=cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
-vsl_personality_test(rv-bridge-multi "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap"
-        -DVSL_PERSONALITIES=versaloon,cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
-vsl_personality_test(rv-bridge-wch-link "VSL_CMSIS_DAP_RV_BRIDGE needs the single personality cmsis-dap"
+vsl_personality_test(no-rv-bridge "tag=\\[-cmsis-dap-no-rv-bridge\\] defines=VSL_WITH_CMSIS_DAP\n"
+        -DVSL_PERSONALITIES=cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=OFF)
+vsl_personality_test(rv-bridge-multi "tag=\\[-vsl\\+dap\\] defines=.*,VSL_CMSIS_DAP_RV_BRIDGE\n"
+        -DVSL_PERSONALITIES=versaloon,cmsis-dap)
+vsl_personality_test(no-rv-bridge-multi "tag=\\[-vsl\\+dap-no-rv-bridge\\] defines=.*VSL_DEFAULT_PERSONALITY=0\n"
+        -DVSL_PERSONALITIES=versaloon,cmsis-dap -DVSL_CMSIS_DAP_RV_BRIDGE=OFF)
+# Ignored without cmsis-dap
+vsl_personality_test(rv-bridge-wch-link "tag=\\[-wch-link\\] defines=VSL_WITH_WCH_LINK\n"
         -DVSL_PERSONALITIES=wch-link -DVSL_CMSIS_DAP_RV_BRIDGE=ON)
 # A CMake list, in any order: the result is in canonical order
-vsl_personality_test(list "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0\n"
+vsl_personality_test(list "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0,VSL_CMSIS_DAP_RV_BRIDGE\n"
         "-DVSL_PERSONALITIES=cmsis-dap$<SEMICOLON>versaloon")
-vsl_personality_test(dap-default "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\] .*VSL_DEFAULT_PERSONALITY=1\n"
+vsl_personality_test(dap-default "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\] .*VSL_DEFAULT_PERSONALITY=1,VSL_CMSIS_DAP_RV_BRIDGE\n"
         -DVSL_PERSONALITIES=versaloon,cmsis-dap -DVSL_DEFAULT_PERSONALITY=cmsis-dap)
-vsl_personality_test(triple "set=versaloon,cmsis-dap,wch-link default=versaloon tag=\\[-vsl\\+dap\\+wch\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_WITH_WCH_LINK,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0\n"
+vsl_personality_test(triple "set=versaloon,cmsis-dap,wch-link default=versaloon tag=\\[-vsl\\+dap\\+wch\\] defines=VSL_WITH_VERSALOON,VSL_WITH_CMSIS_DAP,VSL_WITH_WCH_LINK,VSL_MULTI_PERSONALITY,VSL_DEFAULT_PERSONALITY=0,VSL_CMSIS_DAP_RV_BRIDGE\n"
         "-DVSL_PERSONALITIES=wch-link, versaloon ,cmsis-dap")
-vsl_personality_test(dap-wch "set=cmsis-dap,wch-link default=wch-link tag=\\[-wch\\+dap\\] .*VSL_DEFAULT_PERSONALITY=2\n"
+vsl_personality_test(dap-wch "set=cmsis-dap,wch-link default=wch-link tag=\\[-wch\\+dap\\] .*VSL_DEFAULT_PERSONALITY=2,VSL_CMSIS_DAP_RV_BRIDGE\n"
         -DVSL_PERSONALITIES=cmsis-dap,wch-link -DVSL_DEFAULT_PERSONALITY=wch-link)
-vsl_personality_test(multi-wch-id "tag=\\[-dap\\+wch-wch-id\\] .*VSL_WCH_LINK_WCH_USB_ID\n"
+vsl_personality_test(multi-wch-id "tag=\\[-dap\\+wch-wch-id\\] .*VSL_WCH_LINK_WCH_USB_ID,VSL_CMSIS_DAP_RV_BRIDGE\n"
         -DVSL_PERSONALITIES=cmsis-dap,wch-link -DVSL_WCH_LINK_WCH_USB_ID=ON)
 vsl_personality_test(duplicate "set=versaloon,cmsis-dap default=versaloon"
         -DVSL_PERSONALITIES=versaloon,cmsis-dap,versaloon)
@@ -160,27 +167,6 @@ vsl_personality_test(debug-cdc-multi-wch-link "set=versaloon,wch-link default=ve
         -DVSL_PERSONALITIES=versaloon,wch-link -DVSL_DEBUG_CDC=ON)
 vsl_personality_test(default-not-in-set-hint "-UVSL_DEFAULT_PERSONALITY"
         -DVSL_PERSONALITIES=cmsis-dap -DVSL_DEFAULT_PERSONALITY=versaloon)
-
-# The deprecated VSL_PROTOCOL: the same result as the new option, with a warning
-vsl_personality_test(protocol-warning "VSL_PROTOCOL is deprecated"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=cmsis-dap)
-vsl_personality_test(protocol-dual "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\]"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=versaloon)
-vsl_personality_test(protocol-dual-cmsis-dap "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\]"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=cmsis-dap)
-vsl_personality_test(protocol-wch-link "set=wch-link default=wch-link tag=\\[-wch-link\\]"
-        -DVSL_PROTOCOL=wch-link -DVSL_DEFAULT_PROTOCOL=versaloon)
-vsl_personality_test(protocol-unknown "Unknown VSL_PROTOCOL 'triple'" -DVSL_PROTOCOL=triple)
-vsl_personality_test(protocol-and-personalities "Set VSL_PERSONALITIES or the deprecated VSL_PROTOCOL, not both"
-        -DVSL_PROTOCOL=cmsis-dap -DVSL_PERSONALITIES=cmsis-dap)
-vsl_personality_test(default-protocol-alone "VSL_DEFAULT_PROTOCOL is deprecated, and ignored"
-        -DVSL_PERSONALITIES=versaloon -DVSL_DEFAULT_PROTOCOL=cmsis-dap)
-vsl_personality_test(default-protocol-unknown "Unknown VSL_DEFAULT_PROTOCOL 'wch-link'"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=wch-link)
-vsl_personality_test(default-protocol-and-personality "Set VSL_DEFAULT_PERSONALITY or the deprecated VSL_DEFAULT_PROTOCOL"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=versaloon -DVSL_DEFAULT_PERSONALITY=cmsis-dap)
-vsl_personality_test(default-protocol-and-personality-same "set=versaloon,cmsis-dap default=cmsis-dap"
-        -DVSL_PROTOCOL=dual -DVSL_DEFAULT_PROTOCOL=cmsis-dap -DVSL_DEFAULT_PERSONALITY=cmsis-dap)
 
 # The cache across configure runs: tests/cmake/fixture is configured in
 # one build directory again and again, in this order. Each step needs the
@@ -199,12 +185,8 @@ set_tests_properties(personalities.cache.clean PROPERTIES FIXTURES_SETUP vsl-cac
 set(_vsl_fixture_previous vsl-cache-clean)
 # A first configure without options caches the empty defaults
 vsl_personality_cache_test(default "set=versaloon default=versaloon tag=\\[\\]")
-# Then the deprecated option in the same directory: no error
-vsl_personality_cache_test(protocol "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\]" -DVSL_PROTOCOL=dual)
-# The new option while VSL_PROTOCOL is still in the cache: an error
-vsl_personality_cache_test(both "not both" -DVSL_PERSONALITIES=cmsis-dap)
-# Removed from the cache: the new option works
-vsl_personality_cache_test(unset "set=cmsis-dap default=cmsis-dap" -UVSL_PROTOCOL -DVSL_PERSONALITIES=cmsis-dap)
+# Then a set in the same directory
+vsl_personality_cache_test(set "set=cmsis-dap default=cmsis-dap" -DVSL_PERSONALITIES=cmsis-dap)
 # A default that the new set does not have: an error with a hint
 vsl_personality_cache_test(stale-default "-UVSL_DEFAULT_PERSONALITY" -DVSL_DEFAULT_PERSONALITY=cmsis-dap -DVSL_PERSONALITIES=versaloon)
 

@@ -210,6 +210,41 @@ class HookedPort final : public protocol::JtagPort {
    jtag::BitBangPort<Pins> port_;
 };
 
+// The bit-bang engine, with a check of the JtagPort contract at each
+// shift: the TDI and TMS bits above bitCount are 0, and tdo is 0 on entry.
+class CheckedPort final : public protocol::JtagPort {
+   public:
+   explicit CheckedPort(Pins &pins)
+      : port_(pins) {
+   }
+
+   void init() override {
+      port_.init();
+   }
+   void fini() override {
+      port_.fini();
+   }
+   [[nodiscard]] bool setSpeed(uint32_t kHz) override {
+      return port_.setSpeed(kHz);
+   }
+   [[nodiscard]] bool
+   shift(uint32_t bitCount, art::span<const uint8_t> tdi, art::span<const uint8_t> tms, art::span<uint8_t> tdo) override {
+      ++shifts;
+      const auto unused = static_cast<uint8_t>(bitCount % 8 == 0 ? 0 : 0xFFu << (bitCount % 8));
+      if((tdi.back() & unused) != 0 || (tms.back() & unused) != 0 ||
+         std::any_of(tdo.begin(), tdo.end(), [](uint8_t byte) { return byte != 0; })) {
+         ++violations;
+      }
+      return port_.shift(bitCount, tdi, tms, tdo);
+   }
+
+   int shifts{ 0 };
+   int violations{ 0 };
+
+   private:
+   jtag::BitBangPort<Pins> port_;
+};
+
 // An STM32F1 chain, connected and configured
 struct Stm32Bench : Bench {
    Stm32Bench() {
@@ -584,6 +619,22 @@ TEST_CASE("DAP JTAG: a sequence makes the next transfer write the IR") {
    CHECK(b.run({ 0x10, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 }) == V{ 0x10, 0x00 });
    CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == cat({ { 0x05, 0x01, 0x01 }, word(b.chain.dpidr) }));
    CHECK(b.chain.irScans == 4);
+}
+
+TEST_CASE("DAP JTAG: each scan clears its unused bits and TDO bytes") {
+   BasicBench<CheckedPort> b;
+   b.connect();
+   b.configure({ 4, 5 });
+   // DR scans, then an IR scan in the same buffers
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == cat({ { 0x05, 0x01, 0x01 }, word(b.chain.dpidr) }));
+   CHECK(b.run({ 0x16, 0x00 }) == cat({ { 0x16, 0x00 }, word(dpIdcode) }));
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == cat({ { 0x05, 0x01, 0x01 }, word(b.chain.dpidr) }));
+   // A sequence of 64 bits with TDO capture, then sequences of 3 bits with
+   // TMS and of 13 bits, all with TDI bytes of 0xFF
+   CHECK(b.run(cat({ { 0x14, 0x01, 0x80 }, Bytes(8, 0xFF) })).size() == 10);
+   CHECK(b.run({ 0x14, 0x02, 0x43, 0xFF, 0x0D, 0xFF, 0xFF }) == V{ 0x14, 0x00 });
+   CHECK(b.port.shifts > 5);
+   CHECK(b.port.violations == 0);
 }
 
 TEST_CASE("DAP JTAG: the idle cycles of DAP_TransferConfigure follow each DR scan") {
