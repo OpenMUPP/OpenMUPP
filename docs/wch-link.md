@@ -34,6 +34,11 @@ The `wch-link` image has these properties:
   To leave the WCH-Link personality, use the switch request on EP0 or the key (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
   `tools/vsl_personality.py` sends the switch request on EP0, for example `python3 tools/vsl_personality.py switch versaloon`.
   The tool knows the WCH-Link personality by its USB ID (`1209:0001` or `1a86:8010`) and the product string `Versaloon WCH-Link`.
+  The ID `1209:0001` is the shared test ID of pid.codes, so the tool must read the product string.
+  Without access to the device, the tool cannot read it.
+  The tool then tells you the ID, the bus and the address of the device, and it points to `etc/70-versaloon-wch-link.rules`.
+  Copy this file to `/etc/udev/rules.d/` to fix the access.
+  To skip the product string check, use `--id`, for example `python3 tools/vsl_personality.py --id 1209:0001 switch versaloon`.
   The `wch-link` image has only one personality, so it stalls the switch request on EP0.
   While the WCH-Link personality is active, the image has no serial port, and the debug log of a `Debug` build is silent.
 

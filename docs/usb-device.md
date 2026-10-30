@@ -213,6 +213,12 @@ python3 tools/vsl_personality.py switch bootloader
 `switch bootloader` starts `versaloon-bootloader` (see [Bootloader code](firmware-update.md#bootloader-code)).
 
 The tool finds the dongle by the VID:PID of each personality.
+`--id VID:PID` selects the dongle by this ID instead, without the product string check.
+This also works for a dongle with a custom ID.
+The tool takes the personality from the ID when it knows the ID.
+For an unknown ID, give it with `--active versaloon|cmsis-dap|wch-link`.
+Without `--active`, the switch request on EP0 still works, but the fallback command for old firmware does not.
+After a switch, the tool waits for the target personality at its standard IDs.
 For the WCH-Link personality, it also compares the product string with `Versaloon WCH-Link`.
 Other devices use the IDs `1209:0001` and `1a86:8010` too.
 The tool ignores a device with one of these IDs and a different product string.
