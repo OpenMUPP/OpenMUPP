@@ -47,7 +47,7 @@ The libraries are Git submodules in `dependencies/`.
 Clone with the submodules:
 
 ```sh
-git clone --recurse-submodules ssh://git@gitlab.vandertogt.org:3022/embedded-projects/versaloon-ng.git
+git clone --recurse-submodules ssh://git@gitlab.vandertogt.org:3022/embedded-projects/openmupp.git
 ```
 
 In an existing clone, run `git submodule update --init --recursive`.
