@@ -8,7 +8,7 @@ Thus unmodified OpenOCD (`vsllink` driver) finds it.
 |---|---|
 | VID:PID | `0x0483:0xA038` (the OpenOCD default) |
 | Device class | `0xEF/0x02/0x01` (miscellaneous, with interface association descriptors) |
-| Manufacturer string | `Versaloon` |
+| Manufacturer string | `OpenMUPP` |
 | Product string | `Versaloon`. OpenOCD looks for this word. |
 | Serial number string | The 96-bit chip UID in hexadecimal, 24 digits |
 | Maximum power | 200 mA, bus-powered |
@@ -68,8 +68,8 @@ The Versaloon personality is the default.
 | Item | Value |
 |---|---|
 | VID:PID | `0x0403:0x9B3C` |
-| Product string | `Versaloon CMSIS-DAP` |
-| Interface 0 string | `Versaloon CMSIS-DAP v2` |
+| Product string | `OpenMUPP CMSIS-DAP` |
+| Interface 0 string | `OpenMUPP CMSIS-DAP v2` |
 | `bcdUSB` | `0x0201` (USB 2.0 with a BOS descriptor) |
 | Other items | As in the Versaloon personality |
 

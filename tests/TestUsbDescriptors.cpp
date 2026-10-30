@@ -242,9 +242,9 @@ TEST_CASE("The strings name the device and the serial port") {
    CHECK(languages[1] == descriptorType(DescriptorType::String));
    CHECK(word(&languages[2]) == 0x0409);
 
-   CHECK(text(usb::manufacturerDescriptor) == "Versaloon");
+   CHECK(text(usb::manufacturerDescriptor) == "OpenMUPP");
    CHECK(text(usb::productDescriptor).find("Versaloon") != std::string::npos);
-   CHECK(text(usb::serialPortDescriptor) == "Versaloon serial port");
+   CHECK(text(usb::serialPortDescriptor) == "OpenMUPP serial port");
    CHECK(usb::stringCount == 5);
 }
 

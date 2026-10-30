@@ -60,7 +60,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 
 ## Use the probe
 
-The probe has the USB ID `0403:9B3C` and the product name `Versaloon CMSIS-DAP`.
+The probe has the USB ID `0403:9B3C` and the product name `OpenMUPP CMSIS-DAP`.
 The host tools find the CMSIS-DAP v2 interface by the text `CMSIS-DAP` in its interface string.
 
 On Linux, a udev rule gives a normal user access to the probe.

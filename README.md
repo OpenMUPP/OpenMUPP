@@ -223,7 +223,7 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
 
-A firmware image built with `-DVSL_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `Versaloon CMSIS-DAP`.
+A firmware image built with `-DVSL_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `OpenMUPP CMSIS-DAP`.
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 The serial port works as in the default image.
 

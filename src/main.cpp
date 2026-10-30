@@ -182,8 +182,8 @@ wchlink::Processor wchProcessor{ wchTarget, wchPlatform };
 // --- CMSIS-DAP --------------------------------------------------------
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
 // processor keeps a pointer to the serial number text.
-constexpr const char *dapVendor = "Versaloon";
-constexpr const char *dapProduct = "Versaloon CMSIS-DAP";
+constexpr const char *dapVendor = "OpenMUPP";
+constexpr const char *dapProduct = "OpenMUPP CMSIS-DAP";
 
 std::array<char, 2 * hw::Uid::SizeBytes + 1> dapSerialNumber{};
 
