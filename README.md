@@ -227,7 +227,7 @@ A firmware image built with `-DVSL_PERSONALITIES=cmsis-dap` shows as a USB devic
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 The serial port works as in the default image.
 
-A firmware image built with `-DVSL_PERSONALITIES=wch-link` shows as a USB device with the ID `1209:0001` and the product name `Versaloon WCH-Link`.
+A firmware image built with `-DVSL_PERSONALITIES=wch-link` shows as a USB device with the ID `1209:0001` and the product name `OpenMUPP WCH-Link`.
 The host tools `wlink` and `minichlink` find the probe if it has the ID `1a86:8010` (see [docs/wch-link.md](docs/wch-link.md#use-the-probe)).
 This image has no serial port.
 

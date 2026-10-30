@@ -220,7 +220,7 @@ For an unknown ID, give it with `--active versaloon|cmsis-dap|wch-link`.
 The tool still needs access to the device, so `--id` does not replace the udev rules.
 Without `--active`, the switch request on EP0 still works, but the fallback command for old firmware does not.
 After a switch, the tool waits for the target personality at its standard IDs.
-For the WCH-Link personality, it also compares the product string with `Versaloon WCH-Link`.
+For the WCH-Link personality, it also compares the product string with `OpenMUPP WCH-Link`, or `Versaloon WCH-Link` of older firmware.
 Other devices use the IDs `1209:0001` and `1a86:8010` too.
 The tool ignores a device with one of these IDs and a different product string.
 Use `--serial` to select one dongle when more than one is connected.

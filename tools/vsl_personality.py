@@ -71,10 +71,11 @@ PERSONALITIES = {
 
 # Other devices use these USB IDs too (the pid.codes test ID, the real
 # WCH-LinkE, the ST virtual COM port), so the product string must also match.
+# Firmware before the OpenMUPP rename has the product "Versaloon WCH-Link".
 PRODUCT_STRINGS = {
-    (0x1209, 0x0001): "Versaloon WCH-Link",
-    (0x1A86, 0x8010): "Versaloon WCH-Link",
-    (0x0483, 0x5740): "Bootloader",
+    (0x1209, 0x0001): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
+    (0x1A86, 0x8010): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
+    (0x0483, 0x5740): ("Bootloader",),
 }
 
 # The ROM DFU has its own serial number, not the chip UID of the firmware,
@@ -205,12 +206,12 @@ def find_devices(usb, serial=None, any_serial_ids=(), usb_id=None, unreadable=No
     result = []
     for name, vid, pid in candidates:
         for device in usb.core.find(find_all=True, idVendor=vid, idProduct=pid):
-            product = PRODUCT_STRINGS.get((vid, pid))
-            if product is not None and usb_id is None:
+            products = PRODUCT_STRINGS.get((vid, pid))
+            if products is not None and usb_id is None:
                 found = get_string(usb, device, device.iProduct)
                 if found is None and unreadable is not None:
                     unreadable.append(device)
-                if found != product:
+                if found not in products:
                     continue
             if serial is not None and (vid, pid) not in any_serial_ids:
                 found = get_string(usb, device, device.iSerialNumber)
