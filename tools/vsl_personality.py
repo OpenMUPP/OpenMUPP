@@ -37,6 +37,17 @@ Usage:
     python3 vsl_personality.py switch wch-link
     python3 vsl_personality.py switch versaloon --serial 0123456789AB
     python3 vsl_personality.py switch bootloader
+    python3 vsl_personality.py --id 1209:0001 show
+    python3 vsl_personality.py --id 1234:5678 --active wch-link switch versaloon
+
+A device with a known ID, but with strings that the tool cannot read, is
+reported with its bus and address. On Linux this is a missing udev rule, and
+--id does not help: the tool cannot open the device either.
+--id VID:PID selects the dongle by this ID, without the product string check,
+for a dongle with an ID or a product string that the tool does not know.
+An ID that the tool does not know has an unknown personality: --active names
+it. Without it, the EP0 request still works, but not the fallback command.
+The wait after a switch looks for the standard IDs of the target.
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
 The unit tests in test_vsl_personality.py need no pyusb and no hardware.
@@ -81,6 +92,7 @@ FW_UPDATE_KEY = 0xAA
 DAP_VENDOR0 = 0x80
 DAP_INVALID = 0xFF
 LIBUSB_ERROR_PIPE = -9
+LIBUSB_ERROR_ACCESS = -3
 # libusb errors after which the request can have gone out: IO, NO_DEVICE,
 # TIMEOUT. The dongle can disconnect before the status stage ends.
 IN_PROGRESS_ERRORS = {
@@ -90,6 +102,9 @@ IN_PROGRESS_ERRORS = {
 }
 TIMEOUT_MS = 1000
 ENUMERATION_TIMEOUT_S = 10.0
+
+
+UNKNOWN = "unknown"
 
 
 class PersonalityError(Exception):
@@ -141,6 +156,11 @@ def check_reply(active, reply, target=None):
         raise PersonalityError("the firmware refused the switch (status %d): %s" % (reply[1], refusal(target)))
 
 
+def is_access_denied(error):
+    """True when a USBError is a missing permission (EACCES)."""
+    return getattr(error, "errno", None) == errno.EACCES or getattr(error, "backend_error_code", None) == LIBUSB_ERROR_ACCESS
+
+
 def is_stall(error):
     """True when a USBError is a stall (EPIPE) of the device."""
     return error.errno == errno.EPIPE or getattr(error, "backend_error_code", None) == LIBUSB_ERROR_PIPE
@@ -169,21 +189,36 @@ def get_string(usb, device, index):
         return None
 
 
-def find_devices(usb, serial=None, any_serial_ids=()):
+def find_devices(usb, serial=None, any_serial_ids=(), usb_id=None, unreadable=None):
     """(personality, device) for each dongle, optionally with one serial number.
 
     The devices with an ID in any_serial_ids match each serial number.
+    usb_id = (VID, PID) selects the devices with this ID, without the product
+    string check; the personality is "unknown" for an ID that is not known.
+    The list unreadable gets each device whose product string the host cannot
+    read: it can be a dongle without access.
     """
+    if usb_id is None:
+        candidates = [(name, vid, pid) for name, (_code, ids) in PERSONALITIES.items() for vid, pid in ids]
+    else:
+        candidates = [(personality_of(*usb_id) or UNKNOWN, *usb_id)]
     result = []
-    for name, (_code, ids) in PERSONALITIES.items():
-        for vid, pid in ids:
-            for device in usb.core.find(find_all=True, idVendor=vid, idProduct=pid):
-                product = PRODUCT_STRINGS.get((vid, pid))
-                if product is not None and get_string(usb, device, device.iProduct) != product:
+    for name, vid, pid in candidates:
+        for device in usb.core.find(find_all=True, idVendor=vid, idProduct=pid):
+            product = PRODUCT_STRINGS.get((vid, pid))
+            if product is not None and usb_id is None:
+                found = get_string(usb, device, device.iProduct)
+                if found is None and unreadable is not None:
+                    unreadable.append(device)
+                if found != product:
                     continue
-                if serial is not None and (vid, pid) not in any_serial_ids and get_string(usb, device, device.iSerialNumber) != serial:
+            if serial is not None and (vid, pid) not in any_serial_ids:
+                found = get_string(usb, device, device.iSerialNumber)
+                if found != serial:
+                    if found is None and unreadable is not None and device not in unreadable:
+                        unreadable.append(device)
                     continue
-                result.append((name, device))
+            result.append((name, device))
     return result
 
 
@@ -245,8 +280,38 @@ def send_command(usb, device, active, target):
             pass
 
 
+def parse_usb_id(text):
+    """(VID, PID) of a "VID:PID" text in hexadecimal."""
+    try:
+        vid, pid = (int(part, 16) for part in text.split(":"))
+    except ValueError:
+        raise argparse.ArgumentTypeError("%r is not a VID:PID in hexadecimal, for example 1209:0001" % text)
+    if not (0 <= vid <= 0xFFFF and 0 <= pid <= 0xFFFF):
+        raise argparse.ArgumentTypeError("%r is out of range" % text)
+    return vid, pid
+
+
+def report_unreadable(unreadable):
+    """Tells about the devices with a known ID whose strings the host cannot read."""
+    for device in unreadable:
+        print(
+            "%04x:%04x on bus %s address %s: cannot read its strings, so it is not checked. "
+            "Without access, install the udev rules in etc/ (70-versaloon-*.rules)"
+            % (device.idVendor, device.idProduct, device.bus, device.address),
+            file=sys.stderr,
+        )
+
+
+def find_selected(usb, args):
+    """The dongles for the command line. Reports the devices without access."""
+    unreadable = []
+    devices = find_devices(usb, args.serial, usb_id=args.id, unreadable=unreadable)
+    report_unreadable(unreadable)
+    return devices
+
+
 def command_show(usb, args):
-    devices = find_devices(usb, args.serial)
+    devices = find_selected(usb, args)
     if not devices:
         print("No dongle found")
         return 1
@@ -257,7 +322,7 @@ def command_show(usb, args):
 
 
 def command_switch(usb, args):
-    devices = find_devices(usb, args.serial)
+    devices = find_selected(usb, args)
     if not devices:
         print("No dongle found", file=sys.stderr)
         return 1
@@ -265,6 +330,8 @@ def command_switch(usb, args):
         print("More than one dongle: select one with --serial", file=sys.stderr)
         return 1
     active, device = devices[0]
+    if active == UNKNOWN and args.active is not None:
+        active = args.active
     if active == args.personality:
         print("The dongle has the %s personality already" % active)
         return 0
@@ -277,6 +344,9 @@ def command_switch(usb, args):
             if active == "wch-link":
                 print("The firmware refused the switch: %s" % refusal(args.personality), file=sys.stderr)
                 return 1
+            if active == UNKNOWN:
+                print("The request stalled and the personality of this ID is unknown: select it with --active", file=sys.stderr)
+                return 1
             # A stall: the firmware refused the switch, or it is from before
             # the EP0 request. The in-protocol command tells which one.
             send_command(usb, device, active, args.personality)
@@ -285,12 +355,17 @@ def command_switch(usb, args):
         return 1
     except (usb.core.USBError, NotImplementedError) as error:
         print("Cannot send the request: %s" % error, file=sys.stderr)
+        if is_access_denied(error):
+            print("No access to the device: install the udev rules in etc/ (70-versaloon-*.rules)", file=sys.stderr)
         return 1
     finally:
         usb.util.dispose_resources(device)
     print("Switching from %s to %s ..." % (active, args.personality))
     if not wait_for(usb, args.personality, serial, ENUMERATION_TIMEOUT_S):
         print("The dongle did not enumerate as %s" % args.personality, file=sys.stderr)
+        unreadable = []
+        find_devices(usb, serial, unreadable=unreadable)
+        report_unreadable(unreadable)
         if args.personality == BOOTLOADER:
             # The tool reads the product string and the serial number, which needs access to the device
             print("If the bootloader runs, check the access to 0483:5740: etc/70-versaloon-bootloader.rules", file=sys.stderr)
@@ -305,11 +380,15 @@ def command_switch(usb, args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--serial", help="the serial number of the dongle (the chip UID)")
+    parser.add_argument("--id", type=parse_usb_id, metavar="VID:PID", help="select the dongle by this USB ID (hexadecimal), without the product string check")
+    parser.add_argument("--active", choices=sorted(set(PERSONALITIES) - {BOOTLOADER}), help="the personality of a dongle with an unknown --id")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("show", help="list the dongles and their personality")
     switch = commands.add_parser("switch", help="switch to a personality")
     switch.add_argument("personality", choices=sorted(PERSONALITIES))
     args = parser.parse_args(argv)
+    if args.active is not None and (args.id is None or personality_of(*args.id) is not None):
+        parser.error("--active needs --id with an ID that the tool does not know")
     usb = import_usb()
     if args.command == "show":
         return command_show(usb, args)
