@@ -95,6 +95,11 @@ class ParseOutputTest(unittest.TestCase):
         result = fb.parse_output(openocd_log(1024, firmware="Versaloon(0x15)by Simon(compiled on Jan  1 2013)"))
         self.assertEqual(result["firmware"], "Versaloon(0x15)by Simon(compiled on Jan  1 2013)")
 
+    def test_reads_firmware_text_without_abilities_line(self):
+        for firmware in ("openmupp v1.0.0, board mini", "versaloon-ng v0.12.0, board mini"):
+            log = openocd_log(1024, firmware=firmware).replace("USB_TO_XXX abilities", "other")
+            self.assertEqual(fb.parse_output(log)["firmware"], firmware)
+
     def test_missing_steps_are_absent(self):
         result = fb.parse_output("Error: no device found")
         self.assertNotIn("write_s", result)
