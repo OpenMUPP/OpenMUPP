@@ -23,8 +23,10 @@ An image that does not fit its limit has no `.hex` and `.bin` files, and no copi
 
 All images use the same object files.
 Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
-One linker script of the board links all images. The STM32F1 boards use `ldscripts/mem-f103.ld` (see [MCU family](boards.md#mcu-family)).
-CMake gives it the start of the application with `-Wl,--defsym=__vsl_app_offset=<bytes>`.
+One memory linker script of the board links all images. The scripts are in `ldscripts/` of system-stm32. The STM32F1 boards use `mem-F103x8.ld` (see [MCU family](boards.md#mcu-family)).
+CMake gives it the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
+The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
+For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
 
 For the STM32F1 boards (`VSL_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `versaloon-bootloader` for the same board.
 The target is `versaloon-bootloader`.
@@ -88,7 +90,7 @@ Thus a post-build step, `cmake/ImageSize.cmake`, compares the `.bin` file of eac
 
 With `VSL_STRICT_SIZE=OFF`, the build skips an image that does not fit:
 
-- The FLASH region of the linker script is 64 KB larger (`__vsl_flash_slack`), so the link does not fail.
+- The FLASH region of the linker script (`__flash_length`) is 64 KB larger (`VSL_FLASH_SLACK`), so the link does not fail.
 - The post-build step removes the `.hex` and `.bin` files of the image and their copies, and shows a CMake warning.
 - The build continues and makes the other images.
 - When the build skips the `app-8k` image, it also skips the combined image (`cmake/CombinedImage.cmake`).

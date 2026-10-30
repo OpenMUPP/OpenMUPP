@@ -69,8 +69,8 @@ set(PROJECT_INCLUDE_DIRS
 )
 
 # Application images. Each image is the same firmware, linked for one start
-# address (the linker script of the board, ldscripts/mem-f103.ld for the
-# STM32F1 boards). The value is the space in bytes in front
+# address (the system-stm32 memory script of the board, mem-F103x8.ld for
+# the STM32F1 boards). The value is the space in bytes in front
 # of the application:
 #   standalone  0       0x08000000, no bootloader: flash with a debug probe
 #   app-8k      8192    0x08002000, behind versaloon-bootloader (8 KB)
@@ -88,7 +88,7 @@ option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
 # An image that does not fit its flash limit: OFF skips the image with a
 # warning (cmake/ImageSize.cmake), ON stops the build. The size is only
 # known after the link. With OFF, the FLASH region of the linker script is
-# 64 KB larger (__vsl_flash_slack), so that the link does not fail. The
+# 64 KB larger (VSL_FLASH_SLACK), so that the link does not fail. The
 # CI build jobs set ON: each image of each CI build must fit.
 option(VSL_STRICT_SIZE "Stop the build when an image does not fit its flash limit, instead of skipping the image" OFF)
 # Application images to leave out, for example app-10k: CI leaves it out of
@@ -241,7 +241,13 @@ if (CMAKE_CROSSCOMPILING)
     set(COMMON_OPTIONS -Os -ffunction-sections -fdata-sections -g -fno-common -fmessage-length=0 -fsigned-char -Werror=odr --specs=nano.specs --specs=nosys.specs)
     set(C_OPTIONS -std=gnu11)
     set(DEBUG_OPTIONS -Wall -Wextra -Og)
-    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${CMAKE_CURRENT_SOURCE_DIR}/ldscripts -Wl,--defsym=__vsl_settings_size=${VSL_SETTINGS_PAGE_SIZE} -Wl,--defsym=__vsl_flash_slack=${VSL_FLASH_SLACK} -T${VSL_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    # The linker scripts of system-stm32 (docs/building.md there). The
+    # settings page is the reserved flash at the end (__flash_reserved_start).
+    # The main stack is 2 KB, because the STM32F103 has only 20 KB RAM, and
+    # the link fails when less than the full stack is free. Each image sets
+    # __flash_offset and __flash_length (vsl_add_app_image).
+    set(VSL_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32/ldscripts)
+    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${VSL_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_end=${VSL_SETTINGS_PAGE_SIZE} -Wl,--defsym=__main_stack_size=2048 -Wl,--defsym=__minimum_stack_size=2048 -T${VSL_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
 endif ()
 
 # Central interface target to unify compile/link flags and defines across all used libraries and executables
@@ -306,12 +312,15 @@ if (CMAKE_CROSSCOMPILING)
         set(_offset ${VSL_APP_OFFSET_${image}})
         math(EXPR _limit "${VSL_FLASH_SIZE} - ${_offset} - ${VSL_SETTINGS_PAGE_SIZE}")
         set(VSL_APP_LIMIT_${image} ${_limit} PARENT_SCOPE)
+        # The FLASH region of the link, with the slack: the size check
+        # below compares the image with the real limit.
+        math(EXPR _link_limit "${_limit} + ${VSL_FLASH_SLACK}")
         add_executable(${_target} src/main.cpp)
         # system-stm32 is an OBJECT library (start-up code, vector table).
         # CMake adds the objects of an OBJECT library only to the target
         # that links it directly, so each image links the libraries again.
         target_link_libraries(${_target} PUBLIC versaloon-ng-objects art::core art::stm32 system-stm32)
-        target_link_options(${_target} PUBLIC -Wl,--defsym=__vsl_app_offset=${_offset} -Wl,-Map,${_name}.map)
+        target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit} -Wl,-Map,${_name}.map)
         # FW_UPDATE enters the bootloader only behind versaloon-bootloader.
         # The legacy bootloader of app-10k does not know the boot request
         # (hasBootloaderEntry in src/main.cpp). On the STM32H5, the
@@ -321,7 +330,7 @@ if (CMAKE_CROSSCOMPILING)
         endif ()
         # Relink when a linker script or the size check changes
         set_target_properties(${_target} PROPERTIES LINK_DEPENDS
-                "${PROJECT_SOURCE_DIR}/ldscripts/${VSL_LDSCRIPT};${PROJECT_SOURCE_DIR}/ldscripts/libs.ld;${PROJECT_SOURCE_DIR}/ldscripts/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
+                "${VSL_LDSCRIPT_DIR}/${VSL_LDSCRIPT};${VSL_LDSCRIPT_DIR}/libs.ld;${VSL_LDSCRIPT_DIR}/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
 
         ADD_DUMP_TARGET(${_target})
         PRINT_SIZE_OF_TARGETS(${_target})
@@ -335,9 +344,6 @@ if (CMAKE_CROSSCOMPILING)
             # The stamp step writes the header into the ELF file and makes
             # the .hex and .bin files. A separate objcopy step would fill the
             # gaps with 0x00 and give a wrong CRC.
-            # The FLASH region of the link, with the slack: the size check
-            # below compares the image with the real limit.
-            math(EXPR _link_limit "${_limit} + ${VSL_FLASH_SLACK}")
             vsl_stamp_image(${_target} BIN ${_name}.bin HEX ${_name}.hex MAX_LENGTH ${_link_limit})
         endif ()
         # Post-build steps run in the order of the calls: the size check

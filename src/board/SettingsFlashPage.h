@@ -4,9 +4,9 @@
 // of an image with more than one personality (VSL_MULTI_PERSONALITY) and
 // the stored mode of the RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE). Target only.
 //
-// STM32F1: the page is the 1 KB at __vsl_settings_start (ldscripts/mem-f103.ld).
-// STM32H5: the page is the 8 KB sector at __vsl_settings_start, the last
-// sector of bank 2 (ldscripts/mem-h523xc.ld). Each log slot
+// STM32F1: the page is the 1 KB at __flash_reserved_start (system-stm32 mem-F103x8.ld).
+// STM32H5: the page is the 8 KB sector at __flash_reserved_start, the last
+// sector of bank 2 (system-stm32 mem-H523xC.ld). Each log slot
 // is one 128-bit flash word (personality/FlashWordSlot.h).
 // The linker script keeps the page out of the FLASH region of the image.
 // stm32flash erases only the pages of the image, so a firmware update
