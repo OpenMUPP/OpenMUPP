@@ -24,7 +24,7 @@ cmake --build build/mini-dap -j
 
 The default value is `versaloon`.
 The default image does not change.
-The build then writes `versaloon-ng-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
+The build then writes `openmupp-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
 All boards build with this value.
 
@@ -418,7 +418,7 @@ In a multi image, only the active personality sets up the pins and the timer of 
 An image without `cmsis-dap` ignores the option.
 An image with the bridge has the settings page, also an image with one personality: 1 KB less flash on the STM32F103, 8 KB less on the STM32H5 (see [Stored mode](#stored-mode)).
 The STM32H5 boards also build the bridge. The bridge is not tested on them.
-The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `versaloon-ng-mini-cmsis-dap-no-rv-bridge-app-10k-Release-<version>.bin`.
+The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `openmupp-mini-cmsis-dap-no-rv-bridge-app-10k-Release-<version>.bin`.
 The `cmsis-dap` and `dual` presets build the bridge:
 
 ```sh
@@ -683,7 +683,7 @@ Thus the firmware takes about 300 µs for each DMI scan, and the wire uses only 
 `adapter speed` (100 kHz to 10 MHz) does not change the rate.
 The [CH32V006 rates on the WeAct STM32H523](#ch32v006-rates-on-the-weact-stm32h523) show the cause (#114).
 
-The rates with the fix, on 2026-10-26, with a Mini with `versaloon-bootloader` and `app-8k` images of `mini-cmsis-dap-rv-bridge`:
+The rates with the fix, on 2026-10-26, with a Mini with `openmupp-bootloader` and `app-8k` images of `mini-cmsis-dap-rv-bridge`:
 
 | Measurement | Before (`v0.12.0-60-gd7f95ac`) | After the fix |
 |---|---|---|
@@ -1028,7 +1028,7 @@ Findings:
 
 Date: 2026-10-11.
 Firmware: `dev` at `6fc6d8b` with E7 (JTAG). The build is `v0.2.0-101-g6fc6d8b`. The tree was clean. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality, `Release` build.
-Probe: Mini board. The image ran behind `versaloon-bootloader`.
+Probe: Mini board. The image ran behind `openmupp-bootloader`.
 Target: STM32F103ZET6 (512 KiB flash) on JTAG. The wiring is the one of the SWD test, with TDI, TDO and TMS added.
 Host: Linux 6.18.55.
 Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1.

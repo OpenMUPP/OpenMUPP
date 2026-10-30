@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Shows and switches the USB personality of a multi image (VSL_PERSONALITIES),
-and starts the bootloader: versaloon-bootloader on the STM32F1 boards, the
+and starts the bootloader: openmupp-bootloader on the STM32F1 boards, the
 ROM USB DFU on the STM32H5 boards.
 
 The script finds the dongle by its VID:PID and sends the switch request on
@@ -27,7 +27,7 @@ device. The script then waits for the target device. See docs/usb-device.md,
 code. Each personality of an app-8k image or of an STM32H5 image accepts it,
 also in an image with one personality. After a stall, the Versaloon
 personality gets VERSALOON_FW_UPDATE [0x0F][0xAA], which older firmware also
-knows. The script then waits for versaloon-bootloader (0483:5740, product
+knows. The script then waits for openmupp-bootloader (0483:5740, product
 "Bootloader") or for the ROM DFU of the STM32H5 (0483:df11). See
 docs/firmware-update.md, "Bootloader code".
 
@@ -59,7 +59,7 @@ import sys
 import time
 
 # Personality name -> (code, ((VID, PID), ...)). "bootloader" is not a
-# personality: its code starts versaloon-bootloader (0483:5740) or the ROM
+# personality: its code starts openmupp-bootloader (0483:5740) or the ROM
 # DFU of the STM32H5 (0483:df11), and it has no switch command.
 BOOTLOADER = "bootloader"
 PERSONALITIES = {

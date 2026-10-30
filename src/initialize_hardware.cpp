@@ -74,7 +74,7 @@ void configurePins() {
 
 #if defined(STM32H5)
 // A key that is down at the reset starts the ROM bootloader, as
-// versaloon-bootloader does on the STM32F1 boards. The request and the
+// openmupp-bootloader does on the STM32F1 boards. The request and the
 // reset of enterBootloader() put the clocks back into their reset state
 // for the jump.
 void enterBootloaderOnKey() {
@@ -111,7 +111,7 @@ void os_startup_initialize_hardware() {
    enterBootloaderOnKey();
 #endif
 
-   // versaloon-bootloader jumps to the firmware with PRIMASK set (cpsid i).
+   // openmupp-bootloader jumps to the firmware with PRIMASK set (cpsid i).
    // Nothing else clears it, so without this the SysTick and USB interrupts
    // never run behind the bootloader.
    __enable_irq();

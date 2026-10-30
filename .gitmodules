@@ -10,7 +10,7 @@
 	path = dependencies/system-stm32
 	url = ssh://git@gitlab.vandertogt.org:3022/embedded-libraries/system-stm32.git
 	branch = main
-[submodule "dependencies/versaloon-bootloader"]
-	path = dependencies/versaloon-bootloader
-	url = ssh://git@gitlab.vandertogt.org:3022/tools/versaloon-bootloader.git
+[submodule "dependencies/openmupp-bootloader"]
+	path = dependencies/openmupp-bootloader
+	url = ssh://git@gitlab.vandertogt.org:3022/embedded-projects/versaloon-bootloader.git
 	branch = master

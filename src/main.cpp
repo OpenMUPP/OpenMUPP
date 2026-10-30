@@ -140,7 +140,7 @@ protocol::TargetPower targetPower{ boardPower, busyWaitDelay };
 
 // The bootloader entry of FW_UPDATE and of the bootloader code of the switch
 // commands, in every personality. On the STM32F1 only the app-8k image
-// enters the bootloader, behind versaloon-bootloader. On the STM32H5 the
+// enters the bootloader, behind openmupp-bootloader. On the STM32H5 the
 // standalone image enters the ROM bootloader. CMake defines
 // VSL_HAS_BOOTLOADER_ENTRY for this file of these images only
 // (vsl_add_app_image() in CMakeLists.txt). The other sources are shared by

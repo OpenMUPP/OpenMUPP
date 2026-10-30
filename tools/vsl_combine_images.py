@@ -8,8 +8,8 @@ step with it. See README.md, "Flash the firmware".
 
 Usage:
     python3 vsl_combine_images.py \\
-        --bootloader versaloon-bootloader-mini.bin \\
-        --app versaloon-ng-app-8k.bin --app-offset 0x2000 \\
+        --bootloader openmupp-bootloader-mini.bin \\
+        --app openmupp-app-8k.bin --app-offset 0x2000 \\
         --bin combined.bin --hex combined.hex
 
 The inputs are binary files. --app-offset is the start of the application,

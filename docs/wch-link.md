@@ -16,7 +16,7 @@ cmake --build --preset mini-wch-link -j
 
 Or set the CMake option `VSL_PERSONALITIES` to `wch-link`.
 All boards build with this value.
-The build writes `versaloon-ng-<board>-wch-link-<image>-<type>-<version>.hex` and `.bin`.
+The build writes `openmupp-<board>-wch-link-<image>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
 
 The `wch-link` image has these properties:

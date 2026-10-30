@@ -4,7 +4,7 @@
 
 using boot::BootloaderEntry;
 
-TEST_CASE("The boot request is the value of versaloon-bootloader") {
+TEST_CASE("The boot request is the value of openmupp-bootloader") {
    CHECK(boot::bootRequest == 0xB007);
 }
 

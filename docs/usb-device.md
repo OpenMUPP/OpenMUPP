@@ -210,7 +210,7 @@ python3 tools/vsl_personality.py switch versaloon
 python3 tools/vsl_personality.py switch bootloader
 ```
 
-`switch bootloader` starts `versaloon-bootloader` (see [Bootloader code](firmware-update.md#bootloader-code)).
+`switch bootloader` starts `openmupp-bootloader` (see [Bootloader code](firmware-update.md#bootloader-code)).
 
 The tool finds the dongle by the VID:PID of each personality.
 `--id VID:PID` selects the dongle by this ID instead, without the product string check.
