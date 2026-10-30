@@ -226,10 +226,12 @@ TEST_CASE("The CMSIS-DAP strings contain CMSIS-DAP in the product and interface 
    CHECK(languages.size() == 4);
    CHECK(word(&languages[2]) == 0x0409);
 
-   CHECK(text(usb::dap::manufacturerDescriptor) == "Versaloon");
+   CHECK(text(usb::dap::manufacturerDescriptor) == "OpenMUPP");
+   CHECK(text(usb::dap::productDescriptor) == "OpenMUPP CMSIS-DAP");
    CHECK(text(usb::dap::productDescriptor).find("CMSIS-DAP") != std::string::npos);
+   CHECK(text(usb::dap::interfaceStringDescriptor) == "OpenMUPP CMSIS-DAP v2");
    CHECK(text(usb::dap::interfaceStringDescriptor).find("CMSIS-DAP") != std::string::npos);
-   CHECK(text(usb::dap::serialPortDescriptor) == "Versaloon serial port");
+   CHECK(text(usb::dap::serialPortDescriptor) == "OpenMUPP serial port");
    CHECK(usb::dap::stringCount == 6);
    CHECK(usb::dap::stringInterface == 5);
 

@@ -140,6 +140,18 @@ TEST_CASE("WCH-Link descriptors: one vendor interface with two bulk pairs") {
    CHECK(usb::wch::packetMemoryUsed == 3 * 8 + 128 + 256);
 }
 
+TEST_CASE("WCH-Link strings: the product string matches etc/70-openmupp-wch-link.rules") {
+   const auto text = [](const auto &descriptor) {
+      std::string result;
+      for(std::size_t i = 2; i < descriptor.size(); i += 2) {
+         result.push_back(static_cast<char>(descriptor[i]));
+      }
+      return result;
+   };
+   CHECK(text(usb::wch::manufacturerDescriptor) == "OpenMUPP");
+   CHECK(text(usb::wch::productDescriptor) == "OpenMUPP WCH-Link");
+}
+
 TEST_CASE("WCH-Link: the host reads the descriptors and opens the endpoints") {
    WchLinkBench bench;
    bench.controller().busReset();

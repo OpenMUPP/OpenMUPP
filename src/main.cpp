@@ -182,8 +182,8 @@ wchlink::Processor wchProcessor{ wchTarget, wchPlatform };
 // --- CMSIS-DAP --------------------------------------------------------
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
 // processor keeps a pointer to the serial number text.
-constexpr const char *dapVendor = "Versaloon";
-constexpr const char *dapProduct = "Versaloon CMSIS-DAP";
+constexpr const char *dapVendor = "OpenMUPP";
+constexpr const char *dapProduct = "OpenMUPP CMSIS-DAP";
 
 std::array<char, 2 * hw::Uid::SizeBytes + 1> dapSerialNumber{};
 
@@ -505,7 +505,7 @@ int main() {
 
    debug::startLog();
    // The board names are string literals, so name.data() ends with a NUL.
-   LOG_INFO(debug::appLog, "versaloon-ng %s, board %s", versionString, board::current.name.data());
+   LOG_INFO(debug::appLog, "openmupp %s, board %s", versionString, board::current.name.data());
    startProtocol();
 
    // USB needs the 48 MHz clock from the PLL. Without the crystal the

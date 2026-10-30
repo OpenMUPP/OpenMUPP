@@ -79,7 +79,7 @@ desc::configuration(desc::ConfigurationFields{ .maxPowerMilliamps = maxPowerMill
                                               desc::endpoint(dataInEndpoint, art::usb::EndpointType::Bulk, packetSize)));
 
 inline constexpr auto languageDescriptor = desc::languages(desc::kLanguageEnglishUs);
-inline constexpr auto manufacturerDescriptor = desc::stringDescriptor(u"Versaloon");
-inline constexpr auto productDescriptor = desc::stringDescriptor(u"Versaloon WCH-Link");
+inline constexpr auto manufacturerDescriptor = desc::stringDescriptor(u"OpenMUPP");
+inline constexpr auto productDescriptor = desc::stringDescriptor(u"OpenMUPP WCH-Link");
 
 } // namespace usb::wch

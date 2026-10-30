@@ -157,12 +157,13 @@ def fake_usb(devices):
 
 class FindDevicesTest(unittest.TestCase):
     def test_wch_link_needs_the_product_string(self):
-        ours = FakeDevice(0x1209, 0x0001, "Versaloon WCH-Link")
+        ours = FakeDevice(0x1209, 0x0001, "OpenMUPP WCH-Link")
+        old = FakeDevice(0x1209, 0x0001, "Versaloon WCH-Link")
         other = FakeDevice(0x1209, 0x0001, "Some test device")
         real = FakeDevice(0x1A86, 0x8010, "WCH-Link")
-        ours_wch_id = FakeDevice(0x1A86, 0x8010, "Versaloon WCH-Link")
-        found = vp.find_devices(fake_usb([ours, other, real, ours_wch_id]))
-        self.assertEqual(found, [("wch-link", ours), ("wch-link", ours_wch_id)])
+        ours_wch_id = FakeDevice(0x1A86, 0x8010, "OpenMUPP WCH-Link")
+        found = vp.find_devices(fake_usb([ours, old, other, real, ours_wch_id]))
+        self.assertEqual(found, [("wch-link", ours), ("wch-link", old), ("wch-link", ours_wch_id)])
 
     def test_unreadable_product_string(self):
         for error in (FakeUsbError("Access denied", -3, errno.EACCES), NotImplementedError("not supported"), ValueError()):
@@ -301,7 +302,7 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(self.waited, [("wch-link", "SN1")])
 
     def test_ep0_request_from_wch_link(self):
-        device = FakeDevice(0x1209, 0x0001, "Versaloon WCH-Link")
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP WCH-Link")
         self.assertEqual(self.switch(device, "cmsis-dap"), 0)
         self.assertEqual(device.ctrl_transfers, [(0x40, 0x0E, 1, 0, None, vp.TIMEOUT_MS)])
         self.assertEqual(self.waited, [("cmsis-dap", "SN1")])
@@ -334,7 +335,7 @@ class CommandSwitchTest(unittest.TestCase):
             self.assertEqual(self.waited, [])
 
     def test_stall_in_wch_link_is_a_refusal(self):
-        device = FakeDevice(0x1209, 0x0001, "Versaloon WCH-Link", ctrl_error=stall())
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP WCH-Link", ctrl_error=stall())
         self.assertEqual(self.switch(device, "versaloon"), 1)
         self.assertEqual(device.writes, [])
         self.assertEqual(self.waited, [])
@@ -345,7 +346,7 @@ class CommandSwitchTest(unittest.TestCase):
     def test_bootloader_not_found_gives_the_udev_hint(self):
         self.wait_result = False
         self.assertEqual(self.switch(FakeDevice(0x0483, 0xA038), "bootloader"), 1)
-        self.assertIn("70-versaloon-bootloader.rules", self.stderr)
+        self.assertIn("70-openmupp-bootloader.rules", self.stderr)
 
     def test_fallback_versaloon(self):
         device = FakeDevice(0x0483, 0xA038, ctrl_error=stall(), reply=[0x00])
@@ -374,7 +375,7 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(self.waited, [("versaloon", "SN1")])
 
     def test_bootloader_ep0_request(self):
-        for vid, pid, product in ((0x0483, 0xA038, ""), (0x0403, 0x9B3C, ""), (0x1209, 0x0001, "Versaloon WCH-Link")):
+        for vid, pid, product in ((0x0483, 0xA038, ""), (0x0403, 0x9B3C, ""), (0x1209, 0x0001, "OpenMUPP WCH-Link")):
             self.waited = []
             device = FakeDevice(vid, pid, product)
             self.assertEqual(self.switch(device, "bootloader"), 0)
@@ -404,7 +405,7 @@ class CommandSwitchTest(unittest.TestCase):
         device = FakeDevice(0x1209, 0x0001, FakeUsbError("Access denied", -3, errno.EACCES))
         self.assertEqual(self.switch(device, "bootloader"), 1)
         self.assertIn("1209:0001 on bus 1 address 7", self.stderr)
-        self.assertIn("70-versaloon", self.stderr)
+        self.assertIn("70-openmupp", self.stderr)
         self.assertIn("No dongle found", self.stderr)
 
     def test_usb_id_switches_without_the_product_string(self):
@@ -416,7 +417,7 @@ class CommandSwitchTest(unittest.TestCase):
         denied = FakeUsbError("Access denied", -3, errno.EACCES)
         device = FakeDevice(0x1209, 0x0001, denied, serial=denied, ctrl_error=denied)
         self.assertEqual(self.switch(device, "versaloon", usb_id=(0x1209, 0x0001)), 1)
-        self.assertIn("70-versaloon", self.stderr)
+        self.assertIn("70-openmupp", self.stderr)
 
     def test_usb_id_and_serial_report_the_unreadable_serial(self):
         denied = FakeUsbError("Access denied", -3, errno.EACCES)

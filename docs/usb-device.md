@@ -8,7 +8,7 @@ Thus unmodified OpenOCD (`vsllink` driver) finds it.
 |---|---|
 | VID:PID | `0x0483:0xA038` (the OpenOCD default) |
 | Device class | `0xEF/0x02/0x01` (miscellaneous, with interface association descriptors) |
-| Manufacturer string | `Versaloon` |
+| Manufacturer string | `OpenMUPP` |
 | Product string | `Versaloon`. OpenOCD looks for this word. |
 | Serial number string | The 96-bit chip UID in hexadecimal, 24 digits |
 | Maximum power | 200 mA, bus-powered |
@@ -68,8 +68,8 @@ The Versaloon personality is the default.
 | Item | Value |
 |---|---|
 | VID:PID | `0x0403:0x9B3C` |
-| Product string | `Versaloon CMSIS-DAP` |
-| Interface 0 string | `Versaloon CMSIS-DAP v2` |
+| Product string | `OpenMUPP CMSIS-DAP` |
+| Interface 0 string | `OpenMUPP CMSIS-DAP v2` |
 | `bcdUSB` | `0x0201` (USB 2.0 with a BOS descriptor) |
 | Other items | As in the Versaloon personality |
 
@@ -220,7 +220,7 @@ For an unknown ID, give it with `--active versaloon|cmsis-dap|wch-link`.
 The tool still needs access to the device, so `--id` does not replace the udev rules.
 Without `--active`, the switch request on EP0 still works, but the fallback command for old firmware does not.
 After a switch, the tool waits for the target personality at its standard IDs.
-For the WCH-Link personality, it also compares the product string with `Versaloon WCH-Link`.
+For the WCH-Link personality, it also compares the product string with `OpenMUPP WCH-Link`, or `Versaloon WCH-Link` of older firmware.
 Other devices use the IDs `1209:0001` and `1a86:8010` too.
 The tool ignores a device with one of these IDs and a different product string.
 Use `--serial` to select one dongle when more than one is connected.
@@ -859,7 +859,7 @@ On Linux:
 2. Make sure that the kernel log (`dmesg`) shows a new `/dev/ttyACM*` port.
 3. Connect the UART TX pin to the UART RX pin (PA9 to PA10 on the Mini). Open the port in a terminal program, for example `picocom /dev/ttyACM0`. Make sure that the typed characters come back.
 4. Run OpenOCD with `-f interface/vsllink.cfg`.
-   Make sure that OpenOCD shows the version text of `GET_INFO`, for example `versaloon-ng v0.1.0, board mini`.
+   Make sure that OpenOCD shows the version text of `GET_INFO`, for example `openmupp v0.1.0, board mini`.
    Make sure that OpenOCD shows the capabilities, `USB_TO_XXX abilities: 0x00000008:0x000000C0:0xC0000002`.
    In JTAG mode, OpenOCD then scans the JTAG chain.
    In SWD mode, OpenOCD reads the DPIDR of the target.

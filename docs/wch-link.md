@@ -33,10 +33,11 @@ The `wch-link` image has these properties:
   The WCH-Link protocol has no command that switches the personality.
   To leave the WCH-Link personality, use the switch request on EP0 or the key (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
   `tools/vsl_personality.py` sends the switch request on EP0, for example `python3 tools/vsl_personality.py switch versaloon`.
-  The tool knows the WCH-Link personality by its USB ID (`1209:0001` or `1a86:8010`) and the product string `Versaloon WCH-Link`.
+  The tool knows the WCH-Link personality by its USB ID (`1209:0001` or `1a86:8010`) and the product string `OpenMUPP WCH-Link`.
+  It also accepts `Versaloon WCH-Link`, the product string of older firmware.
   The ID `1209:0001` is the shared test ID of pid.codes, so the tool must read the product string.
   Without access to the device, the tool cannot read it.
-  The tool then tells you the ID, the bus and the address of the device, and it points to `etc/70-versaloon-wch-link.rules`.
+  The tool then tells you the ID, the bus and the address of the device, and it points to `etc/70-openmupp-wch-link.rules`.
   Copy this file to `/etc/udev/rules.d/` to fix the access.
   `--id` does not give access.
   Use it for a dongle with a USB ID or a product string that the tool does not know, for example `python3 tools/vsl_personality.py --id 1234:5678 --active wch-link switch versaloon`.
@@ -47,7 +48,8 @@ The `wch-link` image has these properties:
 
 The default USB ID is `1209:0001`, the test ID of pid.codes.
 It stays until the project has its own product ID.
-The product string is `Versaloon WCH-Link`.
+The product string is `OpenMUPP WCH-Link`.
+Older firmware has the product string `Versaloon WCH-Link`.
 
 `wlink` and `minichlink` look for a probe with the ID `1a86:8010` of WCH.
 Thus they do not find a probe with the default ID.
@@ -85,14 +87,16 @@ For another chip, the connect fails.
 ## Use the probe
 
 On Linux, a udev rule gives a normal user access to the probe.
-Copy `etc/70-versaloon-wch-link.rules` to `/etc/udev/rules.d/`.
+Copy `etc/70-openmupp-wch-link.rules` to `/etc/udev/rules.d/`.
+The file replaces `70-versaloon-wch-link.rules` of older versions.
+Its rule does not match the product string of older firmware.
 Then reload the rules with `udevadm control --reload` and plug in the probe again.
 The file has a rule for the default ID and a rule for the ID of WCH.
 The file number must stay below 73, because systemd applies the `uaccess` tag in `73-seat-late.rules`.
 The rule for the default ID also checks the product string, because other devices use the test ID too.
 
 ```text
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="Versaloon WCH-Link", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP WCH-Link", MODE="0660", TAG+="uaccess"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="8010", MODE="0660", TAG+="uaccess"
 ```
 

@@ -71,10 +71,11 @@ PERSONALITIES = {
 
 # Other devices use these USB IDs too (the pid.codes test ID, the real
 # WCH-LinkE, the ST virtual COM port), so the product string must also match.
+# Firmware before the OpenMUPP rename has the product "Versaloon WCH-Link".
 PRODUCT_STRINGS = {
-    (0x1209, 0x0001): "Versaloon WCH-Link",
-    (0x1A86, 0x8010): "Versaloon WCH-Link",
-    (0x0483, 0x5740): "Bootloader",
+    (0x1209, 0x0001): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
+    (0x1A86, 0x8010): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
+    (0x0483, 0x5740): ("Bootloader",),
 }
 
 # The ROM DFU has its own serial number, not the chip UID of the firmware,
@@ -205,12 +206,12 @@ def find_devices(usb, serial=None, any_serial_ids=(), usb_id=None, unreadable=No
     result = []
     for name, vid, pid in candidates:
         for device in usb.core.find(find_all=True, idVendor=vid, idProduct=pid):
-            product = PRODUCT_STRINGS.get((vid, pid))
-            if product is not None and usb_id is None:
+            products = PRODUCT_STRINGS.get((vid, pid))
+            if products is not None and usb_id is None:
                 found = get_string(usb, device, device.iProduct)
                 if found is None and unreadable is not None:
                     unreadable.append(device)
-                if found != product:
+                if found not in products:
                     continue
             if serial is not None and (vid, pid) not in any_serial_ids:
                 found = get_string(usb, device, device.iSerialNumber)
@@ -296,7 +297,7 @@ def report_unreadable(unreadable):
     for device in unreadable:
         print(
             "%04x:%04x on bus %s address %s: cannot read its strings, so it is not checked. "
-            "Without access, install the udev rules in etc/ (70-versaloon-*.rules)"
+            "Without access, install the udev rules in etc/ (70-openmupp-*.rules)"
             % (device.idVendor, device.idProduct, device.bus, device.address),
             file=sys.stderr,
         )
@@ -356,7 +357,7 @@ def command_switch(usb, args):
     except (usb.core.USBError, NotImplementedError) as error:
         print("Cannot send the request: %s" % error, file=sys.stderr)
         if is_access_denied(error):
-            print("No access to the device: install the udev rules in etc/ (70-versaloon-*.rules)", file=sys.stderr)
+            print("No access to the device: install the udev rules in etc/ (70-openmupp-*.rules)", file=sys.stderr)
         return 1
     finally:
         usb.util.dispose_resources(device)
@@ -368,7 +369,7 @@ def command_switch(usb, args):
         report_unreadable(unreadable)
         if args.personality == BOOTLOADER:
             # The tool reads the product string and the serial number, which needs access to the device
-            print("If the bootloader runs, check the access to 0483:5740: etc/70-versaloon-bootloader.rules", file=sys.stderr)
+            print("If the bootloader runs, check the access to 0483:5740: etc/70-openmupp-bootloader.rules", file=sys.stderr)
         return 1
     if args.personality == BOOTLOADER:
         print("The dongle runs the bootloader")

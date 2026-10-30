@@ -17,7 +17,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import flash_benchmark as fb  # noqa: E402
 
-FIRMWARE = "versaloon-ng v0.1.0, board mini"
+FIRMWARE = "openmupp v0.1.0, board mini"
 
 
 def openocd_log(size, write_s=1.5, verify_s=0.25, read_s=0.5, firmware=FIRMWARE):
@@ -94,6 +94,11 @@ class ParseOutputTest(unittest.TestCase):
     def test_reads_old_firmware_text(self):
         result = fb.parse_output(openocd_log(1024, firmware="Versaloon(0x15)by Simon(compiled on Jan  1 2013)"))
         self.assertEqual(result["firmware"], "Versaloon(0x15)by Simon(compiled on Jan  1 2013)")
+
+    def test_reads_firmware_text_without_abilities_line(self):
+        for firmware in ("openmupp v1.0.0, board mini", "versaloon-ng v0.12.0, board mini"):
+            log = openocd_log(1024, firmware=firmware).replace("USB_TO_XXX abilities", "other")
+            self.assertEqual(fb.parse_output(log)["firmware"], firmware)
 
     def test_missing_steps_are_absent(self):
         result = fb.parse_output("Error: no device found")
