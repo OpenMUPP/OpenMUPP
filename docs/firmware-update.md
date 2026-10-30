@@ -63,7 +63,7 @@ The other commands compare the serial number of the ROM DFU, so `--serial` does 
 
 The tool must open the bootloader to read its strings.
 On Linux, a udev rule gives a normal user this access.
-Copy `etc/70-versaloon-bootloader.rules` to `/etc/udev/rules.d/`.
+Copy `etc/70-openmupp-bootloader.rules` to `/etc/udev/rules.d/`.
 Then reload the rules with `udevadm control --reload`, and start the bootloader again.
 Without access, the tool does not find the bootloader.
 It then stops after 10 s with an error and a hint, also when the bootloader runs.
@@ -160,7 +160,7 @@ STM32_Programmer_CLI -c port=usb1 -w openmupp-standalone.bin 0x08000000 -v -s 0x
 ```
 
 On Linux, `dfu-util` needs access to the device.
-`etc/70-versaloon-bootloader.rules` has a udev rule for `0483:df11` (see [Bootloader code](#bootloader-code)).
+`etc/70-openmupp-bootloader.rules` has a udev rule for `0483:df11` (see [Bootloader code](#bootloader-code)).
 
 The write erases only the sectors of the image.
 Thus a multi image or an image with the RISC-V bridge keeps the stored personality and the bridge mode in the last sector of bank 2, at `0x0803E000` on the STM32H523CC.

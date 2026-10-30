@@ -297,7 +297,7 @@ def report_unreadable(unreadable):
     for device in unreadable:
         print(
             "%04x:%04x on bus %s address %s: cannot read its strings, so it is not checked. "
-            "Without access, install the udev rules in etc/ (70-versaloon-*.rules)"
+            "Without access, install the udev rules in etc/ (70-openmupp-*.rules)"
             % (device.idVendor, device.idProduct, device.bus, device.address),
             file=sys.stderr,
         )
@@ -357,7 +357,7 @@ def command_switch(usb, args):
     except (usb.core.USBError, NotImplementedError) as error:
         print("Cannot send the request: %s" % error, file=sys.stderr)
         if is_access_denied(error):
-            print("No access to the device: install the udev rules in etc/ (70-versaloon-*.rules)", file=sys.stderr)
+            print("No access to the device: install the udev rules in etc/ (70-openmupp-*.rules)", file=sys.stderr)
         return 1
     finally:
         usb.util.dispose_resources(device)
@@ -369,7 +369,7 @@ def command_switch(usb, args):
         report_unreadable(unreadable)
         if args.personality == BOOTLOADER:
             # The tool reads the product string and the serial number, which needs access to the device
-            print("If the bootloader runs, check the access to 0483:5740: etc/70-versaloon-bootloader.rules", file=sys.stderr)
+            print("If the bootloader runs, check the access to 0483:5740: etc/70-openmupp-bootloader.rules", file=sys.stderr)
         return 1
     if args.personality == BOOTLOADER:
         print("The dongle runs the bootloader")

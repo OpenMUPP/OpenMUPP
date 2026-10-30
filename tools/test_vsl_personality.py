@@ -346,7 +346,7 @@ class CommandSwitchTest(unittest.TestCase):
     def test_bootloader_not_found_gives_the_udev_hint(self):
         self.wait_result = False
         self.assertEqual(self.switch(FakeDevice(0x0483, 0xA038), "bootloader"), 1)
-        self.assertIn("70-versaloon-bootloader.rules", self.stderr)
+        self.assertIn("70-openmupp-bootloader.rules", self.stderr)
 
     def test_fallback_versaloon(self):
         device = FakeDevice(0x0483, 0xA038, ctrl_error=stall(), reply=[0x00])
@@ -405,7 +405,7 @@ class CommandSwitchTest(unittest.TestCase):
         device = FakeDevice(0x1209, 0x0001, FakeUsbError("Access denied", -3, errno.EACCES))
         self.assertEqual(self.switch(device, "bootloader"), 1)
         self.assertIn("1209:0001 on bus 1 address 7", self.stderr)
-        self.assertIn("70-versaloon", self.stderr)
+        self.assertIn("70-openmupp", self.stderr)
         self.assertIn("No dongle found", self.stderr)
 
     def test_usb_id_switches_without_the_product_string(self):
@@ -417,7 +417,7 @@ class CommandSwitchTest(unittest.TestCase):
         denied = FakeUsbError("Access denied", -3, errno.EACCES)
         device = FakeDevice(0x1209, 0x0001, denied, serial=denied, ctrl_error=denied)
         self.assertEqual(self.switch(device, "versaloon", usb_id=(0x1209, 0x0001)), 1)
-        self.assertIn("70-versaloon", self.stderr)
+        self.assertIn("70-openmupp", self.stderr)
 
     def test_usb_id_and_serial_report_the_unreadable_serial(self):
         denied = FakeUsbError("Access denied", -3, errno.EACCES)
