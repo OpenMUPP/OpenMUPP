@@ -1,6 +1,6 @@
 #pragma once
 
-// Entry into the bootloader from the running firmware: versaloon-bootloader
+// Entry into the bootloader from the running firmware: openmupp-bootloader
 // on the STM32F1, the ROM bootloader (USB DFU) on the STM32H5.
 // Hardware-independent: the host unit tests check it.
 //
@@ -14,7 +14,7 @@
 // (boot/Bootloader.h), which writes bootRequest to a backup register and
 // resets.
 //
-// Contract with versaloon-bootloader (tools/versaloon-bootloader, README
+// Contract with openmupp-bootloader (dependencies/openmupp-bootloader, README
 // "Start the bootloader from the application"): after a reset with
 // bootRequest in BKP->DR1, the bootloader clears the register and stays in
 // bootloader mode. The next reset starts the application again.
@@ -33,7 +33,7 @@ namespace boot {
 // The value in BKP->DR1 that keeps the bootloader in bootloader mode. The
 // STM32H5 uses the same value in TAMP->BKP0R.
 // The bootloader defines the same value (boot::bootRequest in
-// src/boot/BootDecision.h of versaloon-bootloader).
+// src/boot/BootDecision.h of openmupp-bootloader).
 inline constexpr uint16_t bootRequest = 0xB007;
 
 // Only the app-8k image of the STM32F1 and the standalone image of the

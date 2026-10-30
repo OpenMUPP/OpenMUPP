@@ -127,7 +127,7 @@ Connect a debug probe to these pads to write the firmware.
 
 ## Bootloader
 
-The board runs the firmware behind `versaloon-bootloader` (board `stlinkv2miniclone` of the bootloader).
+The board runs the firmware behind `openmupp-bootloader` (board `stlinkv2miniclone` of the bootloader).
 Then you can update the firmware over USB, without the SWD pads.
 Write the combined image `versaloon-ng-with-bootloader.hex` one time with a debug probe on the SWD pads (see [Install the bootloader](firmware-update.md#install-the-bootloader)).
 Remove the read protection first (see [Read protection of the original firmware](#read-protection-of-the-original-firmware)).
@@ -175,7 +175,7 @@ Then disconnect the power of the board, and connect it again.
 Status: the test passed on 2026-10-26.
 Image: `stlinkv2miniclone` board with `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `Release` build.
 
-The test used the `app-8k` image behind `versaloon-bootloader`, in the combined image `versaloon-ng-with-bootloader.hex`.
+The test used the `app-8k` image behind `openmupp-bootloader`, in the combined image `versaloon-ng-with-bootloader.hex`.
 The `standalone` image has the same source code and clock setup, but nobody ran it on the board.
 
 The image was written with SWD (OpenOCD `program`, with verify) through the SWD pads.

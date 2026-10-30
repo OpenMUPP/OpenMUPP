@@ -3,7 +3,7 @@
 // Start of the bootloader from the firmware. Target only.
 // boot/BootloaderEntry.h has the contract with the bootloader.
 //
-// STM32F1 (boot/Bootloader.cpp): versaloon-bootloader, app-8k image only.
+// STM32F1 (boot/Bootloader.cpp): openmupp-bootloader, app-8k image only.
 // STM32H5 (boot/RomBootloader.cpp): the USB DFU of the ROM bootloader in
 // system memory (ST AN2606), standalone image.
 

@@ -154,7 +154,7 @@ Thus a short double flash at the connection is not always a problem.
 The WCH-Link personality counts no probe errors, so it never shows the double flash.
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
-The bootloader (versaloon-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
+The bootloader (openmupp-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `VSL_DEBUG_SWD` has no USB LED on the Mini.
 
 ## WeAct STM32H523 core board

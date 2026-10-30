@@ -1,9 +1,9 @@
 # Firmware update
 
-The Mini runs the firmware behind a bootloader: `versaloon-bootloader` (8 KB) or the legacy Versaloon bootloader (10 KB).
-The ST-Link/V2 and the ST-Link/V2 mini clone run it behind `versaloon-bootloader`.
+The Mini runs the firmware behind a bootloader: `openmupp-bootloader` (8 KB) or the legacy Versaloon bootloader (10 KB).
+The ST-Link/V2 and the ST-Link/V2 mini clone run it behind `openmupp-bootloader`.
 See [Install the bootloader](#install-the-bootloader).
-`versaloon-bootloader` is a USB CDC serial port with the ID `0483:5740`.
+`openmupp-bootloader` is a USB CDC serial port with the ID `0483:5740`.
 It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
 
 The WeAct STM32H523 core board (STM32H5) has no bootloader in flash.
@@ -12,7 +12,7 @@ See [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu).
 
 ## Start the bootloader
 
-To start `versaloon-bootloader`, use one of these methods:
+To start `openmupp-bootloader`, use one of these methods:
 
 - Send the Versaloon command `VERSALOON_FW_UPDATE` to interface 0: the two bytes `0x0F 0xAA`. Only the Versaloon personality has this command.
 - Send a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)). Each personality has a switch command.
@@ -53,7 +53,7 @@ The tool sends the switch request on EP0 with the code `0xB0`.
 A firmware from before the bootloader code stalls the request.
 Then the tool sends `VERSALOON_FW_UPDATE` in the Versaloon personality, and `ID_DAP_Vendor0` with `0xB0` in the CMSIS-DAP personality.
 After the request, the tool waits 10 s for the bootloader.
-It finds `versaloon-bootloader` by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
+It finds `openmupp-bootloader` by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
 Other devices use the ID `0483:5740` too, so the tool also compares the product string.
 It finds the ROM USB DFU of the STM32H5 by the ID `0483:df11` only.
 The ROM DFU has its own serial number, so the wait for the bootloader does not compare it.
@@ -167,7 +167,7 @@ Thus a multi image or an image with the RISC-V bridge keeps the stored personali
 
 ## Install the bootloader
 
-The ST-Link/V2 and the ST-Link/V2 mini clone use `versaloon-bootloader`.
+The ST-Link/V2 and the ST-Link/V2 mini clone use `openmupp-bootloader`.
 Their original firmware has read protection.
 Remove it before you write the combined image:
 
@@ -186,11 +186,11 @@ The Mini uses one of two bootloaders:
 - The legacy Versaloon bootloader uses 10 KB. The existing boards have it. It runs the `app-10k` image.
   Hold the key (PB9) down while you connect the board to USB to start it.
   It does not know the boot request, so `VERSALOON_FW_UPDATE` does not start it.
-- `versaloon-bootloader` uses 8 KB. It runs the `app-8k` image.
+- `openmupp-bootloader` uses 8 KB. It runs the `app-8k` image.
   The submodule `dependencies/openmupp-bootloader` has its source (https://gitlab.vandertogt.org/embedded-projects/versaloon-bootloader).
 
 A board with the legacy bootloader can continue to use it.
-To change a board to `versaloon-bootloader`, write the new bootloader one time with a debug probe.
+To change a board to `openmupp-bootloader`, write the new bootloader one time with a debug probe.
 Then write the `app-8k` image, or write the combined image to do both in one step.
 
 The firmware build makes the combined image `versaloon-ng-with-bootloader.hex` (see [Build the firmware](../README.md#build-the-firmware)).
@@ -202,10 +202,10 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
         -c "program versaloon-ng-with-bootloader.hex verify reset exit"
 ```
 
-The build also makes the bootloader image alone, `versaloon-bootloader/versaloon-bootloader-<board>.hex`.
+The build also makes the bootloader image alone, `openmupp-bootloader/openmupp-bootloader-<board>.hex`.
 Write it in the same way when the board must keep its firmware.
 
-At its first start, `versaloon-bootloader` write-protects its 8 KB area.
+At its first start, `openmupp-bootloader` write-protects its 8 KB area.
 To write a new bootloader over it, remove the write protection first:
 
 ```sh
@@ -216,34 +216,34 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
 `stm32f1x unlock 0` erases the option bytes and removes all write protection.
 The bootloader README has the full rules ("Flash protection").
 
-The legacy bootloader (tag `v1-legacy` of `versaloon-bootloader`) does not set write protection or read protection.
+The legacy bootloader (tag `v1-legacy` of `openmupp-bootloader`) does not set write protection or read protection.
 Thus the debug probe can write the combined image over it without `stm32f1x unlock 0`.
 If the write fails, the option bytes of the board were changed: run `stm32f1x unlock 0` first.
 
 ## Write the firmware
 
 1. Start the bootloader (see above). On Linux, a new port `/dev/ttyACM*` shows.
-   `versaloon-bootloader` has the ID `0483:5740`.
+   `openmupp-bootloader` has the ID `0483:5740`.
 2. Write the `.bin` file of the image for the bootloader:
 
    ```sh
-   # versaloon-bootloader (8 KB)
+   # openmupp-bootloader (8 KB)
    stm32flash -w versaloon-ng-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
    # legacy bootloader (10 KB)
    stm32flash -w versaloon-ng-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
    ```
 
 3. Reset the board, or disconnect it and connect it again. The firmware starts.
-   With `versaloon-bootloader`, `stm32flash -g 0x08002000` also starts it.
+   With `openmupp-bootloader`, `stm32flash -g 0x08002000` also starts it.
 
 Do not write the `standalone` image through a bootloader.
 It is linked at `0x08000000`, so it does not start behind a bootloader.
-Do not write the `app-10k` image behind `versaloon-bootloader`, or the `app-8k` image behind the legacy bootloader.
+Do not write the `app-10k` image behind `openmupp-bootloader`, or the `app-8k` image behind the legacy bootloader.
 The start address of the image must be the end of the bootloader.
 
 ## Application image header
 
-`versaloon-bootloader` starts only an application with a valid header.
+`openmupp-bootloader` starts only an application with a valid header.
 Thus it does not start a half-written or damaged image: it stays in bootloader mode.
 The header is in the reserved words of the vector table:
 
@@ -285,7 +285,7 @@ The bootloader uses the start of the flash, and the application uses the rest:
 | Image | Bootloader | Application | Size limit | Size limit, multi image or RISC-V bridge |
 |---|---|---|---|---|
 | `standalone` | none | `0x08000000` | 64 KB | 63 KB |
-| `app-8k` | `versaloon-bootloader`, 8 KB | `0x08002000` | 56 KB | 55 KB |
+| `app-8k` | `openmupp-bootloader`, 8 KB | `0x08002000` | 56 KB | 55 KB |
 | `app-10k` | legacy Versaloon bootloader, 10 KB | `0x08002800` | 54 KB | 53 KB |
 
 The limits are hard limits for all boards.

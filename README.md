@@ -54,11 +54,11 @@ The submodules are:
 - `libArT`: core library (streams, logging, USB device stack).
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/system-stm32.
 - `libart-stm32`: STM32 adapters for libArT. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/libart-stm32.
-- `versaloon-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
+- `openmupp-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
 
 ## Requirements
 
-- CMake 3.20 or later. The `versaloon-bootloader` build and the CMake presets (`CMakePresets.json`) need CMake 3.21 or later.
+- CMake 3.20 or later. The `openmupp-bootloader` build and the CMake presets (`CMakePresets.json`) need CMake 3.21 or later.
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
@@ -116,7 +116,7 @@ Each image has a different start address:
 | Image | Start address | Flash for the application | Use |
 |---|---|---|---|
 | `standalone` | `0x08000000` | 64 KB | No bootloader. Write it with a debug probe. |
-| `app-8k` | `0x08002000` | 56 KB | Behind the new 8 KB `versaloon-bootloader`. |
+| `app-8k` | `0x08002000` | 56 KB | Behind the new 8 KB `openmupp-bootloader`. |
 | `app-10k` | `0x08002800` | 54 KB | Behind the legacy 10 KB Versaloon bootloader of the existing boards. |
 
 The Mini gets all three images.
@@ -128,10 +128,10 @@ This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector
 The build writes these files into the build directory:
 
 - `versaloon-ng-<image>.elf`, `.hex` and `.bin` for each image, for example `versaloon-ng-app-10k.bin`.
-- `versaloon-bootloader/versaloon-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
+- `openmupp-bootloader/openmupp-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
   Only the STM32F1 boards have a bootloader: the Mini, the ST-Link/V2 and the ST-Link/V2 mini clone.
 - `versaloon-ng-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
-  It has `versaloon-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
+  It has `openmupp-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
   The `.bin` file has `0xFF` between the two.
 
 See [docs/development.md](docs/development.md#build-outputs) for all build outputs.
@@ -145,12 +145,12 @@ Select the image for the bootloader on the board:
 | Board | Bootloader | Image | Start address |
 |---|---|---|---|
 | Existing Mini | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
-| New Mini | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
-| ST-Link/V2 or ST-Link/V2 mini clone | `versaloon-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| New Mini | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| ST-Link/V2 or ST-Link/V2 mini clone | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | Any board, debug probe | none | `standalone` | `0x08000000` |
 
 The images behind a bootloader have an application image header with a CRC32 (see [docs/firmware-update.md](docs/firmware-update.md#application-image-header)).
-`versaloon-bootloader` starts only an image with a valid header.
+`openmupp-bootloader` starts only an image with a valid header.
 
 ### Board with the legacy bootloader
 
@@ -169,9 +169,9 @@ To write the firmware, do these steps:
 
 The `app-10k` image refuses `VERSALOON_FW_UPDATE`, because the legacy bootloader does not know the boot request.
 
-### Board with versaloon-bootloader
+### Board with openmupp-bootloader
 
-A new board needs `versaloon-bootloader` one time.
+A new board needs `openmupp-bootloader` one time.
 An existing board can also change to it.
 Write the combined image with a debug probe on the SWD pins of the dongle MCU.
 It has the bootloader and the firmware, so one step is sufficient.
@@ -183,9 +183,9 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
         -c "program versaloon-ng-with-bootloader.hex verify reset exit"
 ```
 
-To write only the bootloader, use `versaloon-bootloader/versaloon-bootloader-<board>.hex` in the same command.
+To write only the bootloader, use `openmupp-bootloader/openmupp-bootloader-<board>.hex` in the same command.
 
-`versaloon-bootloader` write-protects its 8 KB area.
+`openmupp-bootloader` write-protects its 8 KB area.
 To write a new bootloader over it, remove the write protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
 
 To write the firmware through the bootloader, do these steps:

@@ -73,7 +73,7 @@ set(PROJECT_INCLUDE_DIRS
 # the STM32F1 boards). The value is the space in bytes in front
 # of the application:
 #   standalone  0       0x08000000, no bootloader: flash with a debug probe
-#   app-8k      8192    0x08002000, behind versaloon-bootloader (8 KB)
+#   app-8k      8192    0x08002000, behind openmupp-bootloader (8 KB)
 #   app-10k     10240   0x08002800, behind the legacy Versaloon bootloader
 #                       (10 KB) of the existing boards
 # The boards in VSL_BOOTLOADER_BOARDS get standalone and app-8k, and the
@@ -82,9 +82,9 @@ set(PROJECT_INCLUDE_DIRS
 set(VSL_APP_OFFSET_standalone 0)
 set(VSL_APP_OFFSET_app-8k 8192)
 set(VSL_APP_OFFSET_app-10k 10240)
-# Build versaloon-bootloader (dependencies/openmupp-bootloader, cmake/Bootloader.cmake)
+# Build openmupp-bootloader (dependencies/openmupp-bootloader, cmake/Bootloader.cmake)
 # for the board. Only for boards that the bootloader supports.
-option(VSL_BUILD_BOOTLOADER "Build versaloon-bootloader for the board" ON)
+option(VSL_BUILD_BOOTLOADER "Build openmupp-bootloader for the board" ON)
 # An image that does not fit its flash limit: OFF skips the image with a
 # warning (cmake/ImageSize.cmake), ON stops the build. The size is only
 # known after the link. With OFF, the FLASH region of the linker script is
@@ -196,7 +196,7 @@ if (CMAKE_CROSSCOMPILING)
         list(APPEND _vsl_dropped_files "src/board/SettingsFlashPage\\.cpp")
         set(VSL_SETTINGS_PAGE_SIZE 0)
     endif ()
-    # STM32F1 only: the entry into versaloon-bootloader (BKP registers,
+    # STM32F1 only: the entry into openmupp-bootloader (BKP registers,
     # app-8k image), the JTAG fast path on SPI v1 and DMA1, and the one-wire
     # engine of WCH-Link on the timers and DMA1. STM32H5 only: the entry into
     # the ROM bootloader, the JTAG fast path on SPI v2 and GPDMA, and the
@@ -290,7 +290,7 @@ if (CMAKE_CROSSCOMPILING)
     target_include_directories(versaloon-ng-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
 
     # The application image header (magic, length, CRC32) of
-    # versaloon-bootloader. The bootloader starts only an image with a valid
+    # openmupp-bootloader. The bootloader starts only an image with a valid
     # header. The tool is in the bootloader submodule.
     set(_vsl_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader/cmake/VslStampImage.cmake")
     if ("app-8k" IN_LIST VSL_APP_IMAGES OR "app-10k" IN_LIST VSL_APP_IMAGES)
@@ -321,7 +321,7 @@ if (CMAKE_CROSSCOMPILING)
         # that links it directly, so each image links the libraries again.
         target_link_libraries(${_target} PUBLIC versaloon-ng-objects art::core art::stm32 system-stm32)
         target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit} -Wl,-Map,${_name}.map)
-        # FW_UPDATE enters the bootloader only behind versaloon-bootloader.
+        # FW_UPDATE enters the bootloader only behind openmupp-bootloader.
         # The legacy bootloader of app-10k does not know the boot request
         # (hasBootloaderEntry in src/main.cpp). On the STM32H5, the
         # standalone image enters the ROM bootloader.
@@ -379,11 +379,11 @@ if (CMAKE_CROSSCOMPILING)
     include(Bootloader)
     if (VSL_BUILD_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
         vsl_add_bootloader()
-        MESSAGE(STATUS "Building versaloon-bootloader for board " ${BOARD} " into " ${VSL_BOOTLOADER_DIR})
+        MESSAGE(STATUS "Building openmupp-bootloader for board " ${BOARD} " into " ${VSL_BOOTLOADER_DIR})
     endif ()
     if (VSL_BUILD_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS AND "app-8k" IN_LIST VSL_APP_IMAGES)
 
-        # The combined image: versaloon-bootloader and the app-8k image in
+        # The combined image: openmupp-bootloader and the app-8k image in
         # one file from 0x08000000, for a new board and a debug probe. The
         # gap between the two is 0xFF (tools/vsl_combine_images.py).
         find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
@@ -396,14 +396,14 @@ if (CMAKE_CROSSCOMPILING)
                 OUTPUT ${_name}.bin ${_name}.hex
                 COMMAND ${CMAKE_COMMAND} -DPYTHON=${Python3_EXECUTABLE}
                     -DTOOL=${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py
-                    -DBOOTLOADER=${VSL_BOOTLOADER_DIR}/versaloon-bootloader-${BOARD}.bin
+                    -DBOOTLOADER=${VSL_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin
                     -DAPP=versaloon-ng-app-8k.bin -DAPP_OFFSET=${VSL_APP_OFFSET_app-8k}
                     -DIMAGE=${_name} -DCOPY=${_file}
                     -P ${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake
-                DEPENDS versaloon-bootloader versaloon-ng-app-8k.elf
+                DEPENDS openmupp-bootloader versaloon-ng-app-8k.elf
                     "${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py"
                     "${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake"
-                    "${VSL_BOOTLOADER_DIR}/versaloon-bootloader-${BOARD}.bin"
+                    "${VSL_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin"
                 BYPRODUCTS ${_file}.hex ${_file}.bin
                 COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin"
                 VERBATIM)

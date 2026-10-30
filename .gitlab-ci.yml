@@ -74,7 +74,7 @@ run-tool-tests:
 # the CDC port and SWD on. The job sets VSL_STRICT_SIZE, so the linker
 # script fails the link when an image does not fit; the size check reports
 # the size of each image in vsl-images.txt and fails on the same limit. The
-# default target also builds versaloon-bootloader for the Mini and the
+# default target also builds openmupp-bootloader for the Mini and the
 # ST-Link/V2 boards.
 .build-board-template:
   stage: build

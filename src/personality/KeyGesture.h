@@ -9,7 +9,7 @@
 // enough: the LEDs flash then, and the user can release the key.
 //
 // The reset waits for the release of the key (PersonalitySwitch::isDue()).
-// The key at reset is the key of versaloon-bootloader: if the key is still
+// The key at reset is the key of openmupp-bootloader: if the key is still
 // down at the reset of the switch, the bootloader stays in bootloader
 // mode, and the new personality does not start. The gesture counts only
 // after the firmware saw the key released. Thus a key that is down at the
