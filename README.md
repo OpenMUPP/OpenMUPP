@@ -1,7 +1,10 @@
-# versaloon-NG
+# OpenMUPP
 
-versaloon-NG is firmware for debug probes with an STM32F103 chip: the Versaloon Mini.
-A build for the ST-Link/V2 mini clone also exists, with a hardware test of the USB personalities, the LEDs and SWD to a target. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
+OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is firmware for USB debug probes.
+The firmware debugs and programs target chips of more than one architecture: Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
+The boards today use an STM32F103 or compatible chip (the Versaloon Mini and the ST-Link/V2 boards) or an STM32H5 chip.
+The former name of this project is versaloon-ng (also versaloon-NG or versaloon-next-gen).
+A build for the ST-Link/V2 mini clone exists, with a hardware test of the USB personalities, the LEDs and SWD to a target. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
 The port to the STM32H5 (the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
 
