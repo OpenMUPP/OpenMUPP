@@ -227,6 +227,41 @@ class ParseUsbIdTest(unittest.TestCase):
                 vp.parse_usb_id(text)
 
 
+class CommandShowTest(unittest.TestCase):
+    def show(self, devices, usb_id=None):
+        args = argparse.Namespace(serial=None, id=usb_id, active=None)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = vp.command_show(fake_usb(devices), args)
+        return result, stdout.getvalue(), stderr.getvalue()
+
+    def test_unreadable_device_is_reported(self):
+        denied = FakeDevice(0x1209, 0x0001, FakeUsbError("Access denied", -3, errno.EACCES))
+        result, out, err = self.show([denied])
+        self.assertEqual(result, 1)
+        self.assertIn("No dongle found", out)
+        self.assertIn("1209:0001 on bus 1 address 7", err)
+
+    def test_report_next_to_a_found_dongle(self):
+        denied = FakeDevice(0x1209, 0x0001, FakeUsbError("Access denied", -3, errno.EACCES))
+        result, out, err = self.show([FakeDevice(0x0483, 0xA038), denied])
+        self.assertEqual(result, 0)
+        self.assertIn("versaloon  0483:a038", out)
+        self.assertIn("1209:0001 on bus 1 address 7", err)
+
+    def test_unknown_id(self):
+        result, out, _ = self.show([FakeDevice(0x1234, 0x5678)], (0x1234, 0x5678))
+        self.assertEqual(result, 0)
+        self.assertIn("unknown  1234:5678", out)
+
+
+class MainTest(unittest.TestCase):
+    def test_active_needs_an_unknown_id(self):
+        for argv in (["--active", "wch-link", "show"], ["--id", "0483:a038", "--active", "wch-link", "show"]):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                vp.main(argv)
+
+
 class WaitForTest(unittest.TestCase):
     def test_bootloader_wait_skips_the_serial_of_the_rom_dfu(self):
         dfu = FakeDevice(0x0483, 0xDF11, serial="ROM")
@@ -373,9 +408,36 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertIn("No dongle found", self.stderr)
 
     def test_usb_id_switches_without_the_product_string(self):
-        device = FakeDevice(0x1209, 0x0001, FakeUsbError("Access denied", -3, errno.EACCES))
+        device = FakeDevice(0x1209, 0x0001, "Some test device")
         self.assertEqual(self.switch(device, "versaloon", usb_id=(0x1209, 0x0001)), 0)
         self.assertEqual(device.ctrl_transfers, [(0x40, 0x0E, 0, 0, None, vp.TIMEOUT_MS)])
+
+    def test_usb_id_without_access_gives_the_udev_hint(self):
+        denied = FakeUsbError("Access denied", -3, errno.EACCES)
+        device = FakeDevice(0x1209, 0x0001, denied, serial=denied, ctrl_error=denied)
+        self.assertEqual(self.switch(device, "versaloon", usb_id=(0x1209, 0x0001)), 1)
+        self.assertIn("70-versaloon", self.stderr)
+
+    def test_usb_id_and_serial_report_the_unreadable_serial(self):
+        denied = FakeUsbError("Access denied", -3, errno.EACCES)
+        device = FakeDevice(0x1209, 0x0001, denied, serial=denied)
+        args = argparse.Namespace(serial="SN1", id=(0x1209, 0x0001), active=None)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            self.assertEqual(vp.command_show(fake_usb([device]), args), 1)
+        self.assertIn("1209:0001 on bus 1 address 7", stderr.getvalue())
+        self.assertIn("No dongle found", stdout.getvalue())
+
+    def test_no_enumeration_reports_the_unreadable_target(self):
+        self.wait_result = False
+        denied = FakeUsbError("Access denied", -3, errno.EACCES)
+        target = FakeDevice(0x1209, 0x0001, denied)
+        usb = fake_usb([FakeDevice(0x0483, 0xA038), target])
+        args = argparse.Namespace(serial=None, personality="wch-link", id=None, active=None)
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr):
+            vp.command_switch(usb, args)
+        self.assertIn("1209:0001 on bus 1 address 7", stderr.getvalue())
 
     def test_unknown_id_uses_the_ep0_request(self):
         device = FakeDevice(0x1234, 0x5678)
