@@ -40,6 +40,7 @@ The WeAct STM32H523 core board uses an STM32H523CC.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
+The probe board OpenMUPP v1 has no board definition yet. [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins and the rules for its power functions.
 
 ## Get the source code
 
