@@ -291,3 +291,64 @@ Findings:
   Three more read backs of the 32 KiB image with OpenOCD and the `vsllink` driver on JTAG at 1000 kHz had no errors.
   The cause is not known. The timing of the bit-bang engines at 250 MHz is not yet measured (#94).
 - The test did not cover `--full-uart`, the old switch commands, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.
+
+## OpenMUPP v1 probe board
+
+OpenMUPP v1 is the probe board of this project.
+It is open hardware.
+It has an STM32H523CC, a 24 MHz crystal and level shifters for targets from 1.2 V to 5 V.
+The schematics and the design notes are in the repository [openmupp-v1](https://gitlab.vandertogt.org/embedded-projects/openmupp-v1).
+
+The firmware has no board definition for this board yet.
+The board layer needs the direction pins, the split nRESET path and the power functions that this section lists.
+The WeAct STM32H523 core board is the H5 test board until then.
+
+The board has more functions than the Versaloon Mini.
+This table lists the rules that the firmware must follow for each function.
+The README of the board repository has the full pin map.
+
+| Function | Pins | Rule for the firmware |
+|---|---|---|
+| Direction of the level shifters | `DIR_OUT` PB12, `DIR_SWDIO` PB5 | External pull-downs keep the target side high-impedance at reset. Set `DIR_OUT` high only while an engine runs. |
+| One-wire SWDIO | `DIR_SWDIO` PB5 (TIM3_CH2), SWDIO PA6 and PA7 | A timer channel changes the direction in each bit. The SWDIO pull-up to `VTREF` is 2.2 kΩ. |
+| nRESET and debugWIRE | `SRST` PB6 (LPUART1_TX, inverted), `SRST_RX` PB7 (LPUART1_RX) | A low-side FET pulls nRESET low. The MCU never drives nRESET high. The USART runs full-duplex and reads back the real line level. |
+| Target power, 3.3 V | `TARGET_PWR_EN` PB8 | The limit is about 520 mA. With the switch off, `VTREF_SENSE` (PB0) shows half of the target voltage. |
+| Target power, 5 V | `TARGET_5V_EN` PB10 | The limit is about 300 mA. `+5V` is near 4.4 V at full load. See the sequence below. |
+| High voltage (VPP) | `VPP_EN` PC14, `VPP_ON` PC15, `VPP_12V_SEL` PA8, `VPP_SENSE` PA4 (ADC) | Both `VPP_EN` and `VPP_ON` must be high. The default level is 8.4 V. VPP is on J4 pin 19. See the sequence below. |
+| Adapter ID | `ADAPTER_ID` PB1 (ADC) | A 10 kΩ series resistor gives a high source impedance. Use a long sample time. Keep the internal pull resistors off. |
+| TCK link | PB13 to PA5 | Resistor R10 (0 Ω) is fitted. It links the TCK net to PA5, the clock input of SPI1 in slave mode. The fast path can then shift TMS with SPI1. The firmware must accept PA5 as the link (issue #121). PA5 is not 5 V tolerant. |
+| Other pins | `AUX1` PA2, `AUX2` PB3 | Outputs in the `DIR_OUT` group. |
+| LEDs and key | LED state PB2 and PA1, LED USB PA15, key PC13 | The 5-pin header J3 (PA13, PA14, NRST) debugs the probe MCU. It is not a target connector. The target connector is J4. |
+
+### Target power sequence
+
+The two target switches share the output `VTREF`.
+A hardware interlock gives priority to 3.3 V, but it does not remove the overlap in a change from 5 V to 3.3 V.
+Use this sequence for each change:
+
+1. If both switches are off, measure `VTREF_SENSE`. If the target has its own supply, do not turn on a switch.
+2. Turn off both switches.
+3. Wait at least 10 ms.
+4. For a change from 5 V to 3.3 V, wait until `VTREF` is less than 3.4 V. `VTREF_SENSE` shows half of `VTREF`, so wait for less than 1.7 V.
+5. Turn on one switch.
+
+Never set `TARGET_PWR_EN` and `TARGET_5V_EN` high at the same time.
+
+### VPP sequence
+
+The boost converter cannot pull its output down.
+When the level changes from 12 V to 8.4 V, the output capacitor needs 0.5 s to 1 s to discharge.
+Use this sequence for each change:
+
+1. Set `VPP_ON` low.
+2. Set `VPP_12V_SEL` to the new level. High gives 12 V. Low gives 8.4 V.
+3. Keep `VPP_EN` high. Wait until `VPP_SENSE` shows the new level. If this takes more than 2 s, stop and report an error.
+4. Set `VPP_ON` high.
+
+Apply VPP only when the adapter ID shows a high-voltage adapter and the protocol needs VPP.
+The divider on `VPP_SENSE` gives about 2.1 V at 8.4 V and about 3.0 V at 12 V.
+
+These levels are for R34 = 130 kΩ.
+The schematic has 191 kΩ (openmupp-v1 [issue #6](https://gitlab.vandertogt.org/embedded-projects/openmupp-v1/-/issues/6)).
+Then VPP is about 12 V with `VPP_12V_SEL` low and about 17 V with `VPP_12V_SEL` high.
+Do not apply VPP on a board with R34 = 191 kΩ.
