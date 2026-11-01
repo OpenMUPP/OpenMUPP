@@ -1,7 +1,7 @@
 # WCH-LinkE protocol
 
 This document describes the USB protocol of the WCH-LinkE in RISC-V mode, and the wire protocol between the probe and the target.
-The `wch-link` personality (epic #63) speaks this protocol. [WCH-Link personality](wch-link.md) describes its design.
+The `wch-link` personality speaks this protocol. [WCH-Link personality](wch-link.md) describes its design.
 The facts come from USB captures and logic analyzer captures of a real probe. A statement that has no capture behind it says so. No vendor code was copied.
 
 Status: the USB protocol and the wire frames are captured on a CH32V003 (one wire), on a CH32V208 (two wires) and on a CH32V006 (one wire).
@@ -37,7 +37,7 @@ The probe has three interfaces. Only interface 0 carries the debug protocol.
 
 All bulk endpoints have a maximum packet size of 64 bytes. The device is full speed (12 Mbit/s).
 The `wch-link` personality needs interface 0 only.
-The UART and the CDC interfaces are out of scope (see epic #63).
+The UART and the CDC interfaces are out of scope.
 
 ## Framing
 
@@ -75,7 +75,6 @@ The column "Seen" tells the source of a row:
 
 - "captured": a USB capture.
 - "tools": the source code of wlink or minichlink. No capture has the request, so the probe response is not known.
-- "notes": the notes of epic #63.
 
 A name in quotes is the name in the wlink source code.
 
@@ -86,7 +85,7 @@ A name in quotes is the name in the wlink source code.
 | `02 01 02` | Start the data phase of a program | `02 01 02` | captured | [Flash program](#flash-program-wlink) |
 | `02 01 04` | "WriteFlashAndVerify". wlink sends it in place of `02 01 02` | not known | tools | — |
 | `02 01 05` | Start the stub transfer | `02 01 05` | captured | [Flash program](#flash-program-wlink) |
-| `02 01 06` | "Prepare" in wlink, verify in the notes of epic #63. Not confirmed | not known | tools, notes | [Flash program](#flash-program-wlink) |
+| `02 01 06` | "Prepare" in wlink. Not confirmed | not known | tools | [Flash program](#flash-program-wlink) |
 | `02 01 07` | After the stub transfer. Likely: prepare the flash | `02 01 07` | captured | [Flash program](#flash-program-wlink) |
 | `02 01 08` | End of the program | `02 01 08` | captured | [Flash program](#flash-program-wlink) |
 | `02 01 0b` | wlink sends it in place of `02 01 07` for one chip type (`riscvchip` 1) | not known | tools | — |
@@ -117,7 +116,7 @@ A name in quotes is the name in the wlink source code.
 | `0d 02 0e 13`, `0d 02 0e 14`, `0d 02 0e 15` | Reset pin low, high, floating (wlink). minichlink sends `0d 01 13` for low | not known | tools | — |
 | `0d 02 ee 00`, `0d 02 ee 01` | SDI print on, off (firmware 2.10 or later) | not known | tools | — |
 | `0d 01 ff` | Quit | `0d 01 ff` | captured | [Info, connect, quit](#command-0x0d-info-connect-quit) |
-| `0e 01 01` | Disable debug ("DisableDebug") | not known | tools, notes | — |
+| `0e 01 01` | Disable debug ("DisableDebug") | not known | tools | — |
 | `11 01 05`, `11 01 06` | Chip information | 20 raw bytes, no header | captured | [Chip information](#command-0x11-chip-information) |
 | `11 01 09` | Chip information (wlink "V1", minichlink) | not known | tools | — |
 | `7f 01 00` (unknown command) | Unknown command. No other unknown command was tested | `82 81 01 ff` | captured | [Framing](#framing) |
@@ -201,7 +200,7 @@ Request payload (6 bytes): `address (u8)`, `data (u32 BE)`, `op (u8)`.
 The response payload has the same layout. The `op` field now holds the status:
 
 - `00`: success. For a read, the data field has the register value, in the same response. The read is not pipelined.
-- `02`: failure. This value comes from the notes of epic #63. No capture shows a failure, so the value is not confirmed. The personality uses it.
+- `02`: failure. No capture shows a failure, so the value is not confirmed. The personality uses it.
 
 Registers seen (the CH32V003 and the CH32V208 use the same set):
 
@@ -279,7 +278,7 @@ Facts about the data phase:
 - The host waits for the block acknowledge before the next block. A block takes about 136 ms, so the whole flash needs about 2.2 s.
 - The block size depends on the chip: 1024 bytes on the CH32V003, 4096 bytes on the CH32V208 (see below).
 - The image bytes go out in file order. They are not reversed (see [Byte order](#byte-order)).
-- The flash captures hold no verify command and no memory read. The notes of epic #63 list a verify sub-command. No capture used it.
+- The flash captures hold no verify command and no memory read. No capture used a verify sub-command.
 
 ### CH32V208
 
@@ -419,7 +418,7 @@ It differs from wlink in these points (`v208-mc-write.pcapng`):
 Consequences for the personality:
 
 - A probe with the commands `0x0d`, `0x0c`, `0x11`, `0x06 01` and `0x08` is enough for minichlink on a CH32V003.
-- This is a good first target (work item #68). A CH32V20x needs the commands `0x01` and `0x02` and endpoint `0x02` for both tools.
+- This is a good first target. A CH32V20x needs the commands `0x01` and `0x02` and endpoint `0x02` for both tools.
 - On the CH32V003, a minichlink write of 16 KB took about 32 000 DMI round trips and 3.7 s, almost the same as wlink (3.5 s). The committed `v003-mc-write-head.pcapng` holds only the first 4000 frames. The full capture is not in the repository.
 
 Observations:
@@ -699,7 +698,7 @@ Observations:
 
 ## Open questions
 
-The table lists the questions of epic #63 and their state.
+The table lists the open questions about the protocol and their state.
 
 | Question | State |
 |---|---|
@@ -711,7 +710,7 @@ The table lists the questions of epic #63 and their state.
 | USB protocol on a CH32V20x | Answered with a CH32V208. It matches the CH32V003 protocol (see [CH32V208](#ch32v208)). |
 | Probe variant check by wlink and minichlink | wlink prints the variant from byte 2 of the info response. It did not reject the probe. A check of other variants is open. |
 | Error reason codes | **Open.** Seen: `0x55` (no target). The meaning of other codes is open. |
-| Meaning of `02 01 06` | **Open.** The notes of epic #63 call it verify. wlink calls it "Prepare". No capture used it. |
+| Meaning of `02 01 06` | **Open.** wlink calls it "Prepare". No capture used it. |
 | Meaning of `0d 01 03`, `0d 01 04`, `0d 01 05`, `06 01 04`, `11 01 05`, `11 01 06`, `02 01 05` and `02 01 07` | **Open.** The observed behavior is in this document. |
 | Does the probe do target accesses of its own? | Answered: the connect command halts the core. The commands `0x11`, `06 01 01` and `0d 01 04` read the target. The quit command resumes the core (see [Probe actions](#probe-actions-at-connect-at-chip-information-and-at-quit)). |
 | Meaning of the 85-clock frames, the response bits, the tail bits, and the failure of one-wire frames in the `dump` captures | **Partly answered.** The 85-clock frames are `dmstatus` reads (see [Connect frames](#connect-frames)). The response bits and the tail bits are a handshake (see [Wire frame format](#wire-frame-format)). The one-wire `dump` frames are open. The operation field values are answered: a write bit and a parity bit (see [Wire frame format](#wire-frame-format)). |

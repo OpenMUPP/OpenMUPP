@@ -156,10 +156,10 @@ It does not need the other 64 KB of flash.
 
 The firmware now builds the combined image: `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
 A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer and the switch request on EP0).
-Without link-time optimisation (LTO), the `app-10k` image did not fit: it was 1,740 bytes too large.
-Issue #75 added LTO (option `VSL_LTO`), removed the heap code of newlib and removed the 64-bit division:
+The build uses link-time optimisation (LTO, option `VSL_LTO`), has no heap code of newlib and has no 64-bit division.
+Without these measures, the `app-10k` image did not fit: it was 1,740 bytes too large.
 
-| Image (Mini, Release) | Before #75 | Now | Limit |
+| Image (Mini, Release) | Without the measures | Size | Limit |
 |---|---|---|---|
 | `standalone` | 56,012 bytes | 48,876 bytes | 64,512 bytes |
 | `app-8k` | 56,012 bytes | 48,884 bytes | 56,320 bytes |
@@ -167,7 +167,7 @@ Issue #75 added LTO (option `VSL_LTO`), removed the heap code of newlib and remo
 
 The `app-10k` image now has a margin of 5,396 bytes.
 The data and BSS use 16.4 KB.
-A `Debug` build has no LTO. A `Debug` build of the combined image fits no image: the build skips all images (see [Images that do not fit](development.md#images-that-do-not-fit)).
+A `Debug` build has no LTO. A `Debug` build of the combined image fits no image: the build skips all images (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
 
 ## Implementation
 
@@ -381,7 +381,7 @@ If the hart does not halt, the processor halts it, and the call fails.
 - A request out of order gives the error frame. Before a connect, all flash commands give the error frame.
 - A quit, a connect, an erase or a protection command ends a sequence as `02 01 08` does. A quit then resumes the hart at the reset vector, because `dpc` is the value after the reset.
 - minichlink does not read the block acknowledge. The acknowledge waits on the data IN endpoint until the host reads it, as the packets of a memory read do.
-  A quit or a connect drops an acknowledge that is not on its way yet, and takes back the acknowledge on its way. Thus a memory read (`02 01 0c`) of a later tool gets its own data (issue #77).
+  A quit or a connect drops an acknowledge that is not on its way yet, and takes back the acknowledge on its way. Thus a memory read (`02 01 0c`) of a later tool gets its own data.
 
 ### Speed
 
@@ -512,7 +512,7 @@ The pins on the dongle:
 | ST-Link/V2 | PA5 | PB14 | PB14 | PB0 |
 | ST-Link/V2 mini clone | PA5 | PB14 | PB12 | PB6 |
 
-The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. The pins are decided: no new pin is needed.
+The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. No new pin is needed.
 
 #### Two-wire release
 
@@ -575,7 +575,7 @@ An external pull-up of 2.2 kΩ to 3.3 V fixes this. A read bit of a 1 needs the 
 
 ## Hardware test
 
-Work item #71 tests the personality on real hardware.
+The hardware test of the personality is in progress.
 A real target must confirm these items:
 
 - The connect on both wires, and the try of one wire on a CH32V20x.
@@ -605,7 +605,7 @@ Results:
 
 | Item | Result |
 |---|---|
-| USB ID | wlink and minichlink find the probe only with the WCH USB ID. The default ID `1209:0001` hides it (issue #76). |
+| USB ID | wlink and minichlink find the probe only with the WCH USB ID. The default ID `1209:0001` hides it. |
 | Connect on two wires (CH32V208), `wlink status` | Passed, 6 of 6 runs. The connect tries one wire first, then two wires. wlink shows the chip ID `0x2080053c`, 160 KB flash, `misa` `RV32ACIMUX` and `dmstatus` `0x382`. |
 | `wlink dump`, `wlink regs` | Passed. A dump of the full flash (160 KB) takes 11.4 s. Two dumps are the same. |
 | `wlink halt`, `resume`, `reset` | Passed. |
@@ -615,7 +615,7 @@ Results:
 | `wlink unprotect` | Passed. The protection ends at once, without a power cycle: the `ndmreset` loads `RDPR`. The chip erases the flash. The option bytes then read `RDPR` `0xa5`, `USER` `0x3f`, `DATA0` and `DATA1` `0x00`, `WRPR` `0xff`. |
 | minichlink | Failed first: minichlink sends the chip type `09` also for a CH32V208, and the processor tried only one wire for this type. The processor now tries both wires for all types. |
 | `minichlink -i`, `-r`, `-w` | Passed after the fix. A read of 160 KB takes 6.9 s, and it is the same as the wlink dump. A write of 147 KB takes 22 s. A wlink dump after the write is the same as the image. |
-| wlink after `minichlink -w` | Failed first: each memory read gave the error frame `81 55 01 01` until a USB replug. minichlink does not read the block acknowledge of the last block, and the acknowledge stayed on the data IN endpoint (issue #77). The WCH-LinkE has the same problem in part: the first wlink dump fails with `Invalid payload length`, and the next one works. The personality now takes the packet back. Passed after the fix, 3 of 3 runs: the first wlink dump gives the right data. |
+| wlink after `minichlink -w` | Failed first: each memory read gave the error frame `81 55 01 01` until a USB replug. minichlink does not read the block acknowledge of the last block, and the acknowledge stayed on the data IN endpoint. The WCH-LinkE has the same problem in part: the first wlink dump fails with `Invalid payload length`, and the next one works. The personality now takes the packet back. Passed after the fix, 3 of 3 runs: the first wlink dump gives the right data. |
 
 The first connect failed: wlink got the error frame `81 55 01 01`.
 The cause was the handshake bits of the two-wire frame: the probe must drive bit 13 low and bit 51 high (see [Wire frame format](wch-link-protocol.md#wire-frame-format)).
@@ -641,7 +641,7 @@ Results with the timer:
 | `wlink flash` | Passed. 16 KB take 4.4 s (the full wlink run). A dump after the program is the same as the image. The WCH-LinkE takes 3.5 s. A read bit of the personality has a fixed time of 1.3 µs, so the personality is slower. |
 | `wlink protect` | Passed. The protection starts at the next reset, as on the WCH-LinkE. |
 | `wlink unprotect` | Passed. The protection ends at once, and the chip erases the flash. The 16-bit write of the option bytes works: they then read `RDPR` `0xa5`, `USER` `0x17`, `DATA0` `0x00`, `DATA1` `0xff`, `WRPR0` and `WRPR1` `0xff`. |
-| `minichlink -i`, `-w` | Passed. A write of 16 KB takes 5.2 s. Three wlink dumps after the write are the same as the image (issue #77 does not occur). |
+| `minichlink -i`, `-w` | Passed. A write of 16 KB takes 5.2 s. Three wlink dumps after the write are the same as the image (the stale acknowledge of the earlier test does not occur). |
 | `minichlink -r` | Passed for a read of 16,380 bytes (0.9 s), and it is the same as the wlink dump. A read that ends at `0x08004000` (the end of the flash) fails with `cmderr` 3 (exception). The code before the timer gave the same result, so the probe is not the cause. minichlink seems to read one word after the end of the read. A check with a WCH-LinkE is open. |
 
 ### CH32V208 with the timer image
@@ -664,7 +664,7 @@ The first probe also gave more failures than the second probe. Its wiring is not
 
 ### CH32V006 on the WeAct STM32H523 (one wire)
 
-Work item #98 tests the one-wire engine of the STM32H5.
+This test covers the one-wire engine of the STM32H5.
 
 | Item | Value |
 |---|---|

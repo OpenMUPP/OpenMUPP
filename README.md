@@ -1,11 +1,20 @@
 # OpenMUPP
 
-OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is firmware for USB debug probes.
-The firmware debugs and programs target chips of more than one architecture: Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
-The boards today use an STM32F103 or compatible chip (the Versaloon Mini and the ST-Link/V2 boards) or an STM32H5 chip.
-The former name of this project is versaloon-ng (also versaloon-NG or versaloon-next-gen).
-A build for the ST-Link/V2 mini clone exists, with a hardware test of the USB personalities, the LEDs and SWD to a target. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
-The port to the STM32H5 (the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
+OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is the firmware of the OpenMUPP v1 probe.
+OpenMUPP v1 is an open hardware USB debug probe with an STM32H523 MCU.
+It has level shifters for targets from 1.2 V to 5 V, a target power supply and a high-voltage (VPP) supply.
+The schematics are in the repository [openmupp-v1](https://gitlab.vandertogt.org/embedded-projects/openmupp-v1).
+The firmware debugs and programs target chips of more than one architecture.
+Today it supports Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
+The name OpenMUPP stands for more than these two: the goal is one probe for many architectures (see [Planned targets](#planned-targets)).
+
+The OpenMUPP v1 probe is the main target of this project.
+The firmware has no board definition for it yet (see [Boards](#boards)).
+Until then, the WeAct STM32H523 core board is the test board for the same MCU.
+The firmware also builds for older probe hardware: the Versaloon Mini and the ST-Link/V2 boards (STM32F103 or compatible chip).
+These boards are secondary targets. They help to develop and test the code, and you can use them as probes.
+The ST-Link/V2 mini clone has a hardware test of the USB personalities, the LEDs and SWD to a target.
+The ST-Link/V2 build has no hardware test.
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
@@ -26,21 +35,41 @@ The key starts the bootloader, and the Versaloon personality also starts it on r
 
 The [status](docs/status.md) document lists what the firmware does and what the hardware tests cover.
 
+## Planned targets
+
+OpenMUPP v1 has hardware for more protocols than the firmware supports today.
+These targets are planned. None of them works yet.
+
+| Target | Protocols | State |
+|---|---|---|
+| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | Design work started. The firmware does not exist. |
+| PIC | Programming. High-voltage programming uses the VPP supply of the board. | Planned. No design yet. |
+| STM8 | SWIM (single-wire debug and programming interface) | Planned. No design yet. |
+
+The AVR personality will run at the same time as the CMSIS-DAP personality, in one image for the STM32H523 boards.
+The planned protocols need the OpenMUPP v1 hardware: the level shifters, the split nRESET path and the VPP supply.
+An adapter board maps the target connector to the pinout of each target.
+The adapters are passive, except the high-voltage adapters.
+
 ## Boards
 
-| `BOARD` | Hardware | Crystal | Status |
-|---|---|---|---|
-| `mini` | Versaloon Mini | 12 MHz | target |
-| `stlinkv2` | ST-Link/V2, pin map of the official design | 8 MHz | compile-only |
-| `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | target, SWD only (no JTAG pins) |
-| `weacth523` | WeAct STM32H523 core board | 8 MHz | target, 3.3 V targets only |
+OpenMUPP v1 is the main target. The other boards are for development, tests and use as a probe.
 
-The Mini and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
-The WeAct STM32H523 core board uses an STM32H523CC.
+| `BOARD` | Hardware | Crystal | Role | Status |
+|---|---|---|---|---|
+| (none yet) | OpenMUPP v1 probe board, STM32H523CC | 24 MHz | Main target | No board definition yet |
+| `weacth523` | WeAct STM32H523 core board | 8 MHz | Test board for the OpenMUPP v1 MCU | target, 3.3 V targets only |
+| `mini` | Versaloon Mini | 12 MHz | Secondary | target |
+| `stlinkv2` | ST-Link/V2, pin map of the official design | 8 MHz | Secondary | compile-only |
+| `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | Secondary | target, SWD only (no JTAG pins) |
+
+[docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
+The board layer needs the direction pins, the split nRESET path and the power functions before the firmware can drive the board.
+The WeAct STM32H523 core board uses an STM32H523CC, as the OpenMUPP v1 probe does.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
+The Mini and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
-The probe board OpenMUPP v1 has no board definition yet. [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins and the rules for its power functions.
 
 ## Get the source code
 
@@ -89,14 +118,14 @@ The suffix of the preset selects the personalities:
 
 The CI builds only the `-cmsis-dap` and the `-dual` images.
 The Versaloon personality is for old tools only: use CMSIS-DAP for a new setup.
-For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap` for the old dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/development.md#cmake-options)).
+For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap` for a dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/cmake.md#cmake-options)).
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
-With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
+With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/cmake.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality and without the RISC-V bridge. With the bridge, the Debug image does not fit behind a bootloader.
 The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 `cmake --list-presets` shows all presets.
-[docs/development.md](docs/development.md#cmake-presets) describes them.
+[docs/cmake.md](docs/cmake.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit it.
 To set local paths or options, add your own presets in `CMakeUserPresets.json`.
@@ -140,7 +169,7 @@ The build writes these files into the build directory:
 
 See [docs/development.md](docs/development.md#build-outputs) for all build outputs.
 
-See [docs/development.md](docs/development.md#cmake-options) for all CMake options.
+See [docs/cmake.md](docs/cmake.md#cmake-options) for all CMake options.
 
 ## Flash the firmware
 
@@ -278,6 +307,6 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
 - [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule, size, implementation and hardware test.
 - [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures ([docs/wch-link-captures/](docs/wch-link-captures/README.md)).
+- [docs/cmake.md](docs/cmake.md): the CMake options and the CMake presets.
 - [docs/development.md](docs/development.md): build outputs, unit tests, the flash speed benchmark, code format, version, CI and branches.
 - [docs/status.md](docs/status.md): the functions of the firmware and the hardware test status.
-- [docs/plan.md](docs/plan.md): the plan and the work items.

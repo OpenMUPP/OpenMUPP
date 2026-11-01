@@ -1,7 +1,8 @@
 # Status
 
 This document lists the functions of the firmware and the state of the hardware tests.
-The [plan](plan.md) has the work items.
+The main target is the OpenMUPP v1 probe board. It has no board definition yet, so no hardware test covers it.
+The tests below run on the WeAct STM32H523 core board (the same MCU) and on the older STM32F1 boards.
 
 The Versaloon and CMSIS-DAP images have these functions:
 
@@ -27,14 +28,14 @@ The CMSIS-DAP personality is a CMSIS-DAP v2 probe:
 - It switches the 3.3 V target supply and reads the target voltage with `ID_DAP_Vendor2`, with the protections of the `POWER` block (see [cmsis-dap.md](cmsis-dap.md#target-power)).
 - It has no SWO. The `DAP_UART_*` commands can take the UART from the CDC-ACM serial port (see [cmsis-dap.md](cmsis-dap.md#uart-commands)).
 
-A multi image has more than one personality, for example Versaloon and CMSIS-DAP (the old dual image).
+A multi image has more than one personality, for example Versaloon and CMSIS-DAP.
 A switch command or the key selects the next personality, and a flash page stores it.
 
 The WCH-Link personality is a WCH-LinkE in RISC-V mode:
 
 - It reads and writes the memory of a CH32V003 (one wire), a CH32V006 (one wire) and a CH32V20x (two wires), and it erases, programs, protects and unprotects the flash.
 - It has no serial port, no UART bridge and no debug log. A multi image can have it. The switch commands of the other personalities, the switch request on EP0 and the key switch to it. The switch request on EP0 and the key switch from it.
-- Its hardware test is in progress (work item #71). On a CH32V208, wlink (status, dump, erase, flash, protect, unprotect) and minichlink (info, read, write) work. On a CH32V006, wlink (status, dump, regs, erase, flash, protect, unprotect, halt, resume, reset) works and minichlink (read, write) works (see [wch-link.md](wch-link.md#hardware-test)).
+- Its hardware test is in progress. On a CH32V208, wlink (status, dump, erase, flash, protect, unprotect) and minichlink (info, read, write) work. On a CH32V006, wlink (status, dump, regs, erase, flash, protect, unprotect, halt, resume, reset) works and minichlink (read, write) works (see [wch-link.md](wch-link.md#hardware-test)).
 
 Hardware test status:
 

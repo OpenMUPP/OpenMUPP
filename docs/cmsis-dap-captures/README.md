@@ -1,8 +1,8 @@
 # CMSIS-DAP captures for the RISC-V DTM bridge
 
-This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode for the CMSIS-DAP RISC-V bridge (#103).
+This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode for the CMSIS-DAP RISC-V bridge.
 
-- The B0 captures (#104) have no target. They show which DAP commands the TAP emulator must follow.
+- The reference captures have no target. They show which DAP commands the TAP emulator must follow.
 - The bridge captures have the emulated TAP and a CH32V208 or a CH32V006. They show the host tools on the bridge. See [Bridge captures](#bridge-captures).
 
 ## Setup
@@ -110,15 +110,15 @@ Only OpenOCD shifts an IR (`0x7f`, `0x10` and `0x11`). probe-rs shifts no IR.
   OpenOCD reaches them only because it uses the configured chain after the error.
 - The shape of the DMI scans (41 bits), the number of idle cycles in Run-Test/Idle and the polls of the busy status are not visible.
 - Neither tool shows what it sends when it sees a TAP. The list of commands that the tools never sent can change.
-- The host tests (`tests/TestRvDtmTap.cpp`) send these requests to the TAP emulator (#105). The tools do not see its replies.
+- The host tests (`tests/TestRvDtmTap.cpp`) send these requests to the TAP emulator. The tools do not see its replies.
   The bridge captures below close most of these gaps.
 - The flash and halt commands of both tools are not in these captures.
 
 ## Bridge captures
 
 Date: 2026-10-24.
-These captures run the host tools on the emulated TAP (#105, #106). The target is a CH32V208 on two wires, or a CH32V006 on one wire.
-The firmware does not use the TAP yet (#107). Thus test images route the CMSIS-DAP JTAG port to the TAP all the time.
+These captures run the host tools on the emulated TAP. The target is a CH32V208 on two wires, or a CH32V006 on one wire.
+The firmware does not use the TAP yet. Thus test images route the CMSIS-DAP JTAG port to the TAP all the time.
 Do not merge their changes.
 
 | Image | Base commit | `attach()` | Unlock writes | `0xBAD0000n` marker | Change |
@@ -172,7 +172,7 @@ These results are for two wires (images A, B and C).
 Image A calls `attach()` at boot, and its first DMI access fails.
 Image B calls `attach()` and writes `5aa50400` to `0x7e` and `0x7d` at `DAP_Connect`, as the `wch-link` personality does. It passes.
 Image C calls `attach()` at `DAP_Connect`, without the unlock writes, and it passes after a power cycle of the target.
-Thus the time of `attach()` causes the failure, not the unlock writes. The bridge must attach when it switches on (#107).
+Thus the time of `attach()` causes the failure, not the unlock writes. The bridge must attach when it switches on.
 The cause in image A is not known. A probable cause: a command before the first scan changes the shared SWCLK and SWDIO pins.
 
 ### One wire
@@ -202,7 +202,7 @@ The capture `openocd-ch32v208-unplug.pcapng` shows the DMI error model (`docs/cm
 
 ### Open points of these captures
 
-- OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine, and "halted due to undefined" after the recovery. The hardware test (#109) explains these messages: see [OpenOCD messages at examine](../cmsis-dap.md#openocd-messages-at-examine).
+- OpenOCD logs "Vector support with vlenb=0" and "S?aia detected with IMSIC" at examine, and "halted due to undefined" after the recovery. The hardware test explains these messages: see [OpenOCD messages at examine](../cmsis-dap.md#openocd-messages-at-examine).
 - The flash commands of both tools are not in these captures.
 - probe-rs on a one-wire target is not in these captures.
 - The one-wire captures have no run of image C (without the unlock writes).

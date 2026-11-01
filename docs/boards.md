@@ -2,6 +2,8 @@
 
 This document describes the board support of the firmware: the board definitions, the start-up and the LEDs.
 The README lists the supported boards.
+The main target is the [OpenMUPP v1 probe board](#openmupp-v1-probe-board).
+The other boards are for development and tests, or they are older probe hardware.
 
 ## MCU family
 
@@ -261,7 +263,7 @@ After the SWD-to-JTAG switch sequence, OpenOCD found the two TAPs of the target 
 With TRST and SRST wired, all JTAG steps passed.
 The test did not show which of the two signals is necessary.
 
-Status: the test passed on 2026-10-25 (work item #95).
+Status: the test passed on 2026-10-25.
 Probe: WeAct STM32H523 core board.
 Image: `VSL_PERSONALITIES=versaloon,cmsis-dap` (the `weacth523-dual` preset of that time), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
 Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
@@ -289,7 +291,7 @@ Findings:
   This run came directly after a change to the wires.
   Five more runs of the script passed: two runs of the Versaloon steps, two runs of the Versaloon and UART steps, and one full run.
   Three more read backs of the 32 KiB image with OpenOCD and the `vsllink` driver on JTAG at 1000 kHz had no errors.
-  The cause is not known. The timing of the bit-bang engines at 250 MHz is not yet measured (#94).
+  The cause is not known.
 - The test did not cover `--full-uart`, the old switch commands, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.
 
 ## OpenMUPP v1 probe board
@@ -301,7 +303,7 @@ The schematics and the design notes are in the repository [openmupp-v1](https://
 
 The firmware has no board definition for this board yet.
 The board layer needs the direction pins, the split nRESET path and the power functions that this section lists.
-The WeAct STM32H523 core board is the H5 test board until then.
+The WeAct STM32H523 core board is the test board for the same MCU until then.
 
 The board has more functions than the Versaloon Mini.
 This table lists the rules that the firmware must follow for each function.
@@ -316,7 +318,7 @@ The README of the board repository has the full pin map.
 | Target power, 5 V | `TARGET_5V_EN` PB10 | The limit is about 300 mA. `+5V` is near 4.4 V at full load. See the sequence below. |
 | High voltage (VPP) | `VPP_EN` PC14, `VPP_ON` PC15, `VPP_12V_SEL` PA8, `VPP_SENSE` PA4 (ADC) | Both `VPP_EN` and `VPP_ON` must be high. The default level is 8.4 V. VPP is on J4 pin 19. See the sequence below. |
 | Adapter ID | `ADAPTER_ID` PB1 (ADC) | A 10 kΩ series resistor gives a high source impedance. Use a long sample time. Keep the internal pull resistors off. |
-| TCK link | PB13 to PA5 | Resistor R10 (0 Ω) is fitted. It links the TCK net to PA5, the clock input of SPI1 in slave mode. The fast path can then shift TMS with SPI1. The firmware must accept PA5 as the link (issue #121). PA5 is not 5 V tolerant. |
+| TCK link | PB13 to PA5 | Resistor R10 (0 Ω) is fitted. It links the TCK net to PA5, the clock input of SPI1 in slave mode. The fast path can then shift TMS with SPI1. The firmware must accept PA5 as the link. PA5 is not 5 V tolerant. |
 | Other pins | `AUX1` PA2, `AUX2` PB3 | Outputs in the `DIR_OUT` group. |
 | LEDs and key | LED state PB2 and PA1, LED USB PA15, key PC13 | The 5-pin header J3 (PA13, PA14, NRST) debugs the probe MCU. It is not a target connector. The target connector is J4. |
 
@@ -349,6 +351,6 @@ Apply VPP only when the adapter ID shows a high-voltage adapter and the protocol
 The divider on `VPP_SENSE` gives about 2.1 V at 8.4 V and about 3.0 V at 12 V.
 
 These levels are for R34 = 130 kΩ.
-The schematic has 191 kΩ (openmupp-v1 [issue #6](https://gitlab.vandertogt.org/embedded-projects/openmupp-v1/-/issues/6)).
+The schematic has 191 kΩ.
 Then VPP is about 12 V with `VPP_12V_SEL` low and about 17 V with `VPP_12V_SEL` high.
 Do not apply VPP on a board with R34 = 191 kΩ.

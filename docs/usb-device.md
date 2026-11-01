@@ -133,7 +133,7 @@ The order in the list does not matter.
 An image with more than one personality is a multi image (see [Multi image](#multi-image)).
 It also has `personality/` and `board/SettingsFlashPage.cpp`.
 `VSL_DEFAULT_PERSONALITY` selects the personality of a multi image when no personality is stored.
-`cmake/Personalities.cmake` has the table of the personalities (see [Add a personality](development.md#add-a-personality)).
+`cmake/Personalities.cmake` has the table of the personalities (see [Add a personality](cmake.md#add-a-personality)).
 
 The option defines `VSL_WITH_VERSALOON`, `VSL_WITH_CMSIS_DAP` or `VSL_WITH_WCH_LINK` for each personality in the image.
 A multi image also gets `VSL_MULTI_PERSONALITY` and `VSL_DEFAULT_PERSONALITY=<code>`.
@@ -160,8 +160,8 @@ The names of the image files have the text `-cmsis-dap` after the board name.
 ### Multi image
 
 A multi image has more than one personality, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
-The old dual image is the multi image with the Versaloon and the CMSIS-DAP personalities.
-The `-dual` presets now build the multi image with the CMSIS-DAP and the WCH-Link personalities.
+A multi image with the Versaloon and the CMSIS-DAP personalities is also called a dual image.
+The `-dual` presets build the multi image with the CMSIS-DAP and the WCH-Link personalities.
 One personality is active after each start.
 The active personality has its descriptors, its USB function and its commands, as in the image with one personality.
 The firmware changes the personality only with a reset.
@@ -297,7 +297,7 @@ Findings:
   The first MEM-AP access got the status FAILED (`usbtoswd command 0x28 failed with 0x01`).
   The cause: the CMSIS-DAP processor sets its SWD transfer rules on the shared SWD engine at start, also when the Versaloon personality is active.
   The Versaloon SWD block then ran without idle cycles, and without the ABORT write before a WAIT retry.
-  Now INIT and CONFIG of the Versaloon SWD block set the Versaloon rules again (MR !69 and !70).
+  Now INIT and CONFIG of the Versaloon SWD block set the Versaloon rules again.
 - The test did not cover the key switch, the old switch commands, the WCH-Link personality and Windows.
 
 #### Switch request on EP0
@@ -340,7 +340,7 @@ On Windows, a host sends the request through the WinUSB driver of interface 0.
 The Versaloon and WCH-Link personalities need a WinUSB or libusb driver on interface 0 for their bulk endpoints, so this driver is always there.
 In the CMSIS-DAP personality, the MS OS 2.0 descriptors bind WinUSB to interface 0.
 WinUSB must also send a control request to the device recipient.
-No test on Windows confirms this yet. The hardware test of the personalities (work item #88) checks it.
+No test on Windows confirms this yet. The hardware test of the personalities checks it.
 
 The key gesture has these rules:
 
@@ -390,7 +390,7 @@ The common commands are:
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
 The version text has the form `openmupp <version>, board <board>`.
-Firmware before the rename uses `versaloon-ng` in place of `openmupp`.
+Firmware with the former project name versaloon-ng uses `versaloon-ng` in place of `openmupp`.
 
 `SWITCH_PERSONALITY` changes the USB personality of a multi image (see [Multi image](#multi-image)).
 The firmware sends the reply, stores the personality and resets.
@@ -748,7 +748,7 @@ An interrupt makes a period longer, but not shorter.
 At `delay` 0, the firmware runs untimed, without the cycle counter.
 Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`).
 The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
-Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the Mini, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md), #118).
+Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the Mini, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md)).
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 On the STM32H5 (250 MHz), `delay` 0 is timed at 1.85 MHz: the untimed engine there gives 13 MHz (`swd::runsUntimed()`, see [Clock pacing](clock-pacing.md#stm32h5)).

@@ -130,7 +130,7 @@ This loop has no limit. It ends only when no packet is stored after an event del
 A host that sends packets in a pipeline (pyOCD, OpenOCD) keeps a packet stored during a long memory read or a flash download.
 During that time, the rest of the main loop does not run: the LEDs do not change, the key gesture of a multi image waits, and the debug log waits.
 The serial service still runs during the commands, so the UART bridge loses no data.
-Before E6, the commands ran inside the event delivery, with the same effect.
+Before `DAP_TransferAbort`, the commands ran inside the event delivery, with the same effect.
 Thus the OUT endpoint stays armed while a command runs, if a slot is free.
 During a USB suspend, `CmsisDapFunction::poll()` runs no packet. The stored packets run after the resume.
 A packet that arrives during a command waits until that command ends.
@@ -394,7 +394,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Status: in progress (#103). Each image with the `cmsis-dap` personality has the bridge, unless the build sets `VSL_CMSIS_DAP_RV_BRIDGE=OFF`. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test (#109) is done: see [Bridge hardware test](#bridge-hardware-test).
+Status: in progress. Each image with the `cmsis-dap` personality has the bridge, unless the build sets `VSL_CMSIS_DAP_RV_BRIDGE=OFF`. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test is done: see [Bridge hardware test](#bridge-hardware-test).
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -458,9 +458,9 @@ An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_
 Set the stored mode with `python3 tools/vsl_rv_bridge.py stored`, or replug the probe.
 The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
-The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet (#110).
+The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet.
 
-Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, Mini with the SPI1 remap fix of !86, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
+Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, Mini with the SPI1 remap fix, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
 The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
 The [bridge hardware test](#bridge-hardware-test) has the results of the three configs.
 
@@ -494,7 +494,7 @@ A failed store also gives `81 FF`, but the command still sets the mode.
 - `DAP_SWJ_Clock` sets the TCK of the board port also while the TAP is the port. The wire has its own clock: the high speed of the `wch-link` personality.
 
 OpenOCD sends the command with `cmsis-dap cmd 0x81 0x01`.
-probe-rs cannot send a vendor command (#103, decision 7). In the auto mode, probe-rs needs no command:
+probe-rs cannot send a vendor command. In the auto mode, probe-rs needs no command:
 
 ```sh
 probe-rs info --protocol jtag
@@ -610,7 +610,7 @@ The [unplug capture](cmsis-dap-captures/README.md#errors) shows the same limit w
 On one wire, a frame without an answer of the target reads `ffffffff` and gives `op` 0, not `op` 2 ([One wire](cmsis-dap-captures/README.md#one-wire)).
 Thus the host sees data that the target did not send. The planned changes below do not cover this yet.
 
-Planned changes (#103):
+Planned changes:
 
 - The firmware retries a wire access 2 or 3 times before `op` 2, but only when the target did not run the access. Examples: a two-wire frame without the handshake of the target at bit 11, or a one-wire frame that did not start.
 - A read with a parity error, or a one-wire line that stays low, gives `op` 2 at once. A second access can have side effects, for example on `command`, on `data0` with `abstractauto`, or on `sbdata0`.
@@ -621,7 +621,7 @@ OpenOCD would then repeat accesses that the target already ran, and a permanent 
 
 ### Bridge hardware test
 
-The hardware test (#109) has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the Mini.
+The hardware test has a step for each target: the CH32V006, the CH32V003 and the CH32V208, on the Mini.
 A last step checks the real JTAG port with an STM32F103 after the bridge was on.
 
 #### CH32V006 on the Mini
@@ -681,7 +681,7 @@ The USB capture shows that the host sends the next packet a few µs after the re
 The probe takes about 1.1 ms for a packet with 3 DMI scans, and about 0.2 ms for a packet with only TMS moves.
 Thus the firmware takes about 300 µs for each DMI scan, and the wire uses only about 50 µs of it.
 `adapter speed` (100 kHz to 10 MHz) does not change the rate.
-The [CH32V006 rates on the WeAct STM32H523](#ch32v006-rates-on-the-weact-stm32h523) show the cause (#114).
+The [CH32V006 rates on the WeAct STM32H523](#ch32v006-rates-on-the-weact-stm32h523) show the cause.
 
 The rates with the fix, on 2026-10-26, with a Mini with `openmupp-bootloader` and `app-8k` images of `mini-cmsis-dap-rv-bridge`:
 
@@ -796,7 +796,7 @@ Rates, with the target at its reset clock:
 
 #### CH32V006 rates on the WeAct STM32H523
 
-This test looked for the firmware time of #114 on an STM32H5 board.
+This test looked for the firmware time of a DMI scan on an STM32H5 board.
 It measured rates only, not the full test list of the Mini.
 
 | Item | Value |
@@ -917,7 +917,7 @@ Notes:
 
 1. probe-rs `info` without `--chip` cannot identify the CH32V006, the CH32V208 or the STM32F103 ("The connected chip could not automatically be determined"). The scan of the chain passes before this message.
 2. OpenOCD `scan_chain` without a target stops with an assertion (`buf_get_u32: Assertion 'num >= 1 && num <= 32' failed`). The same occurs with the bridge off, so the cause is OpenOCD with a chain of only zeros.
-3. On the CH32V208, `resume` fails (`dmstatus=0x00000c82`) and `pc` reads `0x00000000`. This also occurs with the bridge on, so the auto mode does not cause it (#122).
+3. On the CH32V208, `resume` fails (`dmstatus=0x00000c82`) and `pc` reads `0x00000000`. This also occurs with the bridge on, so the auto mode does not cause it.
 4. A bad SWD connection to the STM32H523 gave DPIDR `0xfffe053f`, and later no answer. Then the SWD step finds no target, and the WCH step sends its frames to the STM32H523. This agrees with the [auto mode](#auto-mode) rules.
 
 ## Tests
@@ -932,7 +932,7 @@ The tests cover the JTAG commands, IDCODE, DPACC and APACC reads and writes, pos
 Other tests send `DAP_TransferAbort` and other packets during a transfer command, through the processor and through the USB function.
 One test sends the abort during the WAIT retries of one SWD transfer, from the serial service of the engine.
 
-`tests/TestRvDtmTap.cpp` runs the emulated TAP of the RISC-V bridge (`src/protocol/cmsisdap/RvDtmTap.h`, #103).
+`tests/TestRvDtmTap.cpp` runs the emulated TAP of the RISC-V bridge (`src/protocol/cmsisdap/RvDtmTap.h`).
 The TAP is a JTAG port without pins: it follows TMS and TDI and gives TDO.
 It has a 5-bit IR, IDCODE, DTMCS (`version` 1, `abits` 7), DMI and BYPASS.
 Update-DR of the DMI register does the access on the wire, with the wire engine of the `wch-link` personality (`wchlink::Target`).
@@ -960,8 +960,8 @@ The tests cover off, on and read, each protection, a board without a switch or a
 This section has the SWD tests. The JTAG tests follow in [JTAG hardware test](#jtag-hardware-test).
 
 Date: 2026-10-10.
-Firmware: `dev` at `5f2135f` with E6 (`DAP_TransferAbort`). The build is `v0.2.0-63-g10d84fa-dirty`. The `-dirty` suffix is from the merge of `dev`, which was not committed at build time. The `src/` tree equals commit `75d93cd`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
-The same checks first ran on `v0.2.0-57-g59614cb` (before E6). All checks passed there too. Only the read speed differs (see below).
+Firmware: `dev` at `5f2135f` with `DAP_TransferAbort`. The build is `v0.2.0-63-g10d84fa-dirty`. The `-dirty` suffix is from the merge of `dev`, which was not committed at build time. The `src/` tree equals commit `75d93cd`. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality.
+The same checks first ran on `v0.2.0-57-g59614cb` (before `DAP_TransferAbort`). All checks passed there too. Only the read speed differs (see below).
 Probe: Mini board.
 Target: STM32F103ZET6 (512 KiB flash) on SWD.
 Host: Linux 6.18.55.
@@ -973,7 +973,7 @@ Tools: OpenOCD 0.12.0+dev-00801-g133dd9d66, pyOCD 0.45.1 (Keil.STM32F1xx_DFP 2.4
 | Flash and verify (32 KiB) | pass | pass | pass |
 | Read back (`cmp`) | pass | pass | not run |
 | Halt, step, reset | pass | pass | pass (halt and step through GDB) |
-| Memory write and read | pass | not run | read only (`probe-rs read`), run before E6 only |
+| Memory write and read | pass | not run | read only (`probe-rs read`), run before `DAP_TransferAbort` only |
 | UART bridge during flash (256 KiB, image verified after) | pass | pass | pass |
 
 Enumeration: the product string is `Versaloon CMSIS-DAP`.
@@ -982,9 +982,9 @@ The `cdc_acm` driver binds interfaces 1 and 2 and gives `/dev/ttyACM0`.
 The `ftdi_sio` driver does not bind to the device.
 OpenOCD opens the probe with VID:PID 0x0403:0x9b3c.
 
-Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with E6):
+Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with `DAP_TransferAbort`):
 
-| SWCLK request | Write | Verify | Read | Read before E6 |
+| SWCLK request | Write | Verify | Read | Read before `DAP_TransferAbort` |
 |---|---|---|---|---|
 | 250 kHz | 4.51 s | 0.16 s | 3.41 s | 3.40 s |
 | 1000 kHz | 2.59 s | 0.13 s | 1.15 s | 0.95 s |
@@ -992,9 +992,9 @@ Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with E6):
 | 4000 kHz | 2.55 s | 0.13 s | 0.73 s | 0.56 s |
 
 All runs passed (0 failures in 3 runs for each rate).
-Only the run before E6 includes 100 kHz and 500 kHz (write 9.75 s and 2.78 s, read 8.27 s and 1.77 s).
+Only the run before `DAP_TransferAbort` includes 100 kHz and 500 kHz (write 9.75 s and 2.78 s, read 8.27 s and 1.77 s).
 
-The Versaloon personality (Mini board, same firmware version before E6, `vsllink` driver) gave these times:
+The Versaloon personality (Mini board, same firmware version before `DAP_TransferAbort`, `vsllink` driver) gave these times:
 
 | Clock | Write | Read |
 |---|---|---|
@@ -1002,12 +1002,12 @@ The Versaloon personality (Mini board, same firmware version before E6, `vsllink
 | 1.85 MHz (untimed) | 2.54 s | 0.81 s |
 
 The `vsllink` driver has fixed SWD steps. Thus the comparison is not exact at 250 kHz, where the clocks are 250 kHz and 235 kHz.
-At 2000 kHz, both personalities ran the untimed engine. This firmware is from before #118: now CMSIS-DAP runs untimed only from 3 MHz.
+At 2000 kHz, both personalities ran the untimed engine. The firmware of this test ran untimed from 1.85 MHz. Now CMSIS-DAP runs untimed only from 3 MHz.
 The write time is the same (2.55 s and 2.54 s).
-The read time with E6 is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon personality (91 and 79 KiB/s).
-Before E6, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
+The read time with `DAP_TransferAbort` is 0.70 s for CMSIS-DAP and 0.81 s for the Versaloon personality (91 and 79 KiB/s).
+Before `DAP_TransferAbort`, the CMSIS-DAP read time was 0.56 s (114 KiB/s).
 
-Maximum SWD clock: the untimed engine. In this test, it ran from 1.85 MHz. Since #118, it runs from 3 MHz (`maxClockHz` in `src/swd/SwdBitBang.h`).
+Maximum SWD clock: the untimed engine. In this test, it ran from 1.85 MHz. Now it runs from 3 MHz (`maxClockHz` in `src/swd/SwdBitBang.h`).
 Its real rate depends on the code (2.42 to 2.7 MHz on the Mini, see [Clock pacing](clock-pacing.md)).
 All runs passed up to this clock with the wiring of this test.
 A request above 3 MHz gives the same clock. A request from 1.85 MHz to 3 MHz now gives the timed engine at 1.3 to 1.56 MHz.
@@ -1017,9 +1017,9 @@ Findings:
 
 - Write time does not improve above 1 MHz. The flash programming time is probably the limit. This test did not measure it.
 - The times at 2000 kHz and 4000 kHz are the same within the noise. This is expected: the engine ran untimed from 1.85 MHz, so both requests gave the same clock.
-- E6 made the read time about 20% to 25% longer at 1000 kHz and 2000 kHz (0.56 s to 0.70 s at 2000 kHz). The 4000 kHz run shows 30%, but it is noisy. Write time and the 250 kHz read time did not change. The cause is not measured. Issue #35 tracks it.
+- `DAP_TransferAbort` made the read time about 20% to 25% longer at 1000 kHz and 2000 kHz (0.56 s to 0.70 s at 2000 kHz). The 4000 kHz run shows 30%, but it is noisy. Write time and the 250 kHz read time did not change. The cause is not measured.
 - After a replug, the SWD connect failed (`cannot read IDR`, and the pin line showed `TDI = 0`). It worked again when the target board was reconnected (the pin line showed `TDI = 1`). The cause is probably the wiring. No log proves this, and the exact wire is not known.
-- `probe-rs info` does not print the DPIDR value. Without `--verbose`, it prints "Connecting to the chip was unsuccessful", although `download`, `verify`, `gdb` and `reset` connect. With `--verbose` (run before E6), it shows the DPv1 MemoryAP and the ROM table, and stops with "does not support SWD multidrop". This is normal for an STM32F1 target.
+- `probe-rs info` does not print the DPIDR value. Without `--verbose`, it prints "Connecting to the chip was unsuccessful", although `download`, `verify`, `gdb` and `reset` connect. With `--verbose` (run before `DAP_TransferAbort`), it shows the DPv1 MemoryAP and the ROM table, and stops with "does not support SWD multidrop". This is normal for an STM32F1 target.
 - `probe-rs verify` prints "Verification failed: contents do not match" for a wrong image, but it exits with code 0. Check the text, not the exit code. This is how probe-rs behaves. It is not a probe finding.
 - In the probe-rs GDB server, the first `pc` after `monitor reset halt` shows a stale value. The next `stepi` shows the correct PC.
 - The UART loopback test with the default run (PA9 to PA10) gives 100 passed, 0 failed and 50 skipped. Linux cannot make 1.5 stop bits, so all skips are for that setting. The test during a 256 KiB flash passes with all three tools (60 of 60 runs at 115200 baud, 8N1).
@@ -1027,7 +1027,7 @@ Findings:
 ## JTAG hardware test
 
 Date: 2026-10-11.
-Firmware: `dev` at `6fc6d8b` with E7 (JTAG). The build is `v0.2.0-101-g6fc6d8b`. The tree was clean. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality, `Release` build.
+Firmware: `dev` at `6fc6d8b` with JTAG support. The build is `v0.2.0-101-g6fc6d8b`. The tree was clean. CMSIS-DAP v2 firmware version 2.1.0, `cmsis-dap` personality, `Release` build.
 Probe: Mini board. The image ran behind `openmupp-bootloader`.
 Target: STM32F103ZET6 (512 KiB flash) on JTAG. The wiring is the one of the SWD test, with TDI, TDO and TMS added.
 Host: Linux 6.18.55.
@@ -1088,7 +1088,7 @@ Findings:
 - The pyOCD target `stm32f103ze` (from the Keil DFP) fails on JTAG before the first transfer with `'bytes' object cannot be interpreted as an integer`. The error is in the debug sequence code of pyOCD (`hex()` of a `bytes` result in a trace call). It is not a probe problem. The test uses the built-in target `stm32f103rc`.
 - `DAP_JTAG_IDCODE` for device 1 (the boundary-scan TAP) returns 0. The firmware loads the IR value `0x0E`, as the reference implementation of Arm does. This is the IDCODE instruction of the Cortex-M3 DAP. The boundary-scan TAP of the STM32F1 probably does not decode it as IDCODE. OpenOCD reads `0x06414041` from this TAP with its own scan, so the TAP does answer. No debug host uses `DAP_JTAG_IDCODE` of this TAP.
 - The probe re-enumerated once on the USB bus, about 2 minutes after the firmware started (device number 7 to 8). The first OpenOCD tries failed with "No such device" in that time. It then stayed on device number 8 for the rest of the test. The cause is not known. A second run did not repeat it.
-- The probe-rs JTAG test is not done. The issue asks for OpenOCD and pyOCD only.
+- The probe-rs JTAG test is not done. The test covers OpenOCD and pyOCD only.
 
 ## UART hardware test
 
