@@ -8,8 +8,6 @@ The firmware debugs and programs target chips of more than one architecture.
 Today it supports Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
 The name OpenMUPP stands for more than these two: the goal is one probe for many architectures (see [Planned targets](#planned-targets)).
 
-**Disclaimer:** this project is in no way related to or associated with the original Versaloon project or its author. The firmware is an independent implementation of the Versaloon USB protocol. It contains no code of the original project.
-
 The OpenMUPP v1 probe is the main target of this project.
 The firmware has no board definition for it yet (see [Boards](#boards)).
 Until then, the WeAct STM32H523 core board is the test board for the same MCU.
@@ -24,6 +22,8 @@ Each firmware image has one of these personalities:
 | Versaloon (original protocol, the default) | `0483:a038` | Unmodified OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M, SWD and JTAG |
 | CMSIS-DAP v2 | `1209:0001` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M, SWD and JTAG (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
 | WCH-Link | `1209:0001` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
+
+The Versaloon personality is an independent implementation of the Versaloon USB protocol. It contains no code of the original Versaloon project. OpenMUPP is not related to that project or its author.
 
 `wlink` and `minichlink` find only the WCH ID `1a86:8010`.
 Build the WCH-Link image with `MUPP_WCH_LINK_WCH_USB_ID` for personal use only (see [docs/wch-link.md](docs/wch-link.md#usb-id)).
@@ -51,7 +51,8 @@ These targets are planned. None of them works yet.
 The AVR personality will run at the same time as the CMSIS-DAP personality, in one image for the STM32H523 boards.
 The planned protocols need the OpenMUPP v1 hardware: the level shifters, the split nRESET path and the VPP supply.
 An adapter board maps the target connector to the pinout of each target.
-The adapters are passive, except the high-voltage adapters.
+All adapters are passive, also the high-voltage adapters. The VPP supply is on the OpenMUPP v1 board.
+Each adapter has an ID resistor. The firmware applies VPP only when the ID shows a high-voltage adapter (see [VPP sequence](docs/boards.md#vpp-sequence)).
 
 ## Boards
 
