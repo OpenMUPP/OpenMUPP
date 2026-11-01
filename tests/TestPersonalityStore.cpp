@@ -68,7 +68,7 @@ TEST_CASE("The personality codes") {
 }
 
 TEST_CASE("The host build has all personalities in code order") {
-   // The test build defines each VSL_WITH_<P> (tests/CMakeLists.txt)
+   // The test build defines each MUPP_WITH_<P> (tests/CMakeLists.txt)
    static_assert(personality::all.size() == 3);
    CHECK(personality::all[0] == Personality::Versaloon);
    CHECK(personality::all[1] == Personality::CmsisDap);
@@ -76,7 +76,7 @@ TEST_CASE("The host build has all personalities in code order") {
    CHECK(personality::has(Personality::Versaloon));
    CHECK(personality::has(Personality::CmsisDap));
    CHECK(personality::has(Personality::WchLink));
-   // No VSL_DEFAULT_PERSONALITY: the first one of the image
+   // No MUPP_DEFAULT_PERSONALITY: the first one of the image
    CHECK(personality::defaultPersonality == Personality::Versaloon);
 }
 

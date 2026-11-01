@@ -94,7 +94,7 @@ class MainTest(unittest.TestCase):
         device = FakeDevice(0x0403, 0x9B3C, reply=[0xFF])
         result, _, err = self.run_main(["on"], [device])
         self.assertEqual(result, 1)
-        self.assertIn("VSL_CMSIS_DAP_RV_BRIDGE", err)
+        self.assertIn("MUPP_CMSIS_DAP_RV_BRIDGE", err)
 
     def test_no_response(self):
         device = FakeDevice(0x0403, 0x9B3C, reply=None)

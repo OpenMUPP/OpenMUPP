@@ -646,7 +646,7 @@ struct Bridge {
 
    // Runs the requests of a trace: one "> hex" line for each request
    void replay(const std::string &name) {
-      std::ifstream file(std::string(VSL_REPLAY_DIR) + "/" + name);
+      std::ifstream file(std::string(MUPP_REPLAY_DIR) + "/" + name);
       REQUIRE(file.is_open());
       std::string line;
       while(std::getline(file, line)) {

@@ -8,7 +8,7 @@
 #
 # When the image fits, the script copies <IMAGE>.bin and .hex to <COPY>.bin
 # and .hex. When the image does not fit:
-#   STRICT ON   the script fails (VSL_STRICT_SIZE, CI)
+#   STRICT ON   the script fails (MUPP_STRICT_SIZE, CI)
 #   STRICT OFF  the script removes the .bin and .hex files of the image and
 #               the copies, and shows a warning. The build continues.
 cmake_minimum_required(VERSION 3.21)
@@ -27,11 +27,11 @@ if (_size GREATER LIMIT)
     math(EXPR _over "${_size} - ${LIMIT}")
     set(_text "${IMAGE} is ${_size} bytes, ${_over} bytes larger than the limit of ${LIMIT} bytes")
     if (STRICT)
-        message(FATAL_ERROR "${_text}. VSL_STRICT_SIZE is ON.")
+        message(FATAL_ERROR "${_text}. MUPP_STRICT_SIZE is ON.")
     endif ()
     file(REMOVE "${IMAGE}.bin" "${IMAGE}.hex" "${COPY}.bin" "${COPY}.hex")
     message(WARNING "${_text}. The build skips this image: it has no .bin and no .hex file. "
-            "Set VSL_STRICT_SIZE=ON to stop the build instead.")
+            "Set MUPP_STRICT_SIZE=ON to stop the build instead.")
     return()
 endif ()
 

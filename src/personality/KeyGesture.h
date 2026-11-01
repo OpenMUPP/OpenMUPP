@@ -1,7 +1,7 @@
 #pragma once
 
 // The key gesture of an image with more than one personality
-// (VSL_MULTI_PERSONALITY): hold the key for holdMs to switch to
+// (MUPP_MULTI_PERSONALITY): hold the key for holdMs to switch to
 // the next personality. Hardware-independent: the host unit tests check
 // it. The main loop gives the key state and the uptime, and requests the
 // next personality (personality/PersonalitySwitch.h) when update()

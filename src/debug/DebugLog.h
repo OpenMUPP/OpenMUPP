@@ -2,8 +2,8 @@
 
 // Debug log over the CDC-ACM port (plan section 9.2). Target only.
 //
-// The CMake option VSL_DEBUG_CDC (ON by default in a Debug build) defines
-// VSL_DEBUG_CDC. Then the libArT logger writes into a LogSink (debug/
+// The CMake option MUPP_DEBUG_CDC (ON by default in a Debug build) defines
+// MUPP_DEBUG_CDC. Then the libArT logger writes into a LogSink (debug/
 // LogSink.h), and pollLog() sends the log to the one CDC-ACM port of the
 // device. The USB descriptors are the same in both builds.
 //
@@ -11,7 +11,7 @@
 // expand to nothing, the loggers do not exist and startLog()/pollLog() are
 // empty. A release build carries no log code.
 //
-// Contract for the UART bridge (B5): with VSL_DEBUG_CDC the CDC port
+// Contract for the UART bridge (B5): with MUPP_DEBUG_CDC the CDC port
 // belongs to the log. Build and start the bridge only when
 // debug::cdcLog is false. USART1 then stays unused, and the device ignores
 // the data that the host sends to the CDC port.
@@ -27,7 +27,7 @@
 
 #include "usb/SerialPortConfig.h"
 
-#if defined(VSL_DEBUG_CDC) && !defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_DEBUG_CDC) && !defined(MUPP_USB_SERIAL_PORT)
 #error "The image has no CDC port for the debug log: the WCH-Link personality has none"
 #endif
 
@@ -37,7 +37,7 @@ class UsbStack;
 
 namespace debug {
 
-#if defined(VSL_DEBUG_CDC)
+#if defined(MUPP_DEBUG_CDC)
 inline constexpr bool cdcLog = true;
 
 // Log topics

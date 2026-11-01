@@ -14,10 +14,10 @@
 #include "board/BoardPins.h"
 #include "debug/DebugLog.h"
 #include "usb/UsbDescriptors.h"
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
 #include "usb/CmsisDapDescriptors.h"
 #endif
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
 #include "usb/WchLinkDescriptors.h"
 #endif
 
@@ -27,11 +27,11 @@ namespace {
 
 using personality::Personality;
 
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
 static_assert(art::usb::CdcAcmFunctionBase::kDataPacketSize == cdcDataPacketSize);
 #endif
 static_assert(hw::Uid::SizeBytes == uidBytes);
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
 static_assert(dap::packetMemoryUsed <= hw::UsbDevice::PacketMemorySize);
 static_assert(switchRequestCode != dap::msOs20VendorCode);
 // The two personalities share the endpoint numbers, so the OUT endpoint is
@@ -49,7 +49,7 @@ static_assert(endpointCount * 8 + 2 * 64 + 2 * versaloonPacketSize + versaloonPa
 // How long D+ stays low before a reset, so the host sees a disconnect
 constexpr uint32_t disconnectMs = 20;
 
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
 constexpr art::usb::CdcAcmEndpoints serialPortEndpoints{
    .notification = cdcNotificationEndpoint,
    .notificationMaxPacketSize = cdcNotificationPacketSize,
@@ -82,7 +82,7 @@ const art::usb::Descriptors versaloonDescriptors{
 };
 #endif
 
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
 const std::array<art::span<const uint8_t>, dap::stringCount> dapStrings{
    desc::asSpan(dap::languageDescriptor),   desc::asSpan(dap::manufacturerDescriptor),
    desc::asSpan(dap::productDescriptor),    serialNumber.bytes(),
@@ -100,7 +100,7 @@ const art::usb::Descriptors dapDescriptors{
 art::usb::msos20::DescriptorSetHandler msOs20Handler(dap::msOs20VendorCode, desc::asSpan(dap::msOs20DescriptorSet));
 #endif
 
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
 const std::array<art::span<const uint8_t>, wch::stringCount> wchStrings{
    desc::asSpan(wch::languageDescriptor),
    desc::asSpan(wch::manufacturerDescriptor),
@@ -120,19 +120,19 @@ const art::usb::Descriptors wchDescriptors{
 // The descriptors of a personality of the image. The constructor of
 // UsbStack takes only a personality of the image.
 const art::usb::Descriptors &descriptorsOf([[maybe_unused]] Personality personality) {
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
    if(personality == Personality::WchLink) {
       return wchDescriptors;
    }
 #endif
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
    if(personality == Personality::CmsisDap) {
       return dapDescriptors;
    }
 #endif
 #if defined(VSL_WITH_VERSALOON)
    return versaloonDescriptors;
-#elif defined(VSL_WITH_CMSIS_DAP)
+#elif defined(MUPP_WITH_CMSIS_DAP)
    return dapDescriptors;
 #else
    return wchDescriptors;
@@ -142,7 +142,7 @@ const art::usb::Descriptors &descriptorsOf([[maybe_unused]] Personality personal
 // The handler of the other vendor requests to the device in a personality
 // (SwitchRequestHandler)
 art::usb::VendorRequestHandler *nextVendorHandlerOf([[maybe_unused]] Personality personality) {
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
    if(personality == Personality::CmsisDap) {
       return &msOs20Handler;
    }
@@ -152,7 +152,7 @@ art::usb::VendorRequestHandler *nextVendorHandlerOf([[maybe_unused]] Personality
 
 // The highest endpoint number of a personality, plus 1 (hw::UsbDevice)
 uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
    if(personality == Personality::WchLink) {
       return wch::endpointCount;
    }
@@ -194,17 +194,17 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
 #if defined(VSL_WITH_VERSALOON)
    , versaloon_(deviceInfo, functions.bootloader, functions.versaloon->usbToXxx, functions.personalitySwitch)
 #endif
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
    , dap_(*functions.dap)
 #endif
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
    , wch_(*functions.wch)
 #endif
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
    , serialPort_(cdcControlInterface, serialPortEndpoints)
 #endif
    , switchRequest_(functions.personalitySwitch, functions.bootloader, nextVendorHandlerOf(active)) {
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
    if(hasSerialPort()) {
       // Both bulk pairs of the WCH-Link personality are single-buffered
       // (usb/WchLinkDescriptors.h).
@@ -219,14 +219,14 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
       static_cast<void>(device_.addFunction(versaloon_));
       break;
 #endif
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
    case Personality::CmsisDap:
       // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
       events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
       static_cast<void>(device_.addFunction(dap_));
       break;
 #endif
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
    case Personality::WchLink:
       static_cast<void>(device_.addFunction(wch_));
       break;
@@ -234,7 +234,7 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
    default:
       break;
    }
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
    if(hasSerialPort()) {
       static_cast<void>(device_.addFunction(serialPort_));
    }
@@ -277,7 +277,7 @@ void UsbStack::start() {
 
 void UsbStack::poll() {
    controller_.poll();
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
    if(personality() == Personality::CmsisDap) {
       // Run one command, then deliver the USB events that came during it:
       // the InComplete event frees the IN endpoint for the next response,
@@ -291,7 +291,7 @@ void UsbStack::poll() {
       }
    }
 #endif
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
    if(personality() == Personality::WchLink) {
       // As the CMSIS-DAP personality: run requests and data packets, and
       // deliver the events that came during them.
@@ -300,8 +300,8 @@ void UsbStack::poll() {
       }
    }
 #endif
-#if defined(VSL_USB_SERIAL_PORT)
-   // Without VSL_DEBUG_CDC the UART bridge reads the serial port
+#if defined(MUPP_USB_SERIAL_PORT)
+   // Without MUPP_DEBUG_CDC the UART bridge reads the serial port
    // (uart/SerialBridge.h).
    if constexpr(debug::cdcLog) {
       if(hasSerialPort()) {
@@ -336,7 +336,7 @@ void UsbStack::pollSerial() {
    events_.setSerialOnly(true);
    controller_.poll();
    events_.setSerialOnly(false);
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
    if constexpr(debug::cdcLog) {
       if(hasSerialPort()) {
          discardSerialInput();
@@ -351,7 +351,7 @@ void UsbStack::setPullUp(void * /*context*/, bool enable) {
    }
 }
 
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
 void UsbStack::discardSerialInput() {
    std::array<uint8_t, cdcDataPacketSize> chunk{};
    while(serialPort_.read(art::span<uint8_t>(chunk.data(), chunk.size())) != 0) {

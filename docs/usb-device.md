@@ -50,7 +50,7 @@ The buffer descriptor table covers only the endpoint numbers 0 to 4, so it takes
 Interface 0 carries the Versaloon command protocol (see [Versaloon commands](#versaloon-commands)).
 
 The serial port is the [UART bridge](uart-bridge.md).
-In a debug build with `VSL_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](debug-log.md)).
+In a debug build with `MUPP_DEBUG_CDC`, the serial port carries the debug log instead (see [Debug log](debug-log.md)).
 
 ## CMSIS-DAP personality
 
@@ -58,7 +58,7 @@ The firmware has a second USB personality: CMSIS-DAP v2 instead of the Versaloon
 Only one personality is active at a time.
 The USB peripheral has 512 bytes of packet memory.
 The Versaloon interface and a CMSIS-DAP interface do not fit together.
-The build option `VSL_PERSONALITIES` selects the personalities (see [Select the personality](#select-the-personality)).
+The build option `MUPP_PERSONALITIES` selects the personalities (see [Select the personality](#select-the-personality)).
 A multi image has more than one personality, and selects one at each start (see [Multi image](#multi-image)).
 The Versaloon personality is the default.
 
@@ -119,28 +119,28 @@ If the probe does not get WinUSB after that, delete this key and plug in the pro
 
 ### Select the personality
 
-The CMake option `VSL_PERSONALITIES` selects the personalities of the image.
+The CMake option `MUPP_PERSONALITIES` selects the personalities of the image.
 It is a list of one or more of these personalities, with `;` or `,` between them:
 
 | Personality | Code | USB interface 0 | VID:PID | Sources |
 |---|---|---|---|---|
 | `versaloon` (default) | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/versaloon/`, `boot/Bootloader.cpp` |
 | `cmsis-dap` | `1` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
-| `wch-link` | `2` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `VSL_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
+| `wch-link` | `2` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `MUPP_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
 
-For example, `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` builds an image with all three personalities.
+For example, `-DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link` builds an image with all three personalities.
 The order in the list does not matter.
 An image with more than one personality is a multi image (see [Multi image](#multi-image)).
 It also has `personality/` and `board/SettingsFlashPage.cpp`.
-`VSL_DEFAULT_PERSONALITY` selects the personality of a multi image when no personality is stored.
+`MUPP_DEFAULT_PERSONALITY` selects the personality of a multi image when no personality is stored.
 `cmake/Personalities.cmake` has the table of the personalities (see [Add a personality](cmake.md#add-a-personality)).
 
-The option defines `VSL_WITH_VERSALOON`, `VSL_WITH_CMSIS_DAP` or `VSL_WITH_WCH_LINK` for each personality in the image.
-A multi image also gets `VSL_MULTI_PERSONALITY` and `VSL_DEFAULT_PERSONALITY=<code>`.
-`VSL_MULTI_PERSONALITY` marks an image with more than one personality.
-`VSL_DEFAULT_PERSONALITY` is the code of the personality when no personality is stored.
+The option defines `VSL_WITH_VERSALOON`, `MUPP_WITH_CMSIS_DAP` or `MUPP_WITH_WCH_LINK` for each personality in the image.
+A multi image also gets `MUPP_MULTI_PERSONALITY` and `MUPP_DEFAULT_PERSONALITY=<code>`.
+`MUPP_MULTI_PERSONALITY` marks an image with more than one personality.
+`MUPP_DEFAULT_PERSONALITY` is the code of the personality when no personality is stored.
 `personality::all` in `src/personality/Personality.h` is the list of the personalities in the image, in code order.
-The header makes the list from the `VSL_WITH_*` defines.
+The header makes the list from the `MUPP_WITH_*` defines.
 `usb::UsbStack` and `main.cpp` use the defines to select the USB function, the descriptors and the protocol objects.
 The CMake file also removes the source files of the personalities that are not in the image.
 Thus the CMSIS-DAP image does not link the Versaloon command and reply buffers (2 x 4096 bytes).
@@ -159,7 +159,7 @@ The names of the image files have the text `-cmsis-dap` after the board name.
 
 ### Multi image
 
-A multi image has more than one personality, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
+A multi image has more than one personality, for example `MUPP_PERSONALITIES=versaloon,cmsis-dap`.
 A multi image with the Versaloon and the CMSIS-DAP personalities is also called a dual image.
 The `-dual` presets build the multi image with the CMSIS-DAP and the WCH-Link personalities.
 One personality is active after each start.
@@ -170,7 +170,7 @@ The firmware stores the personality in the last 1 KB flash page of the applicati
 On the WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash), the page is the last 8 KB flash sector of bank 2, at `0x0803E000`.
 The linker script keeps this page out of the image.
 Thus a multi image and an image with the RISC-V bridge have 1 KB (STM32F103) or 8 KB (STM32H5) less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
-When the page holds no personality, the image uses `VSL_DEFAULT_PERSONALITY`.
+When the page holds no personality, the image uses `MUPP_DEFAULT_PERSONALITY`.
 The default is the first personality of the image in code order.
 `src/personality/PersonalityStore.h` has the page format.
 The record also holds the stored mode of the RISC-V bridge (see [Stored mode](cmsis-dap.md#stored-mode)).
@@ -198,7 +198,7 @@ The personality code is `0` for Versaloon, `1` for CMSIS-DAP and `2` for WCH-Lin
 The firmware refuses a switch to a code that is not in the image.
 The key cycle uses the code order and skips the personalities that are not in the image.
 The settings page has room for four personality codes (`0` to `3`).
-A new personality gets the next code, one entry in `personality::everyPersonality` and one `VSL_WITH_*` define in `personality::has()`.
+A new personality gets the next code, one entry in `personality::everyPersonality` and one `MUPP_WITH_*` define in `personality::has()`.
 `tools/vsl_personality.py` sends the switch from the host.
 It needs the `pyusb` package:
 
@@ -273,7 +273,7 @@ With `--serial`, all tools use only the dongle with this serial number.
 
 Status: the test passed on 2026-10-16.
 Probe: Mini board.
-Image: `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `mini` preset, `Release` build, `v0.9.0-113-gb2dab08` (`dev` with the fix of the SWD rules below).
+Image: `MUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `mini` preset, `Release` build, `v0.9.0-113-gb2dab08` (`dev` with the fix of the SWD rules below).
 Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
 Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD and probe-rs. The test did not record the pyOCD and probe-rs versions.
 The results come from two runs of the script with this image. The serial loopback passed with `--full-uart` on `v0.9.0-112-ga8a1abe`.
@@ -561,7 +561,7 @@ The serial service does these steps:
    In the CMSIS-DAP personality, the service also delivers the events of the CMSIS-DAP endpoints.
    A CMSIS-DAP packet only waits in the processor, so this starts no command (see [CMSIS-DAP transport](cmsis-dap.md#transport)).
    Thus `DAP_TransferAbort` can stop a running transfer command.
-2. It moves the UART data (`uart::pollBridge()`), or the debug log in a `VSL_DEBUG_CDC` build.
+2. It moves the UART data (`uart::pollBridge()`), or the debug log in a `MUPP_DEBUG_CDC` build.
 
 Each call sends one IN packet of up to 64 bytes: 64 bytes per ms.
 At 115200 baud, the UART receives 11.5 bytes per ms.

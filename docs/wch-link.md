@@ -14,7 +14,7 @@ cmake --preset mini-wch-link
 cmake --build --preset mini-wch-link -j
 ```
 
-Or set the CMake option `VSL_PERSONALITIES` to `wch-link`.
+Or set the CMake option `MUPP_PERSONALITIES` to `wch-link`.
 All boards build with this value.
 The build writes `openmupp-<board>-wch-link-<image>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
@@ -24,11 +24,11 @@ The `wch-link` image has these properties:
 - USB interface 0 is the WCH-Link interface: bulk OUT `0x01` and IN `0x81` for commands, bulk OUT `0x02` and IN `0x82` for data.
 - The image has no CDC-ACM serial port. The packet memory of the USB peripheral (512 bytes) has no room for it.
   Thus the UART bridge and the debug log are off.
-  A `Debug` build of this image needs `-DVSL_DEBUG_CDC=OFF`, and it has no debug log. CMake stops with an error when `VSL_DEBUG_CDC` is on.
+  A `Debug` build of this image needs `-DMUPP_DEBUG_CDC=OFF`, and it has no debug log. CMake stops with an error when `MUPP_DEBUG_CDC` is on.
 - The image does not link the Versaloon and CMSIS-DAP code. The SWD and JTAG engines of these personalities are not used.
 - The LEDs show the target power, the command activity and the USB state. They show no probe error pattern.
 - The image has no `VERSALOON_FW_UPDATE` command. To start the bootloader, send the switch request on EP0 with the bootloader code `0xB0`, or use the key (see [Bootloader code](firmware-update.md#bootloader-code)).
-- A multi image can have this personality with others, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
+- A multi image can have this personality with others, for example `-DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
   The switch commands of the other personalities (code `2`), the switch request on EP0 and the key switch to it.
   The WCH-Link protocol has no command that switches the personality.
   To leave the WCH-Link personality, use the switch request on EP0 or the key (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
@@ -53,7 +53,7 @@ Older firmware has the product string `Versaloon WCH-Link`.
 
 `wlink` and `minichlink` look for a probe with the ID `1a86:8010` of WCH.
 Thus they do not find a probe with the default ID.
-The CMake option `VSL_WCH_LINK_WCH_USB_ID` builds the image with the ID `1a86:8010`:
+The CMake option `MUPP_WCH_LINK_WCH_USB_ID` builds the image with the ID `1a86:8010`:
 
 ```sh
 cmake --preset mini-wch-link-wch-id
@@ -66,7 +66,7 @@ Do not publish an image with this ID.
 The names of these image files have `-wch-link-wch-id` after the board.
 In a multi image, the tag ends with `-wch-id`, for example `-dap+wch-wch-id`.
 CI does not build this image.
-The option is only valid when `VSL_PERSONALITIES` has `wch-link`.
+The option is only valid when `MUPP_PERSONALITIES` has `wch-link`.
 
 ## Connect a target
 
@@ -154,9 +154,9 @@ The data and BSS grow from 15.9 KB to 16.4 KB. The RAM has 19.75 KB.
 Thus a combined image fits in the first 64 KB, but the margin for the legacy bootloader is small.
 It does not need the other 64 KB of flash.
 
-The firmware now builds the combined image: `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
+The firmware now builds the combined image: `-DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
 A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer and the switch request on EP0).
-The build uses link-time optimisation (LTO, option `VSL_LTO`), has no heap code of newlib and has no 64-bit division.
+The build uses link-time optimisation (LTO, option `MUPP_LTO`), has no heap code of newlib and has no 64-bit division.
 Without these measures, the `app-10k` image did not fit: it was 1,740 bytes too large.
 
 | Image (Mini, Release) | Without the measures | Size | Limit |
@@ -181,14 +181,14 @@ The personality speaks the protocol with these parts:
 | Target | `src/protocol/wchlink/WchLinkTarget.h` | Connects the processor to the debug module layer and the wire engine |
 
 The host tests are in `tests/TestWchLink.cpp`. They send the packets through the USB function, with the wire engine on mock pins and a mock DM.
-The build option `VSL_PERSONALITIES` with `wch-link` puts the personality into a firmware image (see [Build](#build)).
+The build option `MUPP_PERSONALITIES` with `wch-link` puts the personality into a firmware image (see [Build](#build)).
 
 ### USB
 
 - The interface has the endpoint numbers of the WCH-LinkE, with 64 bytes each. The interface has no CDC interfaces.
   The endpoints and EP0 use 408 bytes of the 512 bytes of packet memory.
 - The default USB ID is `1209:0001`, the test ID of pid.codes. It stays until the project has its own product ID.
-  The CMake option `VSL_WCH_LINK_WCH_USB_ID` (a build define of the same name) selects `1a86:8010`. Use this ID only for personal use, because the vendor ID belongs to WCH.
+  The CMake option `MUPP_WCH_LINK_WCH_USB_ID` (a build define of the same name) selects `1a86:8010`. Use this ID only for personal use, because the vendor ID belongs to WCH.
 - The function takes one request at a time. The command OUT endpoint gets a NAK until the host reads the response.
 - The function arms the data OUT endpoint `0x02` only while the processor takes data: in the stub phase and in the data phase of a program sequence (see [Flash](#flash)).
   A packet is written to the target before the next request runs. Thus a quit directly after the data (minichlink) finds the last block programmed.
@@ -596,7 +596,7 @@ Setup:
 
 | Item | Value |
 |---|---|
-| Probe | Mini board, `wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` (USB ID `1a86:8010`) |
+| Probe | Mini board, `wch-link` image with `MUPP_WCH_LINK_WCH_USB_ID` (USB ID `1a86:8010`) |
 | Target | CH32V208WBU6 board, external power. SWDIO on PA13, SWCLK on PA14. |
 | Host | Linux, wlink 0.1.2 |
 | Logic analyzer | Saleae Logic Pro 8: SWDIO on channel 0, SWCLK on channel 1 |
@@ -668,7 +668,7 @@ This test covers the one-wire engine of the STM32H5.
 
 | Item | Value |
 |---|---|
-| Probe | WeAct STM32H523, `weacth523-wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` |
+| Probe | WeAct STM32H523, `weacth523-wch-link` image with `MUPP_WCH_LINK_WCH_USB_ID` |
 | Target | CH32V006K8U6. SWIO on SWDIO (PB12, with the wire from PA6). |
 | Pull-up | 2.2 kΩ from SWDIO to 3.3 V |
 | Host | Linux, wlink 0.1.3, minichlink |
@@ -690,7 +690,7 @@ Results:
 
 | Item | Value |
 |---|---|
-| Probe | WeAct STM32H523, `weacth523-wch-link` image with `VSL_WCH_LINK_WCH_USB_ID` |
+| Probe | WeAct STM32H523, `weacth523-wch-link` image with `MUPP_WCH_LINK_WCH_USB_ID` |
 | Target | CH32V208WBU6 board, external power. SWDIO on PA13, SWCLK on PA14. |
 | Pull-up | 2.2 kΩ from SWDIO to 3.3 V (the pull-up of the one-wire test) |
 | Host | Linux, wlink 0.1.3, minichlink |

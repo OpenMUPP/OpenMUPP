@@ -1,8 +1,8 @@
 #pragma once
 
 // The settings page (personality/PersonalityStore.h): the stored personality
-// of an image with more than one personality (VSL_MULTI_PERSONALITY) and
-// the stored mode of the RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE). Target only.
+// of an image with more than one personality (MUPP_MULTI_PERSONALITY) and
+// the stored mode of the RISC-V bridge (MUPP_CMSIS_DAP_RV_BRIDGE). Target only.
 //
 // STM32F1: the page is the 1 KB at __flash_reserved_start (system-stm32 mem-F103x8.ld).
 // STM32H5: the page is the 8 KB sector at __flash_reserved_start, the last

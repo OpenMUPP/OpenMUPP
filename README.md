@@ -24,7 +24,7 @@ Each firmware image has one of these personalities:
 | WCH-Link | `1209:0001` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
 
 `wlink` and `minichlink` find only the WCH ID `1a86:8010`.
-Build the WCH-Link image with `VSL_WCH_LINK_WCH_USB_ID` for personal use only (see [docs/wch-link.md](docs/wch-link.md#usb-id)).
+Build the WCH-Link image with `MUPP_WCH_LINK_WCH_USB_ID` for personal use only (see [docs/wch-link.md](docs/wch-link.md#usb-id)).
 
 The Versaloon and CMSIS-DAP personalities also have a USB-CDC serial port.
 The firmware bridges it to a UART of the board.
@@ -118,10 +118,10 @@ The suffix of the preset selects the personalities:
 
 The CI builds only the `-cmsis-dap` and the `-dual` images.
 The Versaloon personality is for old tools only: use CMSIS-DAP for a new setup.
-For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap` for a dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/cmake.md#cmake-options)).
+For another set of personalities, add `-DMUPP_PERSONALITIES=<list>`, for example `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` for a dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/cmake.md#cmake-options)).
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
-With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/cmake.md#images-that-do-not-fit)).
+With `-DMUPP_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/cmake.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality and without the RISC-V bridge. With the bridge, the Debug image does not fit behind a bootloader.
 The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 `cmake --list-presets` shows all presets.
@@ -135,7 +135,7 @@ The alternative is to give the options on the command line:
 
 ```sh
 cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
-      -DVSL_PERSONALITIES=cmsis-dap \
+      -DMUPP_PERSONALITIES=cmsis-dap \
       -DGCC_TOOLCHAIN_PREFIX=/opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
 cmake --build build/mini -j
 ```
@@ -256,16 +256,16 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
 
-A firmware image built with `-DVSL_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `OpenMUPP CMSIS-DAP`.
+A firmware image built with `-DMUPP_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `OpenMUPP CMSIS-DAP`.
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 The serial port works as in the default image.
 
-A firmware image built with `-DVSL_PERSONALITIES=wch-link` shows as a USB device with the ID `1209:0001` and the product name `OpenMUPP WCH-Link`.
+A firmware image built with `-DMUPP_PERSONALITIES=wch-link` shows as a USB device with the ID `1209:0001` and the product name `OpenMUPP WCH-Link`.
 The host tools `wlink` and `minichlink` find the probe if it has the ID `1a86:8010` (see [docs/wch-link.md](docs/wch-link.md#use-the-probe)).
 This image has no serial port.
 
-A firmware image built with more than one personality is a multi image, for example `-DVSL_PERSONALITIES=cmsis-dap,wch-link`.
-`VSL_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
+A firmware image built with more than one personality is a multi image, for example `-DMUPP_PERSONALITIES=cmsis-dap,wch-link`.
+`MUPP_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
 To change the personality, send a switch command, or use the key.
 `tools/vsl_personality.py` sends the switch request on EP0 (see [Tools](#tools)).
 To use the key, hold it down for 3 s until all LEDs flash.

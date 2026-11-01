@@ -1,7 +1,7 @@
 #pragma once
 
 // The switch to the next personality of an image with more than one
-// personality (VSL_MULTI_PERSONALITY). Hardware-independent: the host
+// personality (MUPP_MULTI_PERSONALITY). Hardware-independent: the host
 // unit tests check it.
 //
 // The switch commands call request(): SWITCH_PERSONALITY of the Versaloon

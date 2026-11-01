@@ -42,7 +42,7 @@ The board definition holds all board-specific data:
 - The hardware ID that `VERSALOON_GET_HARDWARE` returns.
 
 `src/board/BoardDefinition.h` defines the types. It does not use CMSIS, so the host unit tests check all boards.
-CMake defines `VSL_BOARD_<BOARD>` (for example `VSL_BOARD_MINI`), and `src/board/Board.h` selects `board::current` from it.
+CMake defines `MUPP_BOARD_<BOARD>` (for example `MUPP_BOARD_MINI`), and `src/board/Board.h` selects `board::current` from it.
 The protocol and the engines read board data only through `board::current`.
 `src/board/BoardPins.h` maps a board pin to the system-stm32 `GpioPin` and `FastPin` drivers.
 
@@ -65,7 +65,7 @@ Some functions come from the pin map and the family, not from a separate field:
   The debug port pins are the same on the two families.
   The STM32F103 frees the pins with `AFIO_MAPR.SWJ_CFG`.
   The STM32H5 has no AFIO. Its debug port pins are in AF0 after reset, and the GPIO mode of a pin frees the pin.
-- `board::withSwd()` gives the board of a debug build with `VSL_DEBUG_SWD`.
+- `board::withSwd()` gives the board of a debug build with `MUPP_DEBUG_SWD`.
   It removes the LEDs on the SWD pins (PA13, PA14), so the debug port keeps SWD.
   On the Mini, the USB LED (PA14) is then not available.
 
@@ -80,7 +80,7 @@ To add a board:
 
 1. Add a header with the board definition in `src/board/boards/`.
 2. Add the board to `src/board/Board.h`.
-3. Add the board to `VSL_BOARDS` in `cmake/Boards.cmake`, with its family, device, crystal and linker script.
+3. Add the board to `MUPP_BOARDS` in `cmake/Boards.cmake`, with its family, device, crystal and linker script.
    A new family also needs CPU flags in `cmake/gcc_arm.cmake`.
 4. Add a build job to `.gitlab-ci.yml` and a test to `tests/TestBoards.cpp`.
 
@@ -94,7 +94,7 @@ This function does these steps:
    The STM32H5 runs at 250 MHz, with the instruction cache on.
 2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
    The Mini disables the debug port. A debug probe can then connect only under reset.
-   With `VSL_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
+   With `MUPP_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
    Then a debug probe can run and step the firmware.
 3. It puts the board pins into a safe state:
    - All LEDs are off, but the power LED is on. The main loop then drives the LEDs (see below).
@@ -157,7 +157,7 @@ The WCH-Link personality counts no probe errors, so it never shows the double fl
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (openmupp-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
-A build with `VSL_DEBUG_SWD` has no USB LED on the Mini.
+A build with `MUPP_DEBUG_SWD` has no USB LED on the Mini.
 
 ## WeAct STM32H523 core board
 
@@ -265,7 +265,7 @@ The test did not show which of the two signals is necessary.
 
 Status: the test passed on 2026-10-25.
 Probe: WeAct STM32H523 core board.
-Image: `VSL_PERSONALITIES=versaloon,cmsis-dap` (the `weacth523-dual` preset of that time), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
+Image: `MUPP_PERSONALITIES=versaloon,cmsis-dap` (the `weacth523-dual` preset of that time), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
 Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
 Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
 

@@ -1,6 +1,6 @@
 #pragma once
 
-// Log sink of a debug build (VSL_DEBUG_CDC): the libArT logger writes the
+// Log sink of a debug build (MUPP_DEBUG_CDC): the libArT logger writes the
 // log lines into a fixed ring buffer, and drainTo() moves them to the
 // serial port in the main loop. Hardware-independent, so the host tests
 // check it with a fake port.

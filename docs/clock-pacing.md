@@ -102,7 +102,7 @@ The design does not use these options:
 
 ### Setup
 
-- Probe: Mini (STM32F103C8 at 72 MHz), an image with `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` and `-DVSL_WCH_LINK_WCH_USB_ID=ON`, `app-8k`.
+- Probe: Mini (STM32F103C8 at 72 MHz), an image with `MUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link` and `-DMUPP_WCH_LINK_WCH_USB_ID=ON`, `app-8k`.
   "Loop constant" is the method with a measured loop constant (see [Alternatives](#alternatives)). "Pacer" is this design with the SWD pacer as a member of the engine (see [SWD pacer in registers](#swd-pacer-in-registers) for the local pacer).
 - Target: WeAct STM32H523 on SWD. JTAG and RVSWD had no target: the probe clocks the frames also without a reply.
 - Logic analyzer: Saleae Logic Pro 8 at 100 MS/s (10 ns resolution), SWDIO on channel 4, SWCLK and TCK on channel 5.

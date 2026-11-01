@@ -84,7 +84,7 @@
       "description": "CMSIS-DAP personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PERSONALITIES": "cmsis-dap"
+        "MUPP_PERSONALITIES": "cmsis-dap"
       }
     },
     {
@@ -92,8 +92,8 @@
       "description": "Dual image with CMSIS-DAP and WCH-Link, CMSIS-DAP as default personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PERSONALITIES": "cmsis-dap,wch-link",
-        "VSL_DEFAULT_PERSONALITY": "cmsis-dap"
+        "MUPP_PERSONALITIES": "cmsis-dap,wch-link",
+        "MUPP_DEFAULT_PERSONALITY": "cmsis-dap"
       }
     },
     {
@@ -101,7 +101,7 @@
       "description": "WCH-Link personality",
       "hidden": true,
       "cacheVariables": {
-        "VSL_PERSONALITIES": "wch-link"
+        "MUPP_PERSONALITIES": "wch-link"
       }
     },
     {
@@ -112,7 +112,7 @@
         "personalities-wch-link"
       ],
       "cacheVariables": {
-        "VSL_WCH_LINK_WCH_USB_ID": {
+        "MUPP_WCH_LINK_WCH_USB_ID": {
           "type": "BOOL",
           "value": "ON"
         }
@@ -126,7 +126,7 @@
         "personalities-cmsis-dap"
       ],
       "cacheVariables": {
-        "VSL_CMSIS_DAP_RV_BRIDGE": {
+        "MUPP_CMSIS_DAP_RV_BRIDGE": {
           "type": "BOOL",
           "value": "OFF"
         }

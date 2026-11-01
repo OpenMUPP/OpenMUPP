@@ -125,7 +125,7 @@ std::vector<uint8_t> parseHex(std::istringstream &stream, bool *wildcard) {
 }
 
 std::vector<Transfer> loadTrace(const std::string &name) {
-   const std::string path = std::string(VSL_REPLAY_DIR) + "/" + name;
+   const std::string path = std::string(MUPP_REPLAY_DIR) + "/" + name;
    std::ifstream file(path);
    REQUIRE_MESSAGE(file.good(), "cannot open ", path);
    std::vector<Transfer> transfers;

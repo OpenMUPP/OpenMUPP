@@ -14,7 +14,7 @@
 // they do not fit the 512 bytes of packet memory with the two bulk pairs.
 //
 // USB ID: the default is an own ID. The WCH ID 1a86:8010 is a build option
-// (VSL_WCH_LINK_WCH_USB_ID) for personal use only: the WCH vendor ID
+// (MUPP_WCH_LINK_WCH_USB_ID) for personal use only: the WCH vendor ID
 // belongs to WCH and must not be in release artifacts. wlink and minichlink
 // find a probe by the WCH ID. With the own ID, they need a flag or a patch.
 // The own ID is the pid.codes test ID 1209:0001 until the project has its
@@ -33,7 +33,7 @@
 
 namespace usb::wch {
 
-#if defined(VSL_WCH_LINK_WCH_USB_ID)
+#if defined(MUPP_WCH_LINK_WCH_USB_ID)
 inline constexpr uint16_t vendorId = 0x1A86;
 inline constexpr uint16_t productId = 0x8010;
 #else

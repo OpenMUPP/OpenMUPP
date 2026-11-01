@@ -22,19 +22,19 @@ The build writes these files into the build directory:
 An image that does not fit its limit has no `.hex` and `.bin` files, and no copies (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
 
 All images use the same object files.
-Only `src/main.cpp` is compiled for each image, because `VSL_HAS_BOOTLOADER_ENTRY` changes it.
+Only `src/main.cpp` is compiled for each image, because `MUPP_HAS_BOOTLOADER_ENTRY` changes it.
 One memory linker script of the board links all images. The scripts are in `ldscripts/` of system-stm32. The STM32F1 boards use `mem-F103x8.ld` (see [MCU family](boards.md#mcu-family)).
 CMake gives it the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
 The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
 For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
 
-For the STM32F1 boards (`VSL_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `openmupp-bootloader` for the same board.
+For the STM32F1 boards (`MUPP_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `openmupp-bootloader` for the same board.
 The target is `openmupp-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
-Only the boards with the legacy bootloader (`VSL_LEGACY_BOOTLOADER_BOARDS`: the Mini) get the `app-10k` image.
-There is no bootloader for the WeAct STM32H523 core board, and no bootloader when `VSL_BUILD_BOOTLOADER` is `OFF`.
+Only the boards with the legacy bootloader (`MUPP_LEGACY_BOOTLOADER_BOARDS`: the Mini) get the `app-10k` image.
+There is no bootloader for the WeAct STM32H523 core board, and no bootloader when `MUPP_BUILD_BOOTLOADER` is `OFF`.
 
 ## Unit tests
 
@@ -194,7 +194,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
 - `build-mini`: release build of all images of the Mini with the `mini-cmsis-dap` preset, plus the size check of each image in `vsl-images.txt`.
-  The build jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
+  The build jobs configure with `-DMUPP_STRICT_SIZE=ON`: a build job fails when an image does not fit.
   The jobs for the STM32F1 boards also build `openmupp-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini with the CMSIS-DAP personality without the RISC-V bridge (debug log on the serial port, SWD on), plus the size check.
 - `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities.
@@ -209,7 +209,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   "ST-Link/V2" is the ST-Link/V2 and the ST-Link/V2 mini clone.
   Each limit of a multi image or an image with the RISC-V bridge is 1 KB smaller, because the last flash page holds the stored personality and the bridge mode.
   CI builds no image with the Versaloon personality.
-- `build-mini-cmsis-dap-no-rv-bridge`: release build of the Mini with `VSL_PERSONALITIES=cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF`, plus the size check.
+- `build-mini-cmsis-dap-no-rv-bridge`: release build of the Mini with `MUPP_PERSONALITIES=cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF`, plus the size check.
   This job keeps no artifacts.
 - `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
   The limit of a multi image or an image with the RISC-V bridge is 8 KB smaller, because the last flash sector holds the stored personality and the bridge mode.

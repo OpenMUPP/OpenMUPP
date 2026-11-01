@@ -71,7 +71,7 @@ run-tool-tests:
 # Builds the application images of the board (standalone, app-8k, app-10k;
 # README "Build the firmware") with the configure preset ${BOARD}${VARIANT}
 # (CMakePresets.json). Release by default; a Debug build has the debug log on
-# the CDC port and SWD on. The job sets VSL_STRICT_SIZE, so the linker
+# the CDC port and SWD on. The job sets MUPP_STRICT_SIZE, so the linker
 # script fails the link when an image does not fit; the size check reports
 # the size of each image in vsl-images.txt and fails on the same limit. The
 # default target also builds openmupp-bootloader for the Mini and the
@@ -85,13 +85,13 @@ run-tool-tests:
     VARIANT: ""
     # The image tag of the personalities (docs/development.md "Image names")
     PROTOCOL_TAG: ""
-    # VSL_SKIP_IMAGES: the images that the job leaves out
+    # MUPP_SKIP_IMAGES: the images that the job leaves out
     SKIP_IMAGES: ""
   script:
     - cd "$CI_PROJECT_DIR"
     - PRESET=${BOARD}${VARIANT}
     - BUILDDIR=build/${PRESET}
-    - cmake --preset ${PRESET} -G "Unix Makefiles" -DVSL_STRICT_SIZE=ON "-DVSL_SKIP_IMAGES=${SKIP_IMAGES}"
+    - cmake --preset ${PRESET} -G "Unix Makefiles" -DMUPP_STRICT_SIZE=ON "-DMUPP_SKIP_IMAGES=${SKIP_IMAGES}"
     - cmake --build --preset ${PRESET} -- -j`nproc`
     - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/vsl-images.txt"
   # Only the .hex and .bin files that a user writes, with the board, the
@@ -144,11 +144,11 @@ build:
   extends: [.build-board-template, .manual-unless-tag]
   parallel:
     matrix:
-      # VSL_PERSONALITIES=cmsis-dap. The Mini is the build-mini job.
+      # MUPP_PERSONALITIES=cmsis-dap. The Mini is the build-mini job.
       - BOARD: [stlinkv2, stlinkv2miniclone]
         VARIANT: -cmsis-dap
         PROTOCOL_TAG: -cmsis-dap
-      # VSL_PERSONALITIES=cmsis-dap,wch-link. The last 1 KB flash page holds
+      # MUPP_PERSONALITIES=cmsis-dap,wch-link. The last 1 KB flash page holds
       # the stored personality, so each image limit of a multi image is 1 KB
       # smaller.
       - BOARD: [mini, stlinkv2, stlinkv2miniclone]
@@ -179,8 +179,8 @@ build-weacth523:
         PROTOCOL_TAG: -cmsis-dap
         BUILD_TYPE: Debug
 
-# VSL_PERSONALITIES=cmsis-dap without the RISC-V bridge
-# (VSL_CMSIS_DAP_RV_BRIDGE=OFF): the only build of the image without the
+# MUPP_PERSONALITIES=cmsis-dap without the RISC-V bridge
+# (MUPP_CMSIS_DAP_RV_BRIDGE=OFF): the only build of the image without the
 # bridge. Build and size check only, no artifacts.
 build-mini-cmsis-dap-no-rv-bridge:
   extends: .build-board-template

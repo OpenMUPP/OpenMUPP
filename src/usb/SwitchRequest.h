@@ -3,7 +3,7 @@
 // The personality switch request on EP0 (docs/usb-device.md, "Switch request
 // on EP0"). Hardware-independent: the host unit tests check it.
 //
-// An image with more than one personality (VSL_MULTI_PERSONALITY) accepts
+// An image with more than one personality (MUPP_MULTI_PERSONALITY) accepts
 // the request in each personality, so a host can leave a personality that
 // has no switch command of its own, for example WCH-Link. An image with a
 // bootloader accepts the bootloader code (boot::bootloaderCode), also with

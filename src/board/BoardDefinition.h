@@ -387,7 +387,7 @@ constexpr SwjConfig swjConfig(const Definition &def) {
    return usesJtagOnlyPin ? SwjConfig::NoJtag : SwjConfig::Full;
 }
 
-// The definition of a debug build (VSL_DEBUG_SWD): the same board without
+// The definition of a debug build (MUPP_DEBUG_SWD): the same board without
 // the LEDs on the SW-DP pins, so swjConfig() keeps SWD on and a debug probe
 // can run and step the firmware. The firmware works without these LEDs.
 // Other signals on the SW-DP pins stay: board/Board.h checks that the

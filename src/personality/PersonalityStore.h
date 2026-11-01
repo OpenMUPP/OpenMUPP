@@ -1,8 +1,8 @@
 #pragma once
 
 // The settings of an image: the stored personality of an image with more
-// than one personality (VSL_MULTI_PERSONALITY), and the stored mode of the
-// RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE). They are in one flash page at
+// than one personality (MUPP_MULTI_PERSONALITY), and the stored mode of the
+// RISC-V bridge (MUPP_CMSIS_DAP_RV_BRIDGE). They are in one flash page at
 // the end of the application area. Hardware-independent: the host unit
 // tests run it on a fake page. board/SettingsFlashPage.h has the page of
 // the target.

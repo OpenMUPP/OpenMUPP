@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sets the mode of the RISC-V bridge of the CMSIS-DAP personality.
 
-An image with VSL_CMSIS_DAP_RV_BRIDGE (the default) has the bridge. The
+An image with MUPP_CMSIS_DAP_RV_BRIDGE (the default) has the bridge. The
 script sends the vendor command ID_DAP_Vendor1 on interface 0:
 
     [0x81][0] off, [0x81][1] on, [0x81][2] auto, [0x81][3] the stored mode
@@ -53,7 +53,7 @@ def check_reply(reply):
     """Raises BridgeError when the response does not confirm the switch."""
     reply = bytes(reply)
     if reply[:1] == bytes([vp.DAP_INVALID]):
-        raise BridgeError("the firmware does not know ID_DAP_Vendor1: the image has no RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE)")
+        raise BridgeError("the firmware does not know ID_DAP_Vendor1: the image has no RISC-V bridge (MUPP_CMSIS_DAP_RV_BRIDGE)")
     if len(reply) < 2 or reply[0] != DAP_VENDOR1:
         raise BridgeError("unexpected response %s" % reply.hex())
     if reply[1] != 0:
