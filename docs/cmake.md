@@ -82,13 +82,13 @@ The host test build runs the post-build steps in CMake script mode on fake files
 
 ### Add a personality
 
-`cmake/Personalities.cmake` has one `vsl_personality()` block for each personality.
+`cmake/Personalities.cmake` has one `mupp_personality()` block for each personality.
 A block has the code of the personality, the short name, the `MUPP_WITH_<P>` define and the sources that only this personality uses.
 The blocks are in code order.
 An image without a personality does not compile its sources.
 The shared sources (`BoardSwd`, `BoardJtag`, `BoardGpio`) are in each image.
 The linker option `-gc-sections` removes the code that an image does not use.
-`vsl_resolve_personalities()` checks the options and sets the defines, the sources to remove and the tag.
+`mupp_resolve_personalities()` checks the options and sets the defines, the sources to remove and the tag.
 The host test build runs these checks in CMake script mode (`tests/cmake/ResolvePersonalities.cmake`, tests `personalities.*`).
 
 ## CMake presets

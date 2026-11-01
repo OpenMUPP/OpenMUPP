@@ -102,7 +102,7 @@ set(MUPP_SKIP_IMAGES "" CACHE STRING "Application images to leave out of the bui
 # selects the next one, and a flash page at the end of the application area
 # stores it (src/personality/).
 include(Personalities)
-vsl_personality_options()
+mupp_personality_options()
 
 # The WCH-Link personality uses the USB ID 1a86:8010 of WCH instead of the
 # own ID. wlink and minichlink find a probe by this ID. The vendor ID belongs
@@ -166,7 +166,7 @@ if (CMAKE_CROSSCOMPILING)
     # Checks the personality options and MUPP_DEBUG_CDC. Sets
     # MUPP_PERSONALITY_SET, the MUPP_WITH_<P> defines (personality/Personality.h), the sources to drop
     # and MUPP_IMAGE_TAG.
-    vsl_resolve_personalities()
+    mupp_resolve_personalities()
 
     # Selects board::current (src/board/Board.h), e.g. MUPP_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
@@ -245,7 +245,7 @@ if (CMAKE_CROSSCOMPILING)
     # settings page is the reserved flash at the end (__flash_reserved_start).
     # The main stack is 2 KB, because the STM32F103 has only 20 KB RAM, and
     # the link fails when less than the full stack is free. Each image sets
-    # __flash_offset and __flash_length (vsl_add_app_image).
+    # __flash_offset and __flash_length (mupp_add_app_image).
     set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32/ldscripts)
     set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_end=${MUPP_SETTINGS_PAGE_SIZE} -Wl,--defsym=__main_stack_size=2048 -Wl,--defsym=__minimum_stack_size=2048 -T${MUPP_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
 endif ()
@@ -306,7 +306,7 @@ if (CMAKE_CROSSCOMPILING)
     # openmupp-<image>.hex and .bin, and a copy with the board,
     # the build type and the version in the name. An image behind a
     # bootloader gets the application image header.
-    function(vsl_add_app_image image)
+    function(mupp_add_app_image image)
         set(_target openmupp-${image}.elf)
         set(_name openmupp-${image})
         set(_offset ${MUPP_APP_OFFSET_${image}})
@@ -362,7 +362,7 @@ if (CMAKE_CROSSCOMPILING)
     # the board linker script (MUPP_LDSCRIPT). The combined image is added below.
     set(_images_list "")
     foreach (_image ${MUPP_APP_IMAGES})
-        vsl_add_app_image(${_image})
+        mupp_add_app_image(${_image})
         string(APPEND _images_list "openmupp-${_image}.bin ${MUPP_APP_LIMIT_${_image}}\n")
     endforeach ()
     # The firmware must fit behind the legacy bootloader on all STM32F1 boards
@@ -378,7 +378,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include(Bootloader)
     if (MUPP_BUILD_BOOTLOADER AND BOARD IN_LIST MUPP_BOOTLOADER_BOARDS)
-        vsl_add_bootloader()
+        mupp_add_bootloader()
         MESSAGE(STATUS "Building openmupp-bootloader for board " ${BOARD} " into " ${MUPP_BOOTLOADER_DIR})
     endif ()
     if (MUPP_BUILD_BOOTLOADER AND BOARD IN_LIST MUPP_BOOTLOADER_BOARDS AND "app-8k" IN_LIST MUPP_APP_IMAGES)

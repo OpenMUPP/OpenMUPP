@@ -2,9 +2,9 @@ diff --git a/cmake/Personalities.cmake b/cmake/Personalities.cmake
 index eb7fc4c..809e9de 100644
 --- a/cmake/Personalities.cmake
 +++ b/cmake/Personalities.cmake
-@@ -37,14 +37,14 @@ vsl_personality(versaloon CODE 0 SHORT vsl DEFINE MUPP_WITH_VERSALOON SOURCES
+@@ -37,14 +37,14 @@ mupp_personality(versaloon CODE 0 SHORT vsl DEFINE MUPP_WITH_VERSALOON SOURCES
  #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
- vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE MUPP_WITH_CMSIS_DAP SOURCES
+ mupp_personality(cmsis-dap CODE 1 SHORT dap DEFINE MUPP_WITH_CMSIS_DAP SOURCES
          "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
 -        "src/protocol/cmsisdap/RvDtmTap\\.cpp"
 +        "src/protocol/cmsisdap/RvDtmTap\\.cpp" "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp"
@@ -12,7 +12,7 @@ index eb7fc4c..809e9de 100644
  #   wch-link   the WCH-Link interface of wlink and minichlink: the dongle
  #              debugs a WCH RISC-V target (CH32V) over the two-wire or the
  #              one-wire debug interface. It has no serial port.
- vsl_personality(wch-link CODE 2 SHORT wch DEFINE MUPP_WITH_WCH_LINK SOURCES
+ mupp_personality(wch-link CODE 2 SHORT wch DEFINE MUPP_WITH_WCH_LINK SOURCES
          "src/protocol/wchlink/WchLinkFlash\\.cpp" "src/protocol/wchlink/WchLinkProcessor\\.cpp"
 -        "src/usb/WchLinkFunction\\.cpp" "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp")
 +        "src/usb/WchLinkFunction\\.cpp")

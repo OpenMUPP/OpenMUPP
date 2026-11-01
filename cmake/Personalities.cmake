@@ -1,13 +1,13 @@
 # The USB personalities of the firmware image (docs/usb-device.md,
 # src/personality/Personality.h).
 #
-# The table below has one vsl_personality() block per personality. A new
-# personality (for example avr) is one more block. vsl_resolve_personalities()
+# The table below has one mupp_personality() block per personality. A new
+# personality (for example avr) is one more block. mupp_resolve_personalities()
 # reads the build options, checks them and sets the defines, the sources to
 # drop and the image tag. The host test build runs the checks in script mode
 # (tests/cmake/ResolvePersonalities.cmake).
 
-# vsl_personality(<name> CODE <code> SHORT <short> DEFINE <define> SOURCES <regex>...)
+# mupp_personality(<name> CODE <code> SHORT <short> DEFINE <define> SOURCES <regex>...)
 #   <name>    the value in MUPP_PERSONALITIES, for example cmsis-dap
 #   CODE      the code of personality::Personality. The blocks are in code
 #             order: this order is the canonical order.
@@ -15,11 +15,11 @@
 #   DEFINE    the MUPP_WITH_<P> define of the personality
 #   SOURCES   the regular expressions of the sources that only this
 #             personality uses. An image without the personality drops them.
-function(vsl_personality name)
+function(mupp_personality name)
     cmake_parse_arguments(PARSE_ARGV 1 _arg "" "CODE;SHORT;DEFINE" "SOURCES")
     list(LENGTH MUPP_ALL_PERSONALITIES _count)
     if (NOT "${_arg_CODE}" STREQUAL "${_count}")
-        message(FATAL_ERROR "vsl_personality(${name}): CODE must be ${_count}. The blocks must be in code order.")
+        message(FATAL_ERROR "mupp_personality(${name}): CODE must be ${_count}. The blocks must be in code order.")
     endif ()
     list(APPEND MUPP_ALL_PERSONALITIES ${name})
     set(MUPP_ALL_PERSONALITIES ${MUPP_ALL_PERSONALITIES} PARENT_SCOPE)
@@ -31,11 +31,11 @@ endfunction()
 
 set(MUPP_ALL_PERSONALITIES "")
 #   versaloon  the Versaloon interface of OpenOCD
-vsl_personality(versaloon CODE 0 SHORT vsl DEFINE MUPP_WITH_VERSALOON SOURCES
+mupp_personality(versaloon CODE 0 SHORT vsl DEFINE MUPP_WITH_VERSALOON SOURCES
         "src/protocol/versaloon/.*\\.cpp"
         "src/usb/VersaloonFunction\\.cpp")
 #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
-vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE MUPP_WITH_CMSIS_DAP SOURCES
+mupp_personality(cmsis-dap CODE 1 SHORT dap DEFINE MUPP_WITH_CMSIS_DAP SOURCES
         "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
         "src/protocol/cmsisdap/RvDtmTap\\.cpp" "src/protocol/cmsisdap/RvBridge\\.cpp"
         "src/usb/CmsisDapFunction\\.cpp")
@@ -45,13 +45,13 @@ vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE MUPP_WITH_CMSIS_DAP SOURCES
 # The RISC-V debug wire engine: the wch-link personality, and the RISC-V
 # bridge of cmsis-dap (MUPP_CMSIS_DAP_RV_BRIDGE, on by default)
 set(MUPP_RV_WIRE_SOURCES "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp")
-vsl_personality(wch-link CODE 2 SHORT wch DEFINE MUPP_WITH_WCH_LINK SOURCES
+mupp_personality(wch-link CODE 2 SHORT wch DEFINE MUPP_WITH_WCH_LINK SOURCES
         "src/protocol/wchlink/WchLinkFlash\\.cpp" "src/protocol/wchlink/WchLinkProcessor\\.cpp"
         "src/usb/WchLinkFunction\\.cpp" ${MUPP_RV_WIRE_SOURCES})
 
 # Declares the cache entries of the personality options. Both are empty by
 # default: empty MUPP_PERSONALITIES is versaloon.
-function(vsl_personality_options)
+function(mupp_personality_options)
     # CMake ignores an unknown option, so an old name would change the image
     # without an error.
     get_cmake_property(_cached CACHE_VARIABLES)
@@ -84,7 +84,7 @@ endfunction()
 #                                the source regexes of the other personalities
 #   MUPP_IMAGE_TAG               the tag after the board in the file names
 #   MUPP_RV_BRIDGE               ON when the image has the RISC-V bridge
-function(vsl_resolve_personalities)
+function(mupp_resolve_personalities)
     set(_set "${MUPP_PERSONALITIES}")
     set(_default "${MUPP_DEFAULT_PERSONALITY}")
 

@@ -5,5 +5,5 @@
 cmake_minimum_required(VERSION 3.20)
 project(vsl-personalities-fixture NONE)
 include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/Personalities.cmake")
-vsl_personality_options()
+mupp_personality_options()
 include("${CMAKE_CURRENT_LIST_DIR}/../ResolvePersonalities.cmake")

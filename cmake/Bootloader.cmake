@@ -19,7 +19,7 @@ set(MUPP_BOOTLOADER_DIR "${CMAKE_CURRENT_BINARY_DIR}/openmupp-bootloader")
 
 # Adds the target openmupp-bootloader, which builds the bootloader for
 # BOARD into MUPP_BOOTLOADER_DIR.
-function(vsl_add_bootloader)
+function(mupp_add_bootloader)
     set(_src_dir "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader")
     if (NOT EXISTS "${_src_dir}/CMakeLists.txt")
         message(FATAL_ERROR "openmupp-bootloader not found in ${_src_dir}. Run: git submodule update --init --recursive, "

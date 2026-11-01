@@ -101,104 +101,104 @@ PASS, FAIL, SKIP = "PASS", "FAIL", "SKIP"
 
 # OpenOCD checks. Each check prints "CHECK PASS|FAIL <name>: <detail>".
 OPENOCD_CHECKS = r"""
-proc vsl_check {name ok {detail ""}} {
+proc mupp_check {name ok {detail ""}} {
 	if {$ok} { set r PASS } else { set r FAIL }
 	echo "CHECK $r $name: [string map {"\n" " "} $detail]"
 }
 
-proc vsl_try {name script} {
+proc mupp_try {name script} {
 	set failed [catch {uplevel 1 $script} result]
-	vsl_check $name [expr {!$failed}] $result
+	mupp_check $name [expr {!$failed}] $result
 	return [expr {!$failed}]
 }
 
 # "pc (/32): 0x08000040" -> 134217792
-proc vsl_reg {name} {
+proc mupp_reg {name} {
 	set text [reg $name]
 	if {![regexp {(0x[0-9a-fA-F]+)} $text all value]} { error "no value in '$text'" }
 	return [expr {$value + 0}]
 }
 
-proc vsl_word {addr} {
+proc mupp_word {addr} {
 	return [expr {[lindex [read_memory $addr 32 1] 0] + 0}]
 }
 
-proc vsl_same {a b} {
+proc mupp_same {a b} {
 	if {[llength $a] != [llength $b]} { return 0 }
 	foreach x $a y $b { if {$x != $y} { return 0 } }
 	return 1
 }
 
-proc vsl_state {} {
+proc mupp_state {} {
 	return [[target current] curstate]
 }
 
 # TCK must not be above F_CPU / 6: set the target to 64 MHz first.
-proc vsl_fast {speed} {
+proc mupp_fast {speed} {
 	stm32f1_clock_max
 	adapter speed $speed
 	if {[string match *jtag* [transport select]]} { jtag arp_init }
 }
 
-proc vsl_flash {image dump size speed} {
+proc mupp_flash {image dump size speed} {
 	reset halt
 	echo [format "INFO dev_id=0x%03x flash_kb=%d" \
-		[expr {[vsl_word 0xE0042000] & 0xfff}] [expr {[vsl_word 0x1FFFF7E0] & 0xffff}]]
-	vsl_fast $speed
-	if {![vsl_try "flash write" {flash write_image erase $image 0x08000000 bin}]} { return }
-	vsl_try "verify" {verify_image $image 0x08000000 bin}
-	vsl_try "read back" {dump_image $dump 0x08000000 $size}
+		[expr {[mupp_word 0xE0042000] & 0xfff}] [expr {[mupp_word 0x1FFFF7E0] & 0xffff}]]
+	mupp_fast $speed
+	if {![mupp_try "flash write" {flash write_image erase $image 0x08000000 bin}]} { return }
+	mupp_try "verify" {verify_image $image 0x08000000 bin}
+	mupp_try "read back" {dump_image $dump 0x08000000 $size}
 }
 
-proc vsl_debug {speed} {
+proc mupp_debug {speed} {
 	adapter speed 1000
 	reset halt
-	vsl_fast $speed
-	set pc [vsl_reg pc]
-	vsl_check "reset halt pc" [expr {$pc == 0x08000040}] [format 0x%08x $pc]
-	set sp [vsl_reg sp]
-	vsl_check "sp from vector table" [expr {$sp == 0x20005000}] [format 0x%08x $sp]
+	mupp_fast $speed
+	set pc [mupp_reg pc]
+	mupp_check "reset halt pc" [expr {$pc == 0x08000040}] [format 0x%08x $pc]
+	set sp [mupp_reg sp]
+	mupp_check "sp from vector table" [expr {$sp == 0x20005000}] [format 0x%08x $sp]
 
-	set r1 [vsl_reg r1]
+	set r1 [mupp_reg r1]
 	step
 	step
-	set r1b [vsl_reg r1]
-	vsl_check "two steps run one adds" [expr {$r1b == (($r1 + 1) & 0xffffffff)}] "r1 $r1 -> $r1b"
+	set r1b [mupp_reg r1]
+	mupp_check "two steps run one adds" [expr {$r1b == (($r1 + 1) & 0xffffffff)}] "r1 $r1 -> $r1b"
 
 	bp 0x08000040 2 hw
 	resume
 	if {[catch {wait_halt 1000}]} {
-		vsl_check "hardware breakpoint halts" 0 "no halt"
+		mupp_check "hardware breakpoint halts" 0 "no halt"
 		halt
 	} else {
-		set pc [vsl_reg pc]
-		set r1c [vsl_reg r1]
-		vsl_check "hardware breakpoint halts" [expr {$pc == 0x08000040 && $r1c != $r1b}] \
+		set pc [mupp_reg pc]
+		set r1c [mupp_reg r1]
+		mupp_check "hardware breakpoint halts" [expr {$pc == 0x08000040 && $r1c != $r1b}] \
 			[format "pc 0x%08x, r1 %d -> %d" $pc $r1b $r1c]
 	}
 	rbp 0x08000040
 
 	set words {0xdeadbeef 0x12345678 0xa5a5a5a5 0x5a5a5a5a}
 	write_memory 0x20000000 32 $words
-	vsl_check "RAM words" [vsl_same $words [read_memory 0x20000000 32 4]]
+	mupp_check "RAM words" [mupp_same $words [read_memory 0x20000000 32 4]]
 	# 4 KiB: the smallest STM32F103 has 6 KiB RAM.
 	set block {}
 	for {set i 0} {$i < 1024} {incr i} {
 		lappend block [expr {($i * 2654435761 + 12345) & 0xffffffff}]
 	}
 	write_memory 0x20000100 32 $block
-	vsl_check "RAM block 4 KiB" [vsl_same $block [read_memory 0x20000100 32 1024]]
+	mupp_check "RAM block 4 KiB" [mupp_same $block [read_memory 0x20000100 32 1024]]
 
 	resume
 	sleep 200
-	vsl_check "running" [expr {[vsl_state] eq "running"}] [vsl_state]
+	mupp_check "running" [expr {[mupp_state] eq "running"}] [mupp_state]
 	halt
-	vsl_check "halt" [expr {[vsl_state] eq "halted"}] [vsl_state]
+	mupp_check "halt" [expr {[mupp_state] eq "halted"}] [mupp_state]
 }
 
-proc vsl_run {image dump size speed} {
-	if {[catch {vsl_flash $image $dump $size $speed} err]} { vsl_check "flash steps" 0 $err }
-	if {[catch {vsl_debug $speed} err]} { vsl_check "debug steps" 0 $err }
+proc mupp_run {image dump size speed} {
+	if {[catch {mupp_flash $image $dump $size $speed} err]} { mupp_check "flash steps" 0 $err }
+	if {[catch {mupp_debug $speed} err]} { mupp_check "debug steps" 0 $err }
 	adapter speed 1000
 	reset run
 }
@@ -208,7 +208,7 @@ OPENOCD_EXPECTED = (
     "two steps run one adds", "hardware breakpoint halts", "RAM words", "RAM block 4 KiB",
     "running", "halt",
 )
-# vsl_run reports these when vsl_flash or vsl_debug stops on an error.
+# mupp_run reports these when mupp_flash or mupp_debug stops on an error.
 STEP_GROUPS = ("flash steps", "debug steps")
 CHECK_PATTERN = re.compile(r"^CHECK (PASS|FAIL) ([^:]+):(.*)$", re.MULTILINE)
 INFO_PATTERN = re.compile(r"INFO dev_id=0x([0-9a-fA-F]+) flash_kb=(\d+)")
@@ -294,7 +294,7 @@ def openocd_command(args, personality, transport, speed_khz, checks_path, image_
     for command in [
         f"adapter speed {SETUP_SPEED_KHZ}",
         "init",
-        f"vsl_run {tcl_path(image_path)} {tcl_path(dump_path)} {len(args.image)} {speed_khz}",
+        f"mupp_run {tcl_path(image_path)} {tcl_path(dump_path)} {len(args.image)} {speed_khz}",
         "shutdown",
     ]:
         cmd += ["-c", command]
@@ -428,7 +428,7 @@ class Runner:
     def openocd(self, personality):
         if self.skipped("openocd"):
             return
-        checks_path = os.path.join(self.args.log_dir, "vsl_checks.tcl")
+        checks_path = os.path.join(self.args.log_dir, "mupp_checks.tcl")
         image_path = os.path.join(self.args.log_dir, "image.bin")
         with open(checks_path, "w") as f:
             f.write(OPENOCD_CHECKS)

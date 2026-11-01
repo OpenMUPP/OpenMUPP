@@ -143,7 +143,7 @@ protocol::TargetPower targetPower{ boardPower, busyWaitDelay };
 // enters the bootloader, behind openmupp-bootloader. On the STM32H5 the
 // standalone image enters the ROM bootloader. CMake defines
 // MUPP_HAS_BOOTLOADER_ENTRY for this file of these images only
-// (vsl_add_app_image() in CMakeLists.txt). The other sources are shared by
+// (mupp_add_app_image() in CMakeLists.txt). The other sources are shared by
 // all images and compiled without the define, so the value is here and not
 // in a shared header.
 #if defined(MUPP_HAS_BOOTLOADER_ENTRY)
