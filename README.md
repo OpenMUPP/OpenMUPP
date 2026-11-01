@@ -327,6 +327,7 @@ The program has no warranty.
 Some parts have a different license:
 
 - `cmake/ClangFormat.cmake` uses the Boost Software License 1.0. See [LICENSES/BSL-1.0.txt](LICENSES/BSL-1.0.txt).
+- The OpenOCD configuration files in `etc/openocd/` and `tools/stm32f1_clock.tcl` use GPL-2.0-or-later.
 - The submodules `libArT`, `libart-stm32` and `system-stm32` use the MIT license. Each submodule has its own license file.
 - The build downloads other libraries with CMake `FetchContent`, for example the CMSIS headers of Arm and ST (Apache-2.0). These libraries keep their own licenses.
 
