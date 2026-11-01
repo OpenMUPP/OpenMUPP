@@ -79,7 +79,7 @@ The libraries are Git submodules in `dependencies/`.
 Clone with the submodules:
 
 ```sh
-git clone --recurse-submodules https://github.com/OpenMUPP/openmupp.git
+git clone --recurse-submodules https://github.com/OpenMUPP/OpenMUPP.git
 ```
 
 In an existing clone, run `git submodule update --init --recursive`.
