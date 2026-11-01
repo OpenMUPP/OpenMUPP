@@ -15,7 +15,6 @@ The firmware also builds for older probe hardware: the Versaloon Mini and the ST
 These boards are secondary targets. They help to develop and test the code, and you can use them as probes.
 The ST-Link/V2 mini clone has a hardware test of the USB personalities, the LEDs and SWD to a target.
 The ST-Link/V2 build has no hardware test.
-The former name of this project is versaloon-ng (also versaloon-NG or versaloon-next-gen).
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
