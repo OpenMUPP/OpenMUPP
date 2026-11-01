@@ -73,7 +73,7 @@ run-tool-tests:
 # (CMakePresets.json). Release by default; a Debug build has the debug log on
 # the CDC port and SWD on. The job sets MUPP_STRICT_SIZE, so the linker
 # script fails the link when an image does not fit; the size check reports
-# the size of each image in vsl-images.txt and fails on the same limit. The
+# the size of each image in mupp-images.txt and fails on the same limit. The
 # default target also builds openmupp-bootloader for the Mini and the
 # ST-Link/V2 boards.
 .build-board-template:
@@ -93,7 +93,7 @@ run-tool-tests:
     - BUILDDIR=build/${PRESET}
     - cmake --preset ${PRESET} -G "Unix Makefiles" -DMUPP_STRICT_SIZE=ON "-DMUPP_SKIP_IMAGES=${SKIP_IMAGES}"
     - cmake --build --preset ${PRESET} -- -j`nproc`
-    - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/vsl-images.txt"
+    - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/mupp-images.txt"
   # Only the .hex and .bin files that a user writes, with the board, the
   # image, the build type and the version in the name (README "Build the
   # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link/V2

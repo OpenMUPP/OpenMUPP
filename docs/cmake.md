@@ -54,7 +54,7 @@ The tag after the board in the file name tells the personalities of the image:
 ### Images that do not fit
 
 Each image has a flash limit: the flash behind its bootloader, without the settings page of a multi image or an image with the RISC-V bridge.
-`vsl-images.txt` lists the limits.
+`mupp-images.txt` lists the limits.
 Some sets of personalities do not fit each image, for example the Debug build of `versaloon,cmsis-dap,wch-link`.
 The size of an image is only known after the link.
 Thus a post-build step, `cmake/ImageSize.cmake`, compares the `.bin` file of each image with its limit.
@@ -75,7 +75,7 @@ The post-build step does not run.
 The CI build jobs set `MUPP_STRICT_SIZE=ON`, so each image of each CI build must fit.
 The presets do not set it: a preset with another `MUPP_PERSONALITIES` skips the images that do not fit.
 
-`vsl-images.txt` also lists a skipped image.
+`mupp-images.txt` also lists a skipped image.
 Thus `ci/check-size.sh` fails on a skipped image, because its `.bin` file does not exist.
 
 The host test build runs the post-build steps in CMake script mode on fake files (`tests/cmake/ImageSizeCase.cmake`, tests `image-size.*`).
@@ -127,7 +127,7 @@ The `-dual` presets build `cmsis-dap,wch-link`.
 The `-cmsis-dap-wch-link` presets do not exist: use the `-dual` presets.
 For a dual image with `versaloon,cmsis-dap`, add `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
-It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
+It has a build preset that builds the `mupp-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
 CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, and `mini-cmsis-dap-no-rv-bridge`.
 The other presets are for local builds only.
 CI uses these presets (see [Continuous integration](development.md#continuous-integration)).

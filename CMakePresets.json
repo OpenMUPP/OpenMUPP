@@ -440,7 +440,7 @@
       "name": "host-tests",
       "configurePreset": "host-tests",
       "targets": [
-        "vsl-tests"
+        "mupp-tests"
       ]
     }
   ],

@@ -1,3 +1,3 @@
-// doctest main of the vsl-tests binary
+// doctest main of the mupp-tests binary
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>

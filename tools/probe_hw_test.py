@@ -592,7 +592,7 @@ def main(argv=None):
     if args.log_dir:
         os.makedirs(args.log_dir, exist_ok=True)
     else:
-        args.log_dir = tempfile.mkdtemp(prefix="vsl-hw-test-")
+        args.log_dir = tempfile.mkdtemp(prefix="mupp-hw-test-")
     print("Logs:", args.log_dir)
     print("This test erases the flash of the target.")
     runner = Runner(args)

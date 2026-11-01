@@ -356,7 +356,7 @@ if (CMAKE_CROSSCOMPILING)
                 VERBATIM)
     endfunction()
 
-    # vsl-images.txt lists each image with its size limit, one line
+    # mupp-images.txt lists each image with its size limit, one line
     # "<bin-file> <limit-in-bytes>". CI runs ci/check-size.sh on each line.
     # The limit of an application image is the FLASH region of
     # the board linker script (MUPP_LDSCRIPT). The combined image is added below.
@@ -374,7 +374,7 @@ if (CMAKE_CROSSCOMPILING)
         math(EXPR _limit "${MUPP_FLASH_SIZE} - ${MUPP_APP_OFFSET_app-10k} - ${MUPP_SETTINGS_PAGE_SIZE}")
         string(APPEND _images_list "openmupp-standalone.bin ${_limit}\n")
     endif ()
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_images_list}")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/mupp-images.txt" "${_images_list}")
 
     include(Bootloader)
     if (MUPP_BUILD_BOOTLOADER AND BOARD IN_LIST MUPP_BOOTLOADER_BOARDS)
@@ -411,7 +411,7 @@ if (CMAKE_CROSSCOMPILING)
         # The combined image ends where the app-8k image ends: its limit is the
         # flash without the settings page.
         math(EXPR _limit "${MUPP_FLASH_SIZE} - ${MUPP_SETTINGS_PAGE_SIZE}")
-        file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_name}.bin ${_limit}\n")
+        file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/mupp-images.txt" "${_name}.bin ${_limit}\n")
     endif ()
 else ()
     enable_testing()

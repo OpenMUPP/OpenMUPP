@@ -17,7 +17,7 @@ The build writes these files into the build directory:
 - `openmupp-bootloader/openmupp-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
 - `openmupp-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
   `tools/mupp_combine_images.py` makes it. The tests are in `tools/test_mupp_combine_images.py`.
-- `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
+- `mupp-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 
 An image that does not fit its limit has no `.hex` and `.bin` files, and no copies (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
 
@@ -193,7 +193,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.
 - `run-tool-tests`: runs the unit tests of the Python scripts in `tools/`.
-- `build-mini`: release build of all images of the Mini with the `mini-cmsis-dap` preset, plus the size check of each image in `vsl-images.txt`.
+- `build-mini`: release build of all images of the Mini with the `mini-cmsis-dap` preset, plus the size check of each image in `mupp-images.txt`.
   The build jobs configure with `-DMUPP_STRICT_SIZE=ON`: a build job fails when an image does not fit.
   The jobs for the STM32F1 boards also build `openmupp-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini with the CMSIS-DAP personality without the RISC-V bridge (debug log on the serial port, SWD on), plus the size check.

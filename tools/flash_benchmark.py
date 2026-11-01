@@ -299,7 +299,7 @@ def cmd_run(args):
         plan += [(transport, speed) for speed in speeds]
 
     runs = []
-    with tempfile.TemporaryDirectory(prefix="vsl-flash-bench-") as work_dir:
+    with tempfile.TemporaryDirectory(prefix="mupp-flash-bench-") as work_dir:
         image_path = os.path.join(work_dir, "image.bin")
         dump_path = os.path.join(work_dir, "dump.bin")
         with open(image_path, "wb") as f:

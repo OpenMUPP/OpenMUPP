@@ -3,7 +3,7 @@
 # than one time in the same build directory, so the cache of one configure
 # goes into the next one.
 cmake_minimum_required(VERSION 3.20)
-project(vsl-personalities-fixture NONE)
+project(mupp-personalities-fixture NONE)
 include("${CMAKE_CURRENT_LIST_DIR}/../../../cmake/Personalities.cmake")
 mupp_personality_options()
 include("${CMAKE_CURRENT_LIST_DIR}/../ResolvePersonalities.cmake")

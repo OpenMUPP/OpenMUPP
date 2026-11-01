@@ -24,7 +24,7 @@ list(APPEND CMAKE_MODULE_PATH ${doctest_SOURCE_DIR}/scripts/cmake)
 # Unit tests
 include(doctest)
 
-add_executable(vsl-tests
+add_executable(mupp-tests
         test_main.cpp
         TestVersion.cpp
         TestBoards.cpp
@@ -99,10 +99,10 @@ add_executable(vsl-tests
         ../dependencies/libArT/src/usb/CdcAcmFunction.cpp
 )
 
-target_compile_options(vsl-tests PRIVATE -O0 -g -Wall -Wextra)
+target_compile_options(mupp-tests PRIVATE -O0 -g -Wall -Wextra)
 # libArT code: not the code under test, keep its warnings out of the test build
 set_source_files_properties(../dependencies/libArT/src/utils/tfp_printf.cpp PROPERTIES COMPILE_OPTIONS -Wno-unused-function)
-target_include_directories(vsl-tests PRIVATE
+target_include_directories(mupp-tests PRIVATE
         ../src
         ${PROJECT_BINARY_DIR}                 # Version.h
         ../dependencies/libArT/src            # USB device stack
@@ -110,12 +110,12 @@ target_include_directories(vsl-tests PRIVATE
         ../dependencies/system-stm32/src      # peripherals/UsbDeviceTypes.h
 )
 # All personalities, so the tests see the full personality list
-target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING MUPP_WITH_VERSALOON MUPP_WITH_CMSIS_DAP MUPP_WITH_WCH_LINK
+target_compile_definitions(mupp-tests PRIVATE UNIT_TESTING MUPP_WITH_VERSALOON MUPP_WITH_CMSIS_DAP MUPP_WITH_WCH_LINK
         MUPP_MULTI_PERSONALITY MUPP_REPLAY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/replay")
-target_link_libraries(vsl-tests PRIVATE doctest::doctest etl::etl)
+target_link_libraries(mupp-tests PRIVATE doctest::doctest etl::etl)
 
 # Discover all tests
-doctest_discover_tests(vsl-tests)
+doctest_discover_tests(mupp-tests)
 
 # The personality options of the firmware build (cmake/Personalities.cmake),
 # in script mode. Each case passes when the output matches <regex>: the result
@@ -177,12 +177,12 @@ function(mupp_personality_cache_test name regex)
     add_test(NAME personalities.cache.${name}
             COMMAND ${CMAKE_COMMAND} ${ARGN} -S ${CMAKE_CURRENT_SOURCE_DIR}/cmake/fixture -B ${_mupp_fixture_dir})
     set_tests_properties(personalities.cache.${name} PROPERTIES PASS_REGULAR_EXPRESSION "${regex}"
-            FIXTURES_SETUP vsl-cache-${name} FIXTURES_REQUIRED "${_mupp_fixture_previous}")
-    set(_mupp_fixture_previous vsl-cache-${name} PARENT_SCOPE)
+            FIXTURES_SETUP mupp-cache-${name} FIXTURES_REQUIRED "${_mupp_fixture_previous}")
+    set(_mupp_fixture_previous mupp-cache-${name} PARENT_SCOPE)
 endfunction()
 add_test(NAME personalities.cache.clean COMMAND ${CMAKE_COMMAND} -E rm -rf ${_mupp_fixture_dir})
-set_tests_properties(personalities.cache.clean PROPERTIES FIXTURES_SETUP vsl-cache-clean)
-set(_mupp_fixture_previous vsl-cache-clean)
+set_tests_properties(personalities.cache.clean PROPERTIES FIXTURES_SETUP mupp-cache-clean)
+set(_mupp_fixture_previous mupp-cache-clean)
 # A first configure without options caches the empty defaults
 mupp_personality_cache_test(default "set=versaloon default=versaloon tag=\\[\\]")
 # Then a set in the same directory
