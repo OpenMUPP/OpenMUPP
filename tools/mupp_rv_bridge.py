@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sets the mode of the RISC-V bridge of the CMSIS-DAP personality.
 
-An image with VSL_CMSIS_DAP_RV_BRIDGE (the default) has the bridge. The
+An image with MUPP_CMSIS_DAP_RV_BRIDGE (the default) has the bridge. The
 script sends the vendor command ID_DAP_Vendor1 on interface 0:
 
     [0x81][0] off, [0x81][1] on, [0x81][2] auto, [0x81][3] the stored mode
@@ -19,12 +19,12 @@ cycle or the next command. OpenOCD sends the command itself (cmsis-dap cmd 0x81 
 docs/cmsis-dap.md, "Bridge switch".
 
 Usage:
-    python3 vsl_rv_bridge.py on
-    python3 vsl_rv_bridge.py auto --serial 0123456789AB
-    python3 vsl_rv_bridge.py off --store
+    python3 mupp_rv_bridge.py on
+    python3 mupp_rv_bridge.py auto --serial 0123456789AB
+    python3 mupp_rv_bridge.py off --store
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
-The unit tests in test_vsl_rv_bridge.py need no pyusb and no hardware.
+The unit tests in test_mupp_rv_bridge.py need no pyusb and no hardware.
 """
 
 import argparse
@@ -32,7 +32,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import vsl_personality as vp  # noqa: E402
+import mupp_personality as vp  # noqa: E402
 
 DAP_VENDOR1 = 0x81
 # The modes of ID_DAP_Vendor1
@@ -53,7 +53,7 @@ def check_reply(reply):
     """Raises BridgeError when the response does not confirm the switch."""
     reply = bytes(reply)
     if reply[:1] == bytes([vp.DAP_INVALID]):
-        raise BridgeError("the firmware does not know ID_DAP_Vendor1: the image has no RISC-V bridge (VSL_CMSIS_DAP_RV_BRIDGE)")
+        raise BridgeError("the firmware does not know ID_DAP_Vendor1: the image has no RISC-V bridge (MUPP_CMSIS_DAP_RV_BRIDGE)")
     if len(reply) < 2 or reply[0] != DAP_VENDOR1:
         raise BridgeError("unexpected response %s" % reply.hex())
     if reply[1] != 0:

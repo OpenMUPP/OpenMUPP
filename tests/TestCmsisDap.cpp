@@ -24,8 +24,8 @@ namespace pswd = protocol::swd;
 using Bytes = std::vector<uint8_t>;
 using cmsisdap::BitBangDapSwd;
 using cmsisdap::Processor;
+using mupptest::MockSwdPins;
 using protocol::PinMode;
-using vsltest::MockSwdPins;
 
 // The DAP_Transfer request bytes
 constexpr uint8_t readDpidr = 0x02;
@@ -1216,7 +1216,7 @@ TEST_CASE("DAP_TransferAbort stops a value match") {
 TEST_CASE("DAP_TransferAbort stops the WAIT retries of a transfer") {
    // The abort arrives in the background service of the engine, between
    // two WAIT retries, as from the USB stack.
-   vsltest::MockBackground background([] { return vsltest::MockBackground::Call{}; });
+   mupptest::MockBackground background([] { return mupptest::MockBackground::Call{}; });
    Bench b(1, gpio::all & ~(gpio::usr1 | gpio::usr2), &background);
    b.connect();
    // 65535 WAIT retries

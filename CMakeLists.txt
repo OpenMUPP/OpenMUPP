@@ -76,25 +76,25 @@ set(PROJECT_INCLUDE_DIRS
 #   app-8k      8192    0x08002000, behind openmupp-bootloader (8 KB)
 #   app-10k     10240   0x08002800, behind the legacy Versaloon bootloader
 #                       (10 KB) of the existing boards
-# The boards in VSL_BOOTLOADER_BOARDS get standalone and app-8k, and the
-# boards in VSL_LEGACY_BOOTLOADER_BOARDS also app-10k. The other boards have
+# The boards in MUPP_BOOTLOADER_BOARDS get standalone and app-8k, and the
+# boards in MUPP_LEGACY_BOOTLOADER_BOARDS also app-10k. The other boards have
 # no bootloader and get the standalone image only.
-set(VSL_APP_OFFSET_standalone 0)
-set(VSL_APP_OFFSET_app-8k 8192)
-set(VSL_APP_OFFSET_app-10k 10240)
+set(MUPP_APP_OFFSET_standalone 0)
+set(MUPP_APP_OFFSET_app-8k 8192)
+set(MUPP_APP_OFFSET_app-10k 10240)
 # Build openmupp-bootloader (dependencies/openmupp-bootloader, cmake/Bootloader.cmake)
 # for the board. Only for boards that the bootloader supports.
-option(VSL_BUILD_BOOTLOADER "Build openmupp-bootloader for the board" ON)
+option(MUPP_BUILD_BOOTLOADER "Build openmupp-bootloader for the board" ON)
 # An image that does not fit its flash limit: OFF skips the image with a
 # warning (cmake/ImageSize.cmake), ON stops the build. The size is only
 # known after the link. With OFF, the FLASH region of the linker script is
-# 64 KB larger (VSL_FLASH_SLACK), so that the link does not fail. The
+# 64 KB larger (MUPP_FLASH_SLACK), so that the link does not fail. The
 # CI build jobs set ON: each image of each CI build must fit.
-option(VSL_STRICT_SIZE "Stop the build when an image does not fit its flash limit, instead of skipping the image" OFF)
+option(MUPP_STRICT_SIZE "Stop the build when an image does not fit its flash limit, instead of skipping the image" OFF)
 # Application images to leave out, for example app-10k: CI leaves it out of
 # a strict build of a set of personalities that does not fit it.
-# A CMake list or a comma-separated list, as VSL_PERSONALITIES.
-set(VSL_SKIP_IMAGES "" CACHE STRING "Application images to leave out of the build (standalone, app-8k, app-10k)")
+# A CMake list or a comma-separated list, as MUPP_PERSONALITIES.
+set(MUPP_SKIP_IMAGES "" CACHE STRING "Application images to leave out of the build (standalone, app-8k, app-10k)")
 
 # USB personalities of the firmware image (cmake/Personalities.cmake):
 # versaloon, cmsis-dap and wch-link. An image with more than one personality
@@ -102,18 +102,18 @@ set(VSL_SKIP_IMAGES "" CACHE STRING "Application images to leave out of the buil
 # selects the next one, and a flash page at the end of the application area
 # stores it (src/personality/).
 include(Personalities)
-vsl_personality_options()
+mupp_personality_options()
 
 # The WCH-Link personality uses the USB ID 1a86:8010 of WCH instead of the
 # own ID. wlink and minichlink find a probe by this ID. The vendor ID belongs
 # to WCH: use it for personal use only. CI does not publish this image.
-option(VSL_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-link personality, for personal use only" OFF)
+option(MUPP_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-link personality, for personal use only" OFF)
 
 # The RISC-V bridge of the CMSIS-DAP personality (docs/cmsis-dap.md, "RISC-V
 # DTM bridge"): the JTAG port can be an emulated RISC-V DTM on the WCH debug
 # wire. In each image with cmsis-dap, also in a multi image. An image without
 # cmsis-dap ignores the option.
-option(VSL_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality" ON)
+option(MUPP_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality" ON)
 
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
@@ -123,78 +123,78 @@ if (CMAKE_CROSSCOMPILING)
         set(CMAKE_BUILD_TYPE Release)
     endif ()
 
-    if (BOARD IN_LIST VSL_LEGACY_BOOTLOADER_BOARDS)
-        set(VSL_APP_IMAGES standalone app-8k app-10k)
-    elseif (BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
-        set(VSL_APP_IMAGES standalone app-8k)
+    if (BOARD IN_LIST MUPP_LEGACY_BOOTLOADER_BOARDS)
+        set(MUPP_APP_IMAGES standalone app-8k app-10k)
+    elseif (BOARD IN_LIST MUPP_BOOTLOADER_BOARDS)
+        set(MUPP_APP_IMAGES standalone app-8k)
     else ()
-        set(VSL_APP_IMAGES standalone)
+        set(MUPP_APP_IMAGES standalone)
     endif ()
-    string(REPLACE "," ";" _vsl_skip_images "${VSL_SKIP_IMAGES}")
-    foreach (_image ${_vsl_skip_images})
+    string(REPLACE "," ";" _mupp_skip_images "${MUPP_SKIP_IMAGES}")
+    foreach (_image ${_mupp_skip_images})
         if (NOT _image MATCHES "^(standalone|app-8k|app-10k)$")
-            message(FATAL_ERROR "VSL_SKIP_IMAGES: unknown image '${_image}', use standalone, app-8k or app-10k")
+            message(FATAL_ERROR "MUPP_SKIP_IMAGES: unknown image '${_image}', use standalone, app-8k or app-10k")
         endif ()
     endforeach ()
-    if (_vsl_skip_images)
-        list(REMOVE_ITEM VSL_APP_IMAGES ${_vsl_skip_images})
+    if (_mupp_skip_images)
+        list(REMOVE_ITEM MUPP_APP_IMAGES ${_mupp_skip_images})
     endif ()
-    if (NOT VSL_APP_IMAGES)
-        message(FATAL_ERROR "VSL_SKIP_IMAGES leaves no image for board ${BOARD}")
+    if (NOT MUPP_APP_IMAGES)
+        message(FATAL_ERROR "MUPP_SKIP_IMAGES leaves no image for board ${BOARD}")
     endif ()
 
     # Debug log over the CDC-ACM port (src/debug/DebugLog.h). The option
     # disables the UART bridge: the CDC port carries only the log. It is ON by
     # default in a Debug build. A Release build carries no log code.
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(_VSL_DEBUG_DEFAULT ON)
+        set(_MUPP_DEBUG_DEFAULT ON)
     else ()
-        set(_VSL_DEBUG_DEFAULT OFF)
+        set(_MUPP_DEBUG_DEFAULT OFF)
     endif ()
-    option(VSL_DEBUG_CDC "Send the debug log to the CDC-ACM port instead of the UART bridge" ${_VSL_DEBUG_DEFAULT})
-    if (VSL_DEBUG_CDC AND CMAKE_BUILD_TYPE STREQUAL "Release")
-        message(FATAL_ERROR "VSL_DEBUG_CDC is for debug builds: a Release build has no debug log. Set -DVSL_DEBUG_CDC=OFF.")
+    option(MUPP_DEBUG_CDC "Send the debug log to the CDC-ACM port instead of the UART bridge" ${_MUPP_DEBUG_DEFAULT})
+    if (MUPP_DEBUG_CDC AND CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "MUPP_DEBUG_CDC is for debug builds: a Release build has no debug log. Set -DMUPP_DEBUG_CDC=OFF.")
     endif ()
 
     # Keep the SW-DP of the dongle MCU on (plan section 3): the board drops
     # its LEDs on the SWD pins (board::withSwd() in src/board/BoardDefinition.h).
-    option(VSL_DEBUG_SWD "Keep SWD of the dongle MCU on; drop the LEDs on the SWD pins" ${_VSL_DEBUG_DEFAULT})
-    if (VSL_DEBUG_SWD AND CMAKE_BUILD_TYPE STREQUAL "Release")
-        message(FATAL_ERROR "VSL_DEBUG_SWD is for debug builds: a Release build has all LEDs. Set -DVSL_DEBUG_SWD=OFF.")
+    option(MUPP_DEBUG_SWD "Keep SWD of the dongle MCU on; drop the LEDs on the SWD pins" ${_MUPP_DEBUG_DEFAULT})
+    if (MUPP_DEBUG_SWD AND CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "MUPP_DEBUG_SWD is for debug builds: a Release build has all LEDs. Set -DMUPP_DEBUG_SWD=OFF.")
     endif ()
 
-    # Checks the personality options and VSL_DEBUG_CDC. Sets
-    # VSL_PERSONALITY_SET, the VSL_WITH_<P> defines (personality/Personality.h), the sources to drop
-    # and VSL_IMAGE_TAG.
-    vsl_resolve_personalities()
+    # Checks the personality options and MUPP_DEBUG_CDC. Sets
+    # MUPP_PERSONALITY_SET, the MUPP_WITH_<P> defines (personality/Personality.h), the sources to drop
+    # and MUPP_IMAGE_TAG.
+    mupp_resolve_personalities()
 
-    # Selects board::current (src/board/Board.h), e.g. VSL_BOARD_MINI
+    # Selects board::current (src/board/Board.h), e.g. MUPP_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
-    set(PROJECT_DEFINES VSL_BOARD_${BOARD_UPPER} ${VSL_PERSONALITY_DEFINES})
+    set(PROJECT_DEFINES MUPP_BOARD_${BOARD_UPPER} ${MUPP_PERSONALITY_DEFINES})
     # An image has the sources of its personalities only: the CMSIS-DAP image
     # does not link the Versaloon command buffers (usb/VersaloonFunction.h).
     # The shared sources (BoardSwd, BoardJtag, BoardGpio) stay: -gc-sections
     # drops what an image does not use.
-    set(VSL_FIRMWARE_SOURCES ${PROJECT_SOURCES})
-    set(_vsl_dropped_files ${VSL_PERSONALITY_DROPPED_SOURCES})
+    set(MUPP_FIRMWARE_SOURCES ${PROJECT_SOURCES})
+    set(_mupp_dropped_files ${MUPP_PERSONALITY_DROPPED_SOURCES})
     # The settings page: the stored personality of a multi image and the
     # stored mode of the RISC-V bridge. Only in a multi image and in an image
     # with the bridge. It is at the end of the application area: one 1 KB
     # flash page on the STM32F103, one 8 KB flash sector on the STM32H5.
-    if (VSL_PERSONALITY_COUNT GREATER 1 OR VSL_RV_BRIDGE)
-        set(_vsl_settings ON)
+    if (MUPP_PERSONALITY_COUNT GREATER 1 OR MUPP_RV_BRIDGE)
+        set(_mupp_settings ON)
     else ()
-        set(_vsl_settings OFF)
+        set(_mupp_settings OFF)
     endif ()
-    if (_vsl_settings AND STM32_FAMILY STREQUAL "STM32F1")
-        set(VSL_SETTINGS_PAGE_SIZE 1024)
-    elseif (_vsl_settings AND STM32_FAMILY STREQUAL "STM32H5")
-        set(VSL_SETTINGS_PAGE_SIZE 8192)
-    elseif (_vsl_settings)
-        message(FATAL_ERROR "Board ${BOARD}: a multi image or the RISC-V bridge (VSL_PERSONALITIES=${VSL_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have.")
+    if (_mupp_settings AND STM32_FAMILY STREQUAL "STM32F1")
+        set(MUPP_SETTINGS_PAGE_SIZE 1024)
+    elseif (_mupp_settings AND STM32_FAMILY STREQUAL "STM32H5")
+        set(MUPP_SETTINGS_PAGE_SIZE 8192)
+    elseif (_mupp_settings)
+        message(FATAL_ERROR "Board ${BOARD}: a multi image or the RISC-V bridge (MUPP_PERSONALITIES=${MUPP_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have.")
     else ()
-        list(APPEND _vsl_dropped_files "src/board/SettingsFlashPage\\.cpp")
-        set(VSL_SETTINGS_PAGE_SIZE 0)
+        list(APPEND _mupp_dropped_files "src/board/SettingsFlashPage\\.cpp")
+        set(MUPP_SETTINGS_PAGE_SIZE 0)
     endif ()
     # STM32F1 only: the entry into openmupp-bootloader (BKP registers,
     # app-8k image), the JTAG fast path on SPI v1 and DMA1, and the one-wire
@@ -202,40 +202,40 @@ if (CMAKE_CROSSCOMPILING)
     # the ROM bootloader, the JTAG fast path on SPI v2 and GPDMA, and the
     # one-wire engine on TIM3 and GPDMA.
     if (NOT STM32_FAMILY STREQUAL "STM32F1")
-        list(APPEND _vsl_dropped_files "src/boot/Bootloader\\.cpp" "src/board/BoardJtagFast\\.cpp" "src/board/BoardRvSwd\\.cpp")
+        list(APPEND _mupp_dropped_files "src/boot/Bootloader\\.cpp" "src/board/BoardJtagFast\\.cpp" "src/board/BoardRvSwd\\.cpp")
     endif ()
     if (NOT STM32_FAMILY STREQUAL "STM32H5")
-        list(APPEND _vsl_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp" "src/board/BoardRvSwdH5\\.cpp")
+        list(APPEND _mupp_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp" "src/board/BoardRvSwdH5\\.cpp")
     endif ()
-    foreach (_file ${_vsl_dropped_files})
-        list(FILTER VSL_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
+    foreach (_file ${_mupp_dropped_files})
+        list(FILTER MUPP_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
     endforeach ()
-    if (VSL_DEBUG_CDC)
-        list(APPEND PROJECT_DEFINES VSL_DEBUG_CDC)
+    if (MUPP_DEBUG_CDC)
+        list(APPEND PROJECT_DEFINES MUPP_DEBUG_CDC)
     else ()
         # The libArT LOG_* macros expand to nothing
         list(APPEND PROJECT_DEFINES LOGGING_DISABLED)
     endif ()
-    if (VSL_DEBUG_SWD)
-        list(APPEND PROJECT_DEFINES VSL_DEBUG_SWD)
+    if (MUPP_DEBUG_SWD)
+        list(APPEND PROJECT_DEFINES MUPP_DEBUG_SWD)
     endif ()
     # Link-time optimisation of the firmware and of all libraries (#75): the
     # images are about 15 % smaller. It is ON by default in a Release build.
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(_VSL_LTO_DEFAULT ON)
+        set(_MUPP_LTO_DEFAULT ON)
     else ()
-        set(_VSL_LTO_DEFAULT OFF)
+        set(_MUPP_LTO_DEFAULT OFF)
     endif ()
-    option(VSL_LTO "Link-time optimisation (-flto)" ${_VSL_LTO_DEFAULT})
+    option(MUPP_LTO "Link-time optimisation (-flto)" ${_MUPP_LTO_DEFAULT})
     # For the targets below and in the dependencies. CMake adds -flto to
     # the compile and the link, and makes the archives with gcc-ar and
     # gcc-ranlib: with plain ar and ranlib, an archive of LTO objects has
     # no symbol index, and the link fails.
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${VSL_LTO})
-    if (VSL_STRICT_SIZE)
-        set(VSL_FLASH_SLACK 0)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${MUPP_LTO})
+    if (MUPP_STRICT_SIZE)
+        set(MUPP_FLASH_SLACK 0)
     else ()
-        set(VSL_FLASH_SLACK 65536)
+        set(MUPP_FLASH_SLACK 65536)
     endif ()
     set(CXX_OPTIONS -fno-exceptions -fno-rtti -fno-use-cxa-atexit -Wno-volatile)
     set(COMMON_OPTIONS -Os -ffunction-sections -fdata-sections -g -fno-common -fmessage-length=0 -fsigned-char -Werror=odr --specs=nano.specs --specs=nosys.specs)
@@ -245,9 +245,9 @@ if (CMAKE_CROSSCOMPILING)
     # settings page is the reserved flash at the end (__flash_reserved_start).
     # The main stack is 2 KB, because the STM32F103 has only 20 KB RAM, and
     # the link fails when less than the full stack is free. Each image sets
-    # __flash_offset and __flash_length (vsl_add_app_image).
-    set(VSL_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32/ldscripts)
-    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${VSL_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_end=${VSL_SETTINGS_PAGE_SIZE} -Wl,--defsym=__main_stack_size=2048 -Wl,--defsym=__minimum_stack_size=2048 -T${VSL_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    # __flash_offset and __flash_length (mupp_add_app_image).
+    set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32/ldscripts)
+    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_end=${MUPP_SETTINGS_PAGE_SIZE} -Wl,--defsym=__main_stack_size=2048 -Wl,--defsym=__minimum_stack_size=2048 -T${MUPP_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
 endif ()
 
 # Central interface target to unify compile/link flags and defines across all used libraries and executables
@@ -267,18 +267,18 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building openmupp version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${VSL_APP_IMAGES}" ", personalities: " "${VSL_PERSONALITY_SET}" ", default: " ${VSL_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${VSL_DEBUG_CDC} ", SWD on: " ${VSL_DEBUG_SWD} ", RISC-V bridge: " ${VSL_RV_BRIDGE} ", strict size: " ${VSL_STRICT_SIZE} ", LTO: " ${VSL_LTO} ")")
+    MESSAGE(STATUS "Building openmupp version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${MUPP_APP_IMAGES}" ", personalities: " "${MUPP_PERSONALITY_SET}" ", default: " ${MUPP_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${MUPP_DEBUG_CDC} ", SWD on: " ${MUPP_DEBUG_SWD} ", RISC-V bridge: " ${MUPP_RV_BRIDGE} ", strict size: " ${MUPP_STRICT_SIZE} ", LTO: " ${MUPP_LTO} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program
     #----------------------------------------------------------------------------------------------------#
     # All sources except src/main.cpp are compiled one time and linked into
     # each application image. src/main.cpp is compiled per image, because
-    # only the images with the bootloader entry define VSL_HAS_BOOTLOADER_ENTRY
+    # only the images with the bootloader entry define MUPP_HAS_BOOTLOADER_ENTRY
     # for it. No other source may use the define.
-    set(VSL_SHARED_SOURCES ${VSL_FIRMWARE_SOURCES})
-    list(FILTER VSL_SHARED_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
-    add_library(openmupp-objects OBJECT ${VSL_SHARED_SOURCES})
+    set(MUPP_SHARED_SOURCES ${MUPP_FIRMWARE_SOURCES})
+    list(FILTER MUPP_SHARED_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
+    add_library(openmupp-objects OBJECT ${MUPP_SHARED_SOURCES})
     # The JTAG, SWD and RISC-V debug wire engines are instantiated in these
     # files (see board/BoardJtag.h, board/BoardSwd.h and board/BoardRvSwd.h).
     # They use -O2 instead of -Os. It comes after the -Os of
@@ -292,29 +292,29 @@ if (CMAKE_CROSSCOMPILING)
     # The application image header (magic, length, CRC32) of
     # openmupp-bootloader. The bootloader starts only an image with a valid
     # header. The tool is in the bootloader submodule.
-    set(_vsl_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader/cmake/VslStampImage.cmake")
-    if ("app-8k" IN_LIST VSL_APP_IMAGES OR "app-10k" IN_LIST VSL_APP_IMAGES)
-        if (NOT EXISTS "${_vsl_stamp_cmake}")
-            message(FATAL_ERROR "${_vsl_stamp_cmake} not found. The images behind a bootloader need it. "
+    set(_mupp_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader/cmake/MuppStampImage.cmake")
+    if ("app-8k" IN_LIST MUPP_APP_IMAGES OR "app-10k" IN_LIST MUPP_APP_IMAGES)
+        if (NOT EXISTS "${_mupp_stamp_cmake}")
+            message(FATAL_ERROR "${_mupp_stamp_cmake} not found. The images behind a bootloader need it. "
                     "Run: git submodule update --init --recursive")
         endif ()
-        include("${_vsl_stamp_cmake}")
+        include("${_mupp_stamp_cmake}")
     endif ()
 
-    # Links the application image <image> (one of VSL_APP_IMAGES) as the
+    # Links the application image <image> (one of MUPP_APP_IMAGES) as the
     # target openmupp-<image>.elf. The build directory gets
     # openmupp-<image>.hex and .bin, and a copy with the board,
     # the build type and the version in the name. An image behind a
     # bootloader gets the application image header.
-    function(vsl_add_app_image image)
+    function(mupp_add_app_image image)
         set(_target openmupp-${image}.elf)
         set(_name openmupp-${image})
-        set(_offset ${VSL_APP_OFFSET_${image}})
-        math(EXPR _limit "${VSL_FLASH_SIZE} - ${_offset} - ${VSL_SETTINGS_PAGE_SIZE}")
-        set(VSL_APP_LIMIT_${image} ${_limit} PARENT_SCOPE)
+        set(_offset ${MUPP_APP_OFFSET_${image}})
+        math(EXPR _limit "${MUPP_FLASH_SIZE} - ${_offset} - ${MUPP_SETTINGS_PAGE_SIZE}")
+        set(MUPP_APP_LIMIT_${image} ${_limit} PARENT_SCOPE)
         # The FLASH region of the link, with the slack: the size check
         # below compares the image with the real limit.
-        math(EXPR _link_limit "${_limit} + ${VSL_FLASH_SLACK}")
+        math(EXPR _link_limit "${_limit} + ${MUPP_FLASH_SLACK}")
         add_executable(${_target} src/main.cpp)
         # system-stm32 is an OBJECT library (start-up code, vector table).
         # CMake adds the objects of an OBJECT library only to the target
@@ -326,16 +326,16 @@ if (CMAKE_CROSSCOMPILING)
         # (hasBootloaderEntry in src/main.cpp). On the STM32H5, the
         # standalone image enters the ROM bootloader.
         if (image STREQUAL "app-8k" OR (image STREQUAL "standalone" AND STM32_FAMILY STREQUAL "STM32H5"))
-            target_compile_definitions(${_target} PRIVATE VSL_HAS_BOOTLOADER_ENTRY)
+            target_compile_definitions(${_target} PRIVATE MUPP_HAS_BOOTLOADER_ENTRY)
         endif ()
         # Relink when a linker script or the size check changes
         set_target_properties(${_target} PROPERTIES LINK_DEPENDS
-                "${VSL_LDSCRIPT_DIR}/${VSL_LDSCRIPT};${VSL_LDSCRIPT_DIR}/libs.ld;${VSL_LDSCRIPT_DIR}/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
+                "${MUPP_LDSCRIPT_DIR}/${MUPP_LDSCRIPT};${MUPP_LDSCRIPT_DIR}/libs.ld;${MUPP_LDSCRIPT_DIR}/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
 
         ADD_DUMP_TARGET(${_target})
         PRINT_SIZE_OF_TARGETS(${_target})
 
-        set(_file openmupp-${BOARD}${VSL_IMAGE_TAG}-${image}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
+        set(_file openmupp-${BOARD}${MUPP_IMAGE_TAG}-${image}-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
         if (_offset EQUAL 0)
             add_custom_command(TARGET ${_target} POST_BUILD
                     COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:${_target}> ${_name}.hex
@@ -344,74 +344,74 @@ if (CMAKE_CROSSCOMPILING)
             # The stamp step writes the header into the ELF file and makes
             # the .hex and .bin files. A separate objcopy step would fill the
             # gaps with 0x00 and give a wrong CRC.
-            vsl_stamp_image(${_target} BIN ${_name}.bin HEX ${_name}.hex MAX_LENGTH ${_link_limit})
+            mupp_stamp_image(${_target} BIN ${_name}.bin HEX ${_name}.hex MAX_LENGTH ${_link_limit})
         endif ()
         # Post-build steps run in the order of the calls: the size check
         # comes after the stamp step. It makes the copies when the image
         # fits, and skips the image when it does not fit.
         add_custom_command(TARGET ${_target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -DIMAGE=${_name} -DLIMIT=${_limit} -DCOPY=${_file}
-                    -DSTRICT=${VSL_STRICT_SIZE} -P ${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake
+                    -DSTRICT=${MUPP_STRICT_SIZE} -P ${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake
                 COMMENT "Checking the size of ${_name}, building ${_file}.hex and ${_file}.bin"
                 VERBATIM)
     endfunction()
 
-    # vsl-images.txt lists each image with its size limit, one line
+    # mupp-images.txt lists each image with its size limit, one line
     # "<bin-file> <limit-in-bytes>". CI runs ci/check-size.sh on each line.
     # The limit of an application image is the FLASH region of
-    # the board linker script (VSL_LDSCRIPT). The combined image is added below.
+    # the board linker script (MUPP_LDSCRIPT). The combined image is added below.
     set(_images_list "")
-    foreach (_image ${VSL_APP_IMAGES})
-        vsl_add_app_image(${_image})
-        string(APPEND _images_list "openmupp-${_image}.bin ${VSL_APP_LIMIT_${_image}}\n")
+    foreach (_image ${MUPP_APP_IMAGES})
+        mupp_add_app_image(${_image})
+        string(APPEND _images_list "openmupp-${_image}.bin ${MUPP_APP_LIMIT_${_image}}\n")
     endforeach ()
     # The firmware must fit behind the legacy bootloader on all STM32F1 boards
     # (docs/firmware-update.md). A board without the app-10k image checks its
-    # standalone image against the app-10k limit too. VSL_SKIP_IMAGES=app-10k
-    # on a board with the legacy bootloader (VSL_LEGACY_BOOTLOADER_BOARDS)
+    # standalone image against the app-10k limit too. MUPP_SKIP_IMAGES=app-10k
+    # on a board with the legacy bootloader (MUPP_LEGACY_BOOTLOADER_BOARDS)
     # turns this check off. The legacy bootloader is STM32F1 only.
-    if (NOT BOARD IN_LIST VSL_LEGACY_BOOTLOADER_BOARDS AND "standalone" IN_LIST VSL_APP_IMAGES AND STM32_FAMILY STREQUAL "STM32F1")
-        math(EXPR _limit "${VSL_FLASH_SIZE} - ${VSL_APP_OFFSET_app-10k} - ${VSL_SETTINGS_PAGE_SIZE}")
+    if (NOT BOARD IN_LIST MUPP_LEGACY_BOOTLOADER_BOARDS AND "standalone" IN_LIST MUPP_APP_IMAGES AND STM32_FAMILY STREQUAL "STM32F1")
+        math(EXPR _limit "${MUPP_FLASH_SIZE} - ${MUPP_APP_OFFSET_app-10k} - ${MUPP_SETTINGS_PAGE_SIZE}")
         string(APPEND _images_list "openmupp-standalone.bin ${_limit}\n")
     endif ()
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_images_list}")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/mupp-images.txt" "${_images_list}")
 
     include(Bootloader)
-    if (VSL_BUILD_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS)
-        vsl_add_bootloader()
-        MESSAGE(STATUS "Building openmupp-bootloader for board " ${BOARD} " into " ${VSL_BOOTLOADER_DIR})
+    if (MUPP_BUILD_BOOTLOADER AND BOARD IN_LIST MUPP_BOOTLOADER_BOARDS)
+        mupp_add_bootloader()
+        MESSAGE(STATUS "Building openmupp-bootloader for board " ${BOARD} " into " ${MUPP_BOOTLOADER_DIR})
     endif ()
-    if (VSL_BUILD_BOOTLOADER AND BOARD IN_LIST VSL_BOOTLOADER_BOARDS AND "app-8k" IN_LIST VSL_APP_IMAGES)
+    if (MUPP_BUILD_BOOTLOADER AND BOARD IN_LIST MUPP_BOOTLOADER_BOARDS AND "app-8k" IN_LIST MUPP_APP_IMAGES)
 
         # The combined image: openmupp-bootloader and the app-8k image in
         # one file from 0x08000000, for a new board and a debug probe. The
-        # gap between the two is 0xFF (tools/vsl_combine_images.py).
+        # gap between the two is 0xFF (tools/mupp_combine_images.py).
         find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
         set(_name openmupp-with-bootloader)
-        set(_file openmupp-${BOARD}${VSL_IMAGE_TAG}-with-bootloader-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
+        set(_file openmupp-${BOARD}${MUPP_IMAGE_TAG}-with-bootloader-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
         # cmake/CombinedImage.cmake skips the combined image when the build
         # skipped the app-8k image. The app-8k .bin file is not in DEPENDS:
         # it can be missing. The .elf file of the app-8k image is.
         add_custom_command(
                 OUTPUT ${_name}.bin ${_name}.hex
                 COMMAND ${CMAKE_COMMAND} -DPYTHON=${Python3_EXECUTABLE}
-                    -DTOOL=${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py
-                    -DBOOTLOADER=${VSL_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin
-                    -DAPP=openmupp-app-8k.bin -DAPP_OFFSET=${VSL_APP_OFFSET_app-8k}
+                    -DTOOL=${PROJECT_SOURCE_DIR}/tools/mupp_combine_images.py
+                    -DBOOTLOADER=${MUPP_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin
+                    -DAPP=openmupp-app-8k.bin -DAPP_OFFSET=${MUPP_APP_OFFSET_app-8k}
                     -DIMAGE=${_name} -DCOPY=${_file}
                     -P ${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake
                 DEPENDS openmupp-bootloader openmupp-app-8k.elf
-                    "${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py"
+                    "${PROJECT_SOURCE_DIR}/tools/mupp_combine_images.py"
                     "${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake"
-                    "${VSL_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin"
+                    "${MUPP_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin"
                 BYPRODUCTS ${_file}.hex ${_file}.bin
                 COMMENT "Building ${_file}.hex \nBuilding ${_file}.bin"
                 VERBATIM)
         add_custom_target(openmupp-with-bootloader ALL DEPENDS ${_name}.bin ${_name}.hex)
         # The combined image ends where the app-8k image ends: its limit is the
         # flash without the settings page.
-        math(EXPR _limit "${VSL_FLASH_SIZE} - ${VSL_SETTINGS_PAGE_SIZE}")
-        file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/vsl-images.txt" "${_name}.bin ${_limit}\n")
+        math(EXPR _limit "${MUPP_FLASH_SIZE} - ${MUPP_SETTINGS_PAGE_SIZE}")
+        file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/mupp-images.txt" "${_name}.bin ${_limit}\n")
     endif ()
 else ()
     enable_testing()

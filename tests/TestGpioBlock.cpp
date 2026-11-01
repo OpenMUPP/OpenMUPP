@@ -430,7 +430,7 @@ struct UsbGpioBench {
    protocol::UsbToAll dispatcher;
    FakeGpioPins pins;
    protocol::GpioBlock block;
-   vsltest::Bench usb;
+   mupptest::Bench usb;
 };
 
 } // namespace
@@ -443,7 +443,7 @@ TEST_CASE("Host gone: a USB bus reset releases SRST") {
 
 TEST_CASE("Host gone: SET_CONFIGURATION 0 releases SRST") {
    UsbGpioBench bench;
-   bench.usb.request(vsltest::setConfiguration, 0);
+   bench.usb.request(mupptest::setConfiguration, 0);
    CHECK(bench.pins.state(gpio::srst).mode == PinMode::InputPullUp);
 }
 

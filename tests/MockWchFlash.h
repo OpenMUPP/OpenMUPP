@@ -35,7 +35,7 @@
 #include <string>
 #include <vector>
 
-namespace vsltest {
+namespace mupptest {
 
 class MockWchFlash {
    public:
@@ -505,4 +505,4 @@ class MockWchFlash {
    uint32_t busyLeft_{ 0 };
 };
 
-} // namespace vsltest
+} // namespace mupptest

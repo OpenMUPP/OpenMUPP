@@ -112,9 +112,9 @@ struct Wire {
       , tap(target) {
    }
 
-   vsltest::MockRvSwdTarget pins;
-   vsltest::MockDebugModule dm;
-   wchlink::RvSwdTarget<vsltest::MockRvSwdTarget> target;
+   mupptest::MockRvSwdTarget pins;
+   mupptest::MockDebugModule dm;
+   wchlink::RvSwdTarget<mupptest::MockRvSwdTarget> target;
    cmsisdap::RvDtmTap tap;
 };
 
@@ -185,7 +185,7 @@ void dmiRead(protocol::JtagPort &port) {
 
 TEST_CASE("RV bridge: off is the real JTAG port") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -201,7 +201,7 @@ TEST_CASE("RV bridge: off is the real JTAG port") {
 
 TEST_CASE("RV bridge: the switch ends the port in use and starts the other one") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -226,7 +226,7 @@ TEST_CASE("RV bridge: the switch ends the port in use and starts the other one")
 
 TEST_CASE("RV bridge: a switch without a connection starts no port") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -243,7 +243,7 @@ TEST_CASE("RV bridge: a switch without a connection starts no port") {
 
 TEST_CASE("RV bridge: the real port gets each speed") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -255,7 +255,7 @@ TEST_CASE("RV bridge: the real port gets each speed") {
 
 TEST_CASE("RV bridge: pinsChanged() makes the TAP connect again") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -278,7 +278,7 @@ namespace {
 // The processor with an optional bridge
 struct Dap {
    explicit Dap(cmsisdap::Bridge *bridge, protocol::JtagPort *jtag = nullptr)
-      : info(vsltest::dapTestInfo())
+      : info(mupptest::dapTestInfo())
       , dap(swd, gpio, platform, info, jtag, nullptr, nullptr, nullptr, bridge) {
    }
 
@@ -293,9 +293,9 @@ struct Dap {
       return response;
    }
 
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Gpio gpio;
-   vsltest::FakeDapPlatform platform;
+   mupptest::FakeDapPlatform platform;
    cmsisdap::DeviceInfo info;
    cmsisdap::Processor dap;
 };
@@ -381,7 +381,7 @@ TEST_CASE("RV bridge: a failed store gives DAP_ERROR and still sets the mode") {
 
 TEST_CASE("RV bridge: the stored mode is the mode of the start") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::On };
@@ -398,7 +398,7 @@ TEST_CASE("RV bridge: the stored mode is the mode of the start") {
 TEST_CASE("RV bridge: storeMode() writes the store and keeps the mode") {
    using Mode = cmsisdap::BridgeMode;
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, Mode::Auto };
@@ -426,7 +426,7 @@ TEST_CASE("RV bridge: DAP_SWJ_Pins on SWCLK or SWDIO tells the bridge") {
 
 TEST_CASE("RV bridge: the processor reads the IDCODE of the TAP after the switch") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -452,7 +452,7 @@ TEST_CASE("RV bridge: the processor reads the IDCODE of the TAP after the switch
 TEST_CASE("RV bridge: auto with a JTAG chain is the real port") {
    FakeJtagPort jtag;
    jtag.tdoFill = 0x55;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -466,7 +466,7 @@ TEST_CASE("RV bridge: auto with a JTAG chain is the real port") {
 
 TEST_CASE("RV bridge: auto with an SWD target is the real port") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -482,7 +482,7 @@ TEST_CASE("RV bridge: auto with an SWD target is the real port") {
 
 TEST_CASE("RV bridge: auto with a WCH target is the TAP") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    swd.ack = cmsisdap::dap::ackNone;
    Wire w;
    FakeModeStore modes;
@@ -503,7 +503,7 @@ TEST_CASE("RV bridge: auto with a WCH target is the TAP") {
 
 TEST_CASE("RV bridge: auto without a target is the real port") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    swd.ack = cmsisdap::dap::ackNone;
    Wire w;
    w.pins.present = false;
@@ -518,7 +518,7 @@ TEST_CASE("RV bridge: auto without a target is the real port") {
 
 TEST_CASE("RV bridge: auto finds the port again at each connect") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    swd.ack = cmsisdap::dap::ackNone;
    Wire w;
    FakeModeStore modes;
@@ -534,7 +534,7 @@ TEST_CASE("RV bridge: auto finds the port again at each connect") {
 
 TEST_CASE("RV bridge: auto while connected keeps the port") {
    FakeJtagPort jtag;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -559,7 +559,7 @@ TEST_CASE("RV bridge: auto while connected keeps the port") {
 TEST_CASE("RV bridge: auto with TDO high is no chain") {
    FakeJtagPort jtag;
    jtag.tdoFill = 0xFF;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
@@ -572,7 +572,7 @@ TEST_CASE("RV bridge: auto finds a TAP on the real port by its IDCODE") {
    // A second emulated TAP is the real port: it gives TDO by its state, so
    // the scan must reach Shift-DR and read the IDCODE in its window.
    Wire real;
-   vsltest::FakeDapSwd swd;
+   mupptest::FakeDapSwd swd;
    Wire w;
    FakeModeStore modes;
    cmsisdap::RvBridge bridge{ real.tap, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };

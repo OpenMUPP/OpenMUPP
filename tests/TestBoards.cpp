@@ -397,7 +397,7 @@ TEST_CASE("withSwd drops the LEDs on the SWD pins and keeps SWD on") {
    CHECK_FALSE(board::withSwd(def).leds.power.has_value());
 
    // A key on an SWD pin stays, and SWD stays off. board/Board.h refuses
-   // such a board in a VSL_DEBUG_SWD build.
+   // such a board in a MUPP_DEBUG_SWD build.
    def = board::stLinkV2;
    def.key = Signal{ { Port::A, 14 }, Active::Low };
    CHECK(board::swjConfig(board::withSwd(def)) == board::SwjConfig::Disabled);

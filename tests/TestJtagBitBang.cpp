@@ -18,7 +18,7 @@ using jtag::Clocking;
 using jtag::halfPeriodCycles;
 using jtag::TckIdle;
 using jtag::Timing;
-using Pins = vsltest::MockJtagPins<>;
+using Pins = mupptest::MockJtagPins<>;
 
 bool bitOf(const std::vector<uint8_t> &bytes, std::size_t index) {
    return ((bytes[index / 8] >> (index % 8)) & 1u) != 0;
@@ -64,8 +64,8 @@ TEST_CASE("JTAG bit-bang: speed selects the clocking mode") {
 }
 
 TEST_CASE("JTAG bit-bang: adaptive clocking needs RTCK") {
-   vsltest::MockJtagPins<false> pins;
-   BitBangPort<vsltest::MockJtagPins<false>> port(pins);
+   mupptest::MockJtagPins<false> pins;
+   BitBangPort<mupptest::MockJtagPins<false>> port(pins);
    REQUIRE(port.setSpeed(500));
    CHECK_FALSE(port.setSpeed(0));
    CHECK(port.timing().clocking == Clocking::Timed);
@@ -207,9 +207,9 @@ TEST_CASE("JTAG bit-bang: RTCK that does not follow TCK is a timeout, TCK ends l
 namespace {
 
 // Samples the time, the TCK level and the rising edges of the pins.
-vsltest::MockBackground backgroundOf(const Pins &pins) {
-   return vsltest::MockBackground(
-   [&pins] { return vsltest::MockBackground::Call{ pins.time, pins.tckLevel(), pins.rising.size() }; });
+mupptest::MockBackground backgroundOf(const Pins &pins) {
+   return mupptest::MockBackground(
+   [&pins] { return mupptest::MockBackground::Call{ pins.time, pins.tckLevel(), pins.rising.size() }; });
 }
 
 // 1 ms at 72 MHz

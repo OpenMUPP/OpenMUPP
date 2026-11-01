@@ -1,11 +1,11 @@
 // The UART bridge of the firmware. See uart/SerialBridge.h.
 #include "uart/SerialBridge.h"
 
-#if !defined(VSL_DEBUG_CDC) && defined(VSL_USB_SERIAL_PORT)
+#if !defined(MUPP_DEBUG_CDC) && defined(MUPP_USB_SERIAL_PORT)
 
 #include <optional>
 
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
 #include "uart/DapUartChannel.h"
 #endif
 #include "uart/UartBridge.h"
@@ -23,7 +23,7 @@ UartPort port{ buffers };
 // Static storage: the serial port of the USB stack is known only in
 // startBridge().
 std::optional<Bridge> bridge;
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
 DapUartChannel<UartPort, bridgeBufferSize> dapChannel{ port, buffers };
 #endif
 
@@ -33,7 +33,7 @@ void startBridge(usb::UsbStack &usbStack) {
    port.start();
    bridge.emplace(usbStack.serialPort(), port, buffers);
    bridge->start();
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
    dapChannel.start(&*bridge);
 #endif
 }
@@ -41,13 +41,13 @@ void startBridge(usb::UsbStack &usbStack) {
 void pollBridge() {
    if(bridge) {
       bridge->poll();
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
       dapChannel.poll();
 #endif
    }
 }
 
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
 cmsisdap::DapUart *dapUart() {
    return &dapChannel;
 }

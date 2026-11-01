@@ -1,4 +1,4 @@
-"""Host tests for vsl_combine_images.py.
+"""Host tests for mupp_combine_images.py.
 
 Run: python3 -m unittest discover -s tools -p "test_*.py"
 """
@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import vsl_combine_images as vc  # noqa: E402
+import mupp_combine_images as vc  # noqa: E402
 
 
 def parse_ihex(text):

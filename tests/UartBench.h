@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-namespace vsltest {
+namespace mupptest {
 
 using art::usb::CdcAcmFunctionBase;
 using art::usb::LineCoding;
@@ -231,4 +231,4 @@ class UartBench {
    uart::UartBridge<FakeUart, ringSize> bridge_;
 };
 
-} // namespace vsltest
+} // namespace mupptest

@@ -21,17 +21,17 @@ namespace control = cmsisdap::uartControl;
 namespace status = cmsisdap::uartStatus;
 namespace configError = cmsisdap::uartConfigError;
 namespace transport = cmsisdap::uartTransport;
+using mupptest::cdcPacketSize;
+using mupptest::pattern;
+using mupptest::ringCapacity;
+using mupptest::ringSize;
 using uart::DataBits;
 using uart::FrameFormat;
 using uart::fromDapControl;
 using uart::Parity;
 using uart::StopBits;
-using vsltest::cdcPacketSize;
-using vsltest::pattern;
-using vsltest::ringCapacity;
-using vsltest::ringSize;
 
-using Channel = uart::DapUartChannel<vsltest::FakeUart, ringSize>;
+using Channel = uart::DapUartChannel<mupptest::FakeUart, ringSize>;
 
 constexpr uint32_t clock72 = 72'000'000;
 constexpr FrameFormat format115200{ 115200, DataBits::Eight, Parity::None, StopBits::One };
@@ -47,7 +47,7 @@ constexpr uint8_t config7E2 = config(7, 1, 1);
 
 // The bridge bench with the channel, started as the firmware does
 // (uart/SerialBridge.cpp).
-struct Bench : vsltest::UartBench {
+struct Bench : mupptest::UartBench {
    explicit Bench(bool withBridge = true)
       : channel(uart, buffers) {
       channel.start(withBridge ? &bridge() : nullptr);
@@ -103,7 +103,7 @@ Bytes cat(std::initializer_list<Bytes> parts) {
 struct DapBench : Bench {
    explicit DapBench(bool withBridge = true, bool withUart = true)
       : Bench(withBridge)
-      , info(vsltest::dapTestInfo())
+      , info(mupptest::dapTestInfo())
       , dap(swd, gpio, platform, info, nullptr, nullptr, withUart ? &channel : nullptr) {
    }
 
@@ -127,9 +127,9 @@ struct DapBench : Bench {
       poll();
    }
 
-   vsltest::FakeDapSwd swd;
-   vsltest::FakeDapGpio gpio;
-   vsltest::FakeDapPlatform platform;
+   mupptest::FakeDapSwd swd;
+   mupptest::FakeDapGpio gpio;
+   mupptest::FakeDapPlatform platform;
    cmsisdap::DeviceInfo info;
    cmsisdap::Processor dap;
 };

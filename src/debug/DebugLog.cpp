@@ -1,7 +1,7 @@
 // Debug log over the CDC-ACM port. See debug/DebugLog.h.
 #include "debug/DebugLog.h"
 
-#if defined(VSL_DEBUG_CDC)
+#if defined(MUPP_DEBUG_CDC)
 
 #include <logging/Formatter.h>
 #include <utils/Timekeeping.h>

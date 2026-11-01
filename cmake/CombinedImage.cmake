@@ -2,7 +2,7 @@
 # script mode. CMakeLists.txt runs it as the command of the target
 # openmupp-with-bootloader.
 #
-#   cmake -DPYTHON=<python3> -DTOOL=<vsl_combine_images.py> -DBOOTLOADER=<bin>
+#   cmake -DPYTHON=<python3> -DTOOL=<mupp_combine_images.py> -DBOOTLOADER=<bin>
 #         -DAPP=<bin> -DAPP_OFFSET=<bytes> -DIMAGE=<name> -DCOPY=<name>
 #         -P CombinedImage.cmake
 #

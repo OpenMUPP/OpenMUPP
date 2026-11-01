@@ -1,4 +1,4 @@
-"""Host tests for vsl_rv_bridge.py. They need no pyusb and no hardware.
+"""Host tests for mupp_rv_bridge.py. They need no pyusb and no hardware.
 
 Run: python3 -m unittest discover -s tools -p "test_*.py"
 """
@@ -10,8 +10,8 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import vsl_rv_bridge as rb  # noqa: E402
-from test_vsl_personality import FakeDevice, fake_usb  # noqa: E402
+import mupp_rv_bridge as rb  # noqa: E402
+from test_mupp_personality import FakeDevice, fake_usb  # noqa: E402
 
 
 class RequestTest(unittest.TestCase):
@@ -94,7 +94,7 @@ class MainTest(unittest.TestCase):
         device = FakeDevice(0x0403, 0x9B3C, reply=[0xFF])
         result, _, err = self.run_main(["on"], [device])
         self.assertEqual(result, 1)
-        self.assertIn("VSL_CMSIS_DAP_RV_BRIDGE", err)
+        self.assertIn("MUPP_CMSIS_DAP_RV_BRIDGE", err)
 
     def test_no_response(self):
         device = FakeDevice(0x0403, 0x9B3C, reply=None)

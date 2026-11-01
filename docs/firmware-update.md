@@ -43,10 +43,10 @@ A multi image replies status `0xFF` to `ID_DAP_Vendor0`.
 A CMSIS-DAP image with one personality replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
 After the reply, the firmware does the same steps as for `VERSALOON_FW_UPDATE` (see [Reply and steps](#reply-and-steps)).
 
-`tools/vsl_personality.py` sends the bootloader code from the host:
+`tools/mupp_personality.py` sends the bootloader code from the host:
 
 ```sh
-python3 tools/vsl_personality.py switch bootloader
+python3 tools/mupp_personality.py switch bootloader
 ```
 
 The tool sends the switch request on EP0 with the code `0xB0`.
@@ -59,7 +59,7 @@ It finds the ROM USB DFU of the STM32H5 by the ID `0483:df11` only.
 The ROM DFU has its own serial number, so the wait for the bootloader does not compare it.
 Thus any STM32 device in ROM DFU mode ends the wait, also a different board.
 The other commands compare the serial number of the ROM DFU, so `--serial` does not select a device in ROM DFU mode.
-`python3 tools/vsl_personality.py show` also lists a dongle that runs the bootloader.
+`python3 tools/mupp_personality.py show` also lists a dongle that runs the bootloader.
 
 The tool must open the bootloader to read its strings.
 On Linux, a udev rule gives a normal user this access.
@@ -116,7 +116,7 @@ The `standalone` image of the STM32H5 has the bootloader entry.
 To start the ROM DFU, use one of these methods:
 
 - Send `VERSALOON_FW_UPDATE` or a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)).
-  `python3 tools/vsl_personality.py switch bootloader` does this and waits for `0483:df11`.
+  `python3 tools/mupp_personality.py switch bootloader` does this and waits for `0483:df11`.
 - Hold the key (KEY, PA0 on the WeAct board) down and reset the board.
 
 The firmware does not jump to the ROM bootloader from the running firmware.
@@ -255,7 +255,7 @@ The header is in the reserved words of the vector table:
 | `0x28` | Reserved, `0` |
 
 The CRC covers the linked image, so a step after the link must add the header.
-The build calls `vsl_stamp_image()` from the bootloader submodule (`cmake/VslStampImage.cmake`) for the `app-8k` and `app-10k` images.
+The build calls `mupp_stamp_image()` from the bootloader submodule (`cmake/MuppStampImage.cmake`) for the `app-8k` and `app-10k` images.
 It writes the header into the `.elf` file, and it writes the `.hex` and `.bin` files.
 The legacy bootloader ignores the header.
 The `standalone` image has no header.
@@ -263,7 +263,7 @@ The `standalone` image has no header.
 To check an image, use the stamp tool with the start address:
 
 ```sh
-dependencies/openmupp-bootloader/tools/vsl-stamp-image.py --check openmupp-app-8k.bin --base 0x08002000
+dependencies/openmupp-bootloader/tools/mupp-stamp-image.py --check openmupp-app-8k.bin --base 0x08002000
 ```
 
 ## Start-up behind the bootloader
@@ -292,8 +292,8 @@ The limits are hard limits for all boards.
 The firmware must also fit behind the legacy bootloader, because the existing boards need the `app-10k` image.
 Thus CI also checks the `standalone` image of the ST-Link/V2 and of the ST-Link/V2 mini clone against the `app-10k` limit (see [Continuous integration](development.md#continuous-integration)).
 
-- The FLASH region of the link (`__flash_length`) goes from the start of the application to the settings page, or to the end of the 64 KB. With `VSL_STRICT_SIZE=ON`, the link of an image fails when the application is too large. The CI build jobs set this option.
-- Without `VSL_STRICT_SIZE`, the build skips an image that is too large, and shows a warning (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
+- The FLASH region of the link (`__flash_length`) goes from the start of the application to the settings page, or to the end of the 64 KB. With `MUPP_STRICT_SIZE=ON`, the link of an image fails when the application is too large. The CI build jobs set this option.
+- Without `MUPP_STRICT_SIZE`, the build skips an image that is too large, and shows a warning (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
 - CI reports the size of each image with `ci/check-size.sh` and fails when the `.bin` file is larger than its limit.
 
 The main stack is 2 KB (`__main_stack_size` of the system-stm32 `sections.ld`), because the STM32F103 has only 20 KB RAM.

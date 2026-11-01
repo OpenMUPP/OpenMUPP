@@ -1,8 +1,8 @@
 # Debug log over the serial port
 
-The CMake option `VSL_DEBUG_CDC` sends the libArT log to the CDC-ACM serial port.
+The CMake option `MUPP_DEBUG_CDC` sends the libArT log to the CDC-ACM serial port.
 The option is `ON` by default in a `Debug` build.
-A `Release` build with `VSL_DEBUG_CDC=ON` fails at configure time.
+A `Release` build with `MUPP_DEBUG_CDC=ON` fails at configure time.
 The USB descriptors are the same in both builds.
 
 With the option, these rules apply:

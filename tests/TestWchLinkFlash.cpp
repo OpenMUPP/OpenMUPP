@@ -14,9 +14,9 @@
 
 namespace {
 
+using mupptest::MockWchFlash;
+using mupptest::WchLinkBench;
 using rvswd::Wire;
-using vsltest::MockWchFlash;
-using vsltest::WchLinkBench;
 using Bytes = std::vector<uint8_t>;
 
 namespace dm = rvswd::dm;

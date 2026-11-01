@@ -4,7 +4,7 @@ This document describes the CMSIS-DAP v2.1 command processor for SWD and JTAG.
 The code is in `src/protocol/cmsisdap/`.
 `usb::CmsisDapFunction` (`src/usb/CmsisDapFunction.h`) moves the packets over USB.
 See the [CMSIS-DAP personality](usb-device.md#cmsis-dap-personality).
-The build option `VSL_PERSONALITIES` with `cmsis-dap` puts the function and the processor into the firmware image (see [Build](#build)).
+The build option `MUPP_PERSONALITIES` with `cmsis-dap` puts the function and the processor into the firmware image (see [Build](#build)).
 
 ## Build
 
@@ -15,10 +15,10 @@ cmake --preset mini-cmsis-dap
 cmake --build --preset mini-cmsis-dap -j
 ```
 
-Or set the CMake option `VSL_PERSONALITIES` to `cmsis-dap`:
+Or set the CMake option `MUPP_PERSONALITIES` to `cmsis-dap`:
 
 ```sh
-cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DVSL_PERSONALITIES=cmsis-dap
+cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini -DMUPP_PERSONALITIES=cmsis-dap
 cmake --build build/mini-dap -j
 ```
 
@@ -37,7 +37,7 @@ The `cmsis-dap` image has these properties:
   On the Mini, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more. On the STM32H5 boards, it uses the fast path at a TCK of 3906 kHz or more.
 
 A `cmsis-dap` image has only this personality.
-A multi image has `cmsis-dap` and other personalities, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
+A multi image has `cmsis-dap` and other personalities, for example `MUPP_PERSONALITIES=versaloon,cmsis-dap`.
 Select the active one with `ID_DAP_Vendor0`, with `SWITCH_PERSONALITY` of the Versaloon protocol, with the switch request on EP0, or with the key (see [Multi image](usb-device.md#multi-image)).
 The switch request on EP0 and the request of the MS OS 2.0 descriptor set use the same handler (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
 
@@ -51,7 +51,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
 - No SWO.
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
-- A `VSL_DEBUG_CDC` build has no UART bridge and no `DAP_UART_*` commands.
+- A `MUPP_DEBUG_CDC` build has no UART bridge and no `DAP_UART_*` commands.
 - On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight.
@@ -168,7 +168,7 @@ Each packet without a response takes one of the 4 slots.
 | `0x22` | `DAP_UART_Control` | Enables, disables and flushes the receiver and the transmitter. |
 | `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
 | `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image without the bootloader entry replies `0xFF` to it. An image with one personality and without the bootloader entry replies `ID_DAP_Invalid` to each code. Only the `app-8k` image and the images of the STM32H5 have the bootloader entry. See [Multi image](usb-device.md#multi-image). |
-| `0x81` | `ID_DAP_Vendor1` | Only in an image with `VSL_CMSIS_DAP_RV_BRIDGE`: sets the mode of the RISC-V bridge, `[0x81][mode u8]`, `0` off, `1` on, `2` auto, `3` the stored mode. Bit 7 of the mode also stores the mode. The response is `[0x81][status u8]`: `0` when the mode is set, `0xFF` for another value or a failed store. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
+| `0x81` | `ID_DAP_Vendor1` | Only in an image with `MUPP_CMSIS_DAP_RV_BRIDGE`: sets the mode of the RISC-V bridge, `[0x81][mode u8]`, `0` off, `1` on, `2` auto, `3` the stored mode. Bit 7 of the mode also stores the mode. The response is `[0x81][status u8]`: `0` when the mode is set, `0xFF` for another value or a failed store. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
 | `0x82` | `ID_DAP_Vendor2` | Switches the 3.3 V supply of the target and reads the target voltage (Vref): `[0x82][op u8]`. Op `0` switches the supply off, `1` switches it on, `2` only reads. The response is `[0x82][status u8][mV u16]`. See [Target power](#target-power). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
@@ -394,7 +394,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Status: in progress. Each image with the `cmsis-dap` personality has the bridge, unless the build sets `VSL_CMSIS_DAP_RV_BRIDGE=OFF`. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test is done: see [Bridge hardware test](#bridge-hardware-test).
+Status: in progress. Each image with the `cmsis-dap` personality has the bridge, unless the build sets `MUPP_CMSIS_DAP_RV_BRIDGE=OFF`. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test is done: see [Bridge hardware test](#bridge-hardware-test).
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -412,13 +412,13 @@ It does each DMI access on the WCH wire (one wire or two wires), with the wire e
 
 ### Build
 
-The CMake option `VSL_CMSIS_DAP_RV_BRIDGE` (default `ON`) adds the bridge to the `cmsis-dap` personality.
+The CMake option `MUPP_CMSIS_DAP_RV_BRIDGE` (default `ON`) adds the bridge to the `cmsis-dap` personality.
 Each image with `cmsis-dap` has the bridge, also a multi image, for example `versaloon,cmsis-dap,wch-link`.
 In a multi image, only the active personality sets up the pins and the timer of the wire engine. A personality switch resets the MCU.
 An image without `cmsis-dap` ignores the option.
 An image with the bridge has the settings page, also an image with one personality: 1 KB less flash on the STM32F103, 8 KB less on the STM32H5 (see [Stored mode](#stored-mode)).
 The STM32H5 boards also build the bridge. The bridge is not tested on them.
-The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `VSL_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `openmupp-mini-cmsis-dap-no-rv-bridge-app-10k-Release-<version>.bin`.
+The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `openmupp-mini-cmsis-dap-no-rv-bridge-app-10k-Release-<version>.bin`.
 The `cmsis-dap` and `dual` presets build the bridge:
 
 ```sh
@@ -455,7 +455,7 @@ A firmware without the stored mode refuses `81 03`, and stays in auto. The chang
 A firmware without the auto mode (on and off only) refuses `81 02` and `81 03`, so the bridge stays on after `shutdown`. Use the configs with a firmware that has the stored mode.
 Ctrl-C and SIGTERM also run `shutdown`.
 An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
-Set the stored mode with `python3 tools/vsl_rv_bridge.py stored`, or replug the probe.
+Set the stored mode with `python3 tools/mupp_rv_bridge.py stored`, or replug the probe.
 The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
 The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet.
@@ -500,12 +500,12 @@ probe-rs cannot send a vendor command. In the auto mode, probe-rs needs no comma
 probe-rs info --protocol jtag
 ```
 
-To force the TAP, send the command with `tools/vsl_rv_bridge.py` before probe-rs starts:
+To force the TAP, send the command with `tools/mupp_rv_bridge.py` before probe-rs starts:
 
 ```sh
-python3 tools/vsl_rv_bridge.py on
+python3 tools/mupp_rv_bridge.py on
 probe-rs info --protocol jtag
-python3 tools/vsl_rv_bridge.py stored
+python3 tools/mupp_rv_bridge.py stored
 ```
 
 The mode stays until a USB reset, a power cycle or the next `ID_DAP_Vendor1`.
@@ -519,8 +519,8 @@ The firmware stores it in the settings page, in the same record as the stored pe
 To store a mode, set bit 7 of the mode in `ID_DAP_Vendor1`, or use `--store`:
 
 ```sh
-python3 tools/vsl_rv_bridge.py off --store
-python3 tools/vsl_rv_bridge.py auto --store
+python3 tools/mupp_rv_bridge.py off --store
+python3 tools/mupp_rv_bridge.py auto --store
 ```
 
 - A command without bit 7 does not write the flash. Thus the OpenOCD configs, which send `81 01`, `81 02` and `81 03` in each session, do not wear the flash.
@@ -633,7 +633,7 @@ A last step checks the real JTAG port with an STM32F103 after the bridge was on.
 | Target | CH32V006K8U6 on one wire, with its own supply |
 | OpenOCD | `0.12.0+dev-01355-gcba596a3e`, `ch32v00x-cmsis-dap.cfg` with `WORKAREASIZE` `0x2000` |
 | GDB | `riscv-none-elf-gdb` (xPack GCC 15.2.0-1) |
-| probe-rs | 0.32.0, `--chip CH32V006K8U6 --protocol jtag`, after `tools/vsl_rv_bridge.py on` |
+| probe-rs | 0.32.0, `--chip CH32V006K8U6 --protocol jtag`, after `tools/mupp_rv_bridge.py on` |
 | Test programs | A counter loop of 14 bytes in RAM at `0x20000000`. The same loop in flash at `0x00000000`, with 16 KB of random data after it. Each loop writes its counter to `0x20001000` |
 
 | Test | Tool | Result |
@@ -653,7 +653,7 @@ A last step checks the real JTAG port with an STM32F103 after the bridge was on.
 | `read` | probe-rs | Pass. 16 KB of flash agree with the image |
 | `download --verify` | probe-rs, built-in flash algorithm | Pass. 16 KB in 15.7 s, with the verify. After `probe-rs reset`, the program runs |
 | `gdb` | probe-rs | Fail, in probe-rs. See note 2 |
-| Bridge on after `vsl_rv_bridge.py on` | probe-rs | Pass. probe-rs does not reset the USB device when it opens it |
+| Bridge on after `mupp_rv_bridge.py on` | probe-rs | Pass. probe-rs does not reset the USB device when it opens it |
 | Fast path first, then bridge on, in one USB session | Python script, then OpenOCD | Pass. See note 3 |
 
 Notes:
@@ -859,7 +859,7 @@ The flash test uses a random image of 32 KiB, as in the JTAG hardware test. At 9
 
 | Test | Result |
 |---|---|
-| `vsl_rv_bridge.py on`, then `off`, then an OpenOCD JTAG session | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`). `reset halt` stops at the reset vector |
+| `mupp_rv_bridge.py on`, then `off`, then an OpenOCD JTAG session | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`). `reset halt` stops at the reset vector |
 | The same switch before each flash run, then `program ... verify` and `dump_image` at 1000 kHz | Pass. The read-back agrees with the image |
 | The same at 9000 kHz (SPI fast path) | Pass. The read-back agrees with the image |
 | `cmsis-dap cmd 0x81 0x00` in a JTAG session, with the bridge already off | Pass. The next memory read works |
@@ -874,7 +874,7 @@ The configs in `etc/openocd/` switch the bridge only before the chain scan and a
 #### Auto mode hardware test
 
 This step checks the port that the [auto mode](#auto-mode) selects for each type of target.
-No tool sends `ID_DAP_Vendor1` in the sessions: `vsl_rv_bridge.py auto` sets the mode before each step.
+No tool sends `ID_DAP_Vendor1` in the sessions: `mupp_rv_bridge.py auto` sets the mode before each step.
 OpenOCD uses `interface/cmsis-dap.cfg` with its own TAP and target lines, not the configs in `etc/openocd/`, because these configs send `81 01`.
 
 | Item | Value |

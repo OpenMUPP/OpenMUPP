@@ -15,9 +15,9 @@
 
 namespace {
 
+using mupptest::MockRvSwdTarget;
 using rvswd::RvSwdEngine;
 using rvswd::Wire;
-using vsltest::MockRvSwdTarget;
 
 // Nanoseconds of core cycles at the 72 MHz of the mock
 double nsOf(uint32_t cycles) {
@@ -340,8 +340,8 @@ TEST_CASE("RVSWD: the background runs before each frame, with the interrupts on"
    for(const Wire wire : { Wire::Two, Wire::One }) {
       CAPTURE(static_cast<int>(wire));
       MockRvSwdTarget pins(wire);
-      vsltest::MockBackground background(
-      [&pins] { return vsltest::MockBackground::Call{ pins.time, pins.irqLocked(), pins.risingEdges.size() }; });
+      mupptest::MockBackground background(
+      [&pins] { return mupptest::MockBackground::Call{ pins.time, pins.irqLocked(), pins.risingEdges.size() }; });
       RvSwdEngine<MockRvSwdTarget> engine(pins, &background);
       engine.init(wire);
       // More than 1 ms of frames: about 9 frames at 115 us, 25 at 45 us
@@ -597,8 +597,8 @@ TEST_CASE("RVSWD one wire: the host does not drive a line that the target holds 
 
 TEST_CASE("RVSWD one wire: line reset") {
    MockRvSwdTarget pins(Wire::One);
-   vsltest::MockBackground background(
-   [&pins] { return vsltest::MockBackground::Call{ pins.time, pins.irqLocked(), pins.risingEdges.size() }; });
+   mupptest::MockBackground background(
+   [&pins] { return mupptest::MockBackground::Call{ pins.time, pins.irqLocked(), pins.risingEdges.size() }; });
    RvSwdEngine<MockRvSwdTarget> engine(pins, &background);
    engine.init(Wire::One);
    pins.lineEdges.clear();

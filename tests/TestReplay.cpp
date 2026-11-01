@@ -125,7 +125,7 @@ std::vector<uint8_t> parseHex(std::istringstream &stream, bool *wildcard) {
 }
 
 std::vector<Transfer> loadTrace(const std::string &name) {
-   const std::string path = std::string(VSL_REPLAY_DIR) + "/" + name;
+   const std::string path = std::string(MUPP_REPLAY_DIR) + "/" + name;
    std::ifstream file(path);
    REQUIRE_MESSAGE(file.good(), "cannot open ", path);
    std::vector<Transfer> transfers;
@@ -160,15 +160,15 @@ void replay(const std::string &name) {
    LowJtagPins jtagPins;
    jtag::BitBangPort<LowJtagPins> jtagPort(jtagPins);
    protocol::JtagRawBlock jtagRaw(jtagPort);
-   vsltest::MockSwdPins swdPins;
+   mupptest::MockSwdPins swdPins;
    swdPins.readData = swdReadData;
-   swd::BitBangPort<vsltest::MockSwdPins> swdPort(swdPins);
+   swd::BitBangPort<mupptest::MockSwdPins> swdPort(swdPins);
    protocol::SwdBlock swd(swdPort);
    REQUIRE(usbToAll.add(gpio));
    REQUIRE(usbToAll.add(jtagRaw));
    REQUIRE(usbToAll.add(swd));
 
-   vsltest::Bench bench(nullptr, &usbToAll);
+   mupptest::Bench bench(nullptr, &usbToAll);
    bench.enumerate();
 
    const auto transfers = loadTrace(name);

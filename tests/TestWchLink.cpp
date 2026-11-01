@@ -20,8 +20,8 @@ namespace {
 
 using art::usb::DescriptorType;
 using art::usb::EndpointType;
+using mupptest::WchLinkBench;
 using rvswd::Wire;
-using vsltest::WchLinkBench;
 using Bytes = std::vector<uint8_t>;
 
 namespace dm = rvswd::dm;
@@ -72,7 +72,7 @@ std::vector<Access> take(WchLinkBench &bench) {
 }
 
 // Words of little-endian memory
-void putWord(vsltest::MockDebugModule &dm, uint32_t address, uint32_t value) {
+void putWord(mupptest::MockDebugModule &dm, uint32_t address, uint32_t value) {
    dm.store(address, value, 4);
 }
 
@@ -860,8 +860,8 @@ TEST_CASE("The switch request in the WCH-Link personality") {
    WchLinkBench bench(Wire::Two, &personalitySwitch);
    bench.enumerate();
 
-   CHECK_FALSE(vsltest::switchRequest(bench.controller(), personality::toCode(personality::Personality::CmsisDap)).stalled);
-   CHECK(vsltest::switchesTo(personalitySwitch, personality::Personality::CmsisDap));
+   CHECK_FALSE(mupptest::switchRequest(bench.controller(), personality::toCode(personality::Personality::CmsisDap)).stalled);
+   CHECK(mupptest::switchesTo(personalitySwitch, personality::Personality::CmsisDap));
 }
 
 TEST_CASE("The switch request with the bootloader code in the WCH-Link personality") {
@@ -869,8 +869,8 @@ TEST_CASE("The switch request with the bootloader code in the WCH-Link personali
    WchLinkBench bench(Wire::Two, nullptr, &bootloader);
    bench.enumerate();
 
-   CHECK(vsltest::switchRequest(bench.controller(), personality::toCode(personality::Personality::Versaloon)).stalled);
-   CHECK_FALSE(vsltest::switchRequest(bench.controller(), boot::bootloaderCode).stalled);
+   CHECK(mupptest::switchRequest(bench.controller(), personality::toCode(personality::Personality::Versaloon)).stalled);
+   CHECK_FALSE(mupptest::switchRequest(bench.controller(), boot::bootloaderCode).stalled);
    CHECK(bootloader.isRequested());
 }
 
@@ -881,6 +881,6 @@ TEST_CASE("The switch request works before SET_CONFIGURATION") {
    controller.busReset();
    bench.request(WchLinkBench::setAddress, 5);
 
-   CHECK_FALSE(vsltest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
-   CHECK(vsltest::switchesTo(personalitySwitch, personality::Personality::Versaloon));
+   CHECK_FALSE(mupptest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
+   CHECK(mupptest::switchesTo(personalitySwitch, personality::Personality::Versaloon));
 }

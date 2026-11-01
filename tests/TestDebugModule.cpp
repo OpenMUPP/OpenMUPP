@@ -16,14 +16,14 @@
 
 namespace {
 
+using mupptest::MockDebugModule;
+using mupptest::MockRvSwdTarget;
 using rvswd::DebugModule;
 using rvswd::MemoryAccess;
 using rvswd::RvSwdEngine;
 using rvswd::Status;
 using rvswd::Width;
 using rvswd::Wire;
-using vsltest::MockDebugModule;
-using vsltest::MockRvSwdTarget;
 
 namespace dm = rvswd::dm;
 

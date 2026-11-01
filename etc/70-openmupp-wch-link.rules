@@ -6,5 +6,5 @@
 # Default image: the test ID of pid.codes. Many devices share it, so the rule
 # also checks the product string.
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP WCH-Link", MODE="0660", TAG+="uaccess"
-# Image built with VSL_WCH_LINK_WCH_USB_ID: the ID of WCH. Real WCH-Link probes use it too.
+# Image built with MUPP_WCH_LINK_WCH_USB_ID: the ID of WCH. Real WCH-Link probes use it too.
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="8010", MODE="0660", TAG+="uaccess"

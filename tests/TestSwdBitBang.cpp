@@ -13,9 +13,9 @@
 namespace {
 
 namespace pswd = protocol::swd;
+using mupptest::MockSwdPins;
 using swd::BitBangPort;
 using swd::halfPeriodCycles;
-using vsltest::MockSwdPins;
 
 constexpr uint8_t readDpidr = 0xA5;
 constexpr uint8_t writeAbort = 0x81;
@@ -395,9 +395,9 @@ TEST_CASE("SWD bit-bang: a line reset and the JTAG-to-SWD sequence before a tran
 namespace {
 
 // Samples the time, the SWCLK level and the rising edges of the pins.
-vsltest::MockBackground backgroundOf(const MockSwdPins &pins) {
-   return vsltest::MockBackground(
-   [&pins] { return vsltest::MockBackground::Call{ pins.time, pins.swclkLevel(), pins.risingEdges.size() }; });
+mupptest::MockBackground backgroundOf(const MockSwdPins &pins) {
+   return mupptest::MockBackground(
+   [&pins] { return mupptest::MockBackground::Call{ pins.time, pins.swclkLevel(), pins.risingEdges.size() }; });
 }
 
 // 1 ms at 72 MHz

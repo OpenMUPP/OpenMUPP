@@ -146,7 +146,7 @@ class ArgsTest(unittest.TestCase):
         self.assertEqual(cmd[:3], ["openocd", "-s", "scripts"])
         self.assertIn("cmsis-dap vid_pid 0x0403 0x9b3c", cmd)
         self.assertIn("transport select jtag", cmd)
-        self.assertIn("vsl_run {C:/img.bin} {d.bin} 256 9000", cmd)
+        self.assertIn("mupp_run {C:/img.bin} {d.bin} 256 9000", cmd)
         self.assertEqual(cmd[-1], "shutdown")
 
 

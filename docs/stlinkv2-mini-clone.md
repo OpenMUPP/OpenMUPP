@@ -173,7 +173,7 @@ Then disconnect the power of the board, and connect it again.
 ## Hardware test
 
 Status: the test passed on 2026-10-26.
-Image: `stlinkv2miniclone` board with `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `Release` build.
+Image: `stlinkv2miniclone` board with `MUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `Release` build.
 
 The test used the `app-8k` image behind `openmupp-bootloader`, in the combined image `openmupp-with-bootloader.hex`.
 The `standalone` image has the same source code and clock setup, but nobody ran it on the board.
@@ -187,7 +187,7 @@ The image was written with SWD (OpenOCD `program`, with verify) through the SWD 
 | State LED, idle | pass: blue |
 | State LED, commands and probe errors (OpenOCD `vsllink`, no target) | pass: blue off on each command, red double flashes |
 | Write of the combined image with SWD after `stm32f1x unlock 0` | pass: verified |
-| `vsl_personality.py switch bootloader` (boot request) | pass: `0483:5740` with the product `Bootloader` |
+| `mupp_personality.py switch bootloader` (boot request) | pass: `0483:5740` with the product `Bootloader` |
 | `stm32flash -w openmupp-app-8k.bin -v -S 0x08002000`, then `-g 0x08002000` | pass: write and verify, the firmware starts as `0483:a038` |
 | Key: SWIM to GND at power-up, with a valid application | pass: `0483:5740` |
 | Power-up without the SWIM wire | pass: the firmware starts |

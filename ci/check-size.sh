@@ -1,7 +1,7 @@
 #!/bin/sh
 # Reports the flash size of a firmware image and fails when it is larger than
 # the limit. The limit depends on the image: the build directory has the file
-# vsl-images.txt with the limit of each image (CMakeLists.txt).
+# mupp-images.txt with the limit of each image (CMakeLists.txt).
 #
 # Usage: ci/check-size.sh <image.bin> <limit-in-bytes>
 set -eu

@@ -43,7 +43,7 @@
 
 #include "rvswd/RvSwdEngine.h"
 
-namespace vsltest {
+namespace mupptest {
 
 class MockRvSwdTarget {
    public:
@@ -590,4 +590,4 @@ class MockRvSwdTarget {
    uint32_t holdStart_{ 0 };
 };
 
-} // namespace vsltest
+} // namespace mupptest

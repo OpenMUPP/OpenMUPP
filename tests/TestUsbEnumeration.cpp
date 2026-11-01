@@ -24,9 +24,9 @@ namespace {
 
 using art::usb::DescriptorType;
 using art::usb::EndpointType;
-using vsltest::Bench;
-using vsltest::versaloonIn;
-using vsltest::versaloonOut;
+using mupptest::Bench;
+using mupptest::versaloonIn;
+using mupptest::versaloonOut;
 
 // Records the USB_TO_XXX commands and replies with replySize bytes that
 // count up.

@@ -1,7 +1,7 @@
 #pragma once
 
 // The JTAG port of the CMSIS-DAP processor in an image with the RISC-V
-// bridge (VSL_CMSIS_DAP_RV_BRIDGE): the real JTAG port of the board, or the
+// bridge (MUPP_CMSIS_DAP_RV_BRIDGE): the real JTAG port of the board, or the
 // emulated TAP (RvDtmTap.h). The vendor command ID_DAP_Vendor1
 // (DapProcessor.h) sets the mode:
 //

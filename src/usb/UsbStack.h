@@ -4,16 +4,16 @@
 // the protocol interface of one personality and, in most personalities,
 // one CDC-ACM serial port. Target only.
 //
-// The build selects the personalities of the image (VSL_PERSONALITIES,
+// The build selects the personalities of the image (MUPP_PERSONALITIES,
 // cmake/Personalities.cmake). Each one has a define, its descriptors and its USB
 // function:
 //
 //   versaloon   the Versaloon vendor interface of OpenOCD,
-//               VSL_WITH_VERSALOON (usb/UsbDescriptors.h,
+//               MUPP_WITH_VERSALOON (usb/UsbDescriptors.h,
 //               usb/VersaloonFunction.h)
-//   cmsis-dap   the CMSIS-DAP v2 interface, VSL_WITH_CMSIS_DAP
+//   cmsis-dap   the CMSIS-DAP v2 interface, MUPP_WITH_CMSIS_DAP
 //               (usb/CmsisDapDescriptors.h, usb/CmsisDapFunction.h)
-//   wch-link    the WCH-Link interface, VSL_WITH_WCH_LINK
+//   wch-link    the WCH-Link interface, MUPP_WITH_WCH_LINK
 //               (usb/WchLinkDescriptors.h, usb/WchLinkFunction.h)
 //
 // The stack has the USB function of each personality in the image, so an
@@ -26,7 +26,7 @@
 // two bulk pairs leave no packet memory for a serial port. hasSerialPort()
 // tells if the active personality has one. The serial port function is in
 // the stack when a personality of the image has a serial port
-// (VSL_USB_SERIAL_PORT). An image with only wch-link has no serial port, and
+// (MUPP_USB_SERIAL_PORT). An image with only wch-link has no serial port, and
 // the UART bridge and the debug log are off.
 //
 // The USB interrupt only queues the events. poll() runs the USB protocol in
@@ -46,13 +46,13 @@
 #include "usb/SerialEventQueue.h"
 #include "usb/SerialPortConfig.h"
 #include "usb/SwitchRequest.h"
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
 #include "usb/CmsisDapFunction.h"
 #endif
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
 #include "usb/VersaloonFunction.h"
 #endif
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
 #include "usb/WchLinkFunction.h"
 #endif
 
@@ -149,15 +149,15 @@ class UsbStack {
    // at 2^32: only the difference between two values counts.
    [[nodiscard]] uint32_t commandCount() const {
       switch(personality()) {
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
       case personality::Personality::Versaloon:
          return versaloon_.commandCount();
 #endif
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
       case personality::Personality::CmsisDap:
          return dap_.commandCount();
 #endif
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
       case personality::Personality::WchLink:
          return wch_.commandCount();
 #endif
@@ -182,9 +182,9 @@ class UsbStack {
       return !personality::has(personality::Personality::WchLink) || personality() != personality::Personality::WchLink;
    }
 
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
    // The CDC-ACM serial port: the UART bridge, or the debug log in a
-   // VSL_DEBUG_CDC build (see debug/DebugLog.h). The device has it only
+   // MUPP_DEBUG_CDC build (see debug/DebugLog.h). The device has it only
    // when hasSerialPort() is true.
    art::usb::CdcAcmFunctionBase &serialPort() {
       return serialPort_;
@@ -192,7 +192,7 @@ class UsbStack {
 #endif
 
    private:
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
    // Queue sizes of the serial port
    static constexpr std::size_t serialRxSize = 256;
    static constexpr std::size_t serialTxSize = 256;
@@ -200,8 +200,8 @@ class UsbStack {
 
    static void setPullUp(void *context, bool enable);
 
-#if defined(VSL_USB_SERIAL_PORT)
-   // VSL_DEBUG_CDC: the CDC port carries the log, so received data is
+#if defined(MUPP_USB_SERIAL_PORT)
+   // MUPP_DEBUG_CDC: the CDC port carries the log, so received data is
    // dropped.
    void discardSerialInput();
 #endif
@@ -211,16 +211,16 @@ class UsbStack {
    Stm32UsbDeviceController controller_;
    personality::Personality active_;
    art::usb::Device device_;
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
    VersaloonFunction versaloon_;
 #endif
-#if defined(VSL_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_CMSIS_DAP)
    CmsisDapFunction dap_;
 #endif
-#if defined(VSL_WITH_WCH_LINK)
+#if defined(MUPP_WITH_WCH_LINK)
    WchLinkFunction wch_;
 #endif
-#if defined(VSL_USB_SERIAL_PORT)
+#if defined(MUPP_USB_SERIAL_PORT)
    art::usb::CdcAcmFunction<serialRxSize, serialTxSize> serialPort_;
 #endif
    // The vendor requests to the device in each personality

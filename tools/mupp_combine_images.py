@@ -7,7 +7,7 @@ application, then the application. A debug probe writes a new board in one
 step with it. See README.md, "Flash the firmware".
 
 Usage:
-    python3 vsl_combine_images.py \\
+    python3 mupp_combine_images.py \\
         --bootloader openmupp-bootloader-mini.bin \\
         --app openmupp-app-8k.bin --app-offset 0x2000 \\
         --bin combined.bin --hex combined.hex
@@ -15,7 +15,7 @@ Usage:
 The inputs are binary files. --app-offset is the start of the application,
 from the start of the flash. The tool fails when the bootloader is larger
 than this offset, or when the combined image is larger than --flash-size.
-The unit tests are in test_vsl_combine_images.py.
+The unit tests are in test_mupp_combine_images.py.
 """
 
 import argparse
