@@ -4,7 +4,9 @@ OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is the firmware 
 OpenMUPP v1 is an open hardware USB debug probe with an STM32H523 MCU.
 It has level shifters for targets from 1.2 V to 5 V, a target power supply and a high-voltage (VPP) supply.
 The schematics are in the repository [openmupp-v1](https://gitlab.vandertogt.org/embedded-projects/openmupp-v1).
-The firmware debugs and programs target chips of more than one architecture: Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
+The firmware debugs and programs target chips of more than one architecture.
+Today it supports Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
+The name OpenMUPP stands for more than these two: the goal is one probe for many architectures (see [Planned targets](#planned-targets)).
 
 The OpenMUPP v1 probe is the main target of this project.
 The firmware has no board definition for it yet (see [Boards](#boards)).
@@ -33,6 +35,21 @@ The firmware drives the LEDs for the target power, the command activity and the 
 The key starts the bootloader, and the Versaloon personality also starts it on request (see [Flash the firmware](#flash-the-firmware)).
 
 The [status](docs/status.md) document lists what the firmware does and what the hardware tests cover.
+
+## Planned targets
+
+OpenMUPP v1 has hardware for more protocols than the firmware supports today.
+These targets are planned. None of them works yet.
+
+| Target | Protocols | State |
+|---|---|---|
+| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover PDI, TPI, UPDI and aWire. | Preparation work done. The firmware does not exist. |
+| PIC | Programming. The board makes the high voltage (VPP) that some PIC parts need. | Planned. No design yet. |
+| STM8 | SWIM (single-wire debug and programming interface) | Planned. No design yet. |
+
+The AVR personality will run at the same time as the CMSIS-DAP personality, in one image for the STM32H523 boards.
+The planned protocols need the OpenMUPP v1 hardware: the level shifters, the split nRESET path and the VPP supply.
+A passive adapter board maps the target connector to the pinout of each target.
 
 ## Boards
 

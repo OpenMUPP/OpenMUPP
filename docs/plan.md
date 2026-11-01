@@ -17,6 +17,9 @@ The legacy bootloader uses the first 10 KB of flash, so the application starts a
 The new `versaloon-bootloader` uses 8 KB, so the application starts at `0x08002000`.
 The Mini can have an STM32F103C8 (64 KB flash), so the application must not be larger than 54 KB: it must also fit behind the legacy bootloader.
 
+The firmware will also support more architectures on OpenMUPP v1: AVR (ISP and debugWIRE), PIC and STM8 (SWIM).
+The README lists the state of each one (see [Planned targets](../README.md#planned-targets)).
+
 The firmware is compatible with the original Versaloon USB protocol.
 Unmodified upstream OpenOCD (`interface/vsllink.cfg`) must work with it.
 The dongle also has a USB-CDC serial port, which is bridged to USART1.
