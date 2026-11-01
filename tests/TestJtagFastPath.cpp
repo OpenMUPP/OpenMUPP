@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The JTAG fast path on a mock SPI: the same bits and TDO as the bit-bang
 // engine.
 

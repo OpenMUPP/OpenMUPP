@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // RISC-V debug wire engine of the WCH-Link personality: DMI accesses (debug

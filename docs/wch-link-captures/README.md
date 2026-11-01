@@ -19,7 +19,7 @@ They are the evidence for [wch-link-protocol.md](../wch-link-protocol.md).
 ## USB captures (`.pcapng`)
 
 Each file has the traffic of one tool command.
-The file name gives the target, the tool and the command, for example `v003-wlink-flash.pcapng`.
+The file name gives the target, the tool and the command, for example `v003-wlink-status.pcapng`.
 
 | Part of the name | Meaning |
 |---|---|
@@ -32,9 +32,10 @@ The file name gives the target, the tool and the command, for example `v003-wlin
 
 Notes:
 
-- The `v006-` set has no `raw-errors`, `flash-noreset` or `connect-fail` file.
-- `v006-wlink-reset2.pcapng` is the reset that follows `v006-wlink-protect.pcapng`. `v006-wlink-flash.pcapng` flashes 4 KB of random data.
-- `v006-wlink-dump-verify.pcapng` reads the 4 KB back after the flash.
+- The captures of `wlink flash` and the capture `v208-mc-write.pcapng` are not in this repository. They contain a flash stub that the tool sends to the target, and this project has no license for that code. References to `v003-wlink-flash.pcapng`, `v003-wlink-flash-noreset.pcapng`, `v003-wlink-flash-protected.pcapng`, `v006-wlink-flash.pcapng`, `v208-wlink-flash.pcapng` and `v208-mc-write.pcapng` name these captures.
+- The `v006-` set has no `raw-errors` or `connect-fail` file.
+- `v006-wlink-reset2.pcapng` is the reset that follows `v006-wlink-protect.pcapng`.
+- `v006-wlink-dump-verify.pcapng` reads back 4 KB of random data after a flash.
 - There is no minichlink halt and resume capture for the V006. `minichlink -T` waits for input. The resume file showed no command and was dropped. `v006-mc-reboot.pcapng` is the minichlink reboot (`-b`).
 
 - `v003-mc-write-head.pcapng` holds only the first 4000 frames of the minichlink write. The full capture had 13 MB.

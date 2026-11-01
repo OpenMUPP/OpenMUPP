@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The flash operations of the WCH-Link processor (WchLinkProcessor.h), on

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The emulated TAP of the CMSIS-DAP RISC-V bridge (RvDtmTap.h): the TAP
 // state machine, IR, IDCODE, DTMCS and BYPASS on their own, then the B0
 // captures of OpenOCD and probe-rs (tests/replay/dap-*.trace) through the

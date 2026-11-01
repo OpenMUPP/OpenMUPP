@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Decode the 41-pulse frames of the WCH-LinkE one-wire interface (CH32V003).
 
 Input: a Saleae CSV export (digital, one row for each change) with

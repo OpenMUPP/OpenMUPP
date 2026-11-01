@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // A JTAG chain for the mock JTAG pins (MockJtagPins.h): the TAP state

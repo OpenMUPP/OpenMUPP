@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Measures the clock rate of a bit-bang engine in a Logic 2 CSV export.
 
 Usage: clock_rate.py <digital.csv> <column> <nominal period in ns>

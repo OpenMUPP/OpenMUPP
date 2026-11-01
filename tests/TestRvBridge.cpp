@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The RISC-V bridge of the CMSIS-DAP personality: the switching JTAG port
 // (RvBridge.h) on a fake real port and the emulated TAP with mock pins, and
 // ID_DAP_Vendor1 of the processor (DapProcessor.h).

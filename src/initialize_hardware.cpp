@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Board start-up: clocks, the debug port (SWJ) of the dongle MCU and the
 // board pins. The system-stm32 start-up code calls
 // os_startup_initialize_hardware() after the DATA and BSS init, before the

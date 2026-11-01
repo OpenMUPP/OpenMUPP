@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import sys
 from pcap import usb
 dev=int(sys.argv[2]); lim=int(sys.argv[3]) if len(sys.argv)>3 else 10**9

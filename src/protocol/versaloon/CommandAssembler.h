@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Joins the OUT packets of one bulk transfer into one Versaloon command

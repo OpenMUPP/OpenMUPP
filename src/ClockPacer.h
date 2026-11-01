@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Paces the clock edges of the bit-bang engines (swd/SwdBitBang.h,

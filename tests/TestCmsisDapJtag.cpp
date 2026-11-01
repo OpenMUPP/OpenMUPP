@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The CMSIS-DAP command processor on JTAG: the JTAG bit-bang engine and the
 // JTAG fast path on the mock JTAG pins, with the JTAG chain and JTAG-DP of
 // MockJtagDp.h.

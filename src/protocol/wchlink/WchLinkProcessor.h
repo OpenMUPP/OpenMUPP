@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The WCH-Link command processor (RISC-V mode of the WCH-LinkE).

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Debug log over the CDC-ACM port (plan section 9.2). Target only.

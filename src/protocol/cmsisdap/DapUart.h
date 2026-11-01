@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The UART of the target as the CMSIS-DAP command processor (DapProcessor.h)

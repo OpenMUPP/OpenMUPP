@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The UART of the board for the DAP_UART_* commands of CMSIS-DAP v2.1

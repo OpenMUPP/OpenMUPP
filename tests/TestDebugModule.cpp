@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The debug module layer on the wire engine, with mock pins and a mock DM.
 // The reference access sequences come from the WCH-LinkE captures in
 // docs/wch-link-captures (docs/wch-link-protocol.md, "Probe actions").

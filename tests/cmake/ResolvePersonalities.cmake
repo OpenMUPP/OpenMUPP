@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Runs mupp_resolve_personalities() (cmake/Personalities.cmake) in script mode
 # and prints the result in one line. tests/CMakeLists.txt runs it with the
 # options of each test case and checks the line or the error text.

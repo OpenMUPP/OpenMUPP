@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "protocol/wchlink/WchLinkFlash.h"
 
 #include "protocol/wchlink/WchLinkProcessor.h"

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The USB_TO_JTAG_RAW block on a fake JTAG port.
 
 #include "protocol/versaloon/JtagRawBlock.h"

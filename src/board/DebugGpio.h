@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Maps the gpio bits (protocol/GpioPins.h) to the debug pins of a board

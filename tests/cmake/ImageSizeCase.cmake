@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Runs cmake/ImageSize.cmake or cmake/CombinedImage.cmake on fake image
 # files in the directory DIR, and prints the result in one line.
 # tests/CMakeLists.txt runs it for each test case and checks the line or the

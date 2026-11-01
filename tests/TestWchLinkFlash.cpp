@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The flash commands of the WCH-Link personality through its USB function,
 // on the wire engine with mock pins, a mock DM and a mock flash controller
 // (MockWchFlash.h). The command sequences come from the WCH-LinkE captures

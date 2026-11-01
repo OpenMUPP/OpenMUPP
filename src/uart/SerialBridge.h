@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The UART bridge of the firmware: the CDC-ACM serial port to the UART of

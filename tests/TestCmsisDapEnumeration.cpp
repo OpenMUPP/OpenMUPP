@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The descriptors and the CMSIS-DAP function on the libArT USB device stack,
 // with the fake controller of libArT as the host.
 

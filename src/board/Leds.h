@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The LEDs of board::current. A board can have fewer LEDs: the functions do

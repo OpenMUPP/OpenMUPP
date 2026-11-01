@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The firmware has no heap. These definitions replace the newlib and
 // libstdc++ versions, which link malloc, free and the newlib locks (#75).
 //

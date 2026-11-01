@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Shows and switches the USB personality of a multi image (MUPP_PERSONALITIES),
 and starts the bootloader: openmupp-bootloader on the STM32F1 boards, the
 ROM USB DFU on the STM32H5 boards.

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests for the TAP state machine of tools/usb-pcap/dap.py."""
 import os
 import sys

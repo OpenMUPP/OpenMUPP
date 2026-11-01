@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "boot/BootloaderEntry.h"
 #include "personality/PersonalitySwitch.h"
 #include "protocol/versaloon/CommandProcessor.h"

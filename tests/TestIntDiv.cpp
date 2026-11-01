@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The 32-bit division helpers (IntDiv.h), and the functions that use them,
 // against the 64-bit expressions that they replace (#75).
 

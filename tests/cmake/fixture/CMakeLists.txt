@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # A small project that declares the personality options as the firmware
 # build does, and prints the result. tests/CMakeLists.txt configures it more
 # than one time in the same build directory, so the cache of one configure

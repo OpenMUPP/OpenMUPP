@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The SWD engine as the CMSIS-DAP command processor (DapProcessor.h) sees

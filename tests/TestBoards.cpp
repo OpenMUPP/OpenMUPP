@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "board/VrefScale.h"
 #include "board/boards/Mini.h"
 #include "board/boards/OtherUse.h"

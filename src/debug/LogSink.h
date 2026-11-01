@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Log sink of a debug build (MUPP_DEBUG_CDC): the libArT logger writes the

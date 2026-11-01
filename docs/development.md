@@ -188,7 +188,10 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
 
 ## Continuous integration
 
-`.gitlab-ci.yml` runs these jobs:
+`.gitlab-ci.yml` runs the jobs below.
+`.github/workflows/ci.yml` runs the same checks on GitHub, in the public image `ghcr.io/armint/firmware-build-image`.
+
+The jobs:
 
 - `lint-code`: fails when `clangformat` changes a file.
 - `run-unit-tests`: builds and runs the host unit tests with the `host-tests` presets.

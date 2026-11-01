@@ -3,10 +3,12 @@
 OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is the firmware of the OpenMUPP v1 probe.
 OpenMUPP v1 is an open hardware USB debug probe with an STM32H523 MCU.
 It has level shifters for targets from 1.2 V to 5 V, a target power supply and a high-voltage (VPP) supply.
-The schematics are in the repository [openmupp-v1](https://gitlab.vandertogt.org/embedded-projects/openmupp-v1).
+The schematics are in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1).
 The firmware debugs and programs target chips of more than one architecture.
 Today it supports Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
 The name OpenMUPP stands for more than these two: the goal is one probe for many architectures (see [Planned targets](#planned-targets)).
+
+**Disclaimer:** this project is in no way related to or associated with the original Versaloon project or its author. The firmware is an independent implementation of the Versaloon USB protocol. It contains no code of the original project.
 
 The OpenMUPP v1 probe is the main target of this project.
 The firmware has no board definition for it yet (see [Boards](#boards)).
@@ -77,7 +79,7 @@ The libraries are Git submodules in `dependencies/`.
 Clone with the submodules:
 
 ```sh
-git clone --recurse-submodules ssh://git@gitlab.vandertogt.org:3022/embedded-projects/openmupp.git
+git clone --recurse-submodules https://github.com/OpenMUPP/openmupp.git
 ```
 
 In an existing clone, run `git submodule update --init --recursive`.
@@ -310,3 +312,23 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/cmake.md](docs/cmake.md): the CMake options and the CMake presets.
 - [docs/development.md](docs/development.md): build outputs, unit tests, the flash speed benchmark, code format, version, CI and branches.
 - [docs/status.md](docs/status.md): the functions of the firmware and the hardware test status.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Copyright (C) 2026 Armin van der Togt <armin@vandertogt.org>
+
+OpenMUPP is free software. You can redistribute it and modify it under the terms of the GNU General Public License, version 3 or any later version. See [LICENSE](LICENSE).
+The program has no warranty.
+
+Some parts have a different license:
+
+- `cmake/ClangFormat.cmake` uses the Boost Software License 1.0. See [LICENSES/BSL-1.0.txt](LICENSES/BSL-1.0.txt).
+- The OpenOCD configuration files in `etc/openocd/` and `tools/stm32f1_clock.tcl` use GPL-2.0-or-later.
+- The submodules `libArT`, `libart-stm32` and `system-stm32` use the MIT license. Each submodule has its own license file.
+- The build downloads other libraries with CMake `FetchContent`, for example the CMSIS headers of Arm and ST (Apache-2.0). These libraries keep their own licenses.
+
+The hardware design in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1) has its own license.

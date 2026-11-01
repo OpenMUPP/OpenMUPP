@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests for the WCH-LinkE wire frame decoders. They use the captures in docs/wch-link-captures."""
 import collections
 import os

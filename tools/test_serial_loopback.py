@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Host tests for serial_loopback_test.py. They use a fake port, so they need
 no pyserial and no hardware.
 

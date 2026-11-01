@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Flash speed benchmark of the Versaloon dongle with OpenOCD.
 
 The script writes a test image into the flash of an STM32F1 target, verifies

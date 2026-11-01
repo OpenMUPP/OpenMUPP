@@ -1,16 +1,16 @@
 [submodule "dependencies/libArT"]
 	path = dependencies/libArT
-	url = ssh://git@gitlab.vandertogt.org:3022/embedded-libraries/libArT.git
+	url = https://github.com/armint/libart.git
 	branch = main
 [submodule "dependencies/libart-stm32"]
 	path = dependencies/libart-stm32
-	url = ssh://git@gitlab.vandertogt.org:3022/embedded-libraries/libart-stm32.git
+	url = https://github.com/armint/libart-stm32.git
 	branch = main
 [submodule "dependencies/system-stm32"]
 	path = dependencies/system-stm32
-	url = ssh://git@gitlab.vandertogt.org:3022/embedded-libraries/system-stm32.git
+	url = https://github.com/armint/system-stm32.git
 	branch = main
 [submodule "dependencies/openmupp-bootloader"]
 	path = dependencies/openmupp-bootloader
-	url = ssh://git@gitlab.vandertogt.org:3022/embedded-projects/openmupp-bootloader.git
+	url = ../openmupp-bootloader.git
 	branch = master

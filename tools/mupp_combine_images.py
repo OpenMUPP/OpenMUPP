@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Combines the bootloader and an application image into one flash image.
 
 The combined image starts at the start of the flash (0x08000000). It has

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Work that must continue while a long USB_TO_XXX command runs: the serial

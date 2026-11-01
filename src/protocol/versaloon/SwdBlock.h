@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The USB_TO_SWD block (0x46): OpenOCD runs all SWD transfers through it.

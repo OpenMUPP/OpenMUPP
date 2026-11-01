@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The debug connector pins as GPIO pins: the interface of the board GPIO

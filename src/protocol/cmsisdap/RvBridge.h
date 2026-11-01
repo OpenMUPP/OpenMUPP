@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The JTAG port of the CMSIS-DAP processor in an image with the RISC-V

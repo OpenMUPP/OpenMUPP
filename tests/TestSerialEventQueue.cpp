@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The USB event queue with the serial-only mode of UsbStack::pollSerial().
 
 #include "usb/SerialEventQueue.h"

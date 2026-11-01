@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Mock pins for the RISC-V debug wire engine (rvswd/RvSwdEngine.h), with a

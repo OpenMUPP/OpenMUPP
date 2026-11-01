@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The UART bridge of the firmware. See uart/SerialBridge.h.
 #include "uart/SerialBridge.h"
 

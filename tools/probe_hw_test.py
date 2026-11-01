@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Hardware test of a multi image with an STM32F1 target and a UART loopback.
 
 The dongle must have a multi image with the Versaloon and the CMSIS-DAP

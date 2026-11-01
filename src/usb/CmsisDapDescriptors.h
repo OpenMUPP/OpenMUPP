@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // USB identity and descriptors of the CMSIS-DAP personality: a composite

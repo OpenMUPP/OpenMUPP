@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "board/BoardJtag.h"
 
 // The JTAG engines, compiled with -O2 (CMakeLists.txt).

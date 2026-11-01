@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The SWD bit-bang engine on mock pins with a mock target.
 
 #include "swd/SwdBitBang.h"

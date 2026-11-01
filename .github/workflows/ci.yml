@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: CI
+
+# The same checks as .gitlab-ci.yml, in the public image of https://github.com/armint/firmware-build-image.
+# docs/development.md ("Continuous integration") explains each job.
+on:
+  push:
+    branches: [main, dev]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-15.3.rel2-x86_64-arm-none-eabi
+  # cmake/generate_version.cmake runs git in the checkout. The checkout belongs to another user than the
+  # container user, so git refuses it ("dubious ownership") without this setting.
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
+
+jobs:
+  lint-code:
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - run: ci/lint.sh
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - run: |
+          cmake --preset host-tests -G "Unix Makefiles"
+          cmake --build --preset host-tests -- -j$(nproc)
+          ctest --preset host-tests
+
+  tool-tests:
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 -m unittest discover -s tools -p "test_*.py" -v
+
+  # All boards on each run: GitHub has no manual jobs in a matrix. The presets and the size check are the same as in
+  # .build-board-template of .gitlab-ci.yml.
+  build:
+    name: build ${{ matrix.preset }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    strategy:
+      fail-fast: false
+      matrix:
+        preset:
+          - mini-cmsis-dap
+          - mini-debug
+          - mini-dual
+          - mini-cmsis-dap-no-rv-bridge
+          - stlinkv2-cmsis-dap
+          - stlinkv2-dual
+          - stlinkv2miniclone-cmsis-dap
+          - stlinkv2miniclone-dual
+          - weacth523-cmsis-dap
+          - weacth523-dual
+          - weacth523-debug
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - run: ci/compile-preset.sh ${{ matrix.preset }}
+      # Only the files with the board, the build type and the version in the name.
+      - uses: actions/upload-artifact@v4
+        if: matrix.preset != 'mini-cmsis-dap-no-rv-bridge'
+        with:
+          name: openmupp-${{ matrix.preset }}-${{ github.sha }}
+          path: |
+            build/${{ matrix.preset }}/openmupp-*-Release-*.hex
+            build/${{ matrix.preset }}/openmupp-*-Release-*.bin
+            build/${{ matrix.preset }}/openmupp-*-Debug-*.hex
+            build/${{ matrix.preset }}/openmupp-*-Debug-*.bin
+          retention-days: 30

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The WCH-Link personality through its USB function: the descriptors, the
 // endpoints, and the commands of the processor on the wire engine with mock
 // pins and a mock DM. The request and response bytes come from the

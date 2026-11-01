@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The JTAG port: the interface of the JTAG engines (jtag/JtagBitBang.h,

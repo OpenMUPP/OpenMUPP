@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // A mock RISC-V debug module (debug spec 0.13) of one hart, behind the

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Host tests for probe_hw_test.py. They need no tools and no hardware.
 
 Run: python3 -m unittest discover -s tools -p "test_*.py"

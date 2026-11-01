@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Maps board::Pin to the system-stm32 GPIO drivers. Target only: needs CMSIS.

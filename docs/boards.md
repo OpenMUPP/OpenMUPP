@@ -82,7 +82,7 @@ To add a board:
 2. Add the board to `src/board/Board.h`.
 3. Add the board to `MUPP_BOARDS` in `cmake/Boards.cmake`, with its family, device, crystal and linker script.
    A new family also needs CPU flags in `cmake/gcc_arm.cmake`.
-4. Add a build job to `.gitlab-ci.yml` and a test to `tests/TestBoards.cpp`.
+4. Add a build job to `.gitlab-ci.yml` and `.github/workflows/ci.yml`, and a test to `tests/TestBoards.cpp`.
 
 ## Start-up and LEDs
 
@@ -299,7 +299,7 @@ Findings:
 OpenMUPP v1 is the probe board of this project.
 It is open hardware.
 It has an STM32H523CC, a 24 MHz crystal and level shifters for targets from 1.2 V to 5 V.
-The schematics and the design notes are in the repository [openmupp-v1](https://gitlab.vandertogt.org/embedded-projects/openmupp-v1).
+The schematics and the design notes are in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1).
 
 The firmware has no board definition for this board yet.
 The board layer needs the direction pins, the split nRESET path and the power functions that this section lists.

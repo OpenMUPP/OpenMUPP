@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Checks the size of one application image after the link, in script mode.
 # CMakeLists.txt runs it as the last post-build step of each image.
 #

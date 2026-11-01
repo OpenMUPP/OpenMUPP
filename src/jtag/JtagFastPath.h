@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // JTAG fast path: shifts the whole bytes of a JTAG_RAW shift with two SPI

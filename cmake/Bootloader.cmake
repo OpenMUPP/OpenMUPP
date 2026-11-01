@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # openmupp-bootloader (dependencies/openmupp-bootloader) for the board of
 # the build. It uses the first 8 KB of the flash. The app-8k image is linked
 # behind it (CMakeLists.txt, MUPP_APP_IMAGES).
