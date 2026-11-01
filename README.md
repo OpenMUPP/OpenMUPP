@@ -1,11 +1,19 @@
 # OpenMUPP
 
-OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is firmware for USB debug probes.
+OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is the firmware of the OpenMUPP v1 probe.
+OpenMUPP v1 is an open hardware USB debug probe with an STM32H523 MCU.
+It has level shifters for targets from 1.2 V to 5 V, a target power supply and a high-voltage (VPP) supply.
+The schematics are in the repository [openmupp-v1](https://gitlab.vandertogt.org/embedded-projects/openmupp-v1).
 The firmware debugs and programs target chips of more than one architecture: Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
-The boards today use an STM32F103 or compatible chip (the Versaloon Mini and the ST-Link/V2 boards) or an STM32H5 chip.
+
+The OpenMUPP v1 probe is the main target of this project.
+The firmware has no board definition for it yet (see [Boards](#boards)).
+Until then, the WeAct STM32H523 core board is the test board for the same MCU.
+The firmware also builds for older probe hardware: the Versaloon Mini and the ST-Link/V2 boards (STM32F103 or compatible chip).
+These boards are secondary targets. They help to develop and test the code, and you can use them as probes.
+The ST-Link/V2 mini clone has a hardware test of the USB personalities, the LEDs and SWD to a target.
+The ST-Link/V2 build has no hardware test.
 The former name of this project is versaloon-ng (also versaloon-NG or versaloon-next-gen).
-A build for the ST-Link/V2 mini clone exists, with a hardware test of the USB personalities, the LEDs and SWD to a target. A build for the ST-Link/V2 exists, but it has no hardware test (see [Boards](#boards)).
-The port to the STM32H5 (the WeAct STM32H523 core board) has the Versaloon and the CMSIS-DAP personalities.
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
@@ -28,19 +36,23 @@ The [status](docs/status.md) document lists what the firmware does and what the 
 
 ## Boards
 
-| `BOARD` | Hardware | Crystal | Status |
-|---|---|---|---|
-| `mini` | Versaloon Mini | 12 MHz | target |
-| `stlinkv2` | ST-Link/V2, pin map of the official design | 8 MHz | compile-only |
-| `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | target, SWD only (no JTAG pins) |
-| `weacth523` | WeAct STM32H523 core board | 8 MHz | target, 3.3 V targets only |
+OpenMUPP v1 is the main target. The other boards are for development, tests and use as a probe.
 
-The Mini and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
-The WeAct STM32H523 core board uses an STM32H523CC.
+| `BOARD` | Hardware | Crystal | Role | Status |
+|---|---|---|---|---|
+| (none yet) | OpenMUPP v1 probe board, STM32H523CC | 24 MHz | Main target | No board definition yet |
+| `weacth523` | WeAct STM32H523 core board | 8 MHz | Test board for the OpenMUPP v1 MCU | target, 3.3 V targets only |
+| `mini` | Versaloon Mini | 12 MHz | Secondary | target |
+| `stlinkv2` | ST-Link/V2, pin map of the official design | 8 MHz | Secondary | compile-only |
+| `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | Secondary | target, SWD only (no JTAG pins) |
+
+[docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
+The board layer needs the direction pins, the split nRESET path and the power functions before the firmware can drive the board.
+The WeAct STM32H523 core board uses an STM32H523CC, as the OpenMUPP v1 probe does.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
+The Mini and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
-The probe board OpenMUPP v1 has no board definition yet. [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins and the rules for its power functions.
 
 ## Get the source code
 
