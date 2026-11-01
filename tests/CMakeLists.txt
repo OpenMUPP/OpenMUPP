@@ -189,6 +189,8 @@ vsl_personality_cache_test(default "set=versaloon default=versaloon tag=\\[\\]")
 vsl_personality_cache_test(set "set=cmsis-dap default=cmsis-dap" -DMUPP_PERSONALITIES=cmsis-dap)
 # A default that the new set does not have: an error with a hint
 vsl_personality_cache_test(stale-default "-UMUPP_DEFAULT_PERSONALITY" -DMUPP_DEFAULT_PERSONALITY=cmsis-dap -DMUPP_PERSONALITIES=versaloon)
+# An option with its old name: an error, not a different image
+vsl_personality_cache_test(old-prefix "Rename VSL_PERSONALITIES" -DVSL_PERSONALITIES=wch-link)
 
 # The size check of each image and the combined image (cmake/ImageSize.cmake,
 # cmake/CombinedImage.cmake), in script mode on fake files. Each case passes

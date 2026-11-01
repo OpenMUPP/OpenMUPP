@@ -24,6 +24,10 @@ These options select the board, the personality and the debug features:
 | `MUPP_SKIP_IMAGES` | empty | Application images to leave out of the build: a list of `standalone`, `app-8k` and `app-10k`, separated by `,` or `;`, for example `app-8k,app-10k`. Without `app-8k`, the build makes no `with-bootloader` image. On a board with a bootloader, the standalone image of a build without `app-10k` has no check against the `app-10k` limit. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the Arm GNU Toolchain. |
 
+The `MUPP_` options had the `VSL_` prefix before.
+The configure step stops with an error if it finds a `VSL_` option.
+Rename the option, and use `cmake --fresh` for a build directory from before the rename.
+
 ### Image names
 
 The tag after the board in the file name tells the personalities of the image:

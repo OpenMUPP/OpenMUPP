@@ -52,6 +52,14 @@ vsl_personality(wch-link CODE 2 SHORT wch DEFINE MUPP_WITH_WCH_LINK SOURCES
 # Declares the cache entries of the personality options. Both are empty by
 # default: empty MUPP_PERSONALITIES is versaloon.
 function(vsl_personality_options)
+    # CMake ignores an unknown option, so an old name would change the image
+    # without an error.
+    get_cmake_property(_cached CACHE_VARIABLES)
+    list(FILTER _cached INCLUDE REGEX "^VSL_")
+    if (_cached)
+        message(FATAL_ERROR "The VSL_ options are now MUPP_ options. Rename ${_cached}. "
+                "A build directory from before the rename needs --fresh.")
+    endif ()
     set(MUPP_PERSONALITIES "" CACHE STRING
             "USB personalities of the image, a list with ';' or ','. Empty: versaloon. Supported: ${MUPP_ALL_PERSONALITIES}")
     set(MUPP_DEFAULT_PERSONALITY "" CACHE STRING
