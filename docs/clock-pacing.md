@@ -49,7 +49,7 @@ An edge within the slack makes the next half period shorter by up to 32 cycles.
 
 The edges have the jitter of the wait loop: up to one pass of it.
 Thus single periods are shorter or longer than requested, but the mean is correct.
-On the Mini, the shortest SWD period at 1 MHz was 880 ns with the member pacer and 846 ns (15 % shorter) with the local pacer.
+On the Mini, the shortest SWD period at 1 MHz was 880 ns with the member pacer and 846 ns with the local pacer (15 % shorter than the nominal 1000 ns).
 The two measurements have different setups (sample rate and target), so a part of the difference is not from the code.
 
 ### Local pacer
