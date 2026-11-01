@@ -23,6 +23,7 @@ A few fields are open (see [Open questions](#open-questions)).
 The captures are in [`wch-link-captures/`](wch-link-captures/README.md), with the setup, the file names and the decoders.
 The targets are a CH32V003 (one wire), a CH32V208 (two wires) and a CH32V006 (one wire). The host tools are wlink 0.1.2 and 0.1.3, and minichlink.
 A file name in parentheses, for example (`v208-wlink-protect.pcapng`), names the capture that shows a fact.
+The `wlink flash` captures are not in this repository (see [the notes](wch-link-captures/README.md#usb-captures-pcapng)).
 
 ## USB interface
 
