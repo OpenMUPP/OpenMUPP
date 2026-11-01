@@ -87,10 +87,14 @@ jobs:
           submodules: recursive
           fetch-depth: 0
       - run: ci/compile-preset.sh ${{ matrix.preset }}
+      # Only the files with the board, the build type and the version in the name.
       - uses: actions/upload-artifact@v4
+        if: matrix.preset != 'mini-cmsis-dap-no-rv-bridge'
         with:
           name: openmupp-${{ matrix.preset }}-${{ github.sha }}
           path: |
-            build/${{ matrix.preset }}/openmupp-*.hex
-            build/${{ matrix.preset }}/openmupp-*.bin
+            build/${{ matrix.preset }}/openmupp-*-Release-*.hex
+            build/${{ matrix.preset }}/openmupp-*-Release-*.bin
+            build/${{ matrix.preset }}/openmupp-*-Debug-*.hex
+            build/${{ matrix.preset }}/openmupp-*-Debug-*.bin
           retention-days: 30
