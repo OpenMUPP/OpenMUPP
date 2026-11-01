@@ -43,8 +43,8 @@ These targets are planned. None of them works yet.
 
 | Target | Protocols | State |
 |---|---|---|
-| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover PDI, TPI, UPDI and aWire. | Preparation work done. The firmware does not exist. |
-| PIC | Programming. The board makes the high voltage (VPP) that some PIC parts need. | Planned. No design yet. |
+| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. High-voltage programming uses the VPP supply of the board. The first release does not cover PDI, TPI, UPDI and aWire. | Preparation work done. The firmware does not exist. |
+| PIC | Programming. High-voltage programming uses the VPP supply of the board. | Planned. No design yet. |
 | STM8 | SWIM (single-wire debug and programming interface) | Planned. No design yet. |
 
 The AVR personality will run at the same time as the CMSIS-DAP personality, in one image for the STM32H523 boards.
