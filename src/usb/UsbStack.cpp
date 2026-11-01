@@ -38,7 +38,7 @@ static_assert(switchRequestCode != dap::msOs20VendorCode);
 // double-buffered in each.
 static_assert(dap::outEndpoint == versaloonOutEndpoint);
 #endif
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
 // The packet memory: the buffer descriptor table, EP0 (64 bytes each way),
 // two buffers for the double-buffered Versaloon OUT endpoint, and one for
 // each other endpoint.
@@ -60,7 +60,7 @@ constexpr art::usb::CdcAcmEndpoints serialPortEndpoints{
 
 SerialNumber serialNumber;
 
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
 const protocol::DeviceInfo deviceInfo{
    .version = versionString,
    .board = board::current.name,
@@ -130,7 +130,7 @@ const art::usb::Descriptors &descriptorsOf([[maybe_unused]] Personality personal
       return dapDescriptors;
    }
 #endif
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
    return versaloonDescriptors;
 #elif defined(MUPP_WITH_CMSIS_DAP)
    return dapDescriptors;
@@ -191,7 +191,7 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
    , controller_(hardware_, events_)
    , active_(active)
    , device_(controller_, descriptorsOf(active))
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
    , versaloon_(deviceInfo, functions.bootloader, functions.versaloon->usbToXxx, functions.personalitySwitch)
 #endif
 #if defined(MUPP_WITH_CMSIS_DAP)
@@ -214,7 +214,7 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
    // Fails only for an interface range that does not fit the device: a
    // static configuration error, which the host tests catch.
    switch(personality()) {
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
    case Personality::Versaloon:
       static_cast<void>(device_.addFunction(versaloon_));
       break;

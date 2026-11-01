@@ -135,7 +135,7 @@ It also has `personality/` and `board/SettingsFlashPage.cpp`.
 `MUPP_DEFAULT_PERSONALITY` selects the personality of a multi image when no personality is stored.
 `cmake/Personalities.cmake` has the table of the personalities (see [Add a personality](cmake.md#add-a-personality)).
 
-The option defines `VSL_WITH_VERSALOON`, `MUPP_WITH_CMSIS_DAP` or `MUPP_WITH_WCH_LINK` for each personality in the image.
+The option defines `MUPP_WITH_VERSALOON`, `MUPP_WITH_CMSIS_DAP` or `MUPP_WITH_WCH_LINK` for each personality in the image.
 A multi image also gets `MUPP_MULTI_PERSONALITY` and `MUPP_DEFAULT_PERSONALITY=<code>`.
 `MUPP_MULTI_PERSONALITY` marks an image with more than one personality.
 `MUPP_DEFAULT_PERSONALITY` is the code of the personality when no personality is stored.

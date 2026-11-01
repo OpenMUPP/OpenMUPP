@@ -110,7 +110,7 @@ target_include_directories(vsl-tests PRIVATE
         ../dependencies/system-stm32/src      # peripherals/UsbDeviceTypes.h
 )
 # All personalities, so the tests see the full personality list
-target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING VSL_WITH_VERSALOON MUPP_WITH_CMSIS_DAP MUPP_WITH_WCH_LINK
+target_compile_definitions(vsl-tests PRIVATE UNIT_TESTING MUPP_WITH_VERSALOON MUPP_WITH_CMSIS_DAP MUPP_WITH_WCH_LINK
         MUPP_MULTI_PERSONALITY MUPP_REPLAY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/replay")
 target_link_libraries(vsl-tests PRIVATE doctest::doctest etl::etl)
 
@@ -126,7 +126,7 @@ function(vsl_personality_test name regex)
     set_tests_properties(personalities.${name} PROPERTIES PASS_REGULAR_EXPRESSION "${regex}")
 endfunction()
 
-vsl_personality_test(default "set=versaloon default=versaloon tag=\\[\\] defines=VSL_WITH_VERSALOON\n")
+vsl_personality_test(default "set=versaloon default=versaloon tag=\\[\\] defines=MUPP_WITH_VERSALOON\n")
 vsl_personality_test(cmsis-dap "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\] defines=MUPP_WITH_CMSIS_DAP,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=cmsis-dap)
 vsl_personality_test(wch-link "set=wch-link default=wch-link tag=\\[-wch-link\\] defines=MUPP_WITH_WCH_LINK\n"
@@ -143,11 +143,11 @@ vsl_personality_test(no-rv-bridge-multi "tag=\\[-vsl\\+dap-no-rv-bridge\\] defin
 vsl_personality_test(rv-bridge-wch-link "tag=\\[-wch-link\\] defines=MUPP_WITH_WCH_LINK\n"
         -DMUPP_PERSONALITIES=wch-link -DMUPP_CMSIS_DAP_RV_BRIDGE=ON)
 # A CMake list, in any order: the result is in canonical order
-vsl_personality_test(list "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\] defines=VSL_WITH_VERSALOON,MUPP_WITH_CMSIS_DAP,MUPP_MULTI_PERSONALITY,MUPP_DEFAULT_PERSONALITY=0,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+vsl_personality_test(list "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\] defines=MUPP_WITH_VERSALOON,MUPP_WITH_CMSIS_DAP,MUPP_MULTI_PERSONALITY,MUPP_DEFAULT_PERSONALITY=0,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         "-DMUPP_PERSONALITIES=cmsis-dap$<SEMICOLON>versaloon")
 vsl_personality_test(dap-default "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\] .*MUPP_DEFAULT_PERSONALITY=1,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap -DMUPP_DEFAULT_PERSONALITY=cmsis-dap)
-vsl_personality_test(triple "set=versaloon,cmsis-dap,wch-link default=versaloon tag=\\[-vsl\\+dap\\+wch\\] defines=VSL_WITH_VERSALOON,MUPP_WITH_CMSIS_DAP,MUPP_WITH_WCH_LINK,MUPP_MULTI_PERSONALITY,MUPP_DEFAULT_PERSONALITY=0,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+vsl_personality_test(triple "set=versaloon,cmsis-dap,wch-link default=versaloon tag=\\[-vsl\\+dap\\+wch\\] defines=MUPP_WITH_VERSALOON,MUPP_WITH_CMSIS_DAP,MUPP_WITH_WCH_LINK,MUPP_MULTI_PERSONALITY,MUPP_DEFAULT_PERSONALITY=0,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         "-DMUPP_PERSONALITIES=wch-link, versaloon ,cmsis-dap")
 vsl_personality_test(dap-wch "set=cmsis-dap,wch-link default=wch-link tag=\\[-wch\\+dap\\] .*MUPP_DEFAULT_PERSONALITY=2,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=cmsis-dap,wch-link -DMUPP_DEFAULT_PERSONALITY=wch-link)

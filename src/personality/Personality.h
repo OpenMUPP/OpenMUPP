@@ -46,7 +46,7 @@ constexpr const char *name(Personality personality) {
 constexpr bool has(Personality personality) {
    switch(personality) {
    case Personality::Versaloon:
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
       return true;
 #else
       return false;

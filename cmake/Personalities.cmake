@@ -31,7 +31,7 @@ endfunction()
 
 set(MUPP_ALL_PERSONALITIES "")
 #   versaloon  the Versaloon interface of OpenOCD
-vsl_personality(versaloon CODE 0 SHORT vsl DEFINE VSL_WITH_VERSALOON SOURCES
+vsl_personality(versaloon CODE 0 SHORT vsl DEFINE MUPP_WITH_VERSALOON SOURCES
         "src/protocol/versaloon/.*\\.cpp"
         "src/usb/VersaloonFunction\\.cpp")
 #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs

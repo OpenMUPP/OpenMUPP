@@ -40,7 +40,7 @@
 #include "protocol/cmsisdap/RvDtmTap.h"
 #endif
 #endif
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
 #include "protocol/versaloon/GpioBlock.h"
 #include "protocol/versaloon/JtagRawBlock.h"
 #include "protocol/versaloon/PowerBlock.h"
@@ -61,7 +61,7 @@ namespace {
 
 using personality::Personality;
 
-#if defined(VSL_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
 
 // The SWD and JTAG ports of the Versaloon and CMSIS-DAP personalities
 
@@ -116,7 +116,7 @@ bool isActive(Personality personality) {
 // sense in every personality.
 board::BoardPower boardPower;
 
-#if defined(VSL_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
 
 // The DELAY block busy-waits: the main loop stops for the delay, up to
 // 32.767 s. The host waits for the reply in this time. The target power
@@ -295,7 +295,7 @@ void startDap() {
 
 #endif
 
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
 
 // --- Versaloon --------------------------------------------------------
 protocol::UsbToAll usbToAll{ busyWaitDelay };
@@ -327,7 +327,7 @@ void startVersaloon() {
 #endif
 
 usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
                                            .versaloon = &versaloonDeps,
 #else
                                            .versaloon = nullptr,
@@ -350,7 +350,7 @@ usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
                                            .bootloader = bootloader,
                                            } };
 
-#if defined(VSL_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
 // A command runs only after usbStack.start(), so the USB device and the
 // bridge run. Only the Versaloon and CMSIS-DAP engines call it. As in the
 // main loop, the log and the bridge run only with the serial port.
@@ -408,7 +408,7 @@ void startProtocol() {
       startDap();
    }
 #endif
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
    if(isActive(Personality::Versaloon)) {
       startVersaloon();
    }
@@ -428,7 +428,7 @@ void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
 }
 
 void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
-#if defined(VSL_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
    // Switches the target supply off when the rail drops. Only the active
    // personality switches the supply on.
    targetPower.poll(nowMs);
@@ -438,7 +438,7 @@ void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
 // Number of JTAG and SWD errors of the active personality, for the error
 // LED. It wraps at 2^32: only the difference between two values counts.
 uint32_t probeErrorCount() {
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
    if(isActive(Personality::Versaloon)) {
       return swdBlock.errorCount();
    }

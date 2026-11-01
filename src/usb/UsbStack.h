@@ -9,7 +9,7 @@
 // function:
 //
 //   versaloon   the Versaloon vendor interface of OpenOCD,
-//               VSL_WITH_VERSALOON (usb/UsbDescriptors.h,
+//               MUPP_WITH_VERSALOON (usb/UsbDescriptors.h,
 //               usb/VersaloonFunction.h)
 //   cmsis-dap   the CMSIS-DAP v2 interface, MUPP_WITH_CMSIS_DAP
 //               (usb/CmsisDapDescriptors.h, usb/CmsisDapFunction.h)
@@ -49,7 +49,7 @@
 #if defined(MUPP_WITH_CMSIS_DAP)
 #include "usb/CmsisDapFunction.h"
 #endif
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
 #include "usb/VersaloonFunction.h"
 #endif
 #if defined(MUPP_WITH_WCH_LINK)
@@ -149,7 +149,7 @@ class UsbStack {
    // at 2^32: only the difference between two values counts.
    [[nodiscard]] uint32_t commandCount() const {
       switch(personality()) {
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
       case personality::Personality::Versaloon:
          return versaloon_.commandCount();
 #endif
@@ -211,7 +211,7 @@ class UsbStack {
    Stm32UsbDeviceController controller_;
    personality::Personality active_;
    art::usb::Device device_;
-#if defined(VSL_WITH_VERSALOON)
+#if defined(MUPP_WITH_VERSALOON)
    VersaloonFunction versaloon_;
 #endif
 #if defined(MUPP_WITH_CMSIS_DAP)

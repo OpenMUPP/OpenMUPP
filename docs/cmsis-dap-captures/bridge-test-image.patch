@@ -2,7 +2,7 @@ diff --git a/cmake/Personalities.cmake b/cmake/Personalities.cmake
 index eb7fc4c..809e9de 100644
 --- a/cmake/Personalities.cmake
 +++ b/cmake/Personalities.cmake
-@@ -37,14 +37,14 @@ vsl_personality(versaloon CODE 0 SHORT vsl DEFINE VSL_WITH_VERSALOON SOURCES
+@@ -37,14 +37,14 @@ vsl_personality(versaloon CODE 0 SHORT vsl DEFINE MUPP_WITH_VERSALOON SOURCES
  #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
  vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE MUPP_WITH_CMSIS_DAP SOURCES
          "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
@@ -31,7 +31,7 @@ index 5659d16..12c8d1a 100644
 +#include "board/BoardRvSwd.h"
  #include "protocol/cmsisdap/DapProcessor.h"
  #endif
- #if defined(VSL_WITH_VERSALOON)
+ #if defined(MUPP_WITH_VERSALOON)
 @@ -219,6 +221,10 @@ class DapPlatform final : public cmsisdap::Platform {
  };
  

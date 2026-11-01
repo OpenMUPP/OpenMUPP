@@ -5,6 +5,6 @@
 // with the define, UsbStack::hasSerialPort() tells if the active
 // personality has the port.
 
-#if defined(VSL_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
+#if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
 #define MUPP_USB_SERIAL_PORT 1
 #endif
