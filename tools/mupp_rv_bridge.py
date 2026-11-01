@@ -19,12 +19,12 @@ cycle or the next command. OpenOCD sends the command itself (cmsis-dap cmd 0x81 
 docs/cmsis-dap.md, "Bridge switch".
 
 Usage:
-    python3 vsl_rv_bridge.py on
-    python3 vsl_rv_bridge.py auto --serial 0123456789AB
-    python3 vsl_rv_bridge.py off --store
+    python3 mupp_rv_bridge.py on
+    python3 mupp_rv_bridge.py auto --serial 0123456789AB
+    python3 mupp_rv_bridge.py off --store
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
-The unit tests in test_vsl_rv_bridge.py need no pyusb and no hardware.
+The unit tests in test_mupp_rv_bridge.py need no pyusb and no hardware.
 """
 
 import argparse
@@ -32,7 +32,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import vsl_personality as vp  # noqa: E402
+import mupp_personality as vp  # noqa: E402
 
 DAP_VENDOR1 = 0x81
 # The modes of ID_DAP_Vendor1

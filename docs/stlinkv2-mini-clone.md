@@ -187,7 +187,7 @@ The image was written with SWD (OpenOCD `program`, with verify) through the SWD 
 | State LED, idle | pass: blue |
 | State LED, commands and probe errors (OpenOCD `vsllink`, no target) | pass: blue off on each command, red double flashes |
 | Write of the combined image with SWD after `stm32f1x unlock 0` | pass: verified |
-| `vsl_personality.py switch bootloader` (boot request) | pass: `0483:5740` with the product `Bootloader` |
+| `mupp_personality.py switch bootloader` (boot request) | pass: `0483:5740` with the product `Bootloader` |
 | `stm32flash -w openmupp-app-8k.bin -v -S 0x08002000`, then `-g 0x08002000` | pass: write and verify, the firmware starts as `0483:a038` |
 | Key: SWIM to GND at power-up, with a valid application | pass: `0483:5740` |
 | Power-up without the SWIM wire | pass: the firmware starts |

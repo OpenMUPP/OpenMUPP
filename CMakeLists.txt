@@ -385,7 +385,7 @@ if (CMAKE_CROSSCOMPILING)
 
         # The combined image: openmupp-bootloader and the app-8k image in
         # one file from 0x08000000, for a new board and a debug probe. The
-        # gap between the two is 0xFF (tools/vsl_combine_images.py).
+        # gap between the two is 0xFF (tools/mupp_combine_images.py).
         find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
         set(_name openmupp-with-bootloader)
         set(_file openmupp-${BOARD}${MUPP_IMAGE_TAG}-with-bootloader-${CMAKE_BUILD_TYPE}-${FIRMWARE_VERSION})
@@ -395,13 +395,13 @@ if (CMAKE_CROSSCOMPILING)
         add_custom_command(
                 OUTPUT ${_name}.bin ${_name}.hex
                 COMMAND ${CMAKE_COMMAND} -DPYTHON=${Python3_EXECUTABLE}
-                    -DTOOL=${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py
+                    -DTOOL=${PROJECT_SOURCE_DIR}/tools/mupp_combine_images.py
                     -DBOOTLOADER=${MUPP_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin
                     -DAPP=openmupp-app-8k.bin -DAPP_OFFSET=${MUPP_APP_OFFSET_app-8k}
                     -DIMAGE=${_name} -DCOPY=${_file}
                     -P ${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake
                 DEPENDS openmupp-bootloader openmupp-app-8k.elf
-                    "${PROJECT_SOURCE_DIR}/tools/vsl_combine_images.py"
+                    "${PROJECT_SOURCE_DIR}/tools/mupp_combine_images.py"
                     "${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake"
                     "${MUPP_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin"
                 BYPRODUCTS ${_file}.hex ${_file}.bin

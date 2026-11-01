@@ -10,7 +10,7 @@ nTRST and nRST, and passed with them.
 
 The script runs these steps in this order:
 
-  1. Switch to the Versaloon personality (vsl_personality.py).
+  1. Switch to the Versaloon personality (mupp_personality.py).
   2. Serial loopback on the CDC-ACM port (serial_loopback_test.py).
   3. OpenOCD with the vsllink driver, SWD and JTAG, at each speed.
   4. Switch to the CMSIS-DAP personality.
@@ -382,7 +382,7 @@ class Runner:
 
     def switch(self, personality):
         step = f"switch to {personality}"
-        ok = self.run_simple(step, self.python_tool("vsl_personality.py", *self.serial_args(), "switch", personality))
+        ok = self.run_simple(step, self.python_tool("mupp_personality.py", *self.serial_args(), "switch", personality))
         if ok:
             time.sleep(self.args.settle)  # udev needs time for the CDC-ACM port
         return ok

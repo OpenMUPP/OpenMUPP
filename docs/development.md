@@ -16,7 +16,7 @@ The build writes these files into the build directory:
 - `openmupp-<image>.map`, the linker map of each image.
 - `openmupp-bootloader/openmupp-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
 - `openmupp-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
-  `tools/vsl_combine_images.py` makes it. The tests are in `tools/test_vsl_combine_images.py`.
+  `tools/mupp_combine_images.py` makes it. The tests are in `tools/test_mupp_combine_images.py`.
 - `vsl-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 
 An image that does not fit its limit has no `.hex` and `.bin` files, and no copies (see [Images that do not fit](cmake.md#images-that-do-not-fit)).

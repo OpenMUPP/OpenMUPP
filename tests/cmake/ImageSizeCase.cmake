@@ -39,7 +39,7 @@ elseif (SCRIPT STREQUAL "combined")
     file(WRITE "${DIR}/img.hex" "old")
     file(WRITE "${DIR}/copy.bin" "old")
     file(WRITE "${DIR}/copy.hex" "old")
-    set(_args -DPYTHON=${PYTHON} -DTOOL=${CMAKE_CURRENT_LIST_DIR}/../../tools/vsl_combine_images.py
+    set(_args -DPYTHON=${PYTHON} -DTOOL=${CMAKE_CURRENT_LIST_DIR}/../../tools/mupp_combine_images.py
             -DBOOTLOADER=boot.bin -DAPP=app.bin -DAPP_OFFSET=16 -DIMAGE=img -DCOPY=copy
             -P "${_cmake_dir}/CombinedImage.cmake")
 else ()

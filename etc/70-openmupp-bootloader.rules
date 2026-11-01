@@ -1,6 +1,6 @@
 # udev rules for openmupp-bootloader and the ROM USB DFU of the STM32H5
 # (docs/firmware-update.md). They give a normal user access to the
-# bootloader, so tools/vsl_personality.py can read the product string and
+# bootloader, so tools/mupp_personality.py can read the product string and
 # the serial number of openmupp-bootloader, and dfu-util can write the
 # firmware through the ROM DFU. Copy this file to
 # /etc/udev/rules.d/, run "udevadm control --reload", and start the

@@ -267,7 +267,7 @@ This image has no serial port.
 A firmware image built with more than one personality is a multi image, for example `-DMUPP_PERSONALITIES=cmsis-dap,wch-link`.
 `MUPP_DEFAULT_PERSONALITY` selects the personality when no personality is stored.
 To change the personality, send a switch command, or use the key.
-`tools/vsl_personality.py` sends the switch request on EP0 (see [Tools](#tools)).
+`tools/mupp_personality.py` sends the switch request on EP0 (see [Tools](#tools)).
 To use the key, hold it down for 3 s until all LEDs flash.
 Then release the key.
 The dongle then resets and shows as the USB device of the next personality.
@@ -284,8 +284,8 @@ The Python scripts in `tools/` need Python 3.
 
 | Script | Function | Needs |
 |---|---|---|
-| `tools/vsl_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. `--id VID:PID` selects a dongle by its USB ID. | `pyusb` |
-| `tools/vsl_rv_bridge.py` | `off`, `on`, `auto` and `stored` set the mode of the RISC-V bridge of a CMSIS-DAP image. `--store` also stores the mode: the mode after a USB reset and at power-up (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). | `pyusb` |
+| `tools/mupp_personality.py` | `show` lists the dongles and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. `--id VID:PID` selects a dongle by its USB ID. | `pyusb` |
+| `tools/mupp_rv_bridge.py` | `off`, `on`, `auto` and `stored` set the mode of the RISC-V bridge of a CMSIS-DAP image. `--store` also stores the mode: the mode after a USB reset and at power-up (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). | `pyusb` |
 | `tools/serial_loopback_test.py` | Tests the UART bridge with a loopback wire from TX to RX (see [docs/uart-bridge.md](docs/uart-bridge.md)). | `pyserial` |
 | `tools/dap_uart_loopback_test.py` | Tests the `DAP_UART_*` commands of the CMSIS-DAP personality with a loopback wire from TX to RX (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-hardware-test)). | `pyusb`, `pyserial` for `--serial-port` |
 | `tools/flash_benchmark.py` | Measures the flash speed with OpenOCD (see [docs/development.md](docs/development.md#flash-speed-benchmark)). | OpenOCD |
