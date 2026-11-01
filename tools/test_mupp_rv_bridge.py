@@ -53,51 +53,51 @@ class MainTest(unittest.TestCase):
         return result, stdout.getvalue(), stderr.getvalue()
 
     def test_on(self):
-        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x81, 0x00])
         result, out, _ = self.run_main(["on"], [device])
         self.assertEqual(result, 0)
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x01]))])
         self.assertIn("is on", out)
 
     def test_off(self):
-        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x81, 0x00])
         self.assertEqual(self.run_main(["off"], [device])[0], 0)
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x00]))])
 
     def test_auto(self):
-        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x81, 0x00])
         result, out, _ = self.run_main(["auto"], [device])
         self.assertEqual(result, 0)
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x02]))])
         self.assertIn("is auto", out)
 
     def test_store_option(self):
-        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x81, 0x00])
         result, out, _ = self.run_main(["off", "--store"], [device])
         self.assertEqual(result, 0)
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x80]))])
         self.assertIn("is off, stored", out)
 
     def test_store_of_stored(self):
-        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0x00])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x81, 0x00])
         with self.assertRaises(SystemExit):
             self.run_main(["stored", "--store"], [device])
         self.assertEqual(device.writes, [])
 
     def test_failed_store(self):
-        device = FakeDevice(0x0403, 0x9B3C, reply=[0x81, 0xFF])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x81, 0xFF])
         result, _, err = self.run_main(["on", "--store"], [device])
         self.assertEqual(result, 1)
         self.assertIn("failed store", err)
 
     def test_image_without_bridge(self):
-        device = FakeDevice(0x0403, 0x9B3C, reply=[0xFF])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0xFF])
         result, _, err = self.run_main(["on"], [device])
         self.assertEqual(result, 1)
         self.assertIn("MUPP_CMSIS_DAP_RV_BRIDGE", err)
 
     def test_no_response(self):
-        device = FakeDevice(0x0403, 0x9B3C, reply=None)
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=None)
         result, _, err = self.run_main(["on"], [device])
         self.assertEqual(result, 1)
         self.assertIn("Cannot send", err)
@@ -110,8 +110,8 @@ class MainTest(unittest.TestCase):
         self.assertEqual(versaloon.writes, [])
 
     def test_more_than_one(self):
-        a = FakeDevice(0x0403, 0x9B3C, serial="A", reply=[0x81, 0x00])
-        b = FakeDevice(0x0403, 0x9B3C, serial="B", reply=[0x81, 0x00])
+        a = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", serial="A", reply=[0x81, 0x00])
+        b = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", serial="B", reply=[0x81, 0x00])
         self.assertEqual(self.run_main(["on"], [a, b])[0], 1)
         self.assertEqual(self.run_main(["--serial", "B", "on"], [a, b])[0], 0)
         self.assertEqual(a.writes, [])

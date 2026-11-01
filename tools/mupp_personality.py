@@ -12,7 +12,7 @@ switch command of the active personality on interface 0:
 
     Versaloon personality (0483:a038):  SWITCH_PERSONALITY [0x0E][code]
                                         reply [status], 0 = accepted
-    CMSIS-DAP personality (0403:9b3c):  ID_DAP_Vendor0 [0x80][code]
+    CMSIS-DAP personality (1209:0001):  ID_DAP_Vendor0 [0x80][code]
                                         response [0x80][status], 0 = accepted
 
 The WCH-Link personality (1209:0001 or 1a86:8010) has no switch command, so
@@ -64,18 +64,21 @@ import time
 BOOTLOADER = "bootloader"
 PERSONALITIES = {
     "versaloon": (0, ((0x0483, 0xA038),)),
-    "cmsis-dap": (1, ((0x0403, 0x9B3C),)),
+    "cmsis-dap": (1, ((0x1209, 0x0001),)),
     "wch-link": (2, ((0x1209, 0x0001), (0x1A86, 0x8010))),
     BOOTLOADER: (0xB0, ((0x0483, 0x5740), (0x0483, 0xDF11))),
 }
 
 # Other devices use these USB IDs too (the pid.codes test ID, the real
-# WCH-LinkE, the ST virtual COM port), so the product string must also match.
-# Firmware before the OpenMUPP rename has the product "Versaloon WCH-Link".
+# WCH-LinkE, the ST virtual COM port), and the cmsis-dap and wch-link
+# personalities share the pid.codes test ID, so the product string must also
+# match. Firmware before the OpenMUPP rename has the product "Versaloon
+# WCH-Link". The key is (personality, VID, PID).
 PRODUCT_STRINGS = {
-    (0x1209, 0x0001): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
-    (0x1A86, 0x8010): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
-    (0x0483, 0x5740): ("Bootloader",),
+    ("cmsis-dap", 0x1209, 0x0001): ("OpenMUPP CMSIS-DAP",),
+    ("wch-link", 0x1209, 0x0001): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
+    ("wch-link", 0x1A86, 0x8010): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
+    (BOOTLOADER, 0x0483, 0x5740): ("Bootloader",),
 }
 
 # The ROM DFU has its own serial number, not the chip UID of the firmware,
@@ -113,11 +116,9 @@ class PersonalityError(Exception):
 
 
 def personality_of(vid, pid):
-    """The personality name of a VID:PID, or None."""
-    for name, (_code, ids) in PERSONALITIES.items():
-        if (vid, pid) in ids:
-            return name
-    return None
+    """The personality name of a VID:PID, or None when it is unknown or shared."""
+    names = [name for name, (_code, ids) in PERSONALITIES.items() if (vid, pid) in ids]
+    return names[0] if len(names) == 1 else None
 
 
 def switch_request(active, target):
@@ -206,10 +207,10 @@ def find_devices(usb, serial=None, any_serial_ids=(), usb_id=None, unreadable=No
     result = []
     for name, vid, pid in candidates:
         for device in usb.core.find(find_all=True, idVendor=vid, idProduct=pid):
-            products = PRODUCT_STRINGS.get((vid, pid))
+            products = PRODUCT_STRINGS.get((name, vid, pid))
             if products is not None and usb_id is None:
                 found = get_string(usb, device, device.iProduct)
-                if found is None and unreadable is not None:
+                if found is None and unreadable is not None and device not in unreadable:
                     unreadable.append(device)
                 if found not in products:
                     continue
