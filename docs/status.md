@@ -1,7 +1,6 @@
 # Status
 
 This document lists the functions of the firmware and the state of the hardware tests.
-The [plan](plan.md) has the work items.
 The main target is the OpenMUPP v1 probe board. It has no board definition yet, so no hardware test covers it.
 The tests below run on the WeAct STM32H523 core board (the same MCU) and on the older STM32F1 boards.
 

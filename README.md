@@ -308,4 +308,3 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures ([docs/wch-link-captures/](docs/wch-link-captures/README.md)).
 - [docs/development.md](docs/development.md): build outputs, unit tests, the flash speed benchmark, code format, version, CI and branches.
 - [docs/status.md](docs/status.md): the functions of the firmware and the hardware test status.
-- [docs/plan.md](docs/plan.md): the plan and the work items.
