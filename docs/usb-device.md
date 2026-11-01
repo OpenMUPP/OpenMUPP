@@ -273,7 +273,7 @@ With `--serial`, all tools use only the dongle with this serial number.
 
 Status: the test passed on 2026-10-16.
 Probe: Mini board.
-Image: `MUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `mini` preset, `Release` build, `v0.9.0-113-gb2dab08` (`dev` with the fix of the SWD rules below).
+Image: `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link`, `mini` preset, `Release` build, `v0.9.0-113-gb2dab08` (`dev` with the fix of the SWD rules below).
 Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
 Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD and probe-rs. The test did not record the pyOCD and probe-rs versions.
 The results come from two runs of the script with this image. The serial loopback passed with `--full-uart` on `v0.9.0-112-ga8a1abe`.

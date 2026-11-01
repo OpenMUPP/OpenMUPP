@@ -265,7 +265,7 @@ The test did not show which of the two signals is necessary.
 
 Status: the test passed on 2026-10-25.
 Probe: WeAct STM32H523 core board.
-Image: `MUPP_PERSONALITIES=versaloon,cmsis-dap` (the `weacth523-dual` preset of that time), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
+Image: `VSL_PERSONALITIES=versaloon,cmsis-dap` (the `weacth523-dual` preset of that time), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
 Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
 Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
 
