@@ -67,7 +67,7 @@ The Versaloon personality is the default.
 
 | Item | Value |
 |---|---|
-| VID:PID | `0x0403:0x9B3C` |
+| VID:PID | `0x1209:0x0001` |
 | Product string | `OpenMUPP CMSIS-DAP` |
 | Interface 0 string | `OpenMUPP CMSIS-DAP v2` |
 | `bcdUSB` | `0x0201` (USB 2.0 with a BOS descriptor) |
@@ -113,7 +113,7 @@ The Versaloon personality has `bcdUSB` `0x0200` and no BOS. It still needs a Win
 A driver that was installed before for the probe, for example with Zadig, has priority over the WinUSB compatible ID.
 Thus such a probe keeps its old driver.
 Uninstall the device and its driver in the Device Manager (see [Use the probe](cmsis-dap.md#use-the-probe)).
-Windows also keeps data about the descriptors of a device in the registry key `HKLM\SYSTEM\CurrentControlSet\Control\usbflags\04039B3Crrrr`.
+Windows also keeps data about the descriptors of a device in the registry key `HKLM\SYSTEM\CurrentControlSet\Control\usbflags\12090001rrrr`.
 `rrrr` is the `bcdDevice` in hexadecimal.
 If the probe does not get WinUSB after that, delete this key and plug in the probe again.
 
@@ -125,7 +125,7 @@ It is a list of one or more of these personalities, with `;` or `,` between them
 | Personality | Code | USB interface 0 | VID:PID | Sources |
 |---|---|---|---|---|
 | `versaloon` (default) | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/versaloon/`, `boot/Bootloader.cpp` |
-| `cmsis-dap` | `1` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `0403:9B3C` | `protocol/cmsisdap/` |
+| `cmsis-dap` | `1` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `1209:0001` | `protocol/cmsisdap/` |
 | `wch-link` | `2` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `MUPP_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
 
 For example, `-DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link` builds an image with all three personalities.

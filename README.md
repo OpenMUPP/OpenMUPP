@@ -20,7 +20,7 @@ Each firmware image has one of these personalities:
 | Personality | USB ID | Debug tools | Target chips |
 |---|---|---|---|
 | Versaloon (original protocol, the default) | `0483:a038` | Unmodified OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M, SWD and JTAG |
-| CMSIS-DAP v2 | `0403:9b3c` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M, SWD and JTAG (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
+| CMSIS-DAP v2 | `1209:0001` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M, SWD and JTAG (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
 | WCH-Link | `1209:0001` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
 
 `wlink` and `minichlink` find only the WCH ID `1a86:8010`.
@@ -256,7 +256,7 @@ It shows as a USB device with the ID `0483:a038` and the product name `Versaloon
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
 
-A firmware image built with `-DMUPP_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `0403:9b3c` and the product name `OpenMUPP CMSIS-DAP`.
+A firmware image built with `-DMUPP_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `1209:0001` and the product name `OpenMUPP CMSIS-DAP`.
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 The serial port works as in the default image.
 

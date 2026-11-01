@@ -183,7 +183,7 @@ The image was written with SWD (OpenOCD `program`, with verify) through the SWD 
 | Check | Result |
 |---|---|
 | Enumeration after the reset by the debugger (fixed D+ pull-up) | pass: `0483:a038` |
-| Switch Versaloon → CMSIS-DAP → WCH-Link → Versaloon with the switch request on EP0 | pass: `0403:9b3c`, `1209:0001`, `0483:a038` |
+| Switch Versaloon → CMSIS-DAP → WCH-Link → Versaloon with the switch request on EP0 | pass: `1209:0001`, `1209:0001`, `0483:a038` |
 | State LED, idle | pass: blue |
 | State LED, commands and probe errors (OpenOCD `vsllink`, no target) | pass: blue off on each command, red double flashes |
 | Write of the combined image with SWD after `stm32f1x unlock 0` | pass: verified |

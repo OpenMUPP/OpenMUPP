@@ -83,10 +83,10 @@ DEFAULT_SWD_SPEEDS = [1000, 2000, 4000]
 DEFAULT_JTAG_SPEEDS = [1000, 9000]
 STEP_TIMEOUT_S = 300
 
-USB_IDS = {"versaloon": (0x0483, 0xA038), "cmsis-dap": (0x0403, 0x9B3C)}
+USB_IDS = {"versaloon": (0x0483, 0xA038), "cmsis-dap": (0x1209, 0x0001)}
 OPENOCD_INTERFACES = {
     "versaloon": ["-f", "interface/vsllink.cfg"],
-    "cmsis-dap": ["-f", "interface/cmsis-dap.cfg", "-c", "cmsis-dap vid_pid 0x0403 0x9b3c"],
+    "cmsis-dap": ["-f", "interface/cmsis-dap.cfg", "-c", "cmsis-dap vid_pid 0x1209 0x0001"],
 }
 CPU_TAP_IDCODE = "0x3ba00477"
 DEFAULT_PYOCD_TARGET = "stm32f103rc"

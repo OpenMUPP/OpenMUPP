@@ -9,7 +9,7 @@ This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode for t
 
 | Item | Value |
 |---|---|
-| Probe | Versaloon Mini, multi image (`versaloon,cmsis-dap,wch-link`) with the `cmsis-dap` personality active, USB ID `0403:9b3c`, CMSIS-DAP protocol version 2.1.0 |
+| Probe | Versaloon Mini, multi image (`versaloon,cmsis-dap,wch-link`) with the `cmsis-dap` personality active, USB ID `1209:0001`, CMSIS-DAP protocol version 2.1.0 |
 | Firmware commit | Not recorded. The image is a local build of `dev` |
 | Target | None. TCK, TMS, TDI and TDO have no connection, so TDO reads all ones |
 | OpenOCD | `0.12.0+dev-01707-gf7037392b` (local build, 2026-10-24), `interface/cmsis-dap.cfg` and [ch32v-minimal.cfg](ch32v-minimal.cfg) |
@@ -134,7 +134,7 @@ Image A has no marker: its failed accesses show the data of the last good read (
 
 | Item | Value |
 |---|---|
-| Probe | Versaloon Mini, test image (`mini-cmsis-dap`, `app-10k`), USB ID `0403:9b3c` |
+| Probe | Versaloon Mini, test image (`mini-cmsis-dap`, `app-10k`), USB ID `1209:0001` |
 | Target | CH32V208 on two wires (SWDIO, SWCLK), or CH32V006 on one wire (SWDIO). Each target has its own supply |
 | OpenOCD | `0.12.0+dev-01707-gf7037392b` (local build), `interface/cmsis-dap.cfg` and [ch32v-minimal.cfg](ch32v-minimal.cfg) |
 | probe-rs | 0.32.0 |

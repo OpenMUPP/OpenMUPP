@@ -30,7 +30,7 @@ All boards build with this value.
 
 The `cmsis-dap` image has these properties:
 
-- USB interface 0 is CMSIS-DAP v2, with `0403:9B3C`. The Versaloon interface is not in the image.
+- USB interface 0 is CMSIS-DAP v2, with `1209:0001`. The Versaloon interface is not in the image.
 - The CDC-ACM serial port, the UART bridge, the debug log and the LEDs are as in the Versaloon image.
 - The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
@@ -60,14 +60,14 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 
 ## Use the probe
 
-The probe has the USB ID `0403:9B3C` and the product name `OpenMUPP CMSIS-DAP`.
+The probe has the USB ID `1209:0001` and the product name `OpenMUPP CMSIS-DAP`.
 The host tools find the CMSIS-DAP v2 interface by the text `CMSIS-DAP` in its interface string.
 
 On Linux, a udev rule gives a normal user access to the probe.
 For example, put this line into `/etc/udev/rules.d/99-versaloon-cmsis-dap.rules`:
 
 ```text
-SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="9b3c", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP CMSIS-DAP", MODE="0660", TAG+="uaccess"
 ```
 
 Then reload the rules with `udevadm control --reload` and plug in the probe again.
@@ -86,7 +86,7 @@ Then plug in the probe again.
 OpenOCD:
 
 ```sh
-openocd -f interface/cmsis-dap.cfg -c "cmsis-dap vid_pid 0x0403 0x9b3c" -f target/stm32f1x.cfg
+openocd -f interface/cmsis-dap.cfg -c "cmsis-dap vid_pid 0x1209 0x0001" -f target/stm32f1x.cfg
 ```
 
 Older OpenOCD versions use the command `cmsis_dap_vid_pid`.
@@ -438,7 +438,7 @@ The bridge adds about 6.4 KB to a `cmsis-dap` image.
 | `ch32v00x-cmsis-dap.cfg` | CH32V002, CH32V004, CH32V005, CH32V006, CH32V007 | One wire | `0x1000` (4 KB, the CH32V002) |
 | `ch32v20x-cmsis-dap.cfg` | CH32V20x | Two wires | `0x2800` (10 KB, the CH32V203x6) |
 
-Each config sources `ch32v-cmsis-dap-bridge.cfg`. This file selects the adapter (`0403:9b3c`, JTAG) and creates the TAP and the `riscv` target.
+Each config sources `ch32v-cmsis-dap-bridge.cfg`. This file selects the adapter (`1209:0001`, JTAG) and creates the TAP and the `riscv` target.
 The work area starts at `0x20000000`, without backup.
 The default `WORKAREASIZE` is the RAM of the smallest part. Set the RAM of your part before the config, for example 8 KB on the CH32V006:
 
@@ -980,7 +980,7 @@ Enumeration: the product string is `Versaloon CMSIS-DAP`.
 Interface 0 is a vendor class interface with the string `Versaloon CMSIS-DAP v2`.
 The `cdc_acm` driver binds interfaces 1 and 2 and gives `/dev/ttyACM0`.
 The `ftdi_sio` driver does not bind to the device.
-OpenOCD opens the probe with VID:PID 0x0403:0x9b3c.
+OpenOCD opens the probe with VID:PID 0x1209:0x0001.
 
 Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with `DAP_TransferAbort`):
 
