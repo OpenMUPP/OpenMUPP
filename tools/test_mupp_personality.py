@@ -19,9 +19,13 @@ import mupp_personality as vp  # noqa: E402
 class PersonalityOfTest(unittest.TestCase):
     def test_known_ids(self):
         self.assertEqual(vp.personality_of(0x0483, 0xA038), "versaloon")
-        self.assertEqual(vp.personality_of(0x0403, 0x9B3C), "cmsis-dap")
-        self.assertEqual(vp.personality_of(0x1209, 0x0001), "wch-link")
         self.assertEqual(vp.personality_of(0x1A86, 0x8010), "wch-link")
+
+    def test_legacy_cmsis_dap_id(self):
+        self.assertEqual(vp.personality_of(0x0403, 0x9B3C), "cmsis-dap")
+
+    def test_shared_id_is_unknown(self):
+        self.assertIsNone(vp.personality_of(0x1209, 0x0001))
 
     def test_bootloader_id(self):
         self.assertEqual(vp.personality_of(0x0483, 0x5740), "bootloader")
@@ -158,12 +162,15 @@ def fake_usb(devices):
 class FindDevicesTest(unittest.TestCase):
     def test_wch_link_needs_the_product_string(self):
         ours = FakeDevice(0x1209, 0x0001, "OpenMUPP WCH-Link")
+        dap = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP")
         old = FakeDevice(0x1209, 0x0001, "Versaloon WCH-Link")
         other = FakeDevice(0x1209, 0x0001, "Some test device")
         real = FakeDevice(0x1A86, 0x8010, "WCH-Link")
         ours_wch_id = FakeDevice(0x1A86, 0x8010, "OpenMUPP WCH-Link")
-        found = vp.find_devices(fake_usb([ours, old, other, real, ours_wch_id]))
-        self.assertEqual(found, [("wch-link", ours), ("wch-link", old), ("wch-link", ours_wch_id)])
+        found = vp.find_devices(fake_usb([ours, dap, old, other, real, ours_wch_id]))
+        self.assertEqual(
+            found, [("cmsis-dap", dap), ("wch-link", ours), ("wch-link", old), ("wch-link", ours_wch_id)]
+        )
 
     def test_unreadable_product_string(self):
         for error in (FakeUsbError("Access denied", -3, errno.EACCES), NotImplementedError("not supported"), ValueError()):
@@ -203,7 +210,7 @@ class FindDevicesTest(unittest.TestCase):
         denied = FakeDevice(0x1209, 0x0001, FakeUsbError("Access denied", -3, errno.EACCES))
         unreadable = []
         found = vp.find_devices(fake_usb([other, denied]), usb_id=(0x1209, 0x0001), unreadable=unreadable)
-        self.assertEqual(found, [("wch-link", other), ("wch-link", denied)])
+        self.assertEqual(found, [("unknown", other), ("unknown", denied)])
         self.assertEqual(unreadable, [])
 
     def test_usb_id_selects_only_this_id(self):
@@ -213,7 +220,7 @@ class FindDevicesTest(unittest.TestCase):
 
     def test_serial(self):
         a = FakeDevice(0x0483, 0xA038, serial="A")
-        b = FakeDevice(0x0403, 0x9B3C, serial="B")
+        b = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", serial="B")
         self.assertEqual(vp.find_devices(fake_usb([a, b]), "B"), [("cmsis-dap", b)])
 
 
@@ -308,7 +315,7 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(self.waited, [("cmsis-dap", "SN1")])
 
     def test_ep0_no_status_stage_waits(self):
-        device = FakeDevice(0x0403, 0x9B3C, ctrl_error=FakeUsbError("No such device", -4, errno.ENODEV))
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", ctrl_error=FakeUsbError("No such device", -4, errno.ENODEV))
         self.assertEqual(self.switch(device, "versaloon"), 0)
         self.assertEqual(device.writes, [])
         self.assertEqual(self.waited, [("versaloon", "SN1")])
@@ -329,7 +336,7 @@ class CommandSwitchTest(unittest.TestCase):
             NotImplementedError("Operation not supported"),
         )
         for error in errors:
-            device = FakeDevice(0x0403, 0x9B3C, ctrl_error=error, reply=[0x80, 0x00])
+            device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", ctrl_error=error, reply=[0x80, 0x00])
             self.assertEqual(self.switch(device, "versaloon"), 1)
             self.assertEqual(device.writes, [])
             self.assertEqual(self.waited, [])
@@ -355,7 +362,7 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(self.waited, [("cmsis-dap", "SN1")])
 
     def test_fallback_cmsis_dap(self):
-        device = FakeDevice(0x0403, 0x9B3C, ctrl_error=stall(), reply=[0x80, 0x00])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", ctrl_error=stall(), reply=[0x80, 0x00])
         self.assertEqual(self.switch(device, "versaloon"), 0)
         self.assertEqual(device.writes, [(vp.OUT_ENDPOINT, bytes([0x80, 0x00]))])
 
@@ -370,12 +377,12 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(self.waited, [])
 
     def test_fallback_no_reply_waits(self):
-        device = FakeDevice(0x0403, 0x9B3C, ctrl_error=stall(), reply=None)
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", ctrl_error=stall(), reply=None)
         self.assertEqual(self.switch(device, "versaloon"), 0)
         self.assertEqual(self.waited, [("versaloon", "SN1")])
 
     def test_bootloader_ep0_request(self):
-        for vid, pid, product in ((0x0483, 0xA038, ""), (0x0403, 0x9B3C, ""), (0x1209, 0x0001, "OpenMUPP WCH-Link")):
+        for vid, pid, product in ((0x0483, 0xA038, ""), (0x1209, 0x0001, "OpenMUPP CMSIS-DAP"), (0x1209, 0x0001, "OpenMUPP WCH-Link")):
             self.waited = []
             device = FakeDevice(vid, pid, product)
             self.assertEqual(self.switch(device, "bootloader"), 0)
@@ -390,7 +397,7 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(self.waited, [("bootloader", "SN1")])
 
     def test_bootloader_fallback_cmsis_dap_refused(self):
-        device = FakeDevice(0x0403, 0x9B3C, ctrl_error=stall(), reply=[0xFF])
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", ctrl_error=stall(), reply=[0xFF])
         self.assertEqual(self.switch(device, "bootloader"), 1)
         self.assertEqual(device.writes, [(vp.OUT_ENDPOINT, bytes([0x80, 0xB0]))])
         self.assertEqual(self.waited, [])

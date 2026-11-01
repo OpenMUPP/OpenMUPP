@@ -144,7 +144,7 @@ class ArgsTest(unittest.TestCase):
         args.image = hw.make_image(256)
         cmd = hw.openocd_command(args, "cmsis-dap", "jtag", 9000, "c.tcl", "C:\\img.bin", "d.bin")
         self.assertEqual(cmd[:3], ["openocd", "-s", "scripts"])
-        self.assertIn("cmsis-dap vid_pid 0x0403 0x9b3c", cmd)
+        self.assertIn("cmsis-dap vid_pid 0x1209 0x0001", cmd)
         self.assertIn("transport select jtag", cmd)
         self.assertIn("mupp_run {C:/img.bin} {d.bin} 256 9000", cmd)
         self.assertEqual(cmd[-1], "shutdown")

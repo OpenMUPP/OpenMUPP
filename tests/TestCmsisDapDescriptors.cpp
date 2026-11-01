@@ -98,8 +98,8 @@ TEST_CASE("The CMSIS-DAP device descriptor has the CMSIS-DAP identity and the IA
    CHECK(d[5] == 0x02);
    CHECK(d[6] == 0x01);
    CHECK(d[7] == 64);
-   CHECK(word(&d[8]) == 0x0403);
-   CHECK(word(&d[10]) == 0x9B3C);
+   CHECK(word(&d[8]) == 0x1209);
+   CHECK(word(&d[10]) == 0x0001);
    CHECK(word(&d[12]) == (usb::toBcd(VERSION_MAJOR) << 8 | usb::toBcd(VERSION_MINOR)));
    CHECK(d[14] == usb::dap::stringManufacturer);
    CHECK(d[15] == usb::dap::stringProduct);

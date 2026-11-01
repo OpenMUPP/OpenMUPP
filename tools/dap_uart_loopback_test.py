@@ -12,7 +12,7 @@ Each test also checks the owner switch: while the DAP commands own the UART,
 the serial port gets no data (use --serial-port to check this).
 
 The script talks to interface 0 (CMSIS-DAP v2, bulk endpoints 0x03 and
-0x82) of the dongle with VID:PID 0403:9B3C. See docs/cmsis-dap.md, "UART
+0x82) of the dongle with VID:PID 1209:0001. See docs/cmsis-dap.md, "UART
 commands".
 
 Usage:
@@ -30,7 +30,7 @@ import struct
 import sys
 import time
 
-VID, PID = 0x0403, 0x9B3C
+VID, PID = 0x1209, 0x0001
 INTERFACE = 0
 OUT_ENDPOINT = 0x03
 IN_ENDPOINT = 0x82

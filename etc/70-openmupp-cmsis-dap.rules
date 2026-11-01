@@ -1,0 +1,7 @@
+# udev rules for the cmsis-dap personality of OpenMUPP (docs/cmsis-dap.md).
+# They give a normal user access to the probe. Copy this file to
+# /etc/udev/rules.d/, run "udevadm control --reload", and plug in the probe again.
+
+# The number is below 73: systemd applies the uaccess tag in 73-seat-late.rules.
+# The test ID of pid.codes. Many devices share it, so the rule also checks the product string.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP CMSIS-DAP", MODE="0660", TAG+="uaccess"

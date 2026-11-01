@@ -33,8 +33,8 @@
 
 namespace usb::dap {
 
-inline constexpr uint16_t vendorId = 0x0403;
-inline constexpr uint16_t productId = 0x9B3C;
+inline constexpr uint16_t vendorId = 0x1209;
+inline constexpr uint16_t productId = 0x0001;
 
 inline constexpr uint8_t dapInterface = 0;
 inline constexpr uint8_t outEndpoint = versaloonOutEndpoint;
