@@ -28,7 +28,7 @@ The CMSIS-DAP personality is a CMSIS-DAP v2 probe:
 - It switches the 3.3 V target supply and reads the target voltage with `ID_DAP_Vendor2`, with the protections of the `POWER` block (see [cmsis-dap.md](cmsis-dap.md#target-power)).
 - It has no SWO. The `DAP_UART_*` commands can take the UART from the CDC-ACM serial port (see [cmsis-dap.md](cmsis-dap.md#uart-commands)).
 
-A multi image has more than one personality, for example Versaloon and CMSIS-DAP (the old dual image).
+A multi image has more than one personality, for example Versaloon and CMSIS-DAP.
 A switch command or the key selects the next personality, and a flash page stores it.
 
 The WCH-Link personality is a WCH-LinkE in RISC-V mode:

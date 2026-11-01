@@ -160,7 +160,7 @@ The names of the image files have the text `-cmsis-dap` after the board name.
 ### Multi image
 
 A multi image has more than one personality, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
-The old dual image is the multi image with the Versaloon and the CMSIS-DAP personalities.
+The dual image is the multi image with the Versaloon and the CMSIS-DAP personalities.
 The `-dual` presets now build the multi image with the CMSIS-DAP and the WCH-Link personalities.
 One personality is active after each start.
 The active personality has its descriptors, its USB function and its commands, as in the image with one personality.
