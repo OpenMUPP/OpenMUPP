@@ -22,8 +22,8 @@ using rvswd::RvSwdEngine;
 using rvswd::Status;
 using rvswd::Width;
 using rvswd::Wire;
-using vsltest::MockDebugModule;
-using vsltest::MockRvSwdTarget;
+using mupptest::MockDebugModule;
+using mupptest::MockRvSwdTarget;
 
 namespace dm = rvswd::dm;
 

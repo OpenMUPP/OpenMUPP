@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace vsltest {
+namespace mupptest {
 
 using art::usb::DescriptorType;
 using art::usb::test::FakeDeviceController;
@@ -228,4 +228,4 @@ class DapBench {
    art::usb::Function cdc_;
 };
 
-} // namespace vsltest
+} // namespace mupptest

@@ -39,7 +39,7 @@
 #include "MockRvSwdTarget.h"
 #include "rvswd/DebugModule.h"
 
-namespace vsltest {
+namespace mupptest {
 
 class MockDebugModule {
    public:
@@ -458,4 +458,4 @@ class MockDebugModule {
    uint32_t scratch_{ 0 };
 };
 
-} // namespace vsltest
+} // namespace mupptest

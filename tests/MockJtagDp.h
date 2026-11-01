@@ -28,7 +28,7 @@
 
 #include "MockJtagPins.h"
 
-namespace vsltest {
+namespace mupptest {
 
 namespace tapIr {
 inline constexpr uint32_t abort = 0x08;
@@ -326,4 +326,4 @@ class MockJtagChain final : public JtagTarget {
    bool tdo_{ false };
 };
 
-} // namespace vsltest
+} // namespace mupptest

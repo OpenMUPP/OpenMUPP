@@ -23,10 +23,10 @@ namespace {
 using Bytes = std::vector<uint8_t>;
 using V = std::vector<uint8_t>;
 using cmsisdap::Processor;
-using vsltest::MockJtagChain;
+using mupptest::MockJtagChain;
 using Access = MockJtagChain::Access;
 using State = MockJtagChain::State;
-using Pins = vsltest::MockJtagPins<>;
+using Pins = mupptest::MockJtagPins<>;
 
 // The DAP_Transfer request bytes
 constexpr uint8_t readDpidr = 0x02;
@@ -610,7 +610,7 @@ TEST_CASE("DAP JTAG: a sequence makes the next transfer write the IR") {
    CHECK(b.chain.irScans == 1);
    // Test-Logic-Reset loads IDCODE.
    CHECK(b.run({ 0x12, 0x08, 0x3F }) == V{ 0x12, 0x00 });
-   CHECK(b.chain.ir(0) == vsltest::tapIr::idcode);
+   CHECK(b.chain.ir(0) == mupptest::tapIr::idcode);
    CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == cat({ { 0x05, 0x01, 0x01 }, word(b.chain.dpidr) }));
    CHECK(b.chain.irScans == 2);
    CHECK(b.run({ 0x14, 0x01, 0x01, 0x00 }) == V{ 0x14, 0x00 });
@@ -652,7 +652,7 @@ TEST_CASE("DAP JTAG: the idle cycles of DAP_TransferConfigure follow each DR sca
 }
 
 TEST_CASE("DAP JTAG: the fast path does the same transfers") {
-   using Spi = vsltest::MockJtagSpi<Pins>;
+   using Spi = mupptest::MockJtagSpi<Pins>;
    BasicBench<jtag::FastPort<Pins, Spi>> b;
    // 4.5 MHz: SPI divider 8
    CHECK(b.run(cat({ { 0x11 }, word(4'500'000) })) == V{ 0x11, 0x00 });

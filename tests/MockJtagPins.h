@@ -12,7 +12,7 @@
 #include <deque>
 #include <vector>
 
-namespace vsltest {
+namespace mupptest {
 
 class JtagTarget {
    public:
@@ -139,4 +139,4 @@ class MockJtagPins {
    uint32_t dataWritten_{ 0 };
 };
 
-} // namespace vsltest
+} // namespace mupptest

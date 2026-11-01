@@ -31,7 +31,7 @@
 
 #include "protocol/SwdPort.h"
 
-namespace vsltest {
+namespace mupptest {
 
 class MockSwdPins {
    public:
@@ -301,4 +301,4 @@ class MockSwdPins {
    unsigned highCycles_{ 0 };
 };
 
-} // namespace vsltest
+} // namespace mupptest

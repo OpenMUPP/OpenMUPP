@@ -23,7 +23,7 @@
 #include <optional>
 #include <vector>
 
-namespace vsltest {
+namespace mupptest {
 
 class FakeWchPlatform final : public wchlink::Platform {
    public:
@@ -165,4 +165,4 @@ class WchLinkBench {
    art::usb::Device device_;
 };
 
-} // namespace vsltest
+} // namespace mupptest

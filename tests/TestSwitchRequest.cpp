@@ -26,8 +26,8 @@ namespace {
 using art::usb::test::setupPacket;
 using personality::Personality;
 using personality::PersonalitySwitch;
-using vsltest::switchesTo;
-using vsltest::switchRequest;
+using mupptest::switchesTo;
+using mupptest::switchRequest;
 
 } // namespace
 
@@ -38,7 +38,7 @@ TEST_CASE("The switch request has the code of SWITCH_PERSONALITY and not the MS 
 
 TEST_CASE("The switch request in the Versaloon personality") {
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
-   vsltest::Bench bench(nullptr, nullptr, &personalitySwitch);
+   mupptest::Bench bench(nullptr, nullptr, &personalitySwitch);
    bench.enumerate();
 
    CHECK_FALSE(switchRequest(bench.controller(), personality::toCode(Personality::WchLink)).stalled);
@@ -47,7 +47,7 @@ TEST_CASE("The switch request in the Versaloon personality") {
 
 TEST_CASE("The switch request to the active personality cancels a pending switch") {
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
-   vsltest::Bench bench(nullptr, nullptr, &personalitySwitch);
+   mupptest::Bench bench(nullptr, nullptr, &personalitySwitch);
    bench.enumerate();
 
    CHECK_FALSE(switchRequest(bench.controller(), personality::toCode(Personality::CmsisDap)).stalled);
@@ -58,7 +58,7 @@ TEST_CASE("The switch request to the active personality cancels a pending switch
 
 TEST_CASE("A bad switch request stalls and does not switch") {
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
-   vsltest::Bench bench(nullptr, nullptr, &personalitySwitch);
+   mupptest::Bench bench(nullptr, nullptr, &personalitySwitch);
    bench.enumerate();
    auto &controller = bench.controller();
 
@@ -117,7 +117,7 @@ TEST_CASE("The switch request stalls for a personality that is not in the image"
 TEST_CASE("The switch request with the bootloader code requests the bootloader") {
    boot::BootloaderEntry bootloader;
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
-   vsltest::Bench bench(&bootloader, nullptr, &personalitySwitch);
+   mupptest::Bench bench(&bootloader, nullptr, &personalitySwitch);
    bench.enumerate();
 
    CHECK_FALSE(switchRequest(bench.controller(), boot::bootloaderCode).stalled);
@@ -129,7 +129,7 @@ TEST_CASE("The switch request with the bootloader code requests the bootloader")
 
 TEST_CASE("An image with one personality and a bootloader takes only the bootloader code") {
    boot::BootloaderEntry bootloader;
-   vsltest::Bench bench(&bootloader);
+   mupptest::Bench bench(&bootloader);
    bench.enumerate();
    auto &controller = bench.controller();
 
@@ -143,7 +143,7 @@ TEST_CASE("An image with one personality and a bootloader takes only the bootloa
 
 TEST_CASE("The bootloader code stalls without a bootloader") {
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
-   vsltest::Bench bench(nullptr, nullptr, &personalitySwitch);
+   mupptest::Bench bench(nullptr, nullptr, &personalitySwitch);
    bench.enumerate();
 
    CHECK(switchRequest(bench.controller(), boot::bootloaderCode).stalled);
@@ -152,7 +152,7 @@ TEST_CASE("The bootloader code stalls without a bootloader") {
 
 TEST_CASE("Without a next handler, another vendor request stalls") {
    PersonalitySwitch personalitySwitch{ Personality::Versaloon };
-   vsltest::Bench bench(nullptr, nullptr, &personalitySwitch);
+   mupptest::Bench bench(nullptr, nullptr, &personalitySwitch);
    bench.enumerate();
 
    CHECK(bench.controller()

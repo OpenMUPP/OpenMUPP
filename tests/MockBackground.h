@@ -10,7 +10,7 @@
 
 #include "protocol/Background.h"
 
-namespace vsltest {
+namespace mupptest {
 
 class MockBackground final : public protocol::Background {
    public:
@@ -42,4 +42,4 @@ class MockBackground final : public protocol::Background {
    std::function<Call()> sample_;
 };
 
-} // namespace vsltest
+} // namespace mupptest

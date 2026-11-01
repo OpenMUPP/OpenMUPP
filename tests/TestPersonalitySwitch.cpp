@@ -14,7 +14,7 @@
 
 using personality::Personality;
 using personality::PersonalitySwitch;
-using vsltest::DapBench;
+using mupptest::DapBench;
 using Bytes = std::vector<uint8_t>;
 
 namespace {

@@ -18,8 +18,8 @@ namespace {
 
 using jtag::FastPort;
 using jtag::spiShiftFor;
-using Pins = vsltest::MockJtagPins<>;
-using Spi = vsltest::MockJtagSpi<Pins>;
+using Pins = mupptest::MockJtagPins<>;
+using Spi = mupptest::MockJtagSpi<Pins>;
 
 constexpr uint32_t spiClockHz = 36'000'000;
 
@@ -113,8 +113,8 @@ TEST_CASE("JTAG fast path: CONFIG selects the SPI divider or bit-bang") {
    CHECK(f.port.spiShift() == 0);
    CHECK(f.port.timing().clocking == jtag::Clocking::Adaptive);
 
-   vsltest::MockJtagPins<false> noRtck;
-   FastPort<vsltest::MockJtagPins<false>, vsltest::MockJtagSpi<vsltest::MockJtagPins<false>>> port(noRtck);
+   mupptest::MockJtagPins<false> noRtck;
+   FastPort<mupptest::MockJtagPins<false>, mupptest::MockJtagSpi<mupptest::MockJtagPins<false>>> port(noRtck);
    REQUIRE(port.setSpeed(9000));
    CHECK_FALSE(port.setSpeed(0));
    CHECK(port.spiShift() == 2);
@@ -213,8 +213,8 @@ TEST_CASE("JTAG fast path: same TDO as bit-bang over several SPI chunks") {
 
 TEST_CASE("JTAG fast path: a long shift calls the background between SPI chunks, with TCK high") {
    Pins pins;
-   vsltest::MockBackground background(
-   [&pins] { return vsltest::MockBackground::Call{ pins.time, pins.tckLevel(), pins.rising.size() }; });
+   mupptest::MockBackground background(
+   [&pins] { return mupptest::MockBackground::Call{ pins.time, pins.tckLevel(), pins.rising.size() }; });
    FastPort<Pins, Spi> port(pins, &background);
    const Spi &spi = port.spi();
    port.init();

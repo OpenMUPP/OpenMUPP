@@ -109,9 +109,9 @@ struct Dtm {
       , tap(target) {
    }
 
-   vsltest::MockRvSwdTarget pins;
-   vsltest::MockDebugModule dm;
-   wchlink::RvSwdTarget<vsltest::MockRvSwdTarget> target;
+   mupptest::MockRvSwdTarget pins;
+   mupptest::MockDebugModule dm;
+   wchlink::RvSwdTarget<mupptest::MockRvSwdTarget> target;
    RvDtmTap tap;
 };
 
@@ -604,7 +604,7 @@ bool bitOf(const Bytes &bytes, std::size_t offset, uint32_t index) {
 // The CMSIS-DAP processor with the emulated TAP as its JTAG port
 struct Bridge {
    Bridge()
-      : info(vsltest::dapTestInfo())
+      : info(mupptest::dapTestInfo())
       , dap(swd, gpio, platform, info, &tap) {
    }
 
@@ -667,8 +667,8 @@ struct Bridge {
 
    Dtm dtm;
    RvDtmTap &tap{ dtm.tap };
-   vsltest::FakeDapSwd swd;
-   vsltest::FakeDapGpio gpio;
+   mupptest::FakeDapSwd swd;
+   mupptest::FakeDapGpio gpio;
    RunningPlatform platform;
    cmsisdap::DeviceInfo info;
    cmsisdap::Processor dap;

@@ -20,7 +20,7 @@ struct Dap {
    explicit Dap(bool withPower = true)
       : delay(hardware)
       , power(hardware, delay)
-      , info(vsltest::dapTestInfo())
+      , info(mupptest::dapTestInfo())
       , dap(swd, gpio, platform, info, nullptr, nullptr, nullptr, nullptr, nullptr, withPower ? &power : nullptr) {
    }
 
@@ -38,9 +38,9 @@ struct Dap {
    FakePower hardware;
    FakeDelay delay;
    TargetPower power;
-   vsltest::FakeDapSwd swd;
-   vsltest::FakeDapGpio gpio;
-   vsltest::FakeDapPlatform platform;
+   mupptest::FakeDapSwd swd;
+   mupptest::FakeDapGpio gpio;
+   mupptest::FakeDapPlatform platform;
    cmsisdap::DeviceInfo info;
    cmsisdap::Processor dap;
 };

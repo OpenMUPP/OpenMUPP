@@ -27,11 +27,11 @@ using uart::DataBits;
 using uart::FrameFormat;
 using uart::Parity;
 using uart::StopBits;
-using vsltest::cdcPacketSize;
-using vsltest::pattern;
-using vsltest::ringCapacity;
-using vsltest::ringSize;
-using Bench = vsltest::UartBench;
+using mupptest::cdcPacketSize;
+using mupptest::pattern;
+using mupptest::ringCapacity;
+using mupptest::ringSize;
+using Bench = mupptest::UartBench;
 
 constexpr FrameFormat format115200{ 115200, DataBits::Eight, Parity::None, StopBits::One };
 constexpr FrameFormat format9600{ 9600, DataBits::Seven, Parity::Even, StopBits::Two };
@@ -419,7 +419,7 @@ struct SerialTarget {
    }
 };
 
-using JtagPins = vsltest::MockJtagPins<false>;
+using JtagPins = mupptest::MockJtagPins<false>;
 
 // A shift of 512 bits at 10 kHz: 51 ms, 9 times the RX ring of the bench
 // (63 bytes, 5.5 ms). Returns the bytes that the target sent.
@@ -444,7 +444,7 @@ TEST_CASE("UartBridge loses no UART data during a long JTAG shift with the seria
    JtagPins pins;
    SerialTarget target(pins.time);
    std::vector<uint8_t> received;
-   vsltest::MockBackground background([&pins] { return vsltest::MockBackground::Call{ pins.time, pins.tckLevel(), 0 }; });
+   mupptest::MockBackground background([&pins] { return mupptest::MockBackground::Call{ pins.time, pins.tckLevel(), 0 }; });
    // The serial service: the RX interrupt has run up to now, the bridge
    // moves the data, and the host reads the IN packets.
    background.onService = [&] {

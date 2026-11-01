@@ -12,7 +12,7 @@
 
 #include <cstdint>
 
-namespace vsltest {
+namespace mupptest {
 
 // The host sends the switch request with no data stage.
 inline art::usb::test::FakeDeviceController::ControlResult
@@ -32,4 +32,4 @@ inline bool switchesTo(personality::PersonalitySwitch &personalitySwitch, person
    return !personalitySwitch.isDue(0) && personalitySwitch.isDue(personality::PersonalitySwitch::replyDelayMs);
 }
 
-} // namespace vsltest
+} // namespace mupptest

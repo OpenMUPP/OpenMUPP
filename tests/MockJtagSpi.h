@@ -10,7 +10,7 @@
 
 #include "MockJtagPins.h"
 
-namespace vsltest {
+namespace mupptest {
 
 template <typename Pins>
 class MockJtagSpi {
@@ -65,4 +65,4 @@ class MockJtagSpi {
    uint8_t shift_{ 0 };
 };
 
-} // namespace vsltest
+} // namespace mupptest

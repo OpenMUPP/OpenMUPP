@@ -17,9 +17,9 @@ namespace {
 
 using art::usb::DescriptorType;
 using art::usb::EndpointType;
-using vsltest::DapBench;
-using vsltest::dapIn;
-using vsltest::dapOut;
+using mupptest::DapBench;
+using mupptest::dapIn;
+using mupptest::dapOut;
 using Bytes = std::vector<uint8_t>;
 
 Bytes bytes(const auto &descriptor) {
@@ -52,7 +52,7 @@ TEST_CASE("Windows reads the BOS and the MS OS 2.0 descriptor set before SET_CON
    DapBench bench;
    auto &controller = bench.controller();
    controller.busReset();
-   bench.request(vsltest::setAddress, 5);
+   bench.request(mupptest::setAddress, 5);
 
    // The BOS header, then the whole BOS
    const auto header = bench.descriptor(DescriptorType::Bos, 0, 5).data;
@@ -63,7 +63,7 @@ TEST_CASE("Windows reads the BOS and the MS OS 2.0 descriptor set before SET_CON
    // The vendor request with the vendor code of the platform capability:
    // bmRequestType 0xC0, wIndex 7. The set is longer than one packet.
    bool ok = false;
-   const auto set = controller.controlIn(vsltest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
+   const auto set = controller.controlIn(mupptest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
                                                               static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())),
                                          &ok);
    CHECK(ok);
@@ -73,9 +73,9 @@ TEST_CASE("Windows reads the BOS and the MS OS 2.0 descriptor set before SET_CON
 
    // Another vendor code stalls.
    CHECK(
-   controller.controlIn(vsltest::setupPacket(0xC0, static_cast<uint8_t>(usb::dap::msOs20VendorCode + 1), 0, 7, 16)).stalled);
+   controller.controlIn(mupptest::setupPacket(0xC0, static_cast<uint8_t>(usb::dap::msOs20VendorCode + 1), 0, 7, 16)).stalled);
 
-   bench.request(vsltest::setConfiguration, 1);
+   bench.request(mupptest::setConfiguration, 1);
 }
 
 TEST_CASE("SET_CONFIGURATION opens the endpoints of all three CMSIS-DAP interfaces") {
@@ -490,16 +490,16 @@ TEST_CASE("The switch request with the bootloader code in a CMSIS-DAP image with
    auto &controller = bench.controller();
 
    SUBCASE("The bootloader code requests the bootloader") {
-      CHECK_FALSE(vsltest::switchRequest(controller, boot::bootloaderCode).stalled);
+      CHECK_FALSE(mupptest::switchRequest(controller, boot::bootloaderCode).stalled);
       CHECK(bootloader.isRequested());
    }
    SUBCASE("A personality code stalls") {
-      CHECK(vsltest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
+      CHECK(mupptest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
       CHECK_FALSE(bootloader.isRequested());
    }
    SUBCASE("The MS OS 2.0 request goes to the next handler") {
       const auto set =
-      controller.controlIn(vsltest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
+      controller.controlIn(mupptest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
                                                 static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())));
       CHECK_FALSE(set.stalled);
       CHECK(set.data == bytes(usb::dap::msOs20DescriptorSet));
@@ -513,12 +513,12 @@ TEST_CASE("The switch request in the CMSIS-DAP personality") {
    auto &controller = bench.controller();
 
    SUBCASE("The request switches") {
-      CHECK_FALSE(vsltest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
-      CHECK(vsltest::switchesTo(personalitySwitch, personality::Personality::Versaloon));
+      CHECK_FALSE(mupptest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
+      CHECK(mupptest::switchesTo(personalitySwitch, personality::Personality::Versaloon));
    }
    SUBCASE("The MS OS 2.0 request goes to the next handler") {
       const auto set =
-      controller.controlIn(vsltest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
+      controller.controlIn(mupptest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
                                                 static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())));
       CHECK_FALSE(set.stalled);
       CHECK(set.data == bytes(usb::dap::msOs20DescriptorSet));
@@ -526,7 +526,7 @@ TEST_CASE("The switch request in the CMSIS-DAP personality") {
    }
    SUBCASE("Another vendor code stalls") {
       CHECK(
-      controller.controlIn(vsltest::setupPacket(0xC0, static_cast<uint8_t>(usb::dap::msOs20VendorCode + 1), 0, 7, 16)).stalled);
-      CHECK(controller.controlOut(vsltest::setupPacket(usb::switchRequestType, 0x0F, 0, 0, 0), {}).stalled);
+      controller.controlIn(mupptest::setupPacket(0xC0, static_cast<uint8_t>(usb::dap::msOs20VendorCode + 1), 0, 7, 16)).stalled);
+      CHECK(controller.controlOut(mupptest::setupPacket(usb::switchRequestType, 0x0F, 0, 0, 0), {}).stalled);
    }
 }
