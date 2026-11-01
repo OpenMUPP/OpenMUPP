@@ -45,7 +45,7 @@ function(mupp_add_bootloader)
                 # The bootloader area ends where the app-8k image starts. One
                 # value sets both, so they cannot disagree.
                 -DOPENMUPP_BOOTLOADER_AREA_SIZE=${MUPP_APP_OFFSET_app-8k}
-                -DVSL_SYSTEM_STM32_DIR=${PROJECT_SOURCE_DIR}/dependencies/system-stm32
+                -DMUPP_SYSTEM_STM32_DIR=${PROJECT_SOURCE_DIR}/dependencies/system-stm32
                 -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
             BUILD_ALWAYS ON
             BUILD_BYPRODUCTS "${_out}.elf" "${_out}.hex" "${_out}.bin"

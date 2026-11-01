@@ -292,7 +292,7 @@ if (CMAKE_CROSSCOMPILING)
     # The application image header (magic, length, CRC32) of
     # openmupp-bootloader. The bootloader starts only an image with a valid
     # header. The tool is in the bootloader submodule.
-    set(_mupp_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader/cmake/VslStampImage.cmake")
+    set(_mupp_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader/cmake/MuppStampImage.cmake")
     if ("app-8k" IN_LIST MUPP_APP_IMAGES OR "app-10k" IN_LIST MUPP_APP_IMAGES)
         if (NOT EXISTS "${_mupp_stamp_cmake}")
             message(FATAL_ERROR "${_mupp_stamp_cmake} not found. The images behind a bootloader need it. "
@@ -344,7 +344,7 @@ if (CMAKE_CROSSCOMPILING)
             # The stamp step writes the header into the ELF file and makes
             # the .hex and .bin files. A separate objcopy step would fill the
             # gaps with 0x00 and give a wrong CRC.
-            vsl_stamp_image(${_target} BIN ${_name}.bin HEX ${_name}.hex MAX_LENGTH ${_link_limit})
+            mupp_stamp_image(${_target} BIN ${_name}.bin HEX ${_name}.hex MAX_LENGTH ${_link_limit})
         endif ()
         # Post-build steps run in the order of the calls: the size check
         # comes after the stamp step. It makes the copies when the image

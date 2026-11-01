@@ -255,7 +255,7 @@ The header is in the reserved words of the vector table:
 | `0x28` | Reserved, `0` |
 
 The CRC covers the linked image, so a step after the link must add the header.
-The build calls `vsl_stamp_image()` from the bootloader submodule (`cmake/VslStampImage.cmake`) for the `app-8k` and `app-10k` images.
+The build calls `mupp_stamp_image()` from the bootloader submodule (`cmake/MuppStampImage.cmake`) for the `app-8k` and `app-10k` images.
 It writes the header into the `.elf` file, and it writes the `.hex` and `.bin` files.
 The legacy bootloader ignores the header.
 The `standalone` image has no header.
@@ -263,7 +263,7 @@ The `standalone` image has no header.
 To check an image, use the stamp tool with the start address:
 
 ```sh
-dependencies/openmupp-bootloader/tools/vsl-stamp-image.py --check openmupp-app-8k.bin --base 0x08002000
+dependencies/openmupp-bootloader/tools/mupp-stamp-image.py --check openmupp-app-8k.bin --base 0x08002000
 ```
 
 ## Start-up behind the bootloader
