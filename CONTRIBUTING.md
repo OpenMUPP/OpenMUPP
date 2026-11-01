@@ -2,7 +2,7 @@
 
 ## Branches
 
-Features go to `dev`. Bug fixes go to `main`, and then also to `dev`.
+All changes go to `dev`.
 Open a pull request for each change.
 See [docs/development.md](docs/development.md) for the build, the tests and the code format.
 
