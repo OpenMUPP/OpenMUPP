@@ -2,9 +2,9 @@ diff --git a/cmake/Personalities.cmake b/cmake/Personalities.cmake
 index eb7fc4c..809e9de 100644
 --- a/cmake/Personalities.cmake
 +++ b/cmake/Personalities.cmake
-@@ -37,14 +37,14 @@ mupp_personality(versaloon CODE 0 SHORT vsl DEFINE MUPP_WITH_VERSALOON SOURCES
+@@ -37,14 +37,14 @@ vsl_personality(versaloon CODE 0 SHORT vsl DEFINE VSL_WITH_VERSALOON SOURCES
  #   cmsis-dap  the CMSIS-DAP v2 interface of OpenOCD, pyOCD and probe-rs
- mupp_personality(cmsis-dap CODE 1 SHORT dap DEFINE MUPP_WITH_CMSIS_DAP SOURCES
+ vsl_personality(cmsis-dap CODE 1 SHORT dap DEFINE VSL_WITH_CMSIS_DAP SOURCES
          "src/protocol/cmsisdap/DapJtag\\.cpp" "src/protocol/cmsisdap/DapProcessor\\.cpp"
 -        "src/protocol/cmsisdap/RvDtmTap\\.cpp"
 +        "src/protocol/cmsisdap/RvDtmTap\\.cpp" "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp"
@@ -12,13 +12,13 @@ index eb7fc4c..809e9de 100644
  #   wch-link   the WCH-Link interface of wlink and minichlink: the dongle
  #              debugs a WCH RISC-V target (CH32V) over the two-wire or the
  #              one-wire debug interface. It has no serial port.
- mupp_personality(wch-link CODE 2 SHORT wch DEFINE MUPP_WITH_WCH_LINK SOURCES
+ vsl_personality(wch-link CODE 2 SHORT wch DEFINE VSL_WITH_WCH_LINK SOURCES
          "src/protocol/wchlink/WchLinkFlash\\.cpp" "src/protocol/wchlink/WchLinkProcessor\\.cpp"
 -        "src/usb/WchLinkFunction\\.cpp" "src/board/BoardRvSwd\\.cpp" "src/board/BoardDebugModule\\.cpp")
 +        "src/usb/WchLinkFunction\\.cpp")
  
- # The values of the deprecated MUPP_PROTOCOL option
- set(MUPP_PROTOCOLS versaloon cmsis-dap dual wch-link)
+ # The values of the deprecated VSL_PROTOCOL option
+ set(VSL_PROTOCOLS versaloon cmsis-dap dual wch-link)
 diff --git a/src/main.cpp b/src/main.cpp
 index 5659d16..12c8d1a 100644
 --- a/src/main.cpp
@@ -31,7 +31,7 @@ index 5659d16..12c8d1a 100644
 +#include "board/BoardRvSwd.h"
  #include "protocol/cmsisdap/DapProcessor.h"
  #endif
- #if defined(MUPP_WITH_VERSALOON)
+ #if defined(VSL_WITH_VERSALOON)
 @@ -219,6 +221,10 @@ class DapPlatform final : public cmsisdap::Platform {
  };
  
@@ -49,7 +49,7 @@ index 5659d16..12c8d1a 100644
                                    },
 -                                  &boardJtag,
 +                                  &dapTap,
- #if defined(MUPP_MULTI_PERSONALITY)
+ #if defined(VSL_MULTI_PERSONALITY)
                                    &personalitySwitch,
  #else
 diff --git a/src/protocol/cmsisdap/RvDtmTap.cpp b/src/protocol/cmsisdap/RvDtmTap.cpp

@@ -802,7 +802,7 @@ It measured rates only, not the full test list of the Mini.
 | Item | Value |
 |---|---|
 | Date | 2026-10-25 |
-| Probe | WeAct STM32H523, `weacth523-cmsis-dap` with `-DMUPP_CMSIS_DAP_RV_BRIDGE=ON`, standalone image. Before the fix: `v0.12.0-60-gd7f95ac` |
+| Probe | WeAct STM32H523, `weacth523-cmsis-dap` with `-DVSL_CMSIS_DAP_RV_BRIDGE=ON`, standalone image. Before the fix: `v0.12.0-60-gd7f95ac` |
 | Target | CH32V006K8U6 on one wire, on the wiring of the [WeAct one-wire test](wch-link.md#ch32v006-on-the-weact-stm32h523-one-wire) |
 | OpenOCD | The same as for the CH32V006 on the Mini, `adapter serial` of the WeAct |
 | Profile | A Mini in CMSIS-DAP mode on the SWD port of the WeAct. pyOCD read `DWT_PCSR` (the PC sample register) during the OpenOCD run, without a halt of the core |
@@ -880,7 +880,7 @@ OpenOCD uses `interface/cmsis-dap.cfg` with its own TAP and target lines, not th
 | Item | Value |
 |---|---|
 | Date | 2026-10-28 |
-| Probes | Two Minis, Mini 1 and Mini 2 (`app-8k`), multi image `cmsis-dap,wch-link` with `MUPP_WCH_LINK_WCH_USB_ID=ON`, commit `ec2e4c8` |
+| Probes | Two Minis, Mini 1 and Mini 2 (`app-8k`), multi image `cmsis-dap,wch-link` with `VSL_WCH_LINK_WCH_USB_ID=ON`, commit `ec2e4c8` |
 | Host | Linux, OpenOCD `0.12.0+dev-01355-gcba596a3e`, probe-rs 0.32.0, wlink |
 | TCK | 1000 kHz |
 
