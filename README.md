@@ -19,8 +19,8 @@ Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
 |---|---|---|---|
-| Versaloon (original protocol, the default) | `0483:a038` | Unmodified OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M, SWD and JTAG |
-| CMSIS-DAP v2 | `1209:0001` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M, SWD and JTAG (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
+| Versaloon (original protocol) | `0483:a038` | Unmodified OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M, SWD and JTAG |
+| CMSIS-DAP v2 (the default) | `1209:0001` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M, SWD and JTAG (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
 | WCH-Link | `1209:0001` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
 
 The Versaloon personality is an independent implementation of the Versaloon USB protocol. It contains no code of the original Versaloon project. OpenMUPP is not related to that project or its author.
@@ -117,11 +117,14 @@ The suffix of the preset selects the personalities:
 - `-cmsis-dap`: the CMSIS-DAP personality, for example `mini-cmsis-dap`.
 - `-dual`: the multi image with the CMSIS-DAP and the WCH-Link personalities. CMSIS-DAP is the default personality.
 - `-wch-link`: the WCH-Link personality.
-- No suffix: the Versaloon personality.
+- `mini-versaloon`: the Versaloon personality, for the Mini.
+- No suffix: the default personality, CMSIS-DAP. This is the same image as the `-cmsis-dap` preset.
 
 The CI builds only the `-cmsis-dap` and the `-dual` images.
 The Versaloon personality is for old tools only: use CMSIS-DAP for a new setup.
-For another set of personalities, add `-DMUPP_PERSONALITIES=<list>`, for example `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` for a dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/cmake.md#cmake-options)).
+For the Versaloon personality or another set of personalities, add `-DMUPP_PERSONALITIES=<list>`, for example `-DMUPP_PERSONALITIES=versaloon` for the Versaloon personality, or `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` for a dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/cmake.md#cmake-options)).
+Before this change, an empty `MUPP_PERSONALITIES` built the Versaloon personality, and a multi image with Versaloon and CMSIS-DAP started with Versaloon.
+To keep the old image in an existing build directory, add `-DMUPP_PERSONALITIES=versaloon`, or `-DMUPP_DEFAULT_PERSONALITY=versaloon` for the multi image.
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DMUPP_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/cmake.md#images-that-do-not-fit)).
@@ -251,16 +254,16 @@ See [docs/firmware-update.md](docs/firmware-update.md) for the other ways to sta
 ## Use the dongle
 
 Connect the dongle to the host with USB.
-It shows as a USB device with the ID `0483:a038` and the product name `Versaloon`.
+The default image shows as a USB device with the ID `1209:0001` and the product name `OpenMUPP CMSIS-DAP`.
+The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 
-- **Debug adapter:** use OpenOCD with `-f interface/vsllink.cfg`, in JTAG or SWD mode.
-  On Windows, OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
 - **Serial port:** the dongle has a serial port (`/dev/ttyACM*` on Linux, a COM port on Windows).
   The port is bridged to the UART of the board: PA9 (TX) and PA10 (RX) on the Mini.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
 
-A firmware image built with `-DMUPP_PERSONALITIES=cmsis-dap` shows as a USB device with the ID `1209:0001` and the product name `OpenMUPP CMSIS-DAP`.
-The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
+A firmware image built with `-DMUPP_PERSONALITIES=versaloon` shows as a USB device with the ID `0483:a038` and the product name `Versaloon`.
+Use OpenOCD with `-f interface/vsllink.cfg`, in JTAG or SWD mode.
+On Windows, OpenOCD needs a WinUSB driver for interface 0, for example installed with Zadig.
 The serial port works as in the default image.
 
 A firmware image built with `-DMUPP_PERSONALITIES=wch-link` shows as a USB device with the ID `1209:0001` and the product name `OpenMUPP WCH-Link`.

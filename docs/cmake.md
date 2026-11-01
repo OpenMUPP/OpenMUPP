@@ -12,8 +12,8 @@ These options select the board, the personality and the debug features:
 |---|---|---|
 | `BOARD` | `mini` | Board to build for (see [the README](../README.md#boards)). |
 | `MUPP_BUILD_BOOTLOADER` | `ON` | Build `openmupp-bootloader` for the board. Only for the STM32F1 boards. |
-| `MUPP_PERSONALITIES` | empty (`versaloon`) | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `1209:0001` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
-| `MUPP_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `MUPP_PERSONALITIES`. Empty: the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
+| `MUPP_PERSONALITIES` | empty (`cmsis-dap`) | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `1209:0001` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
+| `MUPP_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `MUPP_PERSONALITIES`. Empty: `cmsis-dap` when the image has it, else the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `MUPP_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `MUPP_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
 | `MUPP_CMSIS_DAP_RV_BRIDGE` | `ON` | Add the RISC-V bridge to the CMSIS-DAP personality, also in a multi image. The JTAG port can then be an emulated RISC-V DTM on the WCH debug wire. In the auto mode, the probe finds the target at `DAP_Connect`. The vendor command `ID_DAP_Vendor1` sets the mode and can store it (see [cmsis-dap.md](cmsis-dap.md#risc-v-dtm-bridge)). The stored mode needs the settings page, so an image with the bridge has 1 KB (STM32F103) or 8 KB (STM32H5) less flash. An image without `cmsis-dap` ignores the option. A build directory with `OFF` in its cache keeps `OFF`: use `--fresh` or `-DMUPP_CMSIS_DAP_RV_BRIDGE=ON`. On the STM32H5 boards, only the OpenOCD rates of the bridge are measured (WeAct STM32H523, see [cmsis-dap.md](cmsis-dap.md#ch32v006-rates-on-the-weact-stm32h523)). |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
@@ -32,19 +32,20 @@ Rename the option, and use `cmake --fresh` for a build directory from before the
 
 The tag after the board in the file name tells the personalities of the image:
 
-- An image with one personality has no tag for `versaloon`.
-  For each other personality, the tag is `-` and the personality, for example `-cmsis-dap` or `-wch-link`.
+- An image with the `versaloon` personality only has the tag `-vsl`.
+  An image with one other personality has the tag `-` and the personality, for example `-cmsis-dap` or `-wch-link`.
 - A multi image has `-` and the short names of its personalities, joined with `+`.
   The default personality comes first, then the other ones in the order `versaloon`, `cmsis-dap`, `wch-link`.
   The short names are `vsl` (`versaloon`), `dap` (`cmsis-dap`) and `wch` (`wch-link`).
 - With `MUPP_WCH_LINK_WCH_USB_ID=ON`, the tag ends with `-wch-id`, for example `-wch-link-wch-id`.
-- An image with `cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` has a tag that ends with `-no-rv-bridge`, for example `-cmsis-dap-no-rv-bridge` or `-vsl+dap-no-rv-bridge`.
+- An image with `cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` has a tag that ends with `-no-rv-bridge`, for example `-cmsis-dap-no-rv-bridge` or `-dap+vsl-no-rv-bridge`.
 
 | `MUPP_PERSONALITIES` | `MUPP_DEFAULT_PERSONALITY` | Tag |
 |---|---|---|
-| `versaloon` | - | none |
+| `versaloon` | - | `-vsl` |
 | `cmsis-dap` | - | `-cmsis-dap` |
 | `wch-link` | - | `-wch-link` |
+| `versaloon,cmsis-dap` | - | `-dap+vsl` |
 | `versaloon,cmsis-dap` | `versaloon` | `-vsl+dap` |
 | `versaloon,cmsis-dap` | `cmsis-dap` | `-dap+vsl` |
 | `versaloon,cmsis-dap,wch-link` | `versaloon` | `-vsl+dap+wch` |
@@ -109,12 +110,13 @@ The default is `/usr`.
 | `mini-debug` | Mini | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF`: with the bridge, the `app-8k` and `app-10k` images do not fit (tag `-cmsis-dap-no-rv-bridge`) | Debug |
 | `mini-wch-link`, `stlinkv2-wch-link`, `stlinkv2miniclone-wch-link` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `MUPP_WCH_LINK_WCH_USB_ID=ON` | Release |
-| `mini`, `stlinkv2`, `stlinkv2miniclone` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `versaloon` | Release |
+| `mini`, `stlinkv2`, `stlinkv2miniclone` | Mini, ST-Link/V2, ST-Link/V2 mini clone | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
+| `mini-versaloon` | Mini | `versaloon` (tag `-vsl`) | Release |
 | `weacth523-cmsis-dap` | WeAct STM32H523 core board | `cmsis-dap` | Release |
 | `weacth523-dual` | WeAct STM32H523 core board | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `weacth523-debug` | WeAct STM32H523 core board | `cmsis-dap` | Debug |
 | `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
-| `weacth523` | WeAct STM32H523 core board | `versaloon` | Release |
+| `weacth523` | WeAct STM32H523 core board | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.

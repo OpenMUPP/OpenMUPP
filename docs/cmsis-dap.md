@@ -22,8 +22,6 @@ cmake -B build/mini-dap -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini 
 cmake --build build/mini-dap -j
 ```
 
-The default value is `versaloon`.
-The default image does not change.
 The build then writes `openmupp-<board>-cmsis-dap-<variant>-<type>-<version>.hex` and `.bin`.
 Write the image as in [Firmware update](firmware-update.md).
 All boards build with this value.

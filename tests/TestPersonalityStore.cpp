@@ -78,8 +78,8 @@ TEST_CASE("The host build has all personalities in code order") {
    CHECK(personality::has(Personality::Versaloon));
    CHECK(personality::has(Personality::CmsisDap));
    CHECK(personality::has(Personality::WchLink));
-   // No MUPP_DEFAULT_PERSONALITY: the first one of the image
-   CHECK(personality::defaultPersonality == Personality::Versaloon);
+   // No MUPP_DEFAULT_PERSONALITY: cmsis-dap when the image has it
+   CHECK(personality::defaultPersonality == Personality::CmsisDap);
 }
 
 TEST_CASE("The key cycle visits the three personalities in code order") {

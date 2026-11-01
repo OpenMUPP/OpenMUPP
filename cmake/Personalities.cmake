@@ -51,7 +51,7 @@ mupp_personality(wch-link CODE 2 SHORT wch DEFINE MUPP_WITH_WCH_LINK SOURCES
         "src/usb/WchLinkFunction\\.cpp" ${MUPP_RV_WIRE_SOURCES})
 
 # Declares the cache entries of the personality options. Both are empty by
-# default: empty MUPP_PERSONALITIES is versaloon.
+# default: empty MUPP_PERSONALITIES is cmsis-dap.
 function(mupp_personality_options)
     # CMake ignores an unknown option, so an old name would change the image
     # without an error.
@@ -62,16 +62,17 @@ function(mupp_personality_options)
                 "A build directory from before the rename needs --fresh.")
     endif ()
     set(MUPP_PERSONALITIES "" CACHE STRING
-            "USB personalities of the image, a list with ';' or ','. Empty: versaloon. Supported: ${MUPP_ALL_PERSONALITIES}")
+            "USB personalities of the image, a list with ';' or ','. Empty: cmsis-dap. Supported: ${MUPP_ALL_PERSONALITIES}")
     set(MUPP_DEFAULT_PERSONALITY "" CACHE STRING
-            "Personality of a multi image when no personality is stored. Empty: the first one of ${MUPP_ALL_PERSONALITIES}")
+            "Personality of a multi image when no personality is stored. Empty: cmsis-dap, or the first one of ${MUPP_ALL_PERSONALITIES} without it")
 endfunction()
 
 # Reads these variables of the caller:
 #   MUPP_PERSONALITIES        the personalities of the image, a CMake list or
-#                             a comma-separated list. Empty: versaloon.
+#                             a comma-separated list. Empty: cmsis-dap.
 #   MUPP_DEFAULT_PERSONALITY  the personality when no personality is stored.
-#                             Empty: the first one in canonical order.
+#                             Empty: cmsis-dap, or the first one in canonical
+#                             order when the image has no cmsis-dap.
 #   MUPP_WCH_LINK_WCH_USB_ID  the USB ID of WCH for the WCH-Link personality
 #   MUPP_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality.
 #                             Not defined: ON. Ignored without cmsis-dap.
@@ -106,7 +107,7 @@ function(mupp_resolve_personalities)
         if (NOT "${MUPP_PERSONALITIES}" STREQUAL "")
             message(FATAL_ERROR "MUPP_PERSONALITIES has no personality. Supported: ${MUPP_ALL_PERSONALITIES}")
         endif ()
-        set(_requested versaloon)
+        set(_requested cmsis-dap)
     endif ()
 
     # Canonical (code) order, whatever the order of MUPP_PERSONALITIES is
@@ -120,7 +121,11 @@ function(mupp_resolve_personalities)
 
     string(STRIP "${_default}" _default)
     if (_default STREQUAL "")
-        list(GET _personalities 0 _default)
+        if ("cmsis-dap" IN_LIST _personalities)
+            set(_default cmsis-dap)
+        else ()
+            list(GET _personalities 0 _default)
+        endif ()
     elseif (NOT _default IN_LIST _personalities)
         message(FATAL_ERROR "MUPP_DEFAULT_PERSONALITY '${_default}' is not in the personalities of the image: ${_personalities}. "
                 "Set it to one of them, or remove it from the cache with -UMUPP_DEFAULT_PERSONALITY.")
@@ -171,12 +176,12 @@ function(mupp_resolve_personalities)
         list(REMOVE_ITEM _dropped ${MUPP_RV_WIRE_SOURCES})
     endif ()
 
-    # Image tag (#79, decision Q2). A single image: "" for versaloon, else
+    # Image tag (#79, decision Q2). A single image: "-vsl" for versaloon, else
     # "-<name>". A multi image: "-" and the short names joined by "+", the
     # default personality first, the others in canonical order.
     if (_count EQUAL 1)
         if (_default STREQUAL "versaloon")
-            set(_tag "")
+            set(_tag "-${_mupp_personality_versaloon_short}")
         else ()
             set(_tag "-${_default}")
         endif ()
