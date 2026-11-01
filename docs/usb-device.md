@@ -160,8 +160,8 @@ The names of the image files have the text `-cmsis-dap` after the board name.
 ### Multi image
 
 A multi image has more than one personality, for example `VSL_PERSONALITIES=versaloon,cmsis-dap`.
-The dual image is the multi image with the Versaloon and the CMSIS-DAP personalities.
-The `-dual` presets now build the multi image with the CMSIS-DAP and the WCH-Link personalities.
+A multi image with the Versaloon and the CMSIS-DAP personalities is also called a dual image.
+The `-dual` presets build the multi image with the CMSIS-DAP and the WCH-Link personalities.
 One personality is active after each start.
 The active personality has its descriptors, its USB function and its commands, as in the image with one personality.
 The firmware changes the personality only with a reset.
@@ -390,7 +390,7 @@ The common commands are:
 | `FW_UPDATE` | `[0x0F][0xAA]` | `[status u8]` (see [Firmware update](firmware-update.md)). |
 
 The version text has the form `openmupp <version>, board <board>`.
-Firmware before the rename uses `versaloon-ng` in place of `openmupp`.
+Firmware with the former project name versaloon-ng uses `versaloon-ng` in place of `openmupp`.
 
 `SWITCH_PERSONALITY` changes the USB personality of a multi image (see [Multi image](#multi-image)).
 The firmware sends the reply, stores the personality and resets.

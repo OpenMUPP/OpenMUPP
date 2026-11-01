@@ -42,13 +42,14 @@ These targets are planned. None of them works yet.
 
 | Target | Protocols | State |
 |---|---|---|
-| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. High-voltage programming uses the VPP supply of the board. The first release does not cover PDI, TPI, UPDI and aWire. | Preparation work done. The firmware does not exist. |
+| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | Design work started. The firmware does not exist. |
 | PIC | Programming. High-voltage programming uses the VPP supply of the board. | Planned. No design yet. |
 | STM8 | SWIM (single-wire debug and programming interface) | Planned. No design yet. |
 
 The AVR personality will run at the same time as the CMSIS-DAP personality, in one image for the STM32H523 boards.
 The planned protocols need the OpenMUPP v1 hardware: the level shifters, the split nRESET path and the VPP supply.
-A passive adapter board maps the target connector to the pinout of each target.
+An adapter board maps the target connector to the pinout of each target.
+The adapters are passive, except the high-voltage adapters.
 
 ## Boards
 

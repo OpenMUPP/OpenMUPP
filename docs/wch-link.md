@@ -157,7 +157,7 @@ It does not need the other 64 KB of flash.
 The firmware now builds the combined image: `-DVSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
 A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer and the switch request on EP0).
 The build uses link-time optimisation (LTO, option `VSL_LTO`), has no heap code of newlib and has no 64-bit division.
-Without these measures, the `app-10k` image does not fit: it is 1,740 bytes too large.
+Without these measures, the `app-10k` image did not fit: it was 1,740 bytes too large.
 
 | Image (Mini, Release) | Without the measures | Size | Limit |
 |---|---|---|---|

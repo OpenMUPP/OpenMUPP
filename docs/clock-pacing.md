@@ -49,12 +49,14 @@ An edge within the slack makes the next half period shorter by up to 32 cycles.
 
 The edges have the jitter of the wait loop: up to one pass of it.
 Thus single periods are shorter or longer than requested, but the mean is correct.
-On the Mini, the shortest SWD period at 1 MHz is 846 ns to 880 ns, depending on the measurement setup (see [Results](#results)).
+On the Mini, the shortest SWD period at 1 MHz was 880 ns with the member pacer and 846 ns (15 % shorter) with the local pacer.
+The two measurements have different setups (sample rate and target), so a part of the difference is not from the code.
 
 ### Local pacer
 
-The pacer is a local variable of one engine operation, not a member of the engine.
-Each SWD operation (a transfer or a sequence) has its own pacer, as the JTAG engine has.
+In the SWD and JTAG engines, the pacer is a local variable of one engine operation, not a member of the engine.
+Each SWD operation (a transfer or a sequence) has its own pacer, as each JTAG operation has.
+The RVSWD engine keeps the pacer as a member.
 The reason is the compiler: it assumes that a store to a GPIO register can change a `uint32_t` member.
 Thus it loads and stores the deadline of a member pacer at each edge.
 A local pacer keeps the deadline in a register.
@@ -101,7 +103,7 @@ The design does not use these options:
 ### Setup
 
 - Probe: Mini (STM32F103C8 at 72 MHz), an image with `VSL_PERSONALITIES=versaloon,cmsis-dap,wch-link` and `-DVSL_WCH_LINK_WCH_USB_ID=ON`, `app-8k`.
-  "Loop constant" is the method with a measured loop constant (see [Alternatives](#alternatives)). "Pacer" is the design of this document.
+  "Loop constant" is the method with a measured loop constant (see [Alternatives](#alternatives)). "Pacer" is this design with the SWD pacer as a member of the engine (see [SWD pacer in registers](#swd-pacer-in-registers) for the local pacer).
 - Target: WeAct STM32H523 on SWD. JTAG and RVSWD had no target: the probe clocks the frames also without a reply.
 - Logic analyzer: Saleae Logic Pro 8 at 100 MS/s (10 ns resolution), SWDIO on channel 4, SWCLK and TCK on channel 5.
 - Traffic:
@@ -195,7 +197,7 @@ Measured with the third build:
 ## STM32H5
 
 This section gives the measurements on the STM32H5 at 250 MHz.
-They use the member pacer, except for the sections that name the local pacer.
+The SWD rows use the member pacer, except in the sections that name the local pacer.
 
 ### Setup
 

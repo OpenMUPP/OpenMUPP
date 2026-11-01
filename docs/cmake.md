@@ -120,6 +120,7 @@ The `personalities-*` presets set `VSL_PERSONALITIES` and `VSL_DEFAULT_PERSONALI
 They are for the common sets of personalities.
 For another set, add `-DVSL_PERSONALITIES=<list>` to a preset.
 The `-dual` presets build `cmsis-dap,wch-link`.
+The `-cmsis-dap-wch-link` presets do not exist: use the `-dual` presets.
 For a dual image with `versaloon,cmsis-dap`, add `-DVSL_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `vsl-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.

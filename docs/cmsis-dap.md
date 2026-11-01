@@ -394,7 +394,7 @@ A transfer to another device also writes the IR again.
 
 ## RISC-V DTM bridge
 
-Each image with the `cmsis-dap` personality has the bridge, unless the build sets `VSL_CMSIS_DAP_RV_BRIDGE=OFF`. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test is done: see [Bridge hardware test](#bridge-hardware-test).
+Status: in progress. Each image with the `cmsis-dap` personality has the bridge, unless the build sets `VSL_CMSIS_DAP_RV_BRIDGE=OFF`. The [OpenOCD configs](#openocd-configs) are in `etc/openocd/`. The hardware test is done: see [Bridge hardware test](#bridge-hardware-test).
 Test images showed OpenOCD and probe-rs on a CH32V208 (two wires), and OpenOCD on a CH32V006 (one wire), through the bridge ([captures](cmsis-dap-captures/README.md#bridge-captures)).
 
 The bridge lets unmodified OpenOCD and probe-rs debug a CH32V target through this personality.
@@ -494,7 +494,7 @@ A failed store also gives `81 FF`, but the command still sets the mode.
 - `DAP_SWJ_Clock` sets the TCK of the board port also while the TAP is the port. The wire has its own clock: the high speed of the `wch-link` personality.
 
 OpenOCD sends the command with `cmsis-dap cmd 0x81 0x01`.
-probe-rs cannot send a vendor command . In the auto mode, probe-rs needs no command:
+probe-rs cannot send a vendor command. In the auto mode, probe-rs needs no command:
 
 ```sh
 probe-rs info --protocol jtag

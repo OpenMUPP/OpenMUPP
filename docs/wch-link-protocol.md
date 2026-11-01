@@ -75,7 +75,7 @@ The column "Seen" tells the source of a row:
 
 - "captured": a USB capture.
 - "tools": the source code of wlink or minichlink. No capture has the request, so the probe response is not known.
-- "notes": the research notes of the project. They are not in this repository.
+- "notes": notes from an earlier analysis, with no capture or source code behind them. The row is not confirmed.
 
 A name in quotes is the name in the wlink source code.
 

@@ -2,7 +2,7 @@
 
 This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode for the CMSIS-DAP RISC-V bridge.
 
-- The B0 captures have no target. They show which DAP commands the TAP emulator must follow.
+- The reference captures have no target. They show which DAP commands the TAP emulator must follow.
 - The bridge captures have the emulated TAP and a CH32V208 or a CH32V006. They show the host tools on the bridge. See [Bridge captures](#bridge-captures).
 
 ## Setup
