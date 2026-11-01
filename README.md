@@ -117,14 +117,14 @@ The suffix of the preset selects the personalities:
 
 The CI builds only the `-cmsis-dap` and the `-dual` images.
 The Versaloon personality is for old tools only: use CMSIS-DAP for a new setup.
-For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap` for the old dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/development.md#cmake-options)).
+For another set of personalities, add `-DVSL_PERSONALITIES=<list>`, for example `-DVSL_PERSONALITIES=versaloon,cmsis-dap` for a dual image with Versaloon and CMSIS-DAP (see [CMake options](docs/cmake.md#cmake-options)).
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
-With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/development.md#images-that-do-not-fit)).
+With `-DVSL_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/cmake.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality and without the RISC-V bridge. With the bridge, the Debug image does not fit behind a bootloader.
 The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 `cmake --list-presets` shows all presets.
-[docs/development.md](docs/development.md#cmake-presets) describes them.
+[docs/cmake.md](docs/cmake.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit it.
 To set local paths or options, add your own presets in `CMakeUserPresets.json`.
@@ -168,7 +168,7 @@ The build writes these files into the build directory:
 
 See [docs/development.md](docs/development.md#build-outputs) for all build outputs.
 
-See [docs/development.md](docs/development.md#cmake-options) for all CMake options.
+See [docs/cmake.md](docs/cmake.md#cmake-options) for all CMake options.
 
 ## Flash the firmware
 
@@ -306,5 +306,6 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
 - [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule, size, implementation and hardware test.
 - [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures ([docs/wch-link-captures/](docs/wch-link-captures/README.md)).
+- [docs/cmake.md](docs/cmake.md): the CMake options and the CMake presets.
 - [docs/development.md](docs/development.md): build outputs, unit tests, the flash speed benchmark, code format, version, CI and branches.
 - [docs/status.md](docs/status.md): the functions of the firmware and the hardware test status.
