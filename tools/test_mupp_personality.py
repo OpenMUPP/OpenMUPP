@@ -21,6 +21,9 @@ class PersonalityOfTest(unittest.TestCase):
         self.assertEqual(vp.personality_of(0x0483, 0xA038), "versaloon")
         self.assertEqual(vp.personality_of(0x1A86, 0x8010), "wch-link")
 
+    def test_legacy_cmsis_dap_id(self):
+        self.assertEqual(vp.personality_of(0x0403, 0x9B3C), "cmsis-dap")
+
     def test_shared_id_is_unknown(self):
         self.assertIsNone(vp.personality_of(0x1209, 0x0001))
 

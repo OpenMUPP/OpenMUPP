@@ -45,7 +45,8 @@ reported with its bus and address. On Linux this is a missing udev rule, and
 --id does not help: the tool cannot open the device either.
 --id VID:PID selects the dongle by this ID, without the product string check,
 for a dongle with an ID or a product string that the tool does not know.
-An ID that the tool does not know has an unknown personality: --active names
+An ID that the tool does not know, or that two personalities share (1209:0001),
+has an unknown personality: --active names
 it. Without it, the EP0 request still works, but not the fallback command.
 The wait after a switch looks for the standard IDs of the target.
 
@@ -64,7 +65,8 @@ import time
 BOOTLOADER = "bootloader"
 PERSONALITIES = {
     "versaloon": (0, ((0x0483, 0xA038),)),
-    "cmsis-dap": (1, ((0x1209, 0x0001),)),
+    # 0403:9b3c: firmware before the pid.codes ID
+    "cmsis-dap": (1, ((0x1209, 0x0001), (0x0403, 0x9B3C))),
     "wch-link": (2, ((0x1209, 0x0001), (0x1A86, 0x8010))),
     BOOTLOADER: (0xB0, ((0x0483, 0x5740), (0x0483, 0xDF11))),
 }
@@ -390,7 +392,7 @@ def main(argv=None):
     switch.add_argument("personality", choices=sorted(PERSONALITIES))
     args = parser.parse_args(argv)
     if args.active is not None and (args.id is None or personality_of(*args.id) is not None):
-        parser.error("--active needs --id with an ID that the tool does not know")
+        parser.error("--active needs --id with an ID that is unknown or shared")
     usb = import_usb()
     if args.command == "show":
         return command_show(usb, args)

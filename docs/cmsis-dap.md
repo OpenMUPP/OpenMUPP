@@ -64,7 +64,10 @@ The probe has the USB ID `1209:0001` and the product name `OpenMUPP CMSIS-DAP`.
 The host tools find the CMSIS-DAP v2 interface by the text `CMSIS-DAP` in its interface string.
 
 On Linux, a udev rule gives a normal user access to the probe.
-For example, put this line into `/etc/udev/rules.d/99-versaloon-cmsis-dap.rules`:
+Copy `etc/70-openmupp-cmsis-dap.rules` to `/etc/udev/rules.d/`.
+The file number must stay below 73, because systemd applies the `uaccess` tag in `73-seat-late.rules`.
+The rule checks the product string, because other devices use the test ID too.
+The file has this line:
 
 ```text
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP CMSIS-DAP", MODE="0660", TAG+="uaccess"
@@ -82,6 +85,12 @@ Uninstall the device in the Device Manager, and also remove its driver.
 Windows 10 calls this option "Delete the driver software for this device".
 Windows 11 calls it "Attempt to remove the driver for this device".
 Then plug in the probe again.
+
+The CMSIS-DAP and WCH-Link personalities share the ID `1209:0001`, the serial number and the `bcdDevice`.
+The WCH-Link personality needs a Zadig WinUSB driver on Windows, and Windows keeps that driver for the CMSIS-DAP personality too.
+Then the serial port of the CMSIS-DAP personality does not work.
+In a multi image with both personalities, remove the Zadig driver before you use the CMSIS-DAP personality.
+Delete the registry key `usbflags\12090001rrrr` too (see [usb-device.md](usb-device.md)).
 
 OpenOCD:
 
@@ -980,7 +989,7 @@ Enumeration: the product string is `Versaloon CMSIS-DAP`.
 Interface 0 is a vendor class interface with the string `Versaloon CMSIS-DAP v2`.
 The `cdc_acm` driver binds interfaces 1 and 2 and gives `/dev/ttyACM0`.
 The `ftdi_sio` driver does not bind to the device.
-OpenOCD opens the probe with VID:PID 0x1209:0x0001.
+OpenOCD opens the probe with VID:PID 0x0403:0x9b3c (the ID before the pid.codes ID).
 
 Flash speed (64 KiB, median of 3, SWD, target at 64 MHz, firmware with `DAP_TransferAbort`):
 
