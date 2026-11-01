@@ -24,10 +24,10 @@
 namespace {
 
 using art::usb::test::setupPacket;
-using personality::Personality;
-using personality::PersonalitySwitch;
 using mupptest::switchesTo;
 using mupptest::switchRequest;
+using personality::Personality;
+using personality::PersonalitySwitch;
 
 } // namespace
 

@@ -12,9 +12,9 @@
 #include <optional>
 #include <vector>
 
+using mupptest::DapBench;
 using personality::Personality;
 using personality::PersonalitySwitch;
-using mupptest::DapBench;
 using Bytes = std::vector<uint8_t>;
 
 namespace {

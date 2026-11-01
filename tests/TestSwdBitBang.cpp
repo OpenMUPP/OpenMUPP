@@ -13,9 +13,9 @@
 namespace {
 
 namespace pswd = protocol::swd;
+using mupptest::MockSwdPins;
 using swd::BitBangPort;
 using swd::halfPeriodCycles;
-using mupptest::MockSwdPins;
 
 constexpr uint8_t readDpidr = 0xA5;
 constexpr uint8_t writeAbort = 0x81;

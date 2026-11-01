@@ -24,8 +24,8 @@ namespace pswd = protocol::swd;
 using Bytes = std::vector<uint8_t>;
 using cmsisdap::BitBangDapSwd;
 using cmsisdap::Processor;
-using protocol::PinMode;
 using mupptest::MockSwdPins;
+using protocol::PinMode;
 
 // The DAP_Transfer request bytes
 constexpr uint8_t readDpidr = 0x02;

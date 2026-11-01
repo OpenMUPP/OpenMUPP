@@ -20,8 +20,8 @@ namespace {
 
 using art::usb::DescriptorType;
 using art::usb::EndpointType;
-using rvswd::Wire;
 using mupptest::WchLinkBench;
+using rvswd::Wire;
 using Bytes = std::vector<uint8_t>;
 
 namespace dm = rvswd::dm;

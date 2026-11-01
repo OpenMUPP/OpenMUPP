@@ -63,9 +63,10 @@ TEST_CASE("Windows reads the BOS and the MS OS 2.0 descriptor set before SET_CON
    // The vendor request with the vendor code of the platform capability:
    // bmRequestType 0xC0, wIndex 7. The set is longer than one packet.
    bool ok = false;
-   const auto set = controller.controlIn(mupptest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
-                                                              static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())),
-                                         &ok);
+   const auto set =
+   controller.controlIn(mupptest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
+                                              static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())),
+                        &ok);
    CHECK(ok);
    CHECK_FALSE(set.stalled);
    CHECK(set.data == bytes(usb::dap::msOs20DescriptorSet));
@@ -500,7 +501,7 @@ TEST_CASE("The switch request with the bootloader code in a CMSIS-DAP image with
    SUBCASE("The MS OS 2.0 request goes to the next handler") {
       const auto set =
       controller.controlIn(mupptest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
-                                                static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())));
+                                                 static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())));
       CHECK_FALSE(set.stalled);
       CHECK(set.data == bytes(usb::dap::msOs20DescriptorSet));
    }
@@ -519,7 +520,7 @@ TEST_CASE("The switch request in the CMSIS-DAP personality") {
    SUBCASE("The MS OS 2.0 request goes to the next handler") {
       const auto set =
       controller.controlIn(mupptest::setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex,
-                                                static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())));
+                                                 static_cast<uint16_t>(usb::dap::msOs20DescriptorSet.size())));
       CHECK_FALSE(set.stalled);
       CHECK(set.data == bytes(usb::dap::msOs20DescriptorSet));
       CHECK_FALSE(personalitySwitch.requested().has_value());

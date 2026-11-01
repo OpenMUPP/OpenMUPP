@@ -23,14 +23,14 @@ namespace {
 
 using art::usb::CdcAcmFunctionBase;
 using art::usb::LineCoding;
-using uart::DataBits;
-using uart::FrameFormat;
-using uart::Parity;
-using uart::StopBits;
 using mupptest::cdcPacketSize;
 using mupptest::pattern;
 using mupptest::ringCapacity;
 using mupptest::ringSize;
+using uart::DataBits;
+using uart::FrameFormat;
+using uart::Parity;
+using uart::StopBits;
 using Bench = mupptest::UartBench;
 
 constexpr FrameFormat format115200{ 115200, DataBits::Eight, Parity::None, StopBits::One };
@@ -444,7 +444,8 @@ TEST_CASE("UartBridge loses no UART data during a long JTAG shift with the seria
    JtagPins pins;
    SerialTarget target(pins.time);
    std::vector<uint8_t> received;
-   mupptest::MockBackground background([&pins] { return mupptest::MockBackground::Call{ pins.time, pins.tckLevel(), 0 }; });
+   mupptest::MockBackground background(
+   [&pins] { return mupptest::MockBackground::Call{ pins.time, pins.tckLevel(), 0 }; });
    // The serial service: the RX interrupt has run up to now, the bridge
    // moves the data, and the host reads the IN packets.
    background.onService = [&] {

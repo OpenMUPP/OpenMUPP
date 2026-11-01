@@ -15,9 +15,9 @@
 
 namespace {
 
+using mupptest::MockRvSwdTarget;
 using rvswd::RvSwdEngine;
 using rvswd::Wire;
-using mupptest::MockRvSwdTarget;
 
 // Nanoseconds of core cycles at the 72 MHz of the mock
 double nsOf(uint32_t cycles) {

@@ -21,15 +21,15 @@ namespace control = cmsisdap::uartControl;
 namespace status = cmsisdap::uartStatus;
 namespace configError = cmsisdap::uartConfigError;
 namespace transport = cmsisdap::uartTransport;
+using mupptest::cdcPacketSize;
+using mupptest::pattern;
+using mupptest::ringCapacity;
+using mupptest::ringSize;
 using uart::DataBits;
 using uart::FrameFormat;
 using uart::fromDapControl;
 using uart::Parity;
 using uart::StopBits;
-using mupptest::cdcPacketSize;
-using mupptest::pattern;
-using mupptest::ringCapacity;
-using mupptest::ringSize;
 
 using Channel = uart::DapUartChannel<mupptest::FakeUart, ringSize>;
 
