@@ -297,7 +297,7 @@ Findings:
   The first MEM-AP access got the status FAILED (`usbtoswd command 0x28 failed with 0x01`).
   The cause: the CMSIS-DAP processor sets its SWD transfer rules on the shared SWD engine at start, also when the Versaloon personality is active.
   The Versaloon SWD block then ran without idle cycles, and without the ABORT write before a WAIT retry.
-  Now INIT and CONFIG of the Versaloon SWD block set the Versaloon rules again (MR !69 and !70).
+  Now INIT and CONFIG of the Versaloon SWD block set the Versaloon rules again.
 - The test did not cover the key switch, the old switch commands, the WCH-Link personality and Windows.
 
 #### Switch request on EP0
@@ -340,7 +340,7 @@ On Windows, a host sends the request through the WinUSB driver of interface 0.
 The Versaloon and WCH-Link personalities need a WinUSB or libusb driver on interface 0 for their bulk endpoints, so this driver is always there.
 In the CMSIS-DAP personality, the MS OS 2.0 descriptors bind WinUSB to interface 0.
 WinUSB must also send a control request to the device recipient.
-No test on Windows confirms this yet. The hardware test of the personalities (work item #88) checks it.
+No test on Windows confirms this yet. The hardware test of the personalities checks it.
 
 The key gesture has these rules:
 
@@ -748,7 +748,7 @@ An interrupt makes a period longer, but not shorter.
 At `delay` 0, the firmware runs untimed, without the cycle counter.
 Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`).
 The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
-Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the Mini, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md), #118).
+Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the Mini, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md)).
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 On the STM32H5 (250 MHz), `delay` 0 is timed at 1.85 MHz: the untimed engine there gives 13 MHz (`swd::runsUntimed()`, see [Clock pacing](clock-pacing.md#stm32h5)).

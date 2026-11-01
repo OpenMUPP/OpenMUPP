@@ -232,7 +232,7 @@ To replace a trace with a capture, do these steps:
 ## Flash speed benchmark
 
 `tools/flash_benchmark.py` measures the flash speed of the dongle with OpenOCD.
-Use it to compare the old firmware and this firmware on the same target (work item #17).
+Use it to compare the old firmware and this firmware on the same target.
 The target is an STM32F1, with JTAG, SWD and SRST connected.
 
 The script writes a test image into the target flash, verifies it and reads it back.
@@ -339,7 +339,7 @@ Without such a tag, the version is `0.0.0`, and the `git describe` output is the
   The build jobs configure with `-DVSL_STRICT_SIZE=ON`: a build job fails when an image does not fit.
   The jobs for the STM32F1 boards also build `openmupp-bootloader` and the combined image for the board.
 - `build-mini-debug`: debug build of the Mini with the CMSIS-DAP personality without the RISC-V bridge (debug log on the serial port, SWD on), plus the size check.
-- `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities (decision Q6 of #79).
+- `build`: a `parallel:matrix` job with one release build and size check for each board and set of personalities.
   GitLab gives each build the name `build: [<values>]`, with the values of its matrix entry in order, for example `build: [mini, -dual, -dap+wch]`.
   It builds the preset `<board><suffix>` (see [CMake presets](#cmake-presets)).
 
