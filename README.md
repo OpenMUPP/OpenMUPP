@@ -51,7 +51,8 @@ These targets are planned. None of them works yet.
 The AVR personality will run at the same time as the CMSIS-DAP personality, in one image for the STM32H523 boards.
 The planned protocols need the OpenMUPP v1 hardware: the level shifters, the split nRESET path and the VPP supply.
 An adapter board maps the target connector to the pinout of each target.
-The adapters are passive, except the high-voltage adapters.
+All adapters are passive, also the high-voltage adapters. The VPP supply is on the OpenMUPP v1 board.
+Each adapter has an ID resistor. The firmware applies VPP only when the ID shows a high-voltage adapter (see [VPP sequence](docs/boards.md#vpp-sequence)).
 
 ## Boards
 
