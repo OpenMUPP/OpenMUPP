@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // ID_DAP_Vendor2 of the CMSIS-DAP processor (DapProcessor.h): the target
 // supply, on a fake power switch and voltage sense (protocol/TargetPower.h).
 

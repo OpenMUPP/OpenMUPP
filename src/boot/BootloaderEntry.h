@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Entry into the bootloader from the running firmware: openmupp-bootloader

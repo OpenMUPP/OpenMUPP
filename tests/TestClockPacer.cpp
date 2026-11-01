@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The clock pacer of the bit-bang engines (ClockPacer.h): edges on
 // deadlines, also with code between the edges, and late edges.
 

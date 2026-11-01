@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Heartbeat LED pattern: a short flash once per period. The state LED

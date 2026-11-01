@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The 3.3 V target supply with its protections, for every personality that

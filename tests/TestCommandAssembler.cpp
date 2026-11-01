@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The command assembler: joins OUT packets into Versaloon commands.
 
 #include "protocol/versaloon/CommandAssembler.h"

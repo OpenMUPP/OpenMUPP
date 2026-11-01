@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The emulated TAP of the CMSIS-DAP RISC-V bridge: a JTAG port

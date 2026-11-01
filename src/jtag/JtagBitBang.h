@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // JTAG bit-bang engine: shifts the TDI and TMS streams of the JTAG_RAW

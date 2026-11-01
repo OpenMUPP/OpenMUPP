@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Runs one Versaloon command (protocol/versaloon/Versaloon.h) and writes its reply.

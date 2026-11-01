@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Mock pins for the JTAG bit-bang engine (jtag/JtagBitBang.h), with a

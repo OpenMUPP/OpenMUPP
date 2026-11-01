@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The command processor: the common Versaloon commands and the hand-over
 // of the USB_TO_XXX commands.
 

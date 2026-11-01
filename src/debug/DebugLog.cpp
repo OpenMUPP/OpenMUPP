@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Debug log over the CDC-ACM port. See debug/DebugLog.h.
 #include "debug/DebugLog.h"
 

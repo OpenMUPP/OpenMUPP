@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The USB_TO_POWER block (0x60): the 3.3 V target supply and the target

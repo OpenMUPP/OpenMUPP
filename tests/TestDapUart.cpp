@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The DAP_UART_* side of the UART (uart/DapUartChannel.h) and the owner
 // switch with the UART bridge, on the bench of the bridge tests: the real
 // CDC-ACM function, a fake UART and small rings. The last tests run the

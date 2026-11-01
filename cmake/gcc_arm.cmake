@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # When trying to configure the cmake toolchain, hint that this is a cross-compiler and linking the normal test won´t work.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 

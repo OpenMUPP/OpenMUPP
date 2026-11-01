@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Derives the firmware version from `git describe` and writes Version.h into the build directory.
 # A tag vMAJOR.MINOR.BUILD gives the version numbers. Without such a tag (for example before the first
 # release) the version is 0.0.0 and the describe output is the build revision.

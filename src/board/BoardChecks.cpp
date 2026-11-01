@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Build-time checks of the selected board against the build configuration.
 
 #include "board/Board.h"

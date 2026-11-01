@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The USB_TO_GPIO block (0x23): OpenOCD drives SRST and TRST through it.

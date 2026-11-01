@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Mock pins for the SWD bit-bang engine (swd/SwdBitBang.h), with a mock

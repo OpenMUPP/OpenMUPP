@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The USB_TO_JTAG_RAW block (0x47): OpenOCD shifts all JTAG bits through

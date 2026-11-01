@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Host tests for flash_benchmark.py. They use a fake OpenOCD, so they need
 no OpenOCD and no hardware.
 

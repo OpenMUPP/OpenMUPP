@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The SWD port: the interface of the SWD engine (swd/SwdBitBang.h). The

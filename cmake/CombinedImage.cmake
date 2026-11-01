@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Makes the combined image of openmupp-bootloader and the app-8k image, in
 # script mode. CMakeLists.txt runs it as the command of the target
 # openmupp-with-bootloader.

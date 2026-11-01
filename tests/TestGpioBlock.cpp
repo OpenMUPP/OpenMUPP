@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The USB_TO_GPIO block, and the map of its bits to the board pins.
 
 #include "board/DebugGpio.h"

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # The boards of the firmware. BOARD selects one board, and the board selects
 # its MCU family. CMakeLists.txt includes this file before project(): the
 # toolchain file (cmake/gcc_arm.cmake) takes the CPU flags from STM32_FAMILY.

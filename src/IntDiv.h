@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Integer division without 64-bit division. The Cortex-M3 divides 32-bit

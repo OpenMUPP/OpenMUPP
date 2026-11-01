@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The USB_TO_SWD block on a fake SWD port, and the request and parity
 // encoding.
 

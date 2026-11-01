@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import struct, sys
 def blocks(path):
     # Limit: timestamps assume the default if_tsresol (microseconds), as usbmon captures have.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The scale of the Vref sense: ADC reading to the target voltage in mV.

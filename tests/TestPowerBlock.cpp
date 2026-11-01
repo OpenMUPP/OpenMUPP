@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The USB_TO_POWER block, on a fake power switch and voltage sense.
 
 #include "protocol/versaloon/PowerBlock.h"

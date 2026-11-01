@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The USB_TO_ALL dispatcher: block framing, INFO, DELAY and the sub-command
 // blocks.
 

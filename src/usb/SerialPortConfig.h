@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // MUPP_USB_SERIAL_PORT: a personality of the image has the CDC-ACM serial

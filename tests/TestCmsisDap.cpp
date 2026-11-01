@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The CMSIS-DAP command processor on the SWD bit-bang engine, with the
 // mock SWD target of MockSwdPins.h, a fake GPIO and a fake platform.
 

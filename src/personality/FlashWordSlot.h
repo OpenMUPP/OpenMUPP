@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The layout of the settings sector on the STM32H5 (board/SettingsFlashPage.cpp).

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Replays the USB traffic of OpenOCD sessions (tests/replay/*.trace) through
 // the Versaloon function and the USB_TO_ALL dispatcher, on the fake USB
 // controller.

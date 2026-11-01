@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Mock SPI pair for the JTAG fast path (jtag/JtagFastPath.h). It clocks

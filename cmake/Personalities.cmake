@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # The USB personalities of the firmware image (docs/usb-device.md,
 # src/personality/Personality.h).
 #

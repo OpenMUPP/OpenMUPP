@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The JTAG-DP of the CMSIS-DAP command processor (DapProcessor.h) on a JTAG

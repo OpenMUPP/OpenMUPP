@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """pyOCD JTAG (or SWD) test of an STM32F1 target on the CMSIS-DAP personality.
 
 pyOCD 0.45.1 sends DAP_JTAG_Configure with one device of IR length 4. The

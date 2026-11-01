@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // A mock flash controller (FPEC) of a CH32V00x or CH32V20x, and a model of

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The personality switch request on EP0 (docs/usb-device.md, "Switch request

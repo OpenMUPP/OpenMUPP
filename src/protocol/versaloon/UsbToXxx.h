@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The blocks of a USB_TO_ALL command (protocol/versaloon/UsbToAll.h), as OpenOCD

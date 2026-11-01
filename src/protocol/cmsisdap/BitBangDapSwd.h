@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The CMSIS-DAP transfer rules on the SWD bit-bang engine. Hardware-

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The WCH-Link interface (interface 0, usb/WchLinkDescriptors.h).

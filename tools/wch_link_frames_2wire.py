@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Decode the 54-clock frames of the WCH-LinkE two-wire interface.
 
 Input: a Saleae CSV export (digital, one row for each change) with

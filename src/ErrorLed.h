@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Probe error LED pattern: a double flash after a JTAG or SWD error. Each

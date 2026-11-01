@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Central build configuration helper
 # Creates an INTERFACE target with the passed NAME and attaches common
 # compile definitions/options and link options based on variables defined

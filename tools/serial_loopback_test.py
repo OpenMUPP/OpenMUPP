@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Loopback test for the serial port (UART bridge) of the Versaloon dongle.
 
 Connect the UART TX pin to the UART RX pin of the dongle (PA9 to PA10 on the

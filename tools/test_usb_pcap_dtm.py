@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests for the DTM scan decoder of tools/usb-pcap/dtm.py."""
 import os
 import sys

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The USB_TO_XXX dispatcher: runs the blocks of a USB_TO_ALL command

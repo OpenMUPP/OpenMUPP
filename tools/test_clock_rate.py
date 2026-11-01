@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Host tests for clock_rate.py.
 
 Run: python3 -m unittest discover -s tools -p "test_*.py"

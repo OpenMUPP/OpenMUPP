@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The CMSIS-DAP v2.1 command processor for SWD and JTAG. Hardware-

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Host tests for dap_uart_loopback_test.py. They need no pyusb and no hardware.
 
 Run: python3 -m unittest discover -s tools -p "test_*.py"

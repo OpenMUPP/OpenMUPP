@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The RISC-V debug wire engine on mock pins with a mock target. The
 // reference frames and times come from the WCH-LinkE captures in
 // docs/wch-link-captures (docs/wch-link-protocol.md).

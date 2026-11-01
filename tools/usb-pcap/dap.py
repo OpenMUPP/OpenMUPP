@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Decode the CMSIS-DAP request stream (bulk OUT) of a usbmon pcapng.
 
 Usage: dap.py FILE.pcapng DEV [EP_OUT] [--scans | --trace]

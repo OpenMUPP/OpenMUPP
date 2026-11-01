@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "ErrorLed.h"
 
 #include <doctest/doctest.h>

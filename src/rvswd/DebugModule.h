@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The RISC-V debug module (DM, RISC-V debug spec 0.13) of a CH32V target,

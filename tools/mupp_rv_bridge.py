@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Sets the mode of the RISC-V bridge of the CMSIS-DAP personality.
 
 An image with MUPP_CMSIS_DAP_RV_BRIDGE (the default) has the bridge. The

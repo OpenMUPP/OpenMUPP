@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The CMSIS-DAP v2 interface (interface 0, bulk OUT 0x03, bulk IN 0x82).

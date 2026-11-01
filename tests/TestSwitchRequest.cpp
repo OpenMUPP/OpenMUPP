@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The personality switch request on EP0 (usb/SwitchRequest.h) on the
 // libArT USB device stack, with the fake controller of libArT as the host.
 // The tests in the other personalities are in TestCmsisDapEnumeration.cpp

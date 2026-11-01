@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The UART bridge with the real CDC-ACM function of libArT on the device
 // with the descriptors of the firmware. The fake controller of libArT is
 // the host, a fake UART with a simulated interrupt is the UART.
