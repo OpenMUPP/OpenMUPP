@@ -5,7 +5,7 @@ name: CI
 # docs/development.md ("Continuous integration") explains each job.
 on:
   push:
-    branches: [main, dev]
+    branches: [dev]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:

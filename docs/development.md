@@ -238,5 +238,4 @@ Encode `+` as `%2B`, the space as `%20`, `,` as `%2C`, `[` as `%5B` and `]` as `
 
 ## Branches
 
-- `main`: released, stable firmware.
-- `dev`: the next version. Features go into `dev` through merge requests.
+The project has one branch: `dev`. All changes go into `dev` through pull requests. A tag marks each release.
