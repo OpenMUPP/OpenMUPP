@@ -32,7 +32,7 @@ The file name gives the target, the tool and the command, for example `v003-wlin
 
 Notes:
 
-- The captures of `wlink flash` are not in this repository. They contain the flash stub that wlink sends to the target, and this project has no license for that code. References to `v003-wlink-flash.pcapng`, `v003-wlink-flash-noreset.pcapng`, `v003-wlink-flash-protected.pcapng`, `v006-wlink-flash.pcapng` and `v208-wlink-flash.pcapng` name these captures.
+- The captures of `wlink flash` and the capture `v208-mc-write.pcapng` are not in this repository. They contain a flash stub that the tool sends to the target, and this project has no license for that code. References to `v003-wlink-flash.pcapng`, `v003-wlink-flash-noreset.pcapng`, `v003-wlink-flash-protected.pcapng`, `v006-wlink-flash.pcapng`, `v208-wlink-flash.pcapng` and `v208-mc-write.pcapng` name these captures.
 - The `v006-` set has no `raw-errors` or `connect-fail` file.
 - `v006-wlink-reset2.pcapng` is the reset that follows `v006-wlink-protect.pcapng`.
 - `v006-wlink-dump-verify.pcapng` reads back 4 KB of random data after a flash.
