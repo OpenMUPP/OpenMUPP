@@ -7,8 +7,9 @@ When an issue and this document do not agree, the issue is correct. Update this 
 
 ## Targets
 
-- **Versaloon Mini**: STM32F103C8 or STM32F103CB, 12 MHz crystal, 72 MHz core clock.
-- **ST-Link/V2** clone: STM32F103C8, 8 MHz crystal. It is a compile-only target.
+- **OpenMUPP v1** (main target): STM32H523CC, 24 MHz crystal. It has no board definition yet. The WeAct STM32H523 core board is its test board (see [Boards](boards.md#openmupp-v1-probe-board)).
+- **Versaloon Mini** (secondary target): STM32F103C8 or STM32F103CB, 12 MHz crystal, 72 MHz core clock.
+- **ST-Link/V2** clone (secondary target): STM32F103C8, 8 MHz crystal. It is a compile-only target.
   It is not a supported board now, but a port must be easy.
 
 The firmware runs behind `versaloon-bootloader`.

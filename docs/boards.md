@@ -2,6 +2,8 @@
 
 This document describes the board support of the firmware: the board definitions, the start-up and the LEDs.
 The README lists the supported boards.
+The main target is the [OpenMUPP v1 probe board](#openmupp-v1-probe-board).
+The other boards are for development and tests, or they are older probe hardware.
 
 ## MCU family
 
@@ -301,7 +303,7 @@ The schematics and the design notes are in the repository [openmupp-v1](https://
 
 The firmware has no board definition for this board yet.
 The board layer needs the direction pins, the split nRESET path and the power functions that this section lists.
-The WeAct STM32H523 core board is the H5 test board until then.
+The WeAct STM32H523 core board is the test board for the same MCU until then.
 
 The board has more functions than the Versaloon Mini.
 This table lists the rules that the firmware must follow for each function.
