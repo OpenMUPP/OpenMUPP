@@ -476,7 +476,8 @@ The [bridge hardware test](#bridge-hardware-test) has the results of the three c
 ### Flash with OpenOCD
 
 Mainline OpenOCD has no CH32V flash driver yet.
-A patch series for mainline OpenOCD adds the `ch32v` flash driver. The series is on the OpenOCD Gerrit (<https://review.openocd.org>, change `flash/nor/ch32v: add WCH CH32V flash driver`).
+A patch series for mainline OpenOCD adds the `ch32v` flash driver. The series is on the OpenOCD Gerrit, changes 10176 to 10183.
+The driver is change [10182](https://review.openocd.org/c/openocd/+/10182). Get the full series from the last change, [10183](https://review.openocd.org/c/openocd/+/10183).
 Until the merge, build OpenOCD with that series.
 
 With the `ch32v` driver, each config adds two flash banks:
@@ -892,7 +893,7 @@ The test uses the `ch32v` flash driver (see [Flash with OpenOCD](#flash-with-ope
 |---|---|
 | Date | 2026-11-02 |
 | Probe | `cmsis-dap` image, version 0.13 (`bcdDevice`), serial `320069063053363247680543` |
-| OpenOCD | `0.12.0+dev-01780-g1f6863394` with the `ch32v` patch series |
+| OpenOCD | `0.12.0+dev-01780-g1f6863394` with the `ch32v` patch series, an earlier version of Gerrit changes [10176](https://review.openocd.org/c/openocd/+/10176) to [10183](https://review.openocd.org/c/openocd/+/10183) |
 | Test data | Random files of 8000 bytes (the end is not on a page boundary) and of 16 KB |
 
 CH32V003 (`ch32v003-cmsis-dap.cfg`, default `WORKAREASIZE`):
