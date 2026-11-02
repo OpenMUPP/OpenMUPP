@@ -486,7 +486,7 @@ With the `ch32v` driver, each config adds two flash banks:
 | `<CHIPNAME>.flash` | `0x08000000` | `ch32v` |
 | `<CHIPNAME>.alias` | `0x00000000` | `virtual`, the same flash. The WCH SDK links programs to this address |
 
-Without the driver, OpenOCD shows `Error: flash driver 'ch32v' not found` and the info line of the config.
+Without the driver, OpenOCD shows `Error: flash driver 'ch32v' not found`, and the config shows the line `Info : The config has no flash bank: see the error above`.
 The config then has no flash bank, and debug works as before.
 
 The driver probes the family from the chip ID and the flash size from `ESIG_FLACAP`.
