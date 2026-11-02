@@ -80,8 +80,15 @@ PERSONALITIES = {
 PRODUCT_STRINGS = {
     ("cmsis-dap", 0x1209, 0x0001): ("OpenMUPP CMSIS-DAP",),
     ("wch-link", 0x1209, 0x0001): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
-    ("wch-link", 0x1A86, 0x8010): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
+    ("wch-link", 0x1A86, 0x8010): ("OpenMUPP WCH-Link", "Versaloon WCH-Link", "WCH-Link"),
     (BOOTLOADER, 0x0483, 0x5740): ("Bootloader",),
+}
+
+# The WCH ID build has the product "WCH-Link" of the real WCH-LinkE, because
+# probe-rs needs it. The manufacturer string tells the dongle from the real
+# probe. The key is (personality, VID, PID, product).
+MANUFACTURER_STRINGS = {
+    ("wch-link", 0x1A86, 0x8010, "WCH-Link"): "OpenMUPP",
 }
 
 # The ROM DFU has its own serial number, not the chip UID of the firmware,
@@ -216,6 +223,9 @@ def find_devices(usb, serial=None, any_serial_ids=(), usb_id=None, unreadable=No
                 if found is None and unreadable is not None and device not in unreadable:
                     unreadable.append(device)
                 if found not in products:
+                    continue
+                manufacturer = MANUFACTURER_STRINGS.get((name, vid, pid, found))
+                if manufacturer is not None and get_string(usb, device, device.iManufacturer) != manufacturer:
                     continue
             if serial is not None and (vid, pid) not in any_serial_ids:
                 found = get_string(usb, device, device.iSerialNumber)

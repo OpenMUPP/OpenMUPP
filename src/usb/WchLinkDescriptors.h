@@ -82,6 +82,12 @@ desc::configuration(desc::ConfigurationFields{ .maxPowerMilliamps = maxPowerMill
 
 inline constexpr auto languageDescriptor = desc::languages(desc::kLanguageEnglishUs);
 inline constexpr auto manufacturerDescriptor = desc::stringDescriptor(u"OpenMUPP");
+#if defined(MUPP_WCH_LINK_WCH_USB_ID)
+// probe-rs finds a WCH-Link only by this exact product string (get_wlink_info()
+// in probe-rs 0.32.0). The manufacturer "OpenMUPP" tells it from a real WCH-LinkE.
+inline constexpr auto productDescriptor = desc::stringDescriptor(u"WCH-Link");
+#else
 inline constexpr auto productDescriptor = desc::stringDescriptor(u"OpenMUPP WCH-Link");
+#endif
 
 } // namespace usb::wch

@@ -107,14 +107,15 @@ def stall():
 class FakeDevice:
     """A dongle. ctrl_error and reply select how it answers."""
 
-    def __init__(self, vid, pid, product="", serial="SN1", ctrl_error=None, reply=None):
+    def __init__(self, vid, pid, product="", serial="SN1", ctrl_error=None, reply=None, manufacturer="OpenMUPP"):
         self.idVendor = vid
         self.idProduct = pid
+        self.iManufacturer = 1
         self.iProduct = 2
         self.iSerialNumber = 3
         self.bus = 1
         self.address = 7
-        self.strings = {2: product, 3: serial}
+        self.strings = {1: manufacturer, 2: product, 3: serial}
         self.ctrl_error = ctrl_error
         self.reply = reply
         self.ctrl_transfers = []
@@ -167,11 +168,13 @@ class FindDevicesTest(unittest.TestCase):
         dap = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP")
         old = FakeDevice(0x1209, 0x0001, "Versaloon WCH-Link")
         other = FakeDevice(0x1209, 0x0001, "Some test device")
-        real = FakeDevice(0x1A86, 0x8010, "WCH-Link")
+        real = FakeDevice(0x1A86, 0x8010, "WCH-Link", manufacturer="wch.cn")
         ours_wch_id = FakeDevice(0x1A86, 0x8010, "OpenMUPP WCH-Link")
-        found = vp.find_devices(fake_usb([ours, dap, old, other, real, ours_wch_id]))
+        ours_probe_rs = FakeDevice(0x1A86, 0x8010, "WCH-Link")
+        found = vp.find_devices(fake_usb([ours, dap, old, other, real, ours_wch_id, ours_probe_rs]))
         self.assertEqual(
-            found, [("cmsis-dap", dap), ("wch-link", ours), ("wch-link", old), ("wch-link", ours_wch_id)]
+            found,
+            [("cmsis-dap", dap), ("wch-link", ours), ("wch-link", old), ("wch-link", ours_wch_id), ("wch-link", ours_probe_rs)],
         )
 
     def test_unreadable_product_string(self):
