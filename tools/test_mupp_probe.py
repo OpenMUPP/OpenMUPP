@@ -598,5 +598,65 @@ class BridgeCommandTest(unittest.TestCase):
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x01]))])
 
 
+class PowerCheckReplyTest(unittest.TestCase):
+    def test_done(self):
+        mp.check_power_reply([0x82, 0x00, 0xE4, 0x0C])
+
+    def test_old_firmware(self):
+        with self.assertRaisesRegex(mp.ProbeError, "v0.13.0"):
+            mp.check_power_reply([0xFF])
+
+    def test_refused_shows_the_voltage(self):
+        with self.assertRaisesRegex(mp.ProbeError, "refused the switch-on.* 3300 mV"):
+            mp.check_power_reply([0x82, 0x01, 0xE4, 0x0C])
+
+    def test_no_switch(self):
+        with self.assertRaisesRegex(mp.ProbeError, "no power switch"):
+            mp.check_power_reply([0x82, 0xFF, 0x00, 0x00])
+
+    def test_other_response(self):
+        for reply in ([], [0x81, 0x00, 0x00, 0x00], [0x82, 0x00], [0x82, 0x02, 0x00, 0x00]):
+            with self.assertRaises(mp.ProbeError):
+                mp.check_power_reply(reply)
+
+
+class PowerCommandTest(unittest.TestCase):
+    def run_main(self, argv, devices):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = mp.main(["power", *argv], fake_usb(devices))
+        return result, stdout.getvalue(), stderr.getvalue()
+
+    def test_operations(self):
+        for operation, code in (("off", 0), ("on", 1), ("status", 2)):
+            device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x82, 0x00, 0xE4, 0x0C])
+            result, out, _ = self.run_main([operation], [device])
+            self.assertEqual(result, 0)
+            self.assertEqual(device.writes, [(0x03, bytes([0x82, code]))])
+            self.assertIn("Target voltage: 3300 mV", out)
+
+    def test_status_does_not_claim_a_switch(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x82, 0x00, 0x00, 0x00])
+        self.assertNotIn("target power is", self.run_main(["status"], [device])[1])
+
+    def test_refused(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x82, 0x01, 0xE4, 0x0C])
+        result, out, err = self.run_main(["on"], [device])
+        self.assertEqual(result, 1)
+        self.assertEqual(out, "")
+        self.assertIn("own supply", err)
+
+    def test_only_cmsis_dap(self):
+        versaloon = FakeDevice(0x0483, 0xA038)
+        self.assertEqual(self.run_main(["on"], [versaloon])[0], 1)
+        self.assertEqual(versaloon.writes, [])
+
+    def test_no_response(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=None)
+        result, _, err = self.run_main(["off"], [device])
+        self.assertEqual(result, 1)
+        self.assertIn("Cannot send", err)
+
+
 if __name__ == "__main__":
     unittest.main()

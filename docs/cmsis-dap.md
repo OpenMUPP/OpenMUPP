@@ -268,7 +268,19 @@ After `82 00`, the rail capacitance can keep the voltage above 1.8 V for some ti
 An `82 01` in this time is refused, because the firmware sees a target with its own supply.
 Thus, before `82 01`, wait until `82 02` gives a voltage below 1.8 V.
 
-Send the command with OpenOCD, for example a power cycle of the target.
+`tools/mupp_probe.py` sends the command from the host. It needs the `pyusb` package and no connection to the target:
+
+```sh
+python3 tools/mupp_probe.py power on
+python3 tools/mupp_probe.py power off
+python3 tools/mupp_probe.py power status
+```
+
+The tool shows the target voltage. It stops with exit code 1 when the firmware refuses the operation.
+`--serial` selects a dongle.
+
+In an OpenOCD session, `cmsis-dap cmd` sends the command, for example for a power cycle of the target.
+OpenOCD accepts this command only after `init`.
 The 200 ms wait is not tested on hardware:
 
 ```

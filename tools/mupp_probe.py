@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Host control of the probe: the USB personality of a multi image
-(MUPP_PERSONALITIES), the bootloader and the RISC-V bridge.
+(MUPP_PERSONALITIES), the bootloader, the RISC-V bridge and the target power.
 
 "switch" switches the personality or starts the bootloader:
 openmupp-bootloader on the STM32F1 boards, the ROM USB DFU on the STM32H5
@@ -51,6 +51,20 @@ so probe-rs needs no command. Use "on" or "off" to force the port. Without
 OpenOCD sends the command itself (cmsis-dap cmd 0x81 0x01). See
 docs/cmsis-dap.md, "Bridge switch".
 
+"power" switches the 3.3 V supply of the target and reads the target voltage.
+The script sends the vendor command ID_DAP_Vendor2 of the CMSIS-DAP personality
+on interface 0:
+
+    [0x82][0] off, [0x82][1] on, [0x82][2] only read the voltage
+    -> response [0x82][status][mV u16], 0 = done, 1 = refused,
+       0xFF = the board has no power switch
+
+The firmware refuses "on" when the target has its own supply, or when the
+rail has a short circuit or an overload. After "off", the rail can stay above
+1.8 V for some time and "on" is refused too: wait until "status" shows less.
+The supply stays on after the script ends. See docs/cmsis-dap.md,
+"Target power".
+
 Usage:
     python3 mupp_probe.py show
     python3 mupp_probe.py switch cmsis-dap
@@ -62,6 +76,9 @@ Usage:
     python3 mupp_probe.py bridge on
     python3 mupp_probe.py bridge auto --serial 0123456789AB
     python3 mupp_probe.py bridge off --store
+    python3 mupp_probe.py power on
+    python3 mupp_probe.py power off --serial 0123456789AB
+    python3 mupp_probe.py power status
 
 A device with a known ID, but with strings that the tool cannot read, is
 reported with its bus and address. On Linux this is a missing udev rule, and
@@ -71,7 +88,7 @@ for a dongle with an ID or a product string that the tool does not know.
 An ID that the tool does not know, or that two personalities share (1209:0001),
 has an unknown personality: --active names
 it. Without it, the EP0 request still works, but not the fallback command,
-and "bridge" does not find the dongle.
+and "bridge" and "power" do not find the dongle.
 The wait after a switch looks for the standard IDs of the target.
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
@@ -129,11 +146,16 @@ FW_UPDATE = 0x0F
 FW_UPDATE_KEY = 0xAA
 DAP_VENDOR0 = 0x80
 DAP_VENDOR1 = 0x81
+DAP_VENDOR2 = 0x82
 DAP_INVALID = 0xFF
 # The modes of ID_DAP_Vendor1
 BRIDGE_MODES = {"off": 0, "on": 1, "auto": 2, "stored": 3}
 # This bit of the mode also stores the mode
 BRIDGE_STORE_FLAG = 0x80
+# The operations of ID_DAP_Vendor2
+POWER_OPS = {"off": 0, "on": 1, "status": 2}
+POWER_REFUSED = 1
+POWER_NOT_SUPPORTED = 0xFF
 LIBUSB_ERROR_PIPE = -9
 LIBUSB_ERROR_ACCESS = -3
 # libusb errors after which the request can have gone out: IO, NO_DEVICE,
@@ -212,6 +234,31 @@ def check_bridge_reply(reply):
         raise ProbeError(
             "the firmware refused the mode (status %d): a mode that it does not know, or a failed store. A firmware without the stored mode refuses --store" % reply[1]
         )
+
+
+def check_power_reply(reply):
+    """Raises ProbeError when the response does not confirm the power operation."""
+    reply = bytes(reply)
+    if reply[:1] == bytes([DAP_INVALID]):
+        raise ProbeError("the firmware does not know ID_DAP_Vendor2: update it to v0.13.0 or later")
+    if len(reply) < 4 or reply[0] != DAP_VENDOR2:
+        raise ProbeError("unexpected response %s" % reply.hex())
+    millivolts = power_millivolts(reply)
+    if reply[1] == POWER_REFUSED:
+        raise ProbeError(
+            "the firmware refused the switch-on, the target voltage is %d mV. "
+            "Above 1.8 V: the target has its own supply, or the rail did not discharge yet. "
+            "Below it: a short circuit, an overload or a failed measurement" % millivolts
+        )
+    if reply[1] == POWER_NOT_SUPPORTED:
+        raise ProbeError("the firmware refused the operation: the board has no power switch")
+    if reply[1] != 0:
+        raise ProbeError("unexpected response %s" % reply.hex())
+
+
+def power_millivolts(reply):
+    """The target voltage of an ID_DAP_Vendor2 response. 0 without a Vref sense."""
+    return int.from_bytes(bytes(reply)[2:4], "little")
 
 
 def is_access_denied(error):
@@ -493,6 +540,16 @@ def command_bridge(usb, args):
     return 0
 
 
+def command_power(usb, args):
+    reply = run_dap_command(usb, args, bytes([DAP_VENDOR2, POWER_OPS[args.operation]]), check_power_reply)
+    if reply is None:
+        return 1
+    if args.operation != "status":
+        print("The target power is %s" % args.operation)
+    print("Target voltage: %d mV" % power_millivolts(reply))
+    return 0
+
+
 def add_selection_options(parser, default):
     parser.add_argument("--serial", default=default, help="the serial number of the dongle (the chip UID)")
     parser.add_argument("--id", default=default, type=parse_usb_id, metavar="VID:PID", help="select the dongle by this USB ID (hexadecimal), without the product string check")
@@ -509,9 +566,11 @@ def main(argv=None, usb=None):
     bridge = commands.add_parser("bridge", help="set the mode of the RISC-V bridge (CMSIS-DAP personality)")
     bridge.add_argument("mode", choices=tuple(BRIDGE_MODES))
     bridge.add_argument("--store", action="store_true", help="also store the mode: the mode at power-up and after a USB reset")
+    power = commands.add_parser("power", help="switch the 3.3 V target supply or read the target voltage (CMSIS-DAP personality)")
+    power.add_argument("operation", choices=tuple(POWER_OPS))
     # The options also work after the command. SUPPRESS keeps a value from
     # before the command.
-    for subparser in (show, switch, bridge):
+    for subparser in (show, switch, bridge, power):
         add_selection_options(subparser, argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.active is not None and (args.id is None or personality_of(*args.id) is not None):
@@ -520,7 +579,7 @@ def main(argv=None, usb=None):
         parser.error("the stored mode is stored already: use --store with off, on or auto")
     if usb is None:
         usb = import_usb()
-    return {"show": command_show, "switch": command_switch, "bridge": command_bridge}[args.command](usb, args)
+    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power}[args.command](usb, args)
 
 
 if __name__ == "__main__":
