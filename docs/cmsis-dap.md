@@ -467,11 +467,49 @@ An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_
 Set the stored mode with `python3 tools/mupp_rv_bridge.py stored`, or replug the probe.
 The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
-The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet.
+The configs add a flash bank only when OpenOCD has the `ch32v` flash driver (see [Flash with OpenOCD](#flash-with-openocd)).
 
 Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, Mini with the SPI1 remap fix, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
 The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
 The [bridge hardware test](#bridge-hardware-test) has the results of the three configs.
+
+### Flash with OpenOCD
+
+Mainline OpenOCD has no CH32V flash driver yet.
+A patch series for mainline OpenOCD adds the `ch32v` flash driver. The series is on the OpenOCD Gerrit, changes 10176 to 10183.
+The driver is change [10182](https://review.openocd.org/c/openocd/+/10182). Get the full series from the last change, [10183](https://review.openocd.org/c/openocd/+/10183).
+Until the merge, build OpenOCD with that series.
+
+With the `ch32v` driver, each config adds two flash banks:
+
+| Bank | Address | Driver |
+|---|---|---|
+| `<CHIPNAME>.flash` | `0x08000000` | `ch32v` |
+| `<CHIPNAME>.alias` | `0x00000000` | `virtual`, the same flash. The WCH SDK links programs to this address |
+
+Without the driver, OpenOCD shows `Error: flash driver 'ch32v' not found`, and the config shows the line `Info : The config has no flash bank: see the error above`.
+The config then has no flash bank, and debug works as before.
+
+The driver probes the family from the chip ID and the flash size from `ESIG_FLACAP`.
+It writes whole pages with a loader in the work area. The work area must hold the loader (196 bytes) and one page.
+This command writes and verifies a program:
+
+```sh
+openocd -f etc/openocd/ch32v003-cmsis-dap.cfg -c "program firmware.elf verify reset exit"
+```
+
+The driver has these commands. Changes to the option bytes take effect after a reset (`reset halt`):
+
+| Command | Function |
+|---|---|
+| `ch32v mass_erase 0` | Erases the full flash |
+| `ch32v lock 0` | Sets the read protection (`RDPR` `0x00`) |
+| `ch32v unlock 0` | Removes the read and write protection. A protected chip erases its flash |
+| `ch32v options_read 0` | Shows the option bytes, `FLASH_OBR` and `FLASH_WPR` |
+| `ch32v options_write 0 <user> [<data0> <data1>]` | Writes `USER`, and optionally `DATA0` and `DATA1` |
+| `flash protect 0 <first> <last> on` | Sets the write protection of blocks (1 KB on the CH32V003, 2 KB on the CH32V00X, 4 KB on the CH32V20x) |
+
+Results with the `ch32v` driver are in [Flash test with OpenOCD](#flash-test-with-openocd).
 
 ### Bridge switch
 
@@ -846,6 +884,94 @@ Thus the wire and USB now use most of the time.
 The remaining firmware time is spread over the TAP emulation and the packet code.
 A build with `-O2` for `DapJtag.cpp` and `RvDtmTap.cpp` did not make the sequences faster.
 The instruction cache misses are below 1%.
+
+#### Flash test with OpenOCD
+
+The test uses the `ch32v` flash driver (see [Flash with OpenOCD](#flash-with-openocd)).
+
+| Item | Value |
+|---|---|
+| Date | 2026-11-02 |
+| Probe | `cmsis-dap` image, version 0.13 (`bcdDevice`), serial `320069063053363247680543` |
+| OpenOCD | `0.12.0+dev-01780-g1f6863394` with the `ch32v` patch series, an earlier version of Gerrit changes [10176](https://review.openocd.org/c/openocd/+/10176) to [10183](https://review.openocd.org/c/openocd/+/10183) |
+| Test data | Random files of 8000 bytes (the end is not on a page boundary) and of 16 KB |
+
+CH32V003 (`ch32v003-cmsis-dap.cfg`, default `WORKAREASIZE`):
+
+| Test | Result |
+|---|---|
+| `flash probe` | Pass: `CH32V003, chip ID 0x00300500, 16 KiB flash`, 16 protection blocks of 1 KB |
+| `program` of 8000 bytes, `verify` | Pass |
+| `program` to `0x00000000` (the alias bank), `verify_image` at `0x08000000` | Pass |
+| `flash erase_sector 0 2 3` | Pass: only `0x08000080` to `0x080000ff` read `0xffffffff` |
+| `flash fillw` at `0x08000084` (not on a page boundary) | Pass: OpenOCD pads the page, and the other words of the page stay erased |
+| `ch32v mass_erase`, `flash erase_check` | Pass: "Bank is erased" |
+| `flash write_image erase` of 16 KB | Pass: 2.55 s (6.3 KiB/s), with the erase. `verify_image`: 0.16 s |
+| `flash protect 0 2 3 on`, `reset halt` | Pass: `FLASH_WPR` `0xfffffff3`. A write to block 2 fails with `WRPRTERR`. A write to block 4 passes |
+| `flash protect 0 0 last off`, `reset halt` | Pass: `FLASH_WPR` `0xffffffff` |
+| `ch32v options_write 0 0x17 0x42 0x99`, `reset halt` | Pass: `FLASH_OBR` shows `DATA0` `0x42` and `DATA1` `0x99`. Then back to `0x00` and `0xff` |
+| `ch32v lock`, `reset halt` | Pass: `RDPRT` 1. A flash read fails ("progbuf startup failed") |
+| `ch32v unlock`, `reset halt` | Pass: `RDPRT` 0. The chip erased the flash itself. `ndmreset` loads the new `RDPR` |
+
+For comparison: probe-rs needs 20.1 s for 8 KB on the same chip ([CH32V003 on the Mini](#ch32v003-on-the-mini)).
+
+CH32V006 (`ch32v00x-cmsis-dap.cfg` with `WORKAREASIZE` `0x2000`, and the OpenOCD config `target/wch/ch32v00x.cfg`):
+
+| Test | Result |
+|---|---|
+| `flash probe` | Pass: `CH32V00X, chip ID 0x00600620, 62 KiB flash`, 31 protection blocks of 2 KB. The chip ID is at `0x1ffff704`. At `0x1ffff7c4`, the CH32V006 reads `0xffffffff` |
+| `program` of 8000 bytes, `verify` | Pass |
+| `flash write_image erase` of 62 KB | Pass: 23.3 s (2.7 KiB/s), with the erase. `verify_image`: 0.55 s |
+| `flash erase_sector 0 2 3` | Pass: only `0x08000200` to `0x080003ff` read `0xffffffff` |
+| `flash fillw` at `0x08000204` | Pass |
+| `flash protect 0 2 3 on`, `reset halt` | Pass: `FLASH_WPR` `0xfffffff3`. A write to `0x08001000` (block 2) fails with `WRPRTERR`. A write to block 4 passes |
+| `ch32v options_write 0 0xff 0x42 0x99`, `reset halt` | Pass |
+| `ch32v lock`, `reset halt` | Pass: `RDPRT` 1, a flash read fails |
+| `ch32v unlock`, `reset halt` | Pass: `RDPRT` 0, and the flash is erased. `ndmreset` loads the new `RDPR`. No power cycle is necessary |
+
+The RAM write of the abstract command limits the write rate (see [CH32V006 on the Mini](#ch32v006-on-the-mini): `load_image` at 2.76 KiB/s).
+
+Two problems occurred during the test. The driver and the configs now prevent them:
+
+- Without the abstract memory access (`riscv mem_access abstract`, or the older name `riscv set_mem_access abstract` of the OpenMUPP configs), OpenOCD sends 16-bit writes through the program buffer. The CH32V006 refuses the program buffer, and the write times out with `abstractcs.busy` 1. The option bytes were then erased (`RDPR` `0xff`), and the chip was read protected. The CH32V00X configs select the abstract command.
+- With `OBPG` and `STRT` in one `FLASH_CTLR` write after the option byte erase, the CH32V006 does not program the first half word (`RDPR`). The other half words are programmed. The driver now writes `OBPG` alone first.
+
+CH32V208 (`ch32v20x-cmsis-dap.cfg`, and the OpenOCD config `target/wch/ch32v20x.cfg`, default `WORKAREASIZE`):
+
+| Test | Result |
+|---|---|
+| `flash probe` | Pass: `CH32V20x, chip ID 0x2080053c, 160 KiB flash`, 32 protection blocks of 4 KB. The chip ID is at `0x1ffff704` |
+| `ch32v options_read` | Pass: `USER` `0x3f`. The values agree with the option byte area |
+| Erased flash | Reads `0xe339e339`, as the manual says. `flash erase_check` uses this value |
+| `program` of 8000 bytes, `verify` | Pass |
+| `flash write_image erase` of 160 KB | Pass: 13.3 s (12.0 KiB/s), with the erase. `verify_image` at `0x00000000`: 0.70 s |
+| `flash erase_sector 0 2 3` | Pass: only `0x08000200` to `0x080003ff` read `0xe339e339` |
+| `flash fillw` at `0x08000204` | Pass. The padding words read `0xffffffff` |
+| `ch32v mass_erase`, `flash erase_check` | Pass, with a fix in the driver. See the note below the table |
+| `flash protect 0 2 3 on`, `reset halt` | Pass: `FLASH_WPR` `0xfffffff3`. A write to `0x08002000` (block 2) fails with `FLASH_STATR` `0x12` (`WRBSY`, `WRPRTERR`). The next write to block 4 passes |
+| `ch32v options_write 0 0x3f 0x42 0x99`, `reset halt` | Pass |
+| `ch32v lock`, `reset halt` | Pass: `RDPRT` 1, a flash read fails |
+| `ch32v unlock`, `reset halt` | Pass: `RDPRT` 0, and the flash reads `0xe339e339` |
+
+The `ch32v mass_erase` and `flash erase_check` test failed at first: in 2 of 2 runs of the full test list, `erase_check` showed sector 0 as not erased.
+After a mass erase of a full flash, the first reads of the CH32V208 give wrong data, also after `BSY` is 0 and `EOP` is 1.
+A read 1 ms after the end of the erase gave wrong data in the first 16 bytes. A read after 3 ms gave `0xe339e339`.
+The driver now waits 10 ms after a mass erase. Then the sequence that failed (160 KB write, sector erase, `flash fillw`, mass erase, `erase_check`) passed in 5 of 5 runs.
+
+The test found a second problem on the CH32V208, and the loader now prevents it: a word write to a protected page sets `WRPRTERR` at once, but `WRBSY` stays 1. The first loader waited for `WRBSY` until the timeout of OpenOCD.
+
+The final loader adds the `WRPRTERR` check in the `WRBSY` wait of the CH32V20x method only, and its error path clears the flags.
+The CH32V003 and CH32V006 tests ran again on 2026-11-02 with the final loader and the OpenOCD configs `target/wch/ch32v003.cfg` and `target/wch/ch32v00x.cfg`.
+The results did not change: 16 KB in 2.53 s, and 62 KB in 23.2 s.
+The CH32V006 test also passed with the `EOP` wait of the driver, and 6 of 6 runs of `ch32v mass_erase` and `flash erase_check` passed.
+
+The patch series also fixes the two OpenOCD problems of the [CH32V208 test](#ch32v208-on-the-mini):
+
+| Test | Before | With the patch series |
+|---|---|---|
+| `reset halt` | 0 of 8 runs | 10 of 10 runs stop at `pc` 0 |
+| Triggers | "Found 0 triggers" (`tinfo` reads 0) | "Found 4 triggers" |
+| `bp 0x00000004 2 hw` in flash, `resume` | Not available | Pass: "halted due to breakpoint" at `pc` `0x4`. The CH32V208 hardwires `dmode` in `tdata1` to 0. OpenOCD now accepts this |
 
 #### OpenOCD messages at examine
 
