@@ -491,7 +491,7 @@ The config then has no flash bank, and debug works as before.
 
 The driver probes the family from the chip ID and the flash size from `ESIG_FLACAP`.
 It writes whole pages with a loader in the work area. The work area must hold the loader (196 bytes) and one page.
-These commands write and verify a program:
+This command writes and verifies a program:
 
 ```sh
 openocd -f etc/openocd/ch32v003-cmsis-dap.cfg -c "program firmware.elf verify reset exit"
@@ -932,7 +932,7 @@ The RAM write of the abstract command limits the write rate (see [CH32V006 on th
 
 Two problems occurred during the test. The driver and the configs now prevent them:
 
-- Without `mem_access abstract`, OpenOCD sends 16-bit writes through the program buffer. The CH32V006 refuses the program buffer, and the write times out with `abstractcs.busy` 1. The option bytes were then erased (`RDPR` `0xff`), and the chip was read protected. The CH32V00X configs select the abstract command.
+- Without the abstract memory access (`riscv mem_access abstract`, or the older name `riscv set_mem_access abstract` of the OpenMUPP configs), OpenOCD sends 16-bit writes through the program buffer. The CH32V006 refuses the program buffer, and the write times out with `abstractcs.busy` 1. The option bytes were then erased (`RDPR` `0xff`), and the chip was read protected. The CH32V00X configs select the abstract command.
 - With `OBPG` and `STRT` in one `FLASH_CTLR` write after the option byte erase, the CH32V006 does not program the first half word (`RDPR`). The other half words are programmed. The driver now writes `OBPG` alone first.
 
 CH32V208 (`ch32v20x-cmsis-dap.cfg`, and the OpenOCD config `target/wch/ch32v20x.cfg`, default `WORKAREASIZE`):
@@ -946,7 +946,7 @@ CH32V208 (`ch32v20x-cmsis-dap.cfg`, and the OpenOCD config `target/wch/ch32v20x.
 | `flash write_image erase` of 160 KB | Pass: 13.3 s (12.0 KiB/s), with the erase. `verify_image` at `0x00000000`: 0.70 s |
 | `flash erase_sector 0 2 3` | Pass: only `0x08000200` to `0x080003ff` read `0xe339e339` |
 | `flash fillw` at `0x08000204` | Pass. The padding words read `0xffffffff` |
-| `ch32v mass_erase`, `flash erase_check` | Pass in 6 of 7 runs. One run showed sector 0 as not erased. The next 6 runs did not show it again |
+| `ch32v mass_erase`, `flash erase_check` | Fail in 1 of 7 runs: one run showed sector 0 as not erased. The cause is not known. The next 6 runs passed. The driver now waits for `EOP` at the end of an erase. The CH32V208 test with that change is not done yet |
 | `flash protect 0 2 3 on`, `reset halt` | Pass: `FLASH_WPR` `0xfffffff3`. A write to `0x08002000` (block 2) fails with `FLASH_STATR` `0x12` (`WRBSY`, `WRPRTERR`). The next write to block 4 passes |
 | `ch32v options_write 0 0x3f 0x42 0x99`, `reset halt` | Pass |
 | `ch32v lock`, `reset halt` | Pass: `RDPRT` 1, a flash read fails |
@@ -954,8 +954,10 @@ CH32V208 (`ch32v20x-cmsis-dap.cfg`, and the OpenOCD config `target/wch/ch32v20x.
 
 The test found a problem on the CH32V208, and the loader now prevents it: a word write to a protected page sets `WRPRTERR` at once, but `WRBSY` stays 1. The first loader waited for `WRBSY` until the timeout of OpenOCD.
 
-The change adds the `WRPRTERR` check in the `WRBSY` wait of the CH32V20x method only, and the error path clears the flags.
-The CH32V003 and CH32V006 tests ran again with the new loader and the OpenOCD configs `target/wch/ch32v003.cfg` and `target/wch/ch32v00x.cfg` on 2026-11-02, with the same results (16 KB in 2.53 s, 62 KB in 23.2 s).
+The final loader adds the `WRPRTERR` check in the `WRBSY` wait of the CH32V20x method only, and its error path clears the flags.
+The CH32V003 and CH32V006 tests ran again on 2026-11-02 with the final loader and the OpenOCD configs `target/wch/ch32v003.cfg` and `target/wch/ch32v00x.cfg`.
+The results did not change: 16 KB in 2.53 s, and 62 KB in 23.2 s.
+The CH32V006 test also passed with the `EOP` wait of the driver, and 6 of 6 runs of `ch32v mass_erase` and `flash erase_check` passed.
 
 The patch series also fixes the two OpenOCD problems of the [CH32V208 test](#ch32v208-on-the-mini):
 
