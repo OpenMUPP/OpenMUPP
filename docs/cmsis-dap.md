@@ -467,11 +467,46 @@ An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_
 Set the stored mode with `python3 tools/mupp_rv_bridge.py stored`, or replug the probe.
 The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
-The configs have no flash bank. Mainline OpenOCD has no CH32V flash driver yet.
+The configs add a flash bank only when OpenOCD has the `ch32v` flash driver (see [Flash with OpenOCD](#flash-with-openocd)).
 
 Result on 2026-10-24 (OpenOCD `0.12.0+dev-01707-gf7037392b`, Mini with the SPI1 remap fix, CH32V006 on one wire): OpenOCD examines the hart (`XLEN=32`, `misa=0x40801014`). Halt, a RAM write and read, and a step pass.
 The CH32V006 has no triggers, so OpenOCD cannot set a hardware breakpoint.
 The [bridge hardware test](#bridge-hardware-test) has the results of the three configs.
+
+### Flash with OpenOCD
+
+Mainline OpenOCD has no CH32V flash driver yet.
+A patch series for mainline OpenOCD adds the `ch32v` flash driver. The series is on the OpenOCD Gerrit (<https://review.openocd.org>, change `flash/nor/ch32v: add WCH CH32V flash driver`).
+Until the merge, build OpenOCD with that series.
+
+With the `ch32v` driver, each config adds two flash banks:
+
+| Bank | Address | Driver |
+|---|---|---|
+| `<CHIPNAME>.flash` | `0x08000000` | `ch32v` |
+| `<CHIPNAME>.alias` | `0x00000000` | `virtual`, the same flash. The WCH SDK links programs to this address |
+
+Without the driver, OpenOCD shows `Error: flash driver 'ch32v' not found` and the info line of the config.
+The config then has no flash bank, and debug works as before.
+
+The driver probes the family from the chip ID and the flash size from `ESIG_FLACAP`.
+It writes whole pages with a loader in the work area. The work area must hold the loader (180 bytes) and one page.
+These commands write and verify a program:
+
+```sh
+openocd -f etc/openocd/ch32v003-cmsis-dap.cfg -c "program firmware.elf verify reset exit"
+```
+
+The driver has these commands. Changes to the option bytes take effect after a reset (`reset halt`):
+
+| Command | Function |
+|---|---|
+| `ch32v mass_erase 0` | Erases the full flash |
+| `ch32v lock 0` | Sets the read protection (`RDPR` `0x00`) |
+| `ch32v unlock 0` | Removes the read and write protection. A protected chip erases its flash |
+| `ch32v options_read 0` | Shows the option bytes, `FLASH_OBR` and `FLASH_WPR` |
+| `ch32v options_write 0 <user> [<data0> <data1>]` | Writes `USER`, and optionally `DATA0` and `DATA1` |
+| `flash protect 0 <first> <last> on` | Sets the write protection of blocks (1 KB on the CH32V003, 2 KB on the CH32V00X, 4 KB on the CH32V20x) |
 
 ### Bridge switch
 
