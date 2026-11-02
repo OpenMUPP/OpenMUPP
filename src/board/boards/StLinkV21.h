@@ -19,7 +19,9 @@ namespace board {
 // PWR_ENn (PB15) switches the 5 V of the Nucleo target side: low is on. The
 // firmware does not drive it, so a Nucleo that is not broken off gets no
 // target power from the ST-Link USB. A broken-off board does not use it.
-// No JTAG fast path, no power switch and no key. USB_RENUMn (PA15) drives
+// No JTAG fast path, no power switch and no key. The bootloader reads SWO
+// (PA10) as its key at power-up, so the firmware keeps PA10 for SWO.
+// USB_RENUMn (PA15) drives
 // an NPN emitter follower to the D+ pull-up: high connects, low
 // disconnects. Open-drain: when released, the base divider (10k to 5 V,
 // 36k to GND) lifts D+ to about 2.9 V at the host. A 3.3 V push-pull

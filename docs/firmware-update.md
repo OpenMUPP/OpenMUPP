@@ -18,7 +18,7 @@ To start `openmupp-bootloader`, use one of these methods:
 - Send a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)). Each personality has a switch command.
 - On the Mini: hold the key (PB9) down and reset the board.
 - On the ST-Link/V2 mini clone: connect SWIM (header pin 3) to GND (header pin 5), then connect the board to USB (see [Bootloader](stlinkv2-mini-clone.md#bootloader)).
-  The ST-Link/V2-1 has no key.
+- On the ST-Link/V2-1: connect SWO (SWD connector pin 6) to GND (pin 3), then connect the board to USB. Only the bootloader reads this key, so the firmware can use PA10 for SWO.
 
 Only the `app-8k` image accepts the commands.
 On the STM32H5, the commands and the key start the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
