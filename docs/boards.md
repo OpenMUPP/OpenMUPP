@@ -334,7 +334,7 @@ The board has these limits:
   The firmware does not read this key, so the personality key gesture is not available.
   The bootloader reads this key at every reset, and the personality switch also goes through a reset.
   Thus an unpowered target, or a Nucleo target that holds PB3 low, can keep the probe in the bootloader.
-  On a Nucleo that is not broken off, SWO also connects to PB3 of the target MCU through SB15. If the target drives PB3 low, open SB15.
+  On an MB1136 Nucleo that is not broken off, SWO also connects to PB3 of the target MCU through SB15. If the target drives PB3 low, open SB15. Other Nucleo boards use other bridges. Read the user manual of your board.
 - `PWR_ENn` (PB15) switches the 5 V of the Nucleo target side. Low is on. The firmware does not drive PB15, so a Nucleo that is not broken off gets no target power from the ST-Link USB, and Vref reads 0 V. Supply the Nucleo from another source, or break the ST-Link part off.
 - PA15 is JTDI after the reset. Thus the firmware disables the JTAG-DP of the MCU, and SWD stays on.
 
