@@ -223,6 +223,8 @@ After a switch, the tool waits for the target personality at its standard IDs.
 For the ID `1209:0001`, it also compares the product string with `OpenMUPP CMSIS-DAP` or `OpenMUPP WCH-Link` (`Versaloon WCH-Link` for older firmware).
 Other devices use the IDs `1209:0001` and `1a86:8010` too.
 The tool ignores a device with one of these IDs and a different product string.
+With the ID `1a86:8010`, the tool also accepts the product string `WCH-Link` of the WCH ID build (see [USB ID](wch-link.md#usb-id)).
+The real WCH-LinkE has the same product string, so the tool then also compares the manufacturer string with `OpenMUPP`.
 Use `--serial` to select one dongle when more than one is connected.
 
 The tool sends the switch request on EP0 for each switch (see [Switch request on EP0](#switch-request-on-ep0)).

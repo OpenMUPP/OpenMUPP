@@ -35,6 +35,7 @@ The `wch-link` image has these properties:
   `tools/mupp_personality.py` sends the switch request on EP0, for example `python3 tools/mupp_personality.py switch versaloon`.
   The tool knows the WCH-Link personality by its USB ID (`1209:0001` or `1a86:8010`) and the product string `OpenMUPP WCH-Link`.
   It also accepts `Versaloon WCH-Link`, the product string of older firmware.
+  With the ID `1a86:8010`, it also accepts `WCH-Link`, the product string of the WCH ID build, when the manufacturer string is `OpenMUPP`.
   The ID `1209:0001` is the shared test ID of pid.codes, and the CMSIS-DAP personality uses it too, so the tool must read the product string.
   Without access to the device, the tool cannot read it.
   The tool then tells you the ID, the bus and the address of the device, and it points to `etc/70-openmupp-wch-link.rules`.
