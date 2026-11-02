@@ -1,0 +1,222 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1410" viewBox="0 0 1700 1410" font-family="Liberation Sans, Arial, Helvetica, sans-serif">
+<rect width="1700" height="1410" fill="#ffffff"/>
+<text x="60" y="44" font-size="24" font-weight="bold" fill="#263238">OpenMUPP on the ST-Link/V2-1 of a Nucleo-64 board (BOARD=stlinkv21)</text>
+<text x="60" y="70" font-size="15" fill="#546e7a">Layout of MB1360 (UM2324). MB1136 has the same MCU pins, but other connector and pad names. 3.3 V targets only: no level shifters.</text>
+<text x="60" y="94" font-size="15" fill="#546e7a">The probe does not supply the target. Connect GND, and power the target from its own supply.</text>
+<text x="60.0" y="160.0" font-size="18" font-weight="bold" fill="#263238" text-anchor="start">Top side: connect the target</text>
+<rect x="420" y="200" width="1200.0" height="420.0" rx="10" fill="#1f3b73" stroke="#0d2350" stroke-width="3"/>
+<text x="1608.0" y="610.0" font-size="12" font-weight="normal" fill="#90a4ae" text-anchor="end">break line of the Nucleo</text>
+<rect x="1155.0" y="182.0" width="135.0" height="100.5" rx="6" fill="#cfd8dc" stroke="#78909c" stroke-width="2"/>
+<text x="1222.5" y="230.0" font-size="14" font-weight="bold" fill="#263238" text-anchor="middle">USB (CN2)</text>
+<rect x="958.0" y="408.0" width="124" height="124" fill="#212121" stroke="#9e9e9e" stroke-width="1.5"/>
+<text x="1020.0" y="466.0" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">STM32</text>
+<text x="1020.0" y="483.0" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">F103CB</text>
+<circle cx="472.5" cy="267.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="472.5" cy="267.5" r="5" fill="#2b2b2b"/>
+<rect x="461.5" y="298.5" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="472.5" cy="309.5" r="5" fill="#2b2b2b"/>
+<text x="472.5" y="342.5" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">JP4 GND</text>
+<circle cx="1563.0" cy="267.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1563.0" cy="267.5" r="5" fill="#2b2b2b"/>
+<rect x="1552.0" y="298.5" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1563.0" cy="309.5" r="5" fill="#2b2b2b"/>
+<text x="1563.0" y="342.5" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">JP5 GND</text>
+<rect x="791.5" y="231.0" width="22" height="22" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<circle cx="802.5" cy="242.0" r="5" fill="#2b2b2b"/>
+<circle cx="802.5" cy="287.0" r="11" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<circle cx="802.5" cy="287.0" r="5" fill="#2b2b2b"/>
+<circle cx="802.5" cy="330.5" r="11" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<circle cx="802.5" cy="330.5" r="5" fill="#2b2b2b"/>
+<circle cx="802.5" cy="374.0" r="11" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<circle cx="802.5" cy="374.0" r="5" fill="#2b2b2b"/>
+<text x="802.5" y="410.0" font-size="12" font-weight="bold" fill="#cfd8dc" text-anchor="middle">CN4</text>
+<text x="802.5" y="434.0" font-size="12" font-weight="normal" fill="#cfd8dc" text-anchor="middle">not used</text>
+<circle cx="985.5" cy="242.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="985.5" cy="242.0" r="5" fill="#2b2b2b"/>
+<rect x="1016.5" y="231.0" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1027.5" cy="242.0" r="5" fill="#2b2b2b"/>
+<text x="1006.5" y="278.0" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">JP1</text>
+<rect x="1443.0" y="255.0" width="24" height="20" fill="#c62828" stroke="#ffcdd2"/>
+<rect x="1443.0" y="275.0" width="24" height="20" fill="#2e7d32" stroke="#c8e6c9"/>
+<text x="1475.0" y="281.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">LD1</text>
+<polyline points="1455.0,255.0 1455.0,150.0" fill="none" stroke="#90a4ae" stroke-width="1.5"/>
+<line x1="1455.0" y1="150.0" x2="1449.0" y2="150.0" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="1408.8" y="136.0" width="40.2" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1428.9" y="155.0" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">PA9</text>
+<rect x="1090.8" y="136.0" width="314.0" height="28" rx="6" fill="#00897b" stroke="#00897b" stroke-width="1.2"/>
+<text x="1247.8" y="155.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">LED: green idle, red bootloader or fault</text>
+<rect x="544.5" y="327.5" width="36" height="262.5" rx="3" fill="none" stroke="#ffffff" stroke-width="1.2"/>
+<rect x="551.5" y="339.0" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="562.5" cy="350.0" r="5" fill="#2b2b2b"/>
+<line x1="551.5" y1="350.0" x2="400.0" y2="350.0" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="374.6" y="336.0" width="25.4" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="387.3" y="355.0" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">1</text>
+<rect x="138.0" y="336.0" width="232.6" height="28" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="254.3" y="355.0" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle">not connected (R2 not fitted)</text>
+<rect x="49.4" y="336.0" width="84.6" height="28" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="91.7" y="355.0" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle">VDD sense</text>
+<circle cx="562.5" cy="393.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="562.5" cy="393.5" r="5" fill="#2b2b2b"/>
+<line x1="551.5" y1="393.5" x2="400.0" y2="393.5" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="374.6" y="379.5" width="25.4" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="387.3" y="398.5" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">2</text>
+<rect x="330.4" y="379.5" width="40.2" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="350.5" y="398.5" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">PA5</text>
+<rect x="271.4" y="379.5" width="55.0" height="28" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="298.9" y="398.5" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">SWCLK</text>
+<circle cx="562.5" cy="437.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="562.5" cy="437.0" r="5" fill="#2b2b2b"/>
+<line x1="551.5" y1="437.0" x2="400.0" y2="437.0" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="374.6" y="423.0" width="25.4" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="387.3" y="442.0" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">3</text>
+<rect x="330.4" y="423.0" width="40.2" height="28" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="350.5" y="442.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">GND</text>
+<circle cx="562.5" cy="480.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="562.5" cy="480.5" r="5" fill="#2b2b2b"/>
+<line x1="551.5" y1="480.5" x2="400.0" y2="480.5" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="374.6" y="466.5" width="25.4" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="387.3" y="485.5" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">4</text>
+<rect x="226.8" y="466.5" width="143.8" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="298.7" y="485.5" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">PB14 out, PB12 in</text>
+<rect x="167.8" y="466.5" width="55.0" height="28" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="195.3" y="485.5" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">SWDIO</text>
+<circle cx="562.5" cy="524.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="562.5" cy="524.0" r="5" fill="#2b2b2b"/>
+<line x1="551.5" y1="524.0" x2="400.0" y2="524.0" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="374.6" y="510.0" width="25.4" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="387.3" y="529.0" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">5</text>
+<rect x="330.4" y="510.0" width="40.2" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="350.5" y="529.0" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">PB0</text>
+<rect x="278.8" y="510.0" width="47.6" height="28" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="302.6" y="529.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">NRST</text>
+<circle cx="562.5" cy="567.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="562.5" cy="567.5" r="5" fill="#2b2b2b"/>
+<line x1="551.5" y1="567.5" x2="400.0" y2="567.5" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="374.6" y="553.5" width="25.4" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="387.3" y="572.5" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">6</text>
+<rect x="323.0" y="553.5" width="47.6" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="346.8" y="572.5" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">PA10</text>
+<rect x="175.2" y="553.5" width="143.8" height="28" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="247.1" y="572.5" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle">SWO, not used yet</text>
+<rect x="49.6" y="553.5" width="121.6" height="28" rx="6" fill="#fbc02d" stroke="#fbc02d" stroke-width="1.2"/>
+<text x="110.4" y="572.5" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">bootloader key</text>
+<text x="562.5" y="614.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">CN11 (SWD)</text>
+<path d="M 572.5 567.5 C 617.5 552.5, 617.5 452.0, 572.5 437.0" fill="none" stroke="#fbc02d" stroke-width="5" stroke-dasharray="10 6" stroke-linecap="round"/>
+<circle cx="649.5" cy="527.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="649.5" cy="527.0" r="5" fill="#2b2b2b"/>
+<rect x="638.5" y="559.5" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="649.5" cy="570.5" r="5" fill="#2b2b2b"/>
+<text x="633.5" y="534.5" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="end">TX</text>
+<text x="665.5" y="578.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">RX</text>
+<text x="665.5" y="602.0" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="start">JP6</text>
+<polyline points="649.5,581.5 649.5,712.0" fill="none" stroke="#90a4ae" stroke-width="1.5"/>
+<polyline points="660.5,527.0 695.5,527.0 695.5,670.0" fill="none" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="695.5" y="656.0" width="40.2" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="715.6" y="675.0" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">PA2</text>
+<rect x="739.7" y="656.0" width="69.8" height="28" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="774.6" y="675.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">UART TX</text>
+<rect x="813.5" y="656.0" width="106.8" height="28" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="866.9" y="675.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">to target RX</text>
+<rect x="649.5" y="698.0" width="40.2" height="28" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="669.6" y="717.0" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle">PA3</text>
+<rect x="693.7" y="698.0" width="69.8" height="28" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="728.6" y="717.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">UART RX</text>
+<rect x="767.5" y="698.0" width="121.6" height="28" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="828.3" y="717.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">from target TX</text>
+<text x="60.0" y="814.0" font-size="18" font-weight="bold" fill="#263238" text-anchor="start">Bottom side: SWD of the ST-Link MCU, to write the bootloader</text>
+<text x="60.0" y="838.0" font-size="14" font-weight="normal" fill="#546e7a" text-anchor="start">Seen from the bottom. Use the pad on the side away from CN4 (gold). The pads next to CN4 (grey) connect to CN4.</text>
+<rect x="420" y="880" width="1200.0" height="417.0" rx="10" fill="#1f3b73" stroke="#0d2350" stroke-width="3"/>
+<ellipse cx="750.0" cy="904.0" rx="8" ry="12" fill="#b0bec5" stroke="#78909c"/>
+<ellipse cx="870.0" cy="904.0" rx="8" ry="12" fill="#b0bec5" stroke="#78909c"/>
+<ellipse cx="769.5" cy="952.0" rx="8" ry="12" fill="#b0bec5" stroke="#78909c"/>
+<ellipse cx="855.0" cy="952.0" rx="8" ry="12" fill="#b0bec5" stroke="#78909c"/>
+<text x="810.0" y="989.5" font-size="12" font-weight="bold" fill="#cfd8dc" text-anchor="middle">CN2</text>
+<circle cx="472.5" cy="944.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="472.5" cy="944.5" r="5" fill="#2b2b2b"/>
+<rect x="461.5" y="977.0" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="472.5" cy="988.0" r="5" fill="#2b2b2b"/>
+<text x="472.5" y="1021.0" font-size="12" font-weight="bold" fill="#cfd8dc" text-anchor="middle">JP5</text>
+<circle cx="1563.0" cy="944.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1563.0" cy="944.5" r="5" fill="#2b2b2b"/>
+<rect x="1552.0" y="977.0" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1563.0" cy="988.0" r="5" fill="#2b2b2b"/>
+<text x="1563.0" y="1021.0" font-size="12" font-weight="bold" fill="#cfd8dc" text-anchor="middle">JP4</text>
+<rect x="1226.5" y="911.0" width="22" height="22" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<circle cx="1237.5" cy="922.0" r="5" fill="#2b2b2b"/>
+<rect x="1147.5" y="914.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<rect x="1185.0" y="914.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<circle cx="1237.5" cy="965.5" r="11" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<circle cx="1237.5" cy="965.5" r="5" fill="#2b2b2b"/>
+<rect x="1147.5" y="957.5" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<rect x="1185.0" y="957.5" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<circle cx="1237.5" cy="1009.0" r="11" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<circle cx="1237.5" cy="1009.0" r="5" fill="#2b2b2b"/>
+<rect x="1147.5" y="1001.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<rect x="1185.0" y="1001.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<circle cx="1237.5" cy="1054.0" r="11" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<circle cx="1237.5" cy="1054.0" r="5" fill="#2b2b2b"/>
+<rect x="1147.5" y="1046.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<rect x="1185.0" y="1046.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<text x="1174.5" y="1087.0" font-size="12" font-weight="normal" fill="#cfd8dc" text-anchor="middle">DEFAULT</text>
+<text x="1237.5" y="1087.0" font-size="12" font-weight="bold" fill="#cfd8dc" text-anchor="middle">CN4</text>
+<text x="1305.0" y="1087.0" font-size="12" font-weight="normal" fill="#cfd8dc" text-anchor="middle">RESERVED</text>
+<rect x="1276.5" y="914.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<rect x="1314.0" y="914.0" width="18" height="16" rx="2" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.2"/>
+<rect x="1337.0" y="908.0" width="69.8" height="28" rx="6" fill="#c62828" stroke="#c62828" stroke-width="1.2"/>
+<text x="1371.9" y="927.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">SB6 3V3</text>
+<rect x="1276.5" y="957.5" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<rect x="1314.0" y="957.5" width="18" height="16" rx="2" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.2"/>
+<rect x="1337.0" y="951.5" width="84.6" height="28" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="1379.3" y="970.5" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">SB8 SWCLK</text>
+<rect x="1276.5" y="1001.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<rect x="1314.0" y="1001.0" width="18" height="16" rx="2" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.2"/>
+<rect x="1337.0" y="995.0" width="77.2" height="28" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="1375.6" y="1014.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">SB10 GND</text>
+<rect x="1276.5" y="1046.0" width="18" height="16" rx="2" fill="#b0bec5" stroke="#78909c" stroke-width="1.2"/>
+<rect x="1314.0" y="1046.0" width="18" height="16" rx="2" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.2"/>
+<rect x="1337.0" y="1040.0" width="92.0" height="28" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="1383.0" y="1059.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">SB12 SWDIO</text>
+<rect x="994.0" y="911.0" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1005.0" cy="922.0" r="5" fill="#2b2b2b"/>
+<circle cx="1050.0" cy="922.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1050.0" cy="922.0" r="5" fill="#2b2b2b"/>
+<line x1="1027.5" y1="933.0" x2="1027.5" y2="979.0" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="957.5" y="979.0" width="143.8" height="28" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="1029.4" y="998.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">JP1: NRST and GND</text>
+<rect x="1463.5" y="1020.5" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1474.5" cy="1031.5" r="5" fill="#2b2b2b"/>
+<circle cx="1474.5" cy="1075.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1474.5" cy="1075.0" r="5" fill="#2b2b2b"/>
+<circle cx="1474.5" cy="1118.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1474.5" cy="1118.5" r="5" fill="#2b2b2b"/>
+<circle cx="1474.5" cy="1162.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1474.5" cy="1162.0" r="5" fill="#2b2b2b"/>
+<circle cx="1474.5" cy="1205.5" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1474.5" cy="1205.5" r="5" fill="#2b2b2b"/>
+<circle cx="1474.5" cy="1249.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1474.5" cy="1249.0" r="5" fill="#2b2b2b"/>
+<text x="1494.5" y="1039.0" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="start">1</text>
+<text x="1474.5" y="1282.0" font-size="12" font-weight="bold" fill="#cfd8dc" text-anchor="middle">CN11</text>
+<circle cx="1387.5" cy="1204.0" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1387.5" cy="1204.0" r="5" fill="#2b2b2b"/>
+<rect x="1376.5" y="1238.0" width="22" height="22" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1387.5" cy="1249.0" r="5" fill="#2b2b2b"/>
+<text x="1387.5" y="1282.0" font-size="12" font-weight="bold" fill="#cfd8dc" text-anchor="middle">JP6</text>
+<text x="440.0" y="1283.0" font-size="12" font-weight="normal" fill="#cfd8dc" text-anchor="start">JP1: one pin is NRST, the other GND. Find the GND pin with a continuity test.</text>
+<rect x="60" y="1364" width="22" height="22" rx="5" fill="#1565c0" stroke="#b0bec5"/>
+<text x="90" y="1380" font-size="14" fill="#263238">SWD</text>
+<rect x="144" y="1364" width="22" height="22" rx="5" fill="#7b1fa2" stroke="#b0bec5"/>
+<text x="174" y="1380" font-size="14" fill="#263238">UART bridge</text>
+<rect x="292" y="1364" width="22" height="22" rx="5" fill="#fbc02d" stroke="#b0bec5"/>
+<text x="322" y="1380" font-size="14" fill="#263238">Wire / key</text>
+<rect x="432" y="1364" width="22" height="22" rx="5" fill="#00897b" stroke="#b0bec5"/>
+<text x="462" y="1380" font-size="14" fill="#263238">On-board I/O</text>
+<rect x="588" y="1364" width="22" height="22" rx="5" fill="#c62828" stroke="#b0bec5"/>
+<text x="618" y="1380" font-size="14" fill="#263238">Power</text>
+<rect x="688" y="1364" width="22" height="22" rx="5" fill="#263238" stroke="#b0bec5"/>
+<text x="718" y="1380" font-size="14" fill="#263238">GND</text>
+<rect x="772" y="1364" width="22" height="22" rx="5" fill="#ffffff" stroke="#b0bec5"/>
+<text x="802" y="1380" font-size="14" fill="#263238">MCU pin</text>
+<rect x="888" y="1364" width="22" height="22" rx="5" fill="#eceff1" stroke="#b0bec5"/>
+<text x="918" y="1380" font-size="14" fill="#263238">Not used</text>
+</svg>

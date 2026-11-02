@@ -303,6 +303,10 @@ The pins come from the Nucleo-64 schematics MB1136 (revision C-04, sheet 4) and 
 The two boards use the same MCU pins. Only the solder bridge pads are different (see [SWD pads of the MCU](#swd-pads-of-the-mcu)).
 The board is not tested on hardware.
 
+![Pinout of the ST-Link/V2-1 of a Nucleo-64 board](images/stlinkv21-pinout.svg)
+
+The image shows the layout of MB1360 (from UM2324). On MB1136, the connector and pad names are different.
+
 | Signal | MCU pin | Connector | Note |
 |---|---|---|---|
 | SWCLK (TCK) | PA5 | SWD connector pin 2 | PB13 is on the same net. The firmware does not use PB13. |
