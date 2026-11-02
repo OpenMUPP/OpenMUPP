@@ -41,8 +41,7 @@ inline hw::GpioPin gpioPin(Pin pin) {
 
 // Makes the pin of the signal an output in the given state. The output
 // register is written first, so the pin does not glitch.
-inline void configureOutput(Signal signal, bool asserted,
-                            hw::GpioPin::OutputType type = hw::GpioPin::OutputType::PushPull) {
+inline void configureOutput(Signal signal, bool asserted, hw::GpioPin::OutputType type = hw::GpioPin::OutputType::PushPull) {
    const hw::GpioPin pin = gpioPin(signal.pin);
    pin.write(signal.levelFor(asserted));
    pin.configure(hw::GpioPin::Mode::Output, type);
