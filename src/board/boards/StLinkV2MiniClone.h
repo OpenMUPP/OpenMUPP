@@ -8,7 +8,7 @@ namespace board {
 
 // ST-Link/V2 mini clone: the USB stick dongle with a 2x5 header, sold as
 // "ST-Link V2 mini" (STM32F103 compatible MCU, 8 MHz crystal, no board
-// markings). It is not the official ST-Link/V2 design (StLinkV2.h).
+// markings). It is not the official ST-Link/V2 design.
 // Measured pin map: docs/stlinkv2-mini-clone.md.
 //
 // The board ties pins together: PA5 + PB13 (SWCLK), PB14 + PB12

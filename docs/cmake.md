@@ -104,13 +104,13 @@ The default is `/usr`.
 
 | Preset | Board | Personalities (`MUPP_PERSONALITIES`) | Build type |
 |---|---|---|---|
-| `mini-cmsis-dap`, `stlinkv2-cmsis-dap`, `stlinkv2miniclone-cmsis-dap` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap` | Release |
+| `mini-cmsis-dap`, `stlinkv21-cmsis-dap`, `stlinkv2miniclone-cmsis-dap` | Mini, ST-Link/V2-1, ST-Link/V2 mini clone | `cmsis-dap` | Release |
 | `mini-cmsis-dap-no-rv-bridge` | Mini | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` (tag `-cmsis-dap-no-rv-bridge`) | Release |
-| `mini-dual`, `stlinkv2-dual`, `stlinkv2miniclone-dual` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
+| `mini-dual`, `stlinkv21-dual`, `stlinkv2miniclone-dual` | Mini, ST-Link/V2-1, ST-Link/V2 mini clone | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `mini-debug` | Mini | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF`: with the bridge, the `app-8k` and `app-10k` images do not fit (tag `-cmsis-dap-no-rv-bridge`) | Debug |
-| `mini-wch-link`, `stlinkv2-wch-link`, `stlinkv2miniclone-wch-link` | Mini, ST-Link/V2, ST-Link/V2 mini clone | `wch-link` | Release |
+| `mini-wch-link`, `stlinkv21-wch-link`, `stlinkv2miniclone-wch-link` | Mini, ST-Link/V2-1, ST-Link/V2 mini clone | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `MUPP_WCH_LINK_WCH_USB_ID=ON` | Release |
-| `mini`, `stlinkv2`, `stlinkv2miniclone` | Mini, ST-Link/V2, ST-Link/V2 mini clone | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
+| `mini`, `stlinkv21`, `stlinkv2miniclone` | Mini, ST-Link/V2-1, ST-Link/V2 mini clone | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
 | `mini-versaloon` | Mini | `versaloon` (tag `-vsl`) | Release |
 | `weacth523-cmsis-dap` | WeAct STM32H523 core board | `cmsis-dap` | Release |
 | `weacth523-dual` | WeAct STM32H523 core board | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |

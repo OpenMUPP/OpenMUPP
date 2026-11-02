@@ -255,6 +255,8 @@ struct Definition {
    std::optional<Signal> key;
    // Software-controlled USB D+ pull-up. Empty: the pull-up is fixed.
    std::optional<Signal> usbPullUp;
+   // The pull-up pin is an open-drain output: the board sets the high level.
+   bool usbPullUpOpenDrain = false;
    // Add each new pin field to detail::allPins() too, else isValid() and
    // swjConfig() do not see it.
 

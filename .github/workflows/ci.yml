@@ -74,8 +74,8 @@ jobs:
           - mini-debug
           - mini-dual
           - mini-cmsis-dap-no-rv-bridge
-          - stlinkv2-cmsis-dap
-          - stlinkv2-dual
+          - stlinkv21-cmsis-dap
+          - stlinkv21-dual
           - stlinkv2miniclone-cmsis-dap
           - stlinkv2miniclone-dual
           - weacth523-cmsis-dap

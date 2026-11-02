@@ -16,7 +16,7 @@
 #
 #   mini      Versaloon Mini
 #   otheruse  OtherUse
-#   stlinkv2  ST-Link/V2, pin map of the official design (compile-only target)
+#   stlinkv21 ST-Link/V2-1 of the Nucleo-64 boards (not tested on hardware)
 #   stlinkv2miniclone
 #             ST-Link/V2 mini clone, USB stick dongle
 #             (docs/stlinkv2-mini-clone.md)
@@ -24,15 +24,15 @@
 # The STM32F1 boards have an STM32F103x8 or an STM32F103xB. CMSIS has one
 # define (STM32F103xB) for both parts. The firmware uses only the 64 KB of
 # the STM32F103x8.
-set(MUPP_BOARDS mini otheruse stlinkv2 stlinkv2miniclone weacth523)
+set(MUPP_BOARDS mini otheruse stlinkv21 stlinkv2miniclone weacth523)
 #                         family  device      crystal  ldscript      flash
 set(MUPP_BOARD_mini        STM32F1 STM32F103xB 12000000 mem-F103x8.ld 65536)
 set(MUPP_BOARD_otheruse    STM32F1 STM32F103xB 12000000 mem-F103x8.ld 65536)
-set(MUPP_BOARD_stlinkv2    STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
+set(MUPP_BOARD_stlinkv21   STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
 set(MUPP_BOARD_stlinkv2miniclone STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
 set(MUPP_BOARD_weacth523   STM32H5 STM32H523xx 8000000  mem-H523xC.ld 262144)
 # Boards that openmupp-bootloader supports (cmake/Bootloader.cmake)
-set(MUPP_BOOTLOADER_BOARDS mini otheruse stlinkv2 stlinkv2miniclone)
+set(MUPP_BOOTLOADER_BOARDS mini otheruse stlinkv21 stlinkv2miniclone)
 # Boards that shipped with the legacy Versaloon bootloader (10 KB). Only
 # they get the app-10k image.
 set(MUPP_LEGACY_BOOTLOADER_BOARDS mini otheruse)

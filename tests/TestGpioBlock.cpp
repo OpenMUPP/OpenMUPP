@@ -4,7 +4,7 @@
 #include "board/DebugGpio.h"
 #include "board/boards/Mini.h"
 #include "board/boards/OtherUse.h"
-#include "board/boards/StLinkV2.h"
+#include "board/boards/StLinkV21.h"
 #include "protocol/versaloon/GpioBlock.h"
 #include "protocol/versaloon/UsbToAll.h"
 
@@ -199,11 +199,11 @@ TEST_CASE("GPIO bits map to the debug pins of the Mini") {
    CHECK(board::gpioAvailable(board::otherUse.debug) == 0x01F3);
 }
 
-TEST_CASE("GPIO bits map to the debug pins of the ST-Link/V2") {
-   const auto &pins = board::stLinkV2.debug;
+TEST_CASE("GPIO bits map to the debug pins of the ST-Link/V2-1") {
+   const auto &pins = board::stLinkV21.debug;
    CHECK(board::gpioOutputPin(pins, gpio::srst) == Pin{ Port::B, 0 });
    CHECK(board::gpioOutputPin(pins, gpio::tms) == Pin{ Port::B, 14 });
-   CHECK(board::gpioInputPin(pins, gpio::tms) == Pin{ Port::B, 14 });
+   CHECK(board::gpioInputPin(pins, gpio::tms) == Pin{ Port::B, 12 });
    CHECK_FALSE(board::gpioOutputPin(pins, gpio::trst).has_value());
    CHECK_FALSE(board::gpioOutputPin(pins, gpio::rtck).has_value());
    // No TRST, USR1, USR2 and RTCK
@@ -287,8 +287,8 @@ TEST_CASE("IN reads the selected pins") {
 }
 
 TEST_CASE("Pins that the board does not have are ignored and read as 0") {
-   // The ST-Link/V2: no TRST, USR1, USR2 and RTCK
-   Bench bench(board::gpioAvailable(board::stLinkV2.debug));
+   // The ST-Link/V2-1: no TRST, USR1, USR2 and RTCK
+   Bench bench(board::gpioAvailable(board::stLinkV21.debug));
    bench.pins.inputs = gpio::all;
    // OpenOCD in SWD mode: gpio.config(0, TRST, 0, TRST, TRST)
    CHECK(bench.run({ config(gpio::trst, 0, gpio::trst, gpio::trst) }) == std::vector<uint8_t>{ 0x00 });
@@ -369,10 +369,12 @@ TEST_CASE("CONFIG of TMS on the Mini: PB4 drives, PB6 reads") {
    CHECK(board::gpioPinSettings(pins, gpio::usr1, PinMode::PushPull) == Settings{});
 }
 
-TEST_CASE("CONFIG of TMS on the ST-Link/V2: one pin for both directions") {
+TEST_CASE("CONFIG of TMS with one pin for both directions") {
    using board::GpioPinSetting;
    using Settings = std::array<std::optional<GpioPinSetting>, 2>;
-   const auto &pins = board::stLinkV2.debug;
+   // No board has one SWDIO pin now, but the pin code supports it.
+   auto pins = board::stLinkV21.debug;
+   pins.tmsIn = pins.tmsOut;
    const Pin pb14{ Port::B, 14 };
 
    CHECK(board::gpioPinSettings(pins, gpio::tms, PinMode::PushPull) ==

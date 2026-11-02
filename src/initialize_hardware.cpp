@@ -58,7 +58,8 @@ void configurePins() {
    // USB D+ pull-up off: the host does not see the device before the USB
    // stack starts.
    if(def.usbPullUp) {
-      board::configureOutput(*def.usbPullUp, false);
+      board::configureOutput(*def.usbPullUp, false,
+                             def.usbPullUpOpenDrain ? GpioPin::OutputType::OpenDrain : GpioPin::OutputType::PushPull);
    }
 
    // Target power off: the switch pin floats.

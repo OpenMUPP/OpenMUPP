@@ -2,7 +2,7 @@
 
 The board `stlinkv2miniclone` is a USB stick debug probe.
 Shops sell it as "ST-Link V2 mini".
-It is a clone, not the official ST-Link/V2 design (board `stlinkv2`).
+It is a clone, not the official ST-Link/V2 design. The firmware has no board for the official ST-Link/V2.
 The board has no markings.
 
 This document gives the pin map of the board, and how we measured it.
@@ -109,9 +109,8 @@ These pins of the official ST-Link/V2 design are not connected on this board:
 
 The board has no key and no power LED.
 
-Other documents name the ST-Link/V2 for a board with a fixed USB pull-up, no key and no RTCK.
-These statements also apply to this board.
-The differences are the RST pin (PB6, not PB0), the SWDIO input pin (PB12), and the missing JTAG and UART pins on the header.
+The board is similar to the ST-Link/V2-1 (board `stlinkv21`): no key and no RTCK, and the same SWDIO input pin (PB12).
+The differences are the RST pin (PB6, not PB0), the fixed USB pull-up, and the missing UART pins on the header.
 
 ## SWD pads of the MCU
 

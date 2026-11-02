@@ -11,10 +11,10 @@ The name OpenMUPP stands for more than these two: the goal is one probe for many
 The OpenMUPP v1 probe is the main target of this project.
 The firmware has no board definition for it yet (see [Boards](#boards)).
 Until then, the WeAct STM32H523 core board is the test board for the same MCU.
-The firmware also builds for older probe hardware: the Versaloon Mini and the ST-Link/V2 boards (STM32F103 or compatible chip).
+The firmware also builds for older probe hardware: the Versaloon Mini, the ST-Link/V2-1 of the Nucleo-64 boards and the ST-Link/V2 mini clone (STM32F103 or compatible chip).
 These boards are secondary targets. They help to develop and test the code, and you can use them as probes.
 The ST-Link/V2 mini clone has a hardware test of the USB personalities, the LEDs and SWD to a target.
-The ST-Link/V2 build has no hardware test.
+The ST-Link/V2-1 has a hardware test of the WCH-Link personality on one wire (CH32V006) only.
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
@@ -63,7 +63,7 @@ OpenMUPP v1 is the main target. The other boards are for development, tests and 
 | (none yet) | OpenMUPP v1 probe board, STM32H523CC | 24 MHz | Main target | No board definition yet |
 | `weacth523` | WeAct STM32H523 core board | 8 MHz | Test board for the OpenMUPP v1 MCU | target, 3.3 V targets only |
 | `mini` | Versaloon Mini | 12 MHz | Secondary | target |
-| `stlinkv2` | ST-Link/V2, pin map of the official design | 8 MHz | Secondary | compile-only |
+| `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | 8 MHz | Secondary | WCH-Link one wire tested, SWD only (no JTAG pins) |
 | `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | Secondary | target, SWD only (no JTAG pins) |
 
 [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
@@ -71,7 +71,7 @@ The board layer needs the direction pins, the split nRESET path and the power fu
 The WeAct STM32H523 core board uses an STM32H523CC, as the OpenMUPP v1 probe does.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
-The Mini and the ST-Link/V2 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
+The Mini and the ST-Link/V2-1 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
 
 ## Get the source code
@@ -111,7 +111,7 @@ cmake --build --preset mini-cmsis-dap -j
 ```
 
 The build directory is `build/<preset>`, here `build/mini-cmsis-dap`.
-The presets `mini`, `stlinkv2` and `stlinkv2miniclone` build the Release images of one board.
+The presets `mini`, `stlinkv21` and `stlinkv2miniclone` build the Release images of one board.
 The suffix of the preset selects the personalities:
 
 - `-cmsis-dap`: the CMSIS-DAP personality, for example `mini-cmsis-dap`.
@@ -146,7 +146,7 @@ cmake -B build/mini -DCMAKE_TOOLCHAIN_FILE=cmake/gcc_arm.cmake -DBOARD=mini \
 cmake --build build/mini -j
 ```
 
-Use `-DBOARD=stlinkv2`, `-DBOARD=stlinkv2miniclone` or `-DBOARD=weacth523` for the other boards.
+Use `-DBOARD=stlinkv21`, `-DBOARD=stlinkv2miniclone` or `-DBOARD=weacth523` for the other boards.
 If `arm-none-eabi-gcc` is in `/usr/bin`, you can omit `GCC_TOOLCHAIN_PREFIX`.
 
 The build links the same firmware into one or more application images.
@@ -159,7 +159,7 @@ Each image has a different start address:
 | `app-10k` | `0x08002800` | 54 KB | Behind the legacy 10 KB Versaloon bootloader of the existing boards. |
 
 The Mini gets all three images.
-The ST-Link/V2 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image. They never had the legacy bootloader, so they get no `app-10k` image.
+The ST-Link/V2-1 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image. They never had the legacy bootloader, so they get no `app-10k` image.
 The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
 A multi image or an image with the RISC-V bridge has less flash, because the end of the flash holds the stored personality and the bridge mode.
 This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the STM32H5 board.
@@ -168,7 +168,7 @@ The build writes these files into the build directory:
 
 - `openmupp-<image>.elf`, `.hex` and `.bin` for each image, for example `openmupp-app-10k.bin`.
 - `openmupp-bootloader/openmupp-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
-  Only the STM32F1 boards have a bootloader: the Mini, the ST-Link/V2 and the ST-Link/V2 mini clone.
+  Only the STM32F1 boards have a bootloader: the Mini, the ST-Link/V2-1 and the ST-Link/V2 mini clone.
 - `openmupp-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
   It has `openmupp-bootloader` at `0x08000000` and the `app-8k` image at `0x08002000`.
   The `.bin` file has `0xFF` between the two.
@@ -185,7 +185,7 @@ Select the image for the bootloader on the board:
 |---|---|---|---|
 | Existing Mini | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
 | New Mini | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
-| ST-Link/V2 or ST-Link/V2 mini clone | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| ST-Link/V2-1 or ST-Link/V2 mini clone | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | Any board, debug probe | none | `standalone` | `0x08000000` |
 
 The images behind a bootloader have an application image header with a CRC32 (see [docs/firmware-update.md](docs/firmware-update.md#application-image-header)).
@@ -214,7 +214,7 @@ A new board needs `openmupp-bootloader` one time.
 An existing board can also change to it.
 Write the combined image with a debug probe on the SWD pins of the dongle MCU.
 It has the bootloader and the firmware, so one step is sufficient.
-On an ST-Link/V2 or a mini clone with its original firmware, remove the read protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
+On an ST-Link/V2-1 or a mini clone with its original firmware, remove the read protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
 For example, with OpenOCD:
 
 ```sh
