@@ -1,7 +1,7 @@
 # Firmware update
 
 The Mini runs the firmware behind a bootloader: `openmupp-bootloader` (8 KB) or the legacy Versaloon bootloader (10 KB).
-The ST-Link/V2 and the ST-Link/V2 mini clone run it behind `openmupp-bootloader`.
+The ST-Link/V2-1 and the ST-Link/V2 mini clone run it behind `openmupp-bootloader`.
 See [Install the bootloader](#install-the-bootloader).
 `openmupp-bootloader` is a USB CDC serial port with the ID `0483:5740`.
 It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
@@ -18,7 +18,7 @@ To start `openmupp-bootloader`, use one of these methods:
 - Send a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)). Each personality has a switch command.
 - On the Mini: hold the key (PB9) down and reset the board.
 - On the ST-Link/V2 mini clone: connect SWIM (header pin 3) to GND (header pin 5), then connect the board to USB (see [Bootloader](stlinkv2-mini-clone.md#bootloader)).
-  The ST-Link/V2 has no key.
+  The ST-Link/V2-1 has no key.
 
 Only the `app-8k` image accepts the commands.
 On the STM32H5, the commands and the key start the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
@@ -167,7 +167,7 @@ Thus a multi image or an image with the RISC-V bridge keeps the stored personali
 
 ## Install the bootloader
 
-The ST-Link/V2 and the ST-Link/V2 mini clone use `openmupp-bootloader`.
+The ST-Link/V2-1 and the ST-Link/V2 mini clone use `openmupp-bootloader`.
 Their original firmware has read protection.
 Remove it before you write the combined image:
 
@@ -180,6 +180,7 @@ The unlock erases all of the flash.
 Then disconnect the power of the board, and connect it again.
 The read protection stays active until the next power-up.
 See [Read protection of the original firmware](stlinkv2-mini-clone.md#read-protection-of-the-original-firmware).
+On the ST-Link/V2-1, connect the debug probe to the SWD pads of the MCU (see [ST-Link/V2-1](boards.md#st-linkv2-1)).
 
 The Mini uses one of two bootloaders:
 
@@ -290,7 +291,7 @@ The bootloader uses the start of the flash, and the application uses the rest:
 
 The limits are hard limits for all boards.
 The firmware must also fit behind the legacy bootloader, because the existing boards need the `app-10k` image.
-Thus CI also checks the `standalone` image of the ST-Link/V2 and of the ST-Link/V2 mini clone against the `app-10k` limit (see [Continuous integration](development.md#continuous-integration)).
+Thus CI also checks the `standalone` image of the ST-Link/V2-1 and of the ST-Link/V2 mini clone against the `app-10k` limit (see [Continuous integration](development.md#continuous-integration)).
 
 - The FLASH region of the link (`__flash_length`) goes from the start of the application to the settings page, or to the end of the 64 KB. With `MUPP_STRICT_SIZE=ON`, the link of an image fails when the application is too large. The CI build jobs set this option.
 - Without `MUPP_STRICT_SIZE`, the build skips an image that is too large, and shows a warning (see [Images that do not fit](cmake.md#images-that-do-not-fit)).

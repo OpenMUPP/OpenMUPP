@@ -58,8 +58,8 @@
 // Status::NoTarget. A frame with bit 49 high only (the target dropped the
 // frame) gives Status::Wire. One wire: a frame without a target
 // reads 0xffffffff when a pull-up holds the line high (the Mini: the
-// SWDIO input pin; the ST-Link/V2 has no pull-up on the
-// line in a read bit, so a read can give other values). Thus each
+// SWDIO input pin; without a pull-up on the line in a read bit, a read
+// can give other values). Thus each
 // dmstatus read checks the version field
 // (2: spec 0.13), else Status::NoTarget. Other accesses do not detect a
 // missing target on one wire: dmiRead() gives 0xffffffff with Status::Ok,

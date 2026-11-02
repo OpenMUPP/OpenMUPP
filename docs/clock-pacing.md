@@ -69,7 +69,7 @@ The design does not use these options:
 
 - A timer that paces the clock, with DMA, as the one-wire engine does.
   SWD must read the ACK in the middle of a transfer and act on it (OK, WAIT, FAULT): a DMA table that is ready before the transfer does not fit.
-  On the ST-Link/V2, SWCLK (PA5) has no timer channel.
+  On the ST-Link/V2-1 and the mini clone, SWCLK (PA5) has no timer channel.
   A DMA transfer takes 80 to 210 ns on the Mini, and this must fit in the shortest clock phase.
 - SPI for the data, as the JTAG fast path does.
   SWD needs SWDIO on MOSI and MISO, and SPI moves 8 bits at a time. The turnaround (1 bit) and the ACK (3 bits) do not fit this.
@@ -96,7 +96,7 @@ The design does not use these options:
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
 - The Mini and the WeAct STM32H523 are measured.
-  The ST-Link/V2 is not measured.
+  The ST-Link/V2-1 is not measured.
 
 ## Measurements
 

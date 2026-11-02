@@ -206,10 +206,10 @@ The jobs:
 
   | Personalities | Suffix | Tag | Boards |
   |---|---|---|---|
-  | `cmsis-dap` | `-cmsis-dap` | `-cmsis-dap` | ST-Link/V2 (the Mini is `build-mini`) |
-  | `cmsis-dap,wch-link` | `-dual` | `-dap+wch` | Mini, ST-Link/V2 |
+  | `cmsis-dap` | `-cmsis-dap` | `-cmsis-dap` | ST-Link (the Mini is `build-mini`) |
+  | `cmsis-dap,wch-link` | `-dual` | `-dap+wch` | Mini, ST-Link |
 
-  "ST-Link/V2" is the ST-Link/V2 and the ST-Link/V2 mini clone.
+  "ST-Link" is the ST-Link/V2-1 and the ST-Link/V2 mini clone.
   Each limit of a multi image or an image with the RISC-V bridge is 1 KB smaller, because the last flash page holds the stored personality and the bridge mode.
   CI builds no image with the Versaloon personality.
 - `build-mini-cmsis-dap-no-rv-bridge`: release build of the Mini with `MUPP_PERSONALITIES=cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF`, plus the size check.
@@ -218,7 +218,7 @@ The jobs:
   The limit of a multi image or an image with the RISC-V bridge is 8 KB smaller, because the last flash sector holds the stored personality and the bridge mode.
 
 The build jobs of the Mini and the WeAct STM32H523 core board run in each pipeline.
-The build jobs of the ST-Link/V2 boards are manual: start them in the pipeline view of GitLab.
+The build jobs of the ST-Link boards are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
@@ -230,7 +230,7 @@ Outside CI, CMake uses a source in `build/_deps` as it is, and does not check th
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
 The Mini has the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
-The ST-Link/V2 and the ST-Link/V2 mini clone have the `standalone`, `app-8k` and `with-bootloader` images.
+The ST-Link/V2-1 and the ST-Link/V2 mini clone have the `standalone`, `app-8k` and `with-bootloader` images.
 The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
 The tag of a multi image has a `+`, also in the name of the artifact archive and of the matrix job.
 In a URL, encode the full job name, for example in a link to `/-/jobs/artifacts/<ref>/download?job=<job>`.

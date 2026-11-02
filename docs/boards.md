@@ -9,7 +9,7 @@ The other boards are for development and tests, or they are older probe hardware
 
 The board selects the MCU family of the dongle.
 The firmware knows two families: STM32F1 and STM32H5.
-The Mini and the ST-Link/V2 use an STM32F103x8 or STM32F103xB (family STM32F1).
+The Mini and the ST-Link/V2-1 use an STM32F103x8 or STM32F103xB (family STM32F1).
 The ST-Link/V2 mini clone uses an STM32F103 compatible MCU, with the same family.
 The ST-Link/V2 mini clone has its own document with the measured pin map: [ST-Link/V2 mini clone](stlinkv2-mini-clone.md).
 CMSIS has one device define (`STM32F103xB`) for both parts.
@@ -61,7 +61,8 @@ Some functions come from the pin map and the family, not from a separate field:
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
   The setting frees all debug port pins that the board uses, and keeps the rest.
   The Mini uses PA14 for an LED, so it disables the debug port.
-  The ST-Link/V2 and the ST-Link/V2 mini clone keep JTAG and SWD.
+  The ST-Link/V2-1 uses PA15 (JTDI) for the USB pull-up, so it disables the JTAG-DP and keeps SWD.
+  The ST-Link/V2 mini clone keeps JTAG and SWD.
   The debug port pins are the same on the two families.
   The STM32F103 frees the pins with `AFIO_MAPR.SWJ_CFG`.
   The STM32H5 has no AFIO. Its debug port pins are in AF0 after reset, and the GPIO mode of a pin frees the pin.
@@ -293,6 +294,52 @@ Findings:
   Three more read backs of the 32 KiB image with OpenOCD and the `vsllink` driver on JTAG at 1000 kHz had no errors.
   The cause is not known.
 - The test did not cover `--full-uart`, the old switch commands, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.
+
+## ST-Link/V2-1
+
+The board `stlinkv21` is the ST-Link/V2-1 part of a Nucleo-64 board.
+You can break this part off the Nucleo board and use it as a probe.
+The pins come from the Nucleo-64 schematics MB1136 (revision C-04, sheet 4) and MB1360 (revision C-02, sheet 7).
+The two boards use the same MCU pins. Only the solder bridge pads are different (see [SWD pads of the MCU](#swd-pads-of-the-mcu)).
+The board is not tested on hardware.
+
+| Signal | MCU pin | Connector | Note |
+|---|---|---|---|
+| SWCLK (TCK) | PA5 | SWD connector pin 2 | PB13 is on the same net. The firmware does not use PB13. |
+| SWDIO output (TMS out) | PB14 | SWD connector pin 4 | |
+| SWDIO input (TMS in) | PB12 | | Through 100 Ω to SWDIO |
+| NRST (SRST) | PB0 | SWD connector pin 5 | |
+| GND | | SWD connector pin 3 | |
+| UART TX, RX | PA2, PA3 (USART2) | TX/RX jumper header | On the Nucleo board, two solder bridges connect the UART to the target MCU. |
+| Vref sense | PA0 | | Divider 2 from the 3.3 V of the Nucleo board. The resistor from SWD connector pin 1 is not fitted, so the target voltage does not reach PA0. A broken-off board reads 0 V. |
+| State LED | PA9 | | Bicolor LED. High: red. Low: green. Idle is green, activity switches both off, a fault is red. |
+| USB D+ pull-up | PA15 (`USB_RENUMn`) | | An NPN transistor connects the 1.5 kΩ pull-up. High connects, low disconnects. |
+
+The board has these limits:
+
+- The board has an SWD connector only. TDI (PA7) and TDO (PA6) are not connected, so JTAG does not reach a target.
+- SWO (PA10) is on SWD connector pin 6. The firmware does not use it.
+- The board has no key, no RTCK and no target power switch.
+- PA15 is JTDI after the reset. Thus the firmware disables the JTAG-DP of the MCU, and SWD stays on.
+
+### SWD pads of the MCU
+
+The MCU (STM32F103CBT6) has no SWD header.
+To write the bootloader, connect the debug probe to the solder bridge pads of the "reserved" group.
+Use the pad on the side away from the jumper header.
+The pads are different on the two boards:
+
+| Signal | MCU pin | MB1136 | MB1360 |
+|---|---|---|---|
+| SWCLK (`STM_JTCK`) | PA14 (pin 37) | SB6 | SB8 |
+| SWDIO (`STM_JTMS`) | PA13 (pin 34) | SB10 | SB12 |
+| NRST (`STM_RST`) | NRST (pin 7) | SB11. The other pad is GND. | JP1. The other pin is GND. |
+| 3.3 V | | SB4 | SB6 |
+| GND | | SB8 | SB10 |
+
+The pads of the "reserved" group are open. Do not close them.
+Measure each pad to its MCU pin before you connect the probe.
+The original firmware has read protection: see [Install the bootloader](firmware-update.md#install-the-bootloader).
 
 ## OpenMUPP v1 probe board
 

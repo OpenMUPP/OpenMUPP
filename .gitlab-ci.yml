@@ -75,7 +75,7 @@ run-tool-tests:
 # script fails the link when an image does not fit; the size check reports
 # the size of each image in mupp-images.txt and fails on the same limit. The
 # default target also builds openmupp-bootloader for the Mini and the
-# ST-Link/V2 boards.
+# ST-Link boards.
 .build-board-template:
   stage: build
   cache: *fetchcontent-cache
@@ -96,7 +96,7 @@ run-tool-tests:
     - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/mupp-images.txt"
   # Only the .hex and .bin files that a user writes, with the board, the
   # image, the build type and the version in the name (README "Build the
-  # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link/V2
+  # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link
   # boards have no app-10k image. No .elf, .map or bootloader-only files.
   # A tag of a multi image has a "+": encode it as %2B in a download URL.
   artifacts:
@@ -145,13 +145,13 @@ build:
   parallel:
     matrix:
       # MUPP_PERSONALITIES=cmsis-dap. The Mini is the build-mini job.
-      - BOARD: [stlinkv2, stlinkv2miniclone]
+      - BOARD: [stlinkv21, stlinkv2miniclone]
         VARIANT: -cmsis-dap
         PROTOCOL_TAG: -cmsis-dap
       # MUPP_PERSONALITIES=cmsis-dap,wch-link. The last 1 KB flash page holds
       # the stored personality, so each image limit of a multi image is 1 KB
       # smaller.
-      - BOARD: [mini, stlinkv2, stlinkv2miniclone]
+      - BOARD: [mini, stlinkv21, stlinkv2miniclone]
         VARIANT: -dual
         PROTOCOL_TAG: -dap+wch
 

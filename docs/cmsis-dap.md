@@ -45,7 +45,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - A JTAG chain has up to 8 devices. The IR length of a device is 1 to 32 bits.
 - On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
   Else the next scan has an extra TCK edge or a missing TCK edge.
-  The idle level is high on the boards with the SPI fast path (the Mini and the STM32H5 boards), and low on the ST-Link/V2.
+  The idle level is high on the boards with the SPI fast path (the Mini and the STM32H5 boards), and low on the ST-Link/V2-1 and the mini clone.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
 - No SWO.
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).

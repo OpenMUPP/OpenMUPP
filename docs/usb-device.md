@@ -36,7 +36,7 @@ The main loop also does not sleep while a debugger is connected (`DHCSR.C_DEBUGE
 On the STM32H5, the debugger reads zeros from flash, SRAM and the peripherals while the core sleeps.
 The board definition supplies the USB D+ pull-up pin.
 The device connects when `main()` starts the USB device.
-A board without a pull-up pin (the ST-Link/V2 and the ST-Link/V2 mini clone) has a fixed pull-up.
+A board without a pull-up pin (the ST-Link/V2 mini clone) has a fixed pull-up.
 On such an STM32F1 board, the firmware sets D+ (PA12) low for 20 ms before it starts the USB device.
 Thus the host sees a disconnect also after a reset by a debugger or a watchdog.
 Without this step, the host keeps the device of the old firmware and does not enumerate the new one.
@@ -192,7 +192,7 @@ To change the personality, use one of these methods:
   A multi image with WCH-Link needs this request or the key to leave WCH-Link, because the WCH-Link protocol has no free command for a switch.
 - Hold the key down for 3 s while the firmware runs. All LEDs flash three times when the 3 s end, and then stay on. Release the key. The firmware then selects the next personality in the list. With two personalities, this is the other one.
   The key also works in the WCH-Link personality.
-  The ST-Link/V2 has no key: use the switch request on EP0 to leave the WCH-Link personality.
+  The ST-Link/V2-1 has no key: use the switch request on EP0 to leave the WCH-Link personality.
 
 The personality code is `0` for Versaloon, `1` for CMSIS-DAP and `2` for WCH-Link.
 The firmware refuses a switch to a code that is not in the image.
@@ -351,7 +351,7 @@ The key gesture has these rules:
 - The firmware counts the key only after it saw the key released.
   Thus a key that sticks does not change the personality at each start.
 - The key at reset starts the bootloader, as before (see [Firmware update](firmware-update.md)).
-- The ST-Link/V2 has no key. Use the commands.
+- The ST-Link/V2-1 has no key. Use the commands.
 
 The Versaloon personality of a multi image has `VERSALOON_FW_UPDATE`, as the Versaloon image.
 In each personality, the switch commands with the bootloader code `0xB0` start the bootloader (see [Bootloader code](firmware-update.md#bootloader-code)).
@@ -480,17 +480,17 @@ OpenOCD then stops with an error.
 OpenOCD controls the reset lines SRST and TRST through the `GPIO` block (`src/protocol/versaloon/GpioBlock.h`).
 Each bit of a `u16` mask selects one pin of the debug connector:
 
-| Bit | Signal | Mini | ST-Link/V2 | ST-Link/V2 mini clone |
+| Bit | Signal | Mini | ST-Link/V2-1 | ST-Link/V2 mini clone |
 |---|---|---|---|---|
 | `0x0001` | SRST | PB11 | PB0 | PB6 |
 | `0x0002` | TRST | PB10 | none | none |
 | `0x0004` | USR1 | none | none | none |
 | `0x0008` | USR2 | none | none | none |
 | `0x0010` | TCK | PB13 | PA5 | PA5 |
-| `0x0020` | TDO (input only) | PB14 | PA6 | PA6 (not on the header) |
-| `0x0040` | TDI | PB15 | PA7 | PA7 (not on the header) |
+| `0x0020` | TDO (input only) | PB14 | PA6 (not connected) | PA6 (not on the header) |
+| `0x0040` | TDI | PB15 | PA7 (not connected) | PA7 (not on the header) |
 | `0x0080` | RTCK (input only) | PA8 | none | none |
-| `0x0100` | TMS | PB4 out, PB6 in | PB14 | PB14 out, PB12 in |
+| `0x0100` | TMS | PB4 out, PB6 in | PB14 out, PB12 in | PB14 out, PB12 in |
 
 The sub-commands use port index 0. The values are `u16`, little-endian:
 
@@ -524,7 +524,7 @@ On an input with pull, the output register selects the pull direction, as in the
 For TMS on the Mini, `IN` reads PB6. A TMS input also makes PB4 an input.
 
 A pin that the board does not have is ignored, and `IN` reads it as 0.
-Thus OpenOCD can set TRST on the ST-Link/V2.
+Thus OpenOCD can set TRST on the ST-Link/V2-1.
 These requests get `INVALID_PARA`: a bit above `0x0100`, an output on TDO or RTCK, or a wrong payload size.
 A port index other than 0 gets `INVALID_INDEX`.
 
@@ -626,7 +626,7 @@ After each TCK edge, the firmware waits until RTCK has the same level.
 When RTCK does not follow within 10 ms, `IN_OUT` stops and replies `TIMEOUT`.
 TCK is then low, or high when RTCK did not follow a rising edge on a board with the fast path.
 The original firmware did not report this error.
-A board without RTCK (the ST-Link/V2) replies `INVALID_PARA` to 0 kHz.
+A board without RTCK (the ST-Link/V2-1) replies `INVALID_PARA` to 0 kHz.
 
 For each bit, the firmware writes TDI and TMS while TCK is low, and waits for the low half period.
 When TCK idles high, each bit starts with the falling edge.
@@ -642,7 +642,7 @@ On the Mini and the WeAct STM32H523, two SPI peripherals and DMA shift the whole
 The STM32F1 driver is `src/board/BoardJtagFast.cpp` (SPI and DMA1). The STM32H5 driver is `src/board/BoardJtagFastH5.cpp` (SPI v2 and GPDMA1).
 The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
 A board has the fast path when its definition has `jtagFastPath` (see [Boards](boards.md)).
-The ST-Link/V2 does not have it.
+The ST-Link/V2-1 does not have it.
 
 | Signal | Pin | Peripheral | STM32F1 DMA1 channel | STM32H5 GPDMA1 channel |
 |---|---|---|---|---|
@@ -847,7 +847,7 @@ A board can have no switch or no sense (see [Boards](boards.md)):
 | Switch, no sense | `OK` | `OK`, with no protection, and no automatic switch-off | `IN`: `CMD_NOT_SUPPORT`, `GET_TVCC`: 0 |
 | Neither | `OK` | `CMD_NOT_SUPPORT` | `IN`: `CMD_NOT_SUPPORT`, `GET_TVCC`: 0 |
 
-The ST-Link/V2 has a sense but no switch.
+The ST-Link/V2-1 has a sense but no switch.
 
 ## Check the enumeration
 

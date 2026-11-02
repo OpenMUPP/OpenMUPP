@@ -47,14 +47,14 @@
       }
     },
     {
-      "name": "board-stlinkv2",
-      "description": "Board stlinkv2",
+      "name": "board-stlinkv21",
+      "description": "Board stlinkv21",
       "hidden": true,
       "inherits": [
         "base"
       ],
       "cacheVariables": {
-        "BOARD": "stlinkv2"
+        "BOARD": "stlinkv21"
       }
     },
     {
@@ -244,33 +244,33 @@
       ]
     },
     {
-      "name": "stlinkv2",
+      "name": "stlinkv21",
       "displayName": "ST-Link/V2",
       "inherits": [
-        "board-stlinkv2"
+        "board-stlinkv21"
       ]
     },
     {
-      "name": "stlinkv2-cmsis-dap",
+      "name": "stlinkv21-cmsis-dap",
       "displayName": "ST-Link/V2, CMSIS-DAP",
       "inherits": [
-        "board-stlinkv2",
+        "board-stlinkv21",
         "personalities-cmsis-dap"
       ]
     },
     {
-      "name": "stlinkv2-dual",
+      "name": "stlinkv21-dual",
       "displayName": "ST-Link/V2, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
-        "board-stlinkv2",
+        "board-stlinkv21",
         "personalities-dual"
       ]
     },
     {
-      "name": "stlinkv2-wch-link",
+      "name": "stlinkv21-wch-link",
       "displayName": "ST-Link/V2, WCH-Link",
       "inherits": [
-        "board-stlinkv2",
+        "board-stlinkv21",
         "personalities-wch-link"
       ]
     },
@@ -405,20 +405,20 @@
       "configurePreset": "otheruse-wch-link"
     },
     {
-      "name": "stlinkv2",
-      "configurePreset": "stlinkv2"
+      "name": "stlinkv21",
+      "configurePreset": "stlinkv21"
     },
     {
-      "name": "stlinkv2-cmsis-dap",
-      "configurePreset": "stlinkv2-cmsis-dap"
+      "name": "stlinkv21-cmsis-dap",
+      "configurePreset": "stlinkv21-cmsis-dap"
     },
     {
-      "name": "stlinkv2-dual",
-      "configurePreset": "stlinkv2-dual"
+      "name": "stlinkv21-dual",
+      "configurePreset": "stlinkv21-dual"
     },
     {
-      "name": "stlinkv2-wch-link",
-      "configurePreset": "stlinkv2-wch-link"
+      "name": "stlinkv21-wch-link",
+      "configurePreset": "stlinkv21-wch-link"
     },
     {
       "name": "stlinkv2miniclone",
