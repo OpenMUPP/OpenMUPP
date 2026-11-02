@@ -508,6 +508,8 @@ The driver has these commands. Changes to the option bytes take effect after a r
 | `ch32v options_write 0 <user> [<data0> <data1>]` | Writes `USER`, and optionally `DATA0` and `DATA1` |
 | `flash protect 0 <first> <last> on` | Sets the write protection of blocks (1 KB on the CH32V003, 2 KB on the CH32V00X, 4 KB on the CH32V20x) |
 
+Results with the `ch32v` driver are in [Flash test with OpenOCD](#flash-test-with-openocd).
+
 ### Bridge switch
 
 The vendor command `ID_DAP_Vendor1` (`0x81`) sets the mode of the bridge: `81 00` off, `81 01` on, `81 02` auto.
@@ -881,6 +883,38 @@ Thus the wire and USB now use most of the time.
 The remaining firmware time is spread over the TAP emulation and the packet code.
 A build with `-O2` for `DapJtag.cpp` and `RvDtmTap.cpp` did not make the sequences faster.
 The instruction cache misses are below 1%.
+
+#### Flash test with OpenOCD
+
+The test uses the `ch32v` flash driver (see [Flash with OpenOCD](#flash-with-openocd)).
+
+| Item | Value |
+|---|---|
+| Date | 2026-11-02 |
+| Probe | `cmsis-dap` image, version 0.13 (`bcdDevice`), serial `320069063053363247680543` |
+| OpenOCD | `0.12.0+dev-01780-g1f6863394` with the `ch32v` patch series |
+| Test data | Random files of 8000 bytes (the end is not on a page boundary) and of 16 KB |
+
+CH32V003 (`ch32v003-cmsis-dap.cfg`, default `WORKAREASIZE`):
+
+| Test | Result |
+|---|---|
+| `flash probe` | Pass: `CH32V003, chip ID 0x00300500, 16 KiB flash`, 16 protection blocks of 1 KB |
+| `program` of 8000 bytes, `verify` | Pass |
+| `program` to `0x00000000` (the alias bank), `verify_image` at `0x08000000` | Pass |
+| `flash erase_sector 0 2 3` | Pass: only `0x08000080` to `0x080000ff` read `0xffffffff` |
+| `flash fillw` at `0x08000084` (not on a page boundary) | Pass: OpenOCD pads the page, and the other words of the page stay erased |
+| `ch32v mass_erase`, `flash erase_check` | Pass: "Bank is erased" |
+| `flash write_image erase` of 16 KB | Pass: 2.55 s (6.3 KiB/s), with the erase. `verify_image`: 0.16 s |
+| `flash protect 0 2 3 on`, `reset halt` | Pass: `FLASH_WPR` `0xfffffff3`. A write to block 2 fails with `WRPRTERR`. A write to block 4 passes |
+| `flash protect 0 0 last off`, `reset halt` | Pass: `FLASH_WPR` `0xffffffff` |
+| `ch32v options_write 0 0x17 0x42 0x99`, `reset halt` | Pass: `FLASH_OBR` shows `DATA0` `0x42` and `DATA1` `0x99`. Then back to `0x00` and `0xff` |
+| `ch32v lock`, `reset halt` | Pass: `RDPRT` 1. A flash read fails ("progbuf startup failed") |
+| `ch32v unlock`, `reset halt` | Pass: `RDPRT` 0. The chip erased the flash itself. `ndmreset` loads the new `RDPR` |
+
+For comparison: probe-rs needs 20.1 s for 8 KB on the same chip ([CH32V003 on the Mini](#ch32v003-on-the-mini)).
+
+The CH32V006 and the CH32V208 are not tested yet.
 
 #### OpenOCD messages at examine
 
