@@ -21,7 +21,9 @@ namespace board {
 // target power from the ST-Link USB. A broken-off board does not use it.
 // No JTAG fast path, no power switch and no key. USB_RENUMn (PA15) drives
 // an NPN emitter follower to the D+ pull-up: high connects, low
-// disconnects.
+// disconnects. Open-drain: when released, the base divider (10k to 5 V,
+// 36k to GND) lifts D+ to about 2.9 V at the host. A 3.3 V push-pull
+// output gives about 2.4 V. PA15 is 5 V tolerant.
 inline constexpr Definition stLinkV21{
    .name = "stlinkv21",
    .hseFrequency = 8'000'000,
@@ -55,6 +57,7 @@ inline constexpr Definition stLinkV21{
    },
    .key = std::nullopt,
    .usbPullUp = Signal{ { Port::A, 15 }, Active::High },
+   .usbPullUpOpenDrain = true,
 };
 static_assert(isValid(stLinkV21));
 

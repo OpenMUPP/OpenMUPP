@@ -313,7 +313,7 @@ The board is not tested on hardware.
 | UART TX, RX | PA2, PA3 (USART2) | TX/RX jumper header | On the Nucleo board, two solder bridges connect the UART to the target MCU. |
 | Vref sense | PA0 | | Divider 2 from the 3.3 V of the Nucleo board. The resistor from SWD connector pin 1 is not fitted, so the target voltage does not reach PA0. A broken-off board reads 0 V. |
 | State LED | PA9 | | Bicolor LED. High: red. Low: green. Idle is green, activity switches both off, a fault is red. |
-| USB D+ pull-up | PA15 (`USB_RENUMn`) | | An NPN transistor connects the 1.5 kΩ pull-up. High connects, low disconnects. |
+| USB D+ pull-up | PA15 (`USB_RENUMn`) | | An NPN transistor connects the 1.5 kΩ pull-up. High connects, low disconnects. PA15 is an open-drain output (`usbPullUpOpenDrain` in the board definition). When PA15 is released, the divider on the base sets about 2.9 V on D+. A 3.3 V push-pull output gives only about 2.4 V. |
 
 The board has these limits:
 

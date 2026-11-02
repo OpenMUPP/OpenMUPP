@@ -123,6 +123,7 @@ TEST_CASE("ST-Link/V2-1 has the pin map of the Nucleo-64 schematic") {
    CHECK(stLink.leds.stateTwoColour);
    // USB_RENUMn: high connects the D+ pull-up, low disconnects it
    CHECK(stLink.usbPullUp == Signal{ { Port::A, 15 }, Active::High });
+   CHECK(stLink.usbPullUpOpenDrain);
    CHECK(board::swjConfig(stLink) == board::SwjConfig::NoJtag);
    CHECK(board::withSwd(stLink) == stLink);
 }
