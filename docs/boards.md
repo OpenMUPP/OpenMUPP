@@ -301,7 +301,8 @@ The board `stlinkv21` is the ST-Link/V2-1 part of a Nucleo-64 board.
 You can break this part off the Nucleo board and use it as a probe.
 The pins come from the Nucleo-64 schematics MB1136 (revision C-04, sheet 4) and MB1360 (revision C-02, sheet 7).
 The two boards use the same MCU pins. Only the solder bridge pads are different (see [SWD pads of the MCU](#swd-pads-of-the-mcu)).
-The board is not tested on hardware.
+The WCH-Link personality is tested on hardware: a CH32V006 on one wire, with the ST-Link part of an MB1360 board.
+The other functions are not tested on hardware.
 
 ![Pinout of the ST-Link/V2-1 of a Nucleo-64 board](images/stlinkv21-pinout.svg)
 
@@ -323,6 +324,11 @@ The board has these limits:
 
 - The board has an SWD connector only. TDI (PA7) and TDO (PA6) are not connected, so JTAG does not reach a target.
 - SWO (PA10) is on SWD connector pin 6. The firmware does not use it.
+- A one-wire target (WCH-Link, CH32V00x) needs an external pull-up of 1 kΩ to 2.2 kΩ from SWDIO to 3.3 V.
+  The internal pull-up of PB12 is too slow for the read bits (see [One-wire timer](wch-link.md#one-wire-timer)).
+  Without the pull-up, a CH32V006 did not connect. With 1 kΩ on the target side, it connected.
+  Put the pull-up on the target, or on the probe from SWD connector pin 4 to the 3.3 V pad (see [SWD pads of the MCU](#swd-pads-of-the-mcu)).
+  SWD connector pin 1 is a sense input. It does not supply 3.3 V.
 - The board has no key, no RTCK and no target power switch.
   The bootloader uses SWO (PA10) as its key: connect SWD connector pin 6 to GND (pin 3), then connect the board to USB.
   The firmware does not read this key, so the personality key gesture is not available.
@@ -346,6 +352,14 @@ The pads are different on the two boards:
 | GND | | SB8 | SB10 |
 
 The pads of the "reserved" group are open. Do not close them.
+The pad on the side of the jumper header connects to a probe signal through a closed "default" solder bridge.
+Make sure that solder does not touch the two pads of a bridge:
+
+- GND bridge (SB8 on MB1136, SB10 on MB1360): the inner pad is SWDIO of the probe (PB14, SWD connector pin 4).
+  A short on this bridge connects SWDIO to GND. SWDIO then reads low in all states, and no target connects.
+- 3.3 V bridge (SB4 on MB1136, SB6 on MB1360): the inner pad is SWCLK of the probe (PA5 and PB13). A short connects SWCLK to 3.3 V.
+
+If possible, connect the GND of the probe to SWD connector pin 3.
 Measure each pad to its MCU pin before you connect the probe.
 The original firmware has read protection: see [Install the bootloader](firmware-update.md#install-the-bootloader).
 

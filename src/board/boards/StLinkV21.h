@@ -8,7 +8,9 @@ namespace board {
 
 // ST-Link/V2-1 of the Nucleo-64 boards (STM32F103CBT6, 8 MHz crystal). The
 // pins come from the schematics MB1136 (sheet 4) and MB1360 (sheet 7): the
-// two boards use the same MCU pins. Not tested on hardware.
+// two boards use the same MCU pins. Tested on hardware: WCH-Link on one
+// wire (CH32V006, MB1360). A one-wire target needs an external SWDIO
+// pull-up (docs/boards.md).
 //
 // The board ties PA5 + PB13 (T_JTCK) and PB14 + PB12 (SWDIO, PB12 through
 // 100 Ohm). As on the mini clone, PB14 drives SWDIO and PB12 reads it.

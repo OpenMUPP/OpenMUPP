@@ -14,7 +14,7 @@ Until then, the WeAct STM32H523 core board is the test board for the same MCU.
 The firmware also builds for older probe hardware: the Versaloon Mini, the ST-Link/V2-1 of the Nucleo-64 boards and the ST-Link/V2 mini clone (STM32F103 or compatible chip).
 These boards are secondary targets. They help to develop and test the code, and you can use them as probes.
 The ST-Link/V2 mini clone has a hardware test of the USB personalities, the LEDs and SWD to a target.
-The ST-Link/V2-1 build has no hardware test.
+The ST-Link/V2-1 has a hardware test of the WCH-Link personality on one wire (CH32V006) only.
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
@@ -63,7 +63,7 @@ OpenMUPP v1 is the main target. The other boards are for development, tests and 
 | (none yet) | OpenMUPP v1 probe board, STM32H523CC | 24 MHz | Main target | No board definition yet |
 | `weacth523` | WeAct STM32H523 core board | 8 MHz | Test board for the OpenMUPP v1 MCU | target, 3.3 V targets only |
 | `mini` | Versaloon Mini | 12 MHz | Secondary | target |
-| `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | 8 MHz | Secondary | compile-only, SWD only (no JTAG pins) |
+| `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | 8 MHz | Secondary | WCH-Link one wire tested, SWD only (no JTAG pins) |
 | `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | Secondary | target, SWD only (no JTAG pins) |
 
 [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.

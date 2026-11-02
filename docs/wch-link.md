@@ -533,7 +533,8 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `sr
 | Board | SWDIO output | Timer channel | Update DMA | Sample channel and DMA |
 |---|---|---|---|---|
 | Mini | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
-| ST-Link/V2-1, ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
+| ST-Link/V2-1 | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
+| ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | WeAct STM32H523 | PA6 | TIM3_CH1 (AF2) | TIM3_UP, GPDMA1 channel 3 | TIM3_CH3, GPDMA1 channel 4 |
 
 `board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz on the STM32F1, 250 MHz on the STM32H5).
@@ -551,13 +552,13 @@ The STM32H5 engine works as the STM32F1 engine, with these differences:
 - **Times.** The bits have the WCH-LinkE times: a 1 is low for 250 ns, a 0 is low for 860 ns, and the high level is 370 ns.
   The high level after bit 8 of a read is 750 ns. A read bit lasts 1.3 µs.
 - **Read bits.** In the turnaround after bit 8, the code switches SWDIO to open drain. The STM32F1 has no internal pull-up on an output pin.
-  On the Mini, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 mini clone, the separate input pin is PB12. The ST-Link/V2-1 uses PB12 too.
+  On the Mini, the pull-up of the separate SWDIO input pin (PB6) holds the line high. On the ST-Link/V2 mini clone, the separate input pin is PB12. The ST-Link/V2-1 uses PB12 too. With a CH32V006, this pull-up is too slow, and the ST-Link/V2-1 needs an external pull-up (see [ST-Link/V2-1](boards.md#st-linkv2-1)).
   The timer then drives the low pulse of 250 ns, and the target can hold the line low for a 0.
   The sample channel compares at 450 ns. Its DMA copies the input port (`IDR`) to RAM.
   The DMA reads 80 to 210 ns after the compare (measured), thus at 530 to 660 ns.
   That is between the longest 1 (374 ns) and the shortest 0 (824 ns) of the target.
 - **DMA budget.** One DMA transfer takes 80 to 210 ns (measured on TIM3). The update burst must end within the shortest bit (620 ns).
-  The burst has 3 words on TIM3 (ARR, a reserved word, CCR1) and 4 words on TIM1 (ARR, RCR, CCR1, CCR2). The 4-word burst is not tested.
+  The burst has 3 words on TIM3 (ARR, a reserved word, CCR1) and 4 words on TIM1 (ARR, RCR, CCR1, CCR2). The 4-word burst works on the ST-Link/V2-1 with a CH32V006 (connect and memory reads).
   A burst of 5 words on TIM3 did not end in time.
   A sample transfer in each write bit also delayed the burst after a row of 1 bits. Bit 8 of a chip ID read then kept the short low time.
   Thus the sample request is on only for the read bits. The code switches it on in the turnaround and off after the last read bit. The cycle counter times both switches, and the code reads no timer or DMA register during the frame.
