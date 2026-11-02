@@ -12,9 +12,10 @@ namespace board {
 //
 // The board ties PA5 + PB13 (T_JTCK) and PB14 + PB12 (SWDIO, PB12 through
 // 100 Ohm). As on the mini clone, PB14 drives SWDIO and PB12 reads it.
-// The Nucleo has an SWD connector only (CN4): TDI (PA7) and TDO (PA6) are
-// not connected, and T_JRST (PB1) has no connector pin. SWO (PA10) is on
-// CN4 pin 6, but the firmware does not use it.
+// The Nucleo has an SWD connector only (CN4 on MB1136, CN11 on MB1360):
+// TDI (PA7) and TDO (PA6) are not connected, and T_JRST (PB1) has no
+// connector pin. SWO (PA10) is on SWD connector pin 6, but the firmware
+// does not use it.
 // PWR_ENn (PB15) switches the 5 V of the Nucleo target side: low is on. The
 // firmware does not drive it, so a Nucleo that is not broken off gets no
 // target power from the ST-Link USB. A broken-off board does not use it.
@@ -40,8 +41,8 @@ inline constexpr Definition stLinkV21{
    .jtagFastPath = std::nullopt,
    .uart = Uart{ .usart = 2, .tx{ Port::A, 2 }, .rx{ Port::A, 3 } },
    // Divider 2 on PA0 from the 3.3 V of the Nucleo, not from the target:
-   // the resistor from CN4 pin 1 (VDD_TARGET) is not fitted. A board that is
-   // broken off the Nucleo reads 0 V.
+   // the resistor from SWD connector pin 1 (VDD_TARGET) is not fitted. A
+   // board that is broken off the Nucleo reads 0 V.
    .vref = VrefSense{ .pin{ Port::A, 0 }, .divider = 2 },
    .powerSwitch = std::nullopt,
    .leds{
