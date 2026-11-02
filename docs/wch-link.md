@@ -49,7 +49,7 @@ The `wch-link` image has these properties:
 
 The default USB ID is `1209:0001`, the test ID of pid.codes.
 It stays until the project has its own product ID.
-The product string is `OpenMUPP WCH-Link`.
+The product string is `OpenMUPP WCH-Link`. The WCH ID build has another product string (see below).
 Older firmware has the product string `Versaloon WCH-Link`.
 
 `wlink` and `minichlink` look for a probe with the ID `1a86:8010` of WCH.
@@ -68,6 +68,10 @@ The names of these image files have `-wch-link-wch-id` after the board.
 In a multi image, the tag ends with `-wch-id`, for example `-dap+wch-wch-id`.
 CI does not build this image.
 The option is only valid when `MUPP_PERSONALITIES` has `wch-link`.
+
+The WCH ID build also has the product string `WCH-Link`, the same as the WCH-LinkE.
+probe-rs finds a WCH-Link probe only by this product string (probe-rs 0.32.0).
+The manufacturer string stays `OpenMUPP`. `tools/mupp_personality.py` uses it to find the dongle.
 
 ## Connect a target
 
@@ -112,6 +116,17 @@ wlink dump 0x08000000 256
 ```
 
 `minichlink` writes and reads the flash of the target too.
+
+probe-rs uses its WCH-Link driver with the WCH ID build. It finds the chip from the connect response, so `--chip` is not necessary:
+
+```sh
+probe-rs info
+probe-rs read b32 0x08000000 4
+probe-rs download --binary-format bin --base-address 0x08000000 --verify firmware.bin
+```
+
+A test on 2026-11-02 (ST-Link/V2-1, CH32V006 on one wire, probe-rs 0.32.0) showed `Detected chip: CH32V006K8U6` for `info`. The read and the download with the verify passed.
+The CMSIS-DAP personality with the RISC-V bridge needs `--chip` and `--protocol jtag`, because probe-rs cannot find a WCH chip through a JTAG DTM (see [RISC-V DTM bridge](cmsis-dap.md#risc-v-dtm-bridge)).
 The commands that the personality supports are in [Commands](#commands).
 
 ## Size
