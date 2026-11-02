@@ -33,13 +33,13 @@ knows. The script then waits for openmupp-bootloader (0483:5740, product
 docs/firmware-update.md, "Bootloader code".
 
 Usage:
-    python3 mupp_personality.py show
-    python3 mupp_personality.py switch cmsis-dap
-    python3 mupp_personality.py switch wch-link
-    python3 mupp_personality.py switch versaloon --serial 0123456789AB
-    python3 mupp_personality.py switch bootloader
-    python3 mupp_personality.py --id 1209:0001 show
-    python3 mupp_personality.py --id 1234:5678 --active wch-link switch versaloon
+    python3 mupp_probe.py show
+    python3 mupp_probe.py switch cmsis-dap
+    python3 mupp_probe.py switch wch-link
+    python3 mupp_probe.py switch versaloon --serial 0123456789AB
+    python3 mupp_probe.py switch bootloader
+    python3 mupp_probe.py --id 1209:0001 show
+    python3 mupp_probe.py --id 1234:5678 --active wch-link switch versaloon
 
 A device with a known ID, but with strings that the tool cannot read, is
 reported with its bus and address. On Linux this is a missing udev rule, and
@@ -52,7 +52,7 @@ it. Without it, the EP0 request still works, but not the fallback command.
 The wait after a switch looks for the standard IDs of the target.
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
-The unit tests in test_mupp_personality.py need no pyusb and no hardware.
+The unit tests in test_mupp_probe.py need no pyusb and no hardware.
 """
 
 import argparse

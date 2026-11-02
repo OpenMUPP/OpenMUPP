@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Host tests for mupp_personality.py. They need no pyusb and no hardware.
+"""Host tests for mupp_probe.py. They need no pyusb and no hardware.
 
 Run: python3 -m unittest discover -s tools -p "test_*.py"
 """
@@ -15,7 +15,7 @@ import types
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import mupp_personality as vp  # noqa: E402
+import mupp_probe as vp  # noqa: E402
 
 
 class PersonalityOfTest(unittest.TestCase):

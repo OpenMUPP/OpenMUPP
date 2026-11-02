@@ -13,7 +13,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mupp_rv_bridge as rb  # noqa: E402
-from test_mupp_personality import FakeDevice, fake_usb  # noqa: E402
+from test_mupp_probe import FakeDevice, fake_usb  # noqa: E402
 
 
 class RequestTest(unittest.TestCase):

@@ -33,7 +33,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import mupp_personality as vp  # noqa: E402
+import mupp_probe as vp  # noqa: E402
 
 DAP_VENDOR1 = 0x81
 # The modes of ID_DAP_Vendor1

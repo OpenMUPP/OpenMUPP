@@ -46,10 +46,10 @@ A multi image replies status `0xFF` to `ID_DAP_Vendor0`.
 A CMSIS-DAP image with one personality replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
 After the reply, the firmware does the same steps as for `VERSALOON_FW_UPDATE` (see [Reply and steps](#reply-and-steps)).
 
-`tools/mupp_personality.py` sends the bootloader code from the host:
+`tools/mupp_probe.py` sends the bootloader code from the host:
 
 ```sh
-python3 tools/mupp_personality.py switch bootloader
+python3 tools/mupp_probe.py switch bootloader
 ```
 
 The tool sends the switch request on EP0 with the code `0xB0`.
@@ -62,7 +62,7 @@ It finds the ROM USB DFU of the STM32H5 by the ID `0483:df11` only.
 The ROM DFU has its own serial number, so the wait for the bootloader does not compare it.
 Thus any STM32 device in ROM DFU mode ends the wait, also a different board.
 The other commands compare the serial number of the ROM DFU, so `--serial` does not select a device in ROM DFU mode.
-`python3 tools/mupp_personality.py show` also lists a dongle that runs the bootloader.
+`python3 tools/mupp_probe.py show` also lists a dongle that runs the bootloader.
 
 The tool must open the bootloader to read its strings.
 On Linux, a udev rule gives a normal user this access.
@@ -119,7 +119,7 @@ The `standalone` image of the STM32H5 has the bootloader entry.
 To start the ROM DFU, use one of these methods:
 
 - Send `VERSALOON_FW_UPDATE` or a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)).
-  `python3 tools/mupp_personality.py switch bootloader` does this and waits for `0483:df11`.
+  `python3 tools/mupp_probe.py switch bootloader` does this and waits for `0483:df11`.
 - Hold the key (KEY, PA0 on the WeAct board) down and reset the board.
 
 The firmware does not jump to the ROM bootloader from the running firmware.
