@@ -19,6 +19,9 @@ To start `openmupp-bootloader`, use one of these methods:
 - On the Mini: hold the key (PB9) down and reset the board.
 - On the ST-Link/V2 mini clone: connect SWIM (header pin 3) to GND (header pin 5), then connect the board to USB (see [Bootloader](stlinkv2-mini-clone.md#bootloader)).
 - On the ST-Link/V2-1: connect SWO (SWD connector pin 6) to GND (pin 3), then connect the board to USB. Only the bootloader reads this key, so the firmware can use PA10 for SWO.
+  The bootloader reads this key at every reset, and the personality switch also goes through a reset.
+  Thus an unpowered target, or a Nucleo target that holds PB3 low, can keep the probe in the bootloader.
+  On a Nucleo that is not broken off, SWO also connects to PB3 of the target MCU through SB15. If the target drives PB3 low, open SB15.
 
 Only the `app-8k` image accepts the commands.
 On the STM32H5, the commands and the key start the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
