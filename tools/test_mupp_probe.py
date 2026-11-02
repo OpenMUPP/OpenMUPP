@@ -107,7 +107,7 @@ def stall():
 class FakeDevice:
     """A dongle. ctrl_error and reply select how it answers."""
 
-    def __init__(self, vid, pid, product="", serial="SN1", ctrl_error=None, reply=None, manufacturer="OpenMUPP"):
+    def __init__(self, vid, pid, product="", serial="SN1", ctrl_error=None, reply=None, manufacturer="OpenMUPP", claim_error=None):
         self.idVendor = vid
         self.idProduct = pid
         self.iManufacturer = 1
@@ -118,6 +118,8 @@ class FakeDevice:
         self.strings = {1: manufacturer, 2: product, 3: serial}
         self.ctrl_error = ctrl_error
         self.reply = reply
+        self.claim_error = claim_error
+        self.interface_calls = []
         self.ctrl_transfers = []
         self.writes = []
 
@@ -145,6 +147,12 @@ def get_string(device, index):
     return value
 
 
+def fake_claim(device, _interface):
+    device.interface_calls.append("claim")
+    if device.claim_error is not None:
+        raise device.claim_error
+
+
 def fake_usb(devices):
     """A module like pyusb that finds the given devices."""
     usb = types.SimpleNamespace()
@@ -155,9 +163,9 @@ def fake_usb(devices):
     usb.core = types.SimpleNamespace(USBError=FakeUsbError, find=find)
     usb.util = types.SimpleNamespace(
         get_string=get_string,
-        claim_interface=lambda device, interface: None,
-        release_interface=lambda device, interface: None,
-        dispose_resources=lambda device: None,
+        claim_interface=fake_claim,
+        release_interface=lambda device, interface: device.interface_calls.append("release"),
+        dispose_resources=lambda device: device.interface_calls.append("dispose"),
     )
     return usb
 
@@ -564,7 +572,8 @@ class BridgeCommandTest(unittest.TestCase):
         device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=None)
         result, _, err = self.run_main(["on"], [device])
         self.assertEqual(result, 1)
-        self.assertIn("Cannot send", err)
+        self.assertIn("No response", err)
+        self.assertIn("not known", err)
 
     def test_only_cmsis_dap(self):
         versaloon = FakeDevice(0x0483, 0xA038)
@@ -592,7 +601,9 @@ class BridgeCommandTest(unittest.TestCase):
 
     def test_id_needs_active_for_a_shared_id(self):
         device = FakeDevice(0x1209, 0x0001, "Some test device", reply=[0x81, 0x00])
-        self.assertEqual(self.run_main(["on", "--id", "1209:0001"], [device])[0], 1)
+        result, _, err = self.run_main(["on", "--id", "1209:0001"], [device])
+        self.assertEqual(result, 1)
+        self.assertIn("select it with --active", err)
         self.assertEqual(device.writes, [])
         self.assertEqual(self.run_main(["on", "--id", "1209:0001", "--active", "cmsis-dap"], [device])[0], 0)
         self.assertEqual(device.writes, [(0x03, bytes([0x81, 0x01]))])
@@ -646,6 +657,26 @@ class PowerCommandTest(unittest.TestCase):
         self.assertEqual(out, "")
         self.assertIn("own supply", err)
 
+    def test_interface_is_released_after_a_command(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x82, 0x00, 0xE4, 0x0C])
+        self.run_main(["on"], [device])
+        self.assertEqual(device.interface_calls, ["claim", "release", "dispose"])
+
+    def test_interface_is_released_without_a_reply(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=None)
+        self.run_main(["on"], [device])
+        self.assertEqual(device.interface_calls, ["claim", "release", "dispose"])
+
+    def test_failed_claim_gives_the_udev_hint(self):
+        denied = FakeUsbError("Access denied", -3, errno.EACCES)
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", claim_error=denied)
+        result, _, err = self.run_main(["on"], [device])
+        self.assertEqual(result, 1)
+        self.assertEqual(device.writes, [])
+        self.assertEqual(device.interface_calls, ["claim", "release", "dispose"])
+        self.assertIn("Cannot send", err)
+        self.assertIn("70-openmupp", err)
+
     def test_only_cmsis_dap(self):
         versaloon = FakeDevice(0x0483, 0xA038)
         self.assertEqual(self.run_main(["on"], [versaloon])[0], 1)
@@ -655,7 +686,8 @@ class PowerCommandTest(unittest.TestCase):
         device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=None)
         result, _, err = self.run_main(["off"], [device])
         self.assertEqual(result, 1)
-        self.assertIn("Cannot send", err)
+        self.assertIn("No response", err)
+        self.assertIn("not known", err)
 
 
 if __name__ == "__main__":

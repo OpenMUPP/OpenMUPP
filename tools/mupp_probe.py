@@ -433,8 +433,12 @@ def report_send_error(error):
 
 def find_cmsis_dap(usb, args):
     """The one selected dongle with the CMSIS-DAP personality, or None after a message."""
-    devices = [device for name, device in find_selected(usb, args) if name == "cmsis-dap" or (name == UNKNOWN and args.active == "cmsis-dap")]
+    found = find_selected(usb, args)
+    devices = [device for name, device in found if name == "cmsis-dap" or (name == UNKNOWN and args.active == "cmsis-dap")]
     if not devices:
+        if args.active is None and any(name == UNKNOWN for name, _ in found):
+            print("The personality of this ID is unknown: select it with --active", file=sys.stderr)
+            return None
         print("No dongle with the CMSIS-DAP personality found", file=sys.stderr)
         return None
     if len(devices) > 1:
@@ -455,7 +459,10 @@ def run_dap_command(usb, args, request, check):
     try:
         with claimed_interface(usb, device):
             device.write(OUT_ENDPOINT, request, TIMEOUT_MS)
-            reply = device.read(IN_ENDPOINT, 64, TIMEOUT_MS)
+            try:
+                reply = device.read(IN_ENDPOINT, 64, TIMEOUT_MS)
+            except usb.core.USBError as error:
+                raise ProbeError("No response (%s): the command can have run, so the state is not known" % error)
         check(reply)
         return reply
     except ProbeError as error:
