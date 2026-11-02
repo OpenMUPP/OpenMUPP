@@ -914,7 +914,28 @@ CH32V003 (`ch32v003-cmsis-dap.cfg`, default `WORKAREASIZE`):
 
 For comparison: probe-rs needs 20.1 s for 8 KB on the same chip ([CH32V003 on the Mini](#ch32v003-on-the-mini)).
 
-The CH32V006 and the CH32V208 are not tested yet.
+CH32V006 (`ch32v00x-cmsis-dap.cfg` with `WORKAREASIZE` `0x2000`, and the OpenOCD config `target/wch/ch32v00x.cfg`):
+
+| Test | Result |
+|---|---|
+| `flash probe` | Pass: `CH32V00X, chip ID 0x00600620, 62 KiB flash`, 31 protection blocks of 2 KB. The chip ID is at `0x1ffff704`. At `0x1ffff7c4`, the CH32V006 reads `0xffffffff` |
+| `program` of 8000 bytes, `verify` | Pass |
+| `flash write_image erase` of 62 KB | Pass: 23.3 s (2.7 KiB/s), with the erase. `verify_image`: 0.55 s |
+| `flash erase_sector 0 2 3` | Pass: only `0x08000200` to `0x080003ff` read `0xffffffff` |
+| `flash fillw` at `0x08000204` | Pass |
+| `flash protect 0 2 3 on`, `reset halt` | Pass: `FLASH_WPR` `0xfffffff3`. A write to `0x08001000` (block 2) fails with `WRPRTERR`. A write to block 4 passes |
+| `ch32v options_write 0 0xff 0x42 0x99`, `reset halt` | Pass |
+| `ch32v lock`, `reset halt` | Pass: `RDPRT` 1, a flash read fails |
+| `ch32v unlock`, `reset halt` | Pass: `RDPRT` 0, and the flash is erased. `ndmreset` loads the new `RDPR`. No power cycle is necessary |
+
+The RAM write of the abstract command limits the write rate (see [CH32V006 on the Mini](#ch32v006-on-the-mini): `load_image` at 2.76 KiB/s).
+
+Two problems occurred during the test. The driver and the configs now prevent them:
+
+- Without `mem_access abstract`, OpenOCD sends 16-bit writes through the program buffer. The CH32V006 refuses the program buffer, and the write times out with `abstractcs.busy` 1. The option bytes were then erased (`RDPR` `0xff`), and the chip was read protected. The CH32V00X configs select the abstract command.
+- With `OBPG` and `STRT` in one `FLASH_CTLR` write after the option byte erase, the CH32V006 does not program the first half word (`RDPR`). The other half words are programmed. The driver now writes `OBPG` alone first.
+
+The CH32V208 is not tested yet.
 
 #### OpenOCD messages at examine
 
