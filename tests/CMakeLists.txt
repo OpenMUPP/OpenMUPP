@@ -128,7 +128,9 @@ function(mupp_personality_test name regex)
     set_tests_properties(personalities.${name} PROPERTIES PASS_REGULAR_EXPRESSION "${regex}")
 endfunction()
 
-mupp_personality_test(default "set=versaloon default=versaloon tag=\\[\\] defines=MUPP_WITH_VERSALOON\n")
+mupp_personality_test(default "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\] defines=MUPP_WITH_CMSIS_DAP,MUPP_CMSIS_DAP_RV_BRIDGE\n")
+mupp_personality_test(versaloon "set=versaloon default=versaloon tag=\\[-vsl\\] defines=MUPP_WITH_VERSALOON\n"
+        -DMUPP_PERSONALITIES=versaloon)
 mupp_personality_test(cmsis-dap "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\] defines=MUPP_WITH_CMSIS_DAP,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=cmsis-dap)
 mupp_personality_test(wch-link "set=wch-link default=wch-link tag=\\[-wch-link\\] defines=MUPP_WITH_WCH_LINK\n"
@@ -137,25 +139,27 @@ mupp_personality_test(wch-link-wch-id "tag=\\[-wch-link-wch-id\\] defines=MUPP_W
         -DMUPP_PERSONALITIES=wch-link -DMUPP_WCH_LINK_WCH_USB_ID=ON)
 mupp_personality_test(no-rv-bridge "tag=\\[-cmsis-dap-no-rv-bridge\\] defines=MUPP_WITH_CMSIS_DAP\n"
         -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_RV_BRIDGE=OFF)
-mupp_personality_test(rv-bridge-multi "tag=\\[-vsl\\+dap\\] defines=.*,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+mupp_personality_test(rv-bridge-multi "tag=\\[-dap\\+vsl\\] defines=.*,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap)
-mupp_personality_test(no-rv-bridge-multi "tag=\\[-vsl\\+dap-no-rv-bridge\\] defines=.*MUPP_DEFAULT_PERSONALITY=0\n"
+mupp_personality_test(no-rv-bridge-multi "tag=\\[-dap\\+vsl-no-rv-bridge\\] defines=.*MUPP_DEFAULT_PERSONALITY=1\n"
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap -DMUPP_CMSIS_DAP_RV_BRIDGE=OFF)
 # Ignored without cmsis-dap
 mupp_personality_test(rv-bridge-wch-link "tag=\\[-wch-link\\] defines=MUPP_WITH_WCH_LINK\n"
         -DMUPP_PERSONALITIES=wch-link -DMUPP_CMSIS_DAP_RV_BRIDGE=ON)
 # A CMake list, in any order: the result is in canonical order
-mupp_personality_test(list "set=versaloon,cmsis-dap default=versaloon tag=\\[-vsl\\+dap\\] defines=MUPP_WITH_VERSALOON,MUPP_WITH_CMSIS_DAP,MUPP_MULTI_PERSONALITY,MUPP_DEFAULT_PERSONALITY=0,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+mupp_personality_test(list "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\] defines=MUPP_WITH_VERSALOON,MUPP_WITH_CMSIS_DAP,MUPP_MULTI_PERSONALITY,MUPP_DEFAULT_PERSONALITY=1,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         "-DMUPP_PERSONALITIES=cmsis-dap$<SEMICOLON>versaloon")
 mupp_personality_test(dap-default "set=versaloon,cmsis-dap default=cmsis-dap tag=\\[-dap\\+vsl\\] .*MUPP_DEFAULT_PERSONALITY=1,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap -DMUPP_DEFAULT_PERSONALITY=cmsis-dap)
-mupp_personality_test(triple "set=versaloon,cmsis-dap,wch-link default=versaloon tag=\\[-vsl\\+dap\\+wch\\] defines=MUPP_WITH_VERSALOON,MUPP_WITH_CMSIS_DAP,MUPP_WITH_WCH_LINK,MUPP_MULTI_PERSONALITY,MUPP_DEFAULT_PERSONALITY=0,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+mupp_personality_test(triple "set=versaloon,cmsis-dap,wch-link default=cmsis-dap tag=\\[-dap\\+vsl\\+wch\\] defines=MUPP_WITH_VERSALOON,MUPP_WITH_CMSIS_DAP,MUPP_WITH_WCH_LINK,MUPP_MULTI_PERSONALITY,MUPP_DEFAULT_PERSONALITY=1,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         "-DMUPP_PERSONALITIES=wch-link, versaloon ,cmsis-dap")
 mupp_personality_test(dap-wch "set=cmsis-dap,wch-link default=wch-link tag=\\[-wch\\+dap\\] .*MUPP_DEFAULT_PERSONALITY=2,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=cmsis-dap,wch-link -DMUPP_DEFAULT_PERSONALITY=wch-link)
 mupp_personality_test(multi-wch-id "tag=\\[-dap\\+wch-wch-id\\] .*MUPP_WCH_LINK_WCH_USB_ID,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=cmsis-dap,wch-link -DMUPP_WCH_LINK_WCH_USB_ID=ON)
-mupp_personality_test(duplicate "set=versaloon,cmsis-dap default=versaloon"
+mupp_personality_test(vsl-wch "set=versaloon,wch-link default=versaloon tag=\\[-vsl\\+wch\\] .*MUPP_DEFAULT_PERSONALITY=0\n"
+        "-DMUPP_PERSONALITIES=wch-link,versaloon")
+mupp_personality_test(duplicate "set=versaloon,cmsis-dap default=cmsis-dap"
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap,versaloon)
 mupp_personality_test(unknown "Unknown personality 'avr'" -DMUPP_PERSONALITIES=versaloon,avr)
 mupp_personality_test(empty "MUPP_PERSONALITIES has no personality" "-DMUPP_PERSONALITIES=,")
@@ -186,7 +190,7 @@ add_test(NAME personalities.cache.clean COMMAND ${CMAKE_COMMAND} -E rm -rf ${_mu
 set_tests_properties(personalities.cache.clean PROPERTIES FIXTURES_SETUP mupp-cache-clean)
 set(_mupp_fixture_previous mupp-cache-clean)
 # A first configure without options caches the empty defaults
-mupp_personality_cache_test(default "set=versaloon default=versaloon tag=\\[\\]")
+mupp_personality_cache_test(default "set=cmsis-dap default=cmsis-dap tag=\\[-cmsis-dap\\]")
 # Then a set in the same directory
 mupp_personality_cache_test(set "set=cmsis-dap default=cmsis-dap" -DMUPP_PERSONALITIES=cmsis-dap)
 # A default that the new set does not have: an error with a hint

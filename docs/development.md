@@ -10,7 +10,7 @@ The build writes these files into the build directory:
 - `openmupp-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
   The README lists the images and their start addresses.
 - Copies of the `.hex` and `.bin` files with the board, the image, the build type and the version in the name.
-  An example is `openmupp-mini-app-8k-Release-v0.1.0.hex`.
+  An example is `openmupp-mini-vsl-app-8k-Release-v0.1.0.hex`.
   The tag after the board tells the personalities of the image (see [Image names](cmake.md#image-names)).
   An example is `openmupp-mini-cmsis-dap-app-8k-Release-v0.1.0.hex`.
 - `openmupp-<image>.map`, the linker map of each image.

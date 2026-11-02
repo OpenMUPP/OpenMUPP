@@ -88,6 +88,14 @@
       }
     },
     {
+      "name": "personalities-versaloon",
+      "description": "Versaloon personality",
+      "hidden": true,
+      "cacheVariables": {
+        "MUPP_PERSONALITIES": "versaloon"
+      }
+    },
+    {
       "name": "personalities-dual",
       "description": "Dual image with CMSIS-DAP and WCH-Link, CMSIS-DAP as default personality",
       "hidden": true,
@@ -145,6 +153,14 @@
       "displayName": "Versaloon Mini",
       "inherits": [
         "board-mini"
+      ]
+    },
+    {
+      "name": "mini-versaloon",
+      "displayName": "Versaloon Mini, Versaloon",
+      "inherits": [
+        "board-mini",
+        "personalities-versaloon"
       ]
     },
     {
@@ -343,6 +359,10 @@
     {
       "name": "mini",
       "configurePreset": "mini"
+    },
+    {
+      "name": "mini-versaloon",
+      "configurePreset": "mini-versaloon"
     },
     {
       "name": "mini-cmsis-dap",

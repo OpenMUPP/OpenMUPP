@@ -60,7 +60,7 @@ The USB peripheral has 512 bytes of packet memory.
 The Versaloon interface and a CMSIS-DAP interface do not fit together.
 The build option `MUPP_PERSONALITIES` selects the personalities (see [Select the personality](#select-the-personality)).
 A multi image has more than one personality, and selects one at each start (see [Multi image](#multi-image)).
-The Versaloon personality is the default.
+The CMSIS-DAP personality is the default.
 
 `src/usb/CmsisDapDescriptors.h` has the descriptors.
 `src/usb/CmsisDapFunction.h` has the USB function.
@@ -124,8 +124,8 @@ It is a list of one or more of these personalities, with `;` or `,` between them
 
 | Personality | Code | USB interface 0 | VID:PID | Sources |
 |---|---|---|---|---|
-| `versaloon` (default) | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/versaloon/`, `boot/Bootloader.cpp` |
-| `cmsis-dap` | `1` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `1209:0001` | `protocol/cmsisdap/` |
+| `versaloon` | `0` | Versaloon vendor interface (`usb::VersaloonFunction`) | `0483:A038` | `usb/VersaloonFunction.cpp`, `protocol/versaloon/`, `boot/Bootloader.cpp` |
+| `cmsis-dap` (default) | `1` | CMSIS-DAP v2 (`usb::CmsisDapFunction`) | `1209:0001` | `protocol/cmsisdap/` |
 | `wch-link` | `2` | WCH-Link (`usb::WchLinkFunction`), no serial port | `1209:0001`, or `1A86:8010` with `MUPP_WCH_LINK_WCH_USB_ID` | `protocol/wchlink/`, `rvswd/` (see [WCH-Link personality](wch-link.md)) |
 
 For example, `-DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link` builds an image with all three personalities.
@@ -171,7 +171,7 @@ On the WeAct STM32H523 core board (STM32H5, STM32H523CC, 256 KB flash), the page
 The linker script keeps this page out of the image.
 Thus a multi image and an image with the RISC-V bridge have 1 KB (STM32F103) or 8 KB (STM32H5) less flash than the other images (see [Flash layout and size limit](firmware-update.md#flash-layout-and-size-limit)).
 When the page holds no personality, the image uses `MUPP_DEFAULT_PERSONALITY`.
-The default is the first personality of the image in code order.
+The default is `cmsis-dap` when the image has it, else the first personality of the image in code order.
 `src/personality/PersonalityStore.h` has the page format.
 The record also holds the stored mode of the RISC-V bridge (see [Stored mode](cmsis-dap.md#stored-mode)).
 An image with the bridge has the page also with one personality.

@@ -149,7 +149,7 @@ constexpr bool contains(art::span<const Personality> list, Personality personali
 }
 
 // The personality when the settings page has none: MUPP_DEFAULT_PERSONALITY
-// (a code), else the first one of the image
+// (a code), else cmsis-dap when the image has it, else the first one
 #if defined(MUPP_DEFAULT_PERSONALITY)
 // Check the raw value: the cast to the enum would wrap a large one
 static_assert(MUPP_DEFAULT_PERSONALITY >= 0 && MUPP_DEFAULT_PERSONALITY < maxPersonalities,
@@ -157,7 +157,9 @@ static_assert(MUPP_DEFAULT_PERSONALITY >= 0 && MUPP_DEFAULT_PERSONALITY < maxPer
 inline constexpr Personality defaultPersonality = static_cast<Personality>(MUPP_DEFAULT_PERSONALITY);
 #else
 // An image without a personality fails the static_assert on `all` above
-inline constexpr Personality defaultPersonality = all.empty() ? Personality::Versaloon : all[0];
+inline constexpr Personality defaultPersonality = all.empty()                ? Personality::Versaloon :
+                                                  has(Personality::CmsisDap) ? Personality::CmsisDap :
+                                                                               all[0];
 #endif
 static_assert(all.empty() || contains(art::span<const Personality>(all.data(), all.size()), defaultPersonality),
               "MUPP_DEFAULT_PERSONALITY must be a personality of the image");
