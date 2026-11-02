@@ -245,14 +245,14 @@
     },
     {
       "name": "stlinkv21",
-      "displayName": "ST-Link/V2",
+      "displayName": "ST-Link/V2-1",
       "inherits": [
         "board-stlinkv21"
       ]
     },
     {
       "name": "stlinkv21-cmsis-dap",
-      "displayName": "ST-Link/V2, CMSIS-DAP",
+      "displayName": "ST-Link/V2-1, CMSIS-DAP",
       "inherits": [
         "board-stlinkv21",
         "personalities-cmsis-dap"
@@ -260,7 +260,7 @@
     },
     {
       "name": "stlinkv21-dual",
-      "displayName": "ST-Link/V2, dual image, CMSIS-DAP and WCH-Link",
+      "displayName": "ST-Link/V2-1, dual image, CMSIS-DAP and WCH-Link",
       "inherits": [
         "board-stlinkv21",
         "personalities-dual"
@@ -268,7 +268,7 @@
     },
     {
       "name": "stlinkv21-wch-link",
-      "displayName": "ST-Link/V2, WCH-Link",
+      "displayName": "ST-Link/V2-1, WCH-Link",
       "inherits": [
         "board-stlinkv21",
         "personalities-wch-link"

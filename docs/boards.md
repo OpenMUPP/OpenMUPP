@@ -320,6 +320,7 @@ The board has these limits:
 - The board has an SWD connector only. TDI (PA7) and TDO (PA6) are not connected, so JTAG does not reach a target.
 - SWO (PA10) is on SWD connector pin 6. The firmware does not use it.
 - The board has no key, no RTCK and no target power switch.
+- `PWR_ENn` (PB15) switches the 5 V of the Nucleo target side. Low is on. The firmware does not drive PB15, so a Nucleo that is not broken off gets no target power from the ST-Link USB, and Vref reads 0 V. Supply the Nucleo from another source, or break the ST-Link part off.
 - PA15 is JTDI after the reset. Thus the firmware disables the JTAG-DP of the MCU, and SWD stays on.
 
 ### SWD pads of the MCU

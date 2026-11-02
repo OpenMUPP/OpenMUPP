@@ -15,6 +15,9 @@ namespace board {
 // The Nucleo has an SWD connector only (CN4): TDI (PA7) and TDO (PA6) are
 // not connected, and T_JRST (PB1) has no connector pin. SWO (PA10) is on
 // CN4 pin 6, but the firmware does not use it.
+// PWR_ENn (PB15) switches the 5 V of the Nucleo target side: low is on. The
+// firmware does not drive it, so a Nucleo that is not broken off gets no
+// target power from the ST-Link USB. A broken-off board does not use it.
 // No JTAG fast path, no power switch and no key. USB_RENUMn (PA15) drives
 // an NPN emitter follower to the D+ pull-up: high connects, low
 // disconnects.
