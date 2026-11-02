@@ -946,13 +946,18 @@ CH32V208 (`ch32v20x-cmsis-dap.cfg`, and the OpenOCD config `target/wch/ch32v20x.
 | `flash write_image erase` of 160 KB | Pass: 13.3 s (12.0 KiB/s), with the erase. `verify_image` at `0x00000000`: 0.70 s |
 | `flash erase_sector 0 2 3` | Pass: only `0x08000200` to `0x080003ff` read `0xe339e339` |
 | `flash fillw` at `0x08000204` | Pass. The padding words read `0xffffffff` |
-| `ch32v mass_erase`, `flash erase_check` | Fail in 1 of 7 runs: one run showed sector 0 as not erased. The cause is not known. The next 6 runs passed. The driver now waits for `EOP` at the end of an erase. The CH32V208 test with that change is not done yet |
+| `ch32v mass_erase`, `flash erase_check` | Pass, with a fix in the driver. See the note below the table |
 | `flash protect 0 2 3 on`, `reset halt` | Pass: `FLASH_WPR` `0xfffffff3`. A write to `0x08002000` (block 2) fails with `FLASH_STATR` `0x12` (`WRBSY`, `WRPRTERR`). The next write to block 4 passes |
 | `ch32v options_write 0 0x3f 0x42 0x99`, `reset halt` | Pass |
 | `ch32v lock`, `reset halt` | Pass: `RDPRT` 1, a flash read fails |
 | `ch32v unlock`, `reset halt` | Pass: `RDPRT` 0, and the flash reads `0xe339e339` |
 
-The test found a problem on the CH32V208, and the loader now prevents it: a word write to a protected page sets `WRPRTERR` at once, but `WRBSY` stays 1. The first loader waited for `WRBSY` until the timeout of OpenOCD.
+The `ch32v mass_erase` and `flash erase_check` test failed at first: in 2 of 2 runs of the full test list, `erase_check` showed sector 0 as not erased.
+After a mass erase of a full flash, the first reads of the CH32V208 give wrong data, also after `BSY` is 0 and `EOP` is 1.
+A read 1 ms after the end of the erase gave wrong data in the first 16 bytes. A read after 3 ms gave `0xe339e339`.
+The driver now waits 10 ms after a mass erase. Then the sequence that failed (160 KB write, sector erase, `flash fillw`, mass erase, `erase_check`) passed in 5 of 5 runs.
+
+The test found a second problem on the CH32V208, and the loader now prevents it: a word write to a protected page sets `WRPRTERR` at once, but `WRBSY` stays 1. The first loader waited for `WRBSY` until the timeout of OpenOCD.
 
 The final loader adds the `WRPRTERR` check in the `WRBSY` wait of the CH32V20x method only, and its error path clears the flags.
 The CH32V003 and CH32V006 tests ran again on 2026-11-02 with the final loader and the OpenOCD configs `target/wch/ch32v003.cfg` and `target/wch/ch32v00x.cfg`.
