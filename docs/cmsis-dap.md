@@ -954,8 +954,8 @@ CH32V208 (`ch32v20x-cmsis-dap.cfg`, and the OpenOCD config `target/wch/ch32v20x.
 
 The test found a problem on the CH32V208, and the loader now prevents it: a word write to a protected page sets `WRPRTERR` at once, but `WRBSY` stays 1. The first loader waited for `WRBSY` until the timeout of OpenOCD.
 
-The CH32V006 test above used the loader before this change. The change adds the `WRPRTERR` check in the `WRBSY` wait of the CH32V20x method only, and the error path clears the flags. The CH32V006 test did not run again with the new loader.
-The CH32V003 test ran again with the new loader and the OpenOCD config `target/wch/ch32v003.cfg` on 2026-11-02, with the same results (16 KB in 2.53 s).
+The change adds the `WRPRTERR` check in the `WRBSY` wait of the CH32V20x method only, and the error path clears the flags.
+The CH32V003 and CH32V006 tests ran again with the new loader and the OpenOCD configs `target/wch/ch32v003.cfg` and `target/wch/ch32v00x.cfg` on 2026-11-02, with the same results (16 KB in 2.53 s, 62 KB in 23.2 s).
 
 The patch series also fixes the two OpenOCD problems of the [CH32V208 test](#ch32v208-on-the-mini):
 
