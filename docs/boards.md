@@ -334,6 +334,7 @@ The board has these limits:
 The MCU (STM32F103CBT6) has no SWD header.
 To write the bootloader, connect the debug probe to the solder bridge pads of the "reserved" group.
 Use the pad on the side away from the jumper header.
+On MB1360, this is the pad next to the silkscreen label of the solder bridge (for example `SB8`).
 The pads are different on the two boards:
 
 | Signal | MCU pin | MB1136 | MB1360 |

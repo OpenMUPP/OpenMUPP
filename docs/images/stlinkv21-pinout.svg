@@ -124,7 +124,7 @@
 <rect x="767.5" y="698.0" width="121.6" height="28" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
 <text x="828.3" y="717.0" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">from target TX</text>
 <text x="60.0" y="814.0" font-size="18" font-weight="bold" fill="#263238" text-anchor="start">Bottom side: SWD of the ST-Link MCU, to write the bootloader</text>
-<text x="60.0" y="838.0" font-size="14" font-weight="normal" fill="#546e7a" text-anchor="start">Seen from the bottom. Use the pad on the side away from CN4 (gold). The pads next to CN4 (grey) connect to CN4.</text>
+<text x="60.0" y="838.0" font-size="14" font-weight="normal" fill="#546e7a" text-anchor="start">Seen from the bottom. Use the gold pad: the pad next to the SB label, away from CN4. The grey pad connects to CN4.</text>
 <rect x="420" y="880" width="1200.0" height="417.0" rx="10" fill="#1f3b73" stroke="#0d2350" stroke-width="3"/>
 <ellipse cx="750.0" cy="904.0" rx="8" ry="12" fill="#b0bec5" stroke="#78909c"/>
 <ellipse cx="870.0" cy="904.0" rx="8" ry="12" fill="#b0bec5" stroke="#78909c"/>
