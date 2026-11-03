@@ -63,6 +63,9 @@ class MockDebugModule {
    bool resumeAck{ false };
    // The hart does not halt (no ebreak to debug mode, a lock).
    bool neverHalts{ false };
+   // After ndmreset, haltreq halts the hart only after this many dmstatus
+   // reads (the CH32V307 halts about 9 ms after the reset).
+   uint32_t resetHaltReads{ 0 };
    // The reads of abstractcs with busy 1 after each command
    uint32_t busyReads{ 0 };
    // The next command fails with this cmderr (0: none).
@@ -171,6 +174,10 @@ class MockDebugModule {
    }
 
    void readHook(uint8_t address) {
+      if(address == rvswd::dm::dmstatus && haltDelay_ > 0 && --haltDelay_ == 0) {
+         halted = true;
+         update();
+      }
       if(address == rvswd::dm::abstractcs) {
          update();
          if(busy_ > 0) {
@@ -203,13 +210,20 @@ class MockDebugModule {
       active_ = true;
       if((value & rvswd::dm::ndmreset) != 0) {
          ++systemResets;
+         if(resetHaltReads > 0) {
+            halted = false;
+            haltDelay_ = resetHaltReads;
+         }
          if(onSystemReset) {
             onSystemReset();
          }
       }
+      if((value & rvswd::dm::haltreq) == 0) {
+         haltDelay_ = 0;
+      }
       if((value & rvswd::dm::haltreq) != 0) {
          resumeAck = false;
-         if(!neverHalts) {
+         if(!neverHalts && haltDelay_ == 0) {
             halted = true;
          }
       } else if((value & rvswd::dm::resumereq) != 0) {
@@ -457,6 +471,8 @@ class MockDebugModule {
    bool active_{ false };
    uint32_t cmderr_{ 0 };
    uint32_t busy_{ 0 };
+   // The dmstatus reads until a pending reset halt
+   uint32_t haltDelay_{ 0 };
    uint32_t scratch_{ 0 };
 };
 

@@ -76,9 +76,19 @@ bool Flash::resetHalt() {
       return false;
    }
    platform_.delayUs(resetPulseUs);
-   return ok(target_.dmiWrite(dm::dmcontrol, dm::haltreq | dm::dmactive)) && ok(target_.halt()) &&
+   return ok(target_.dmiWrite(dm::dmcontrol, dm::haltreq | dm::dmactive)) && haltAfterReset() &&
           ok(target_.dmiWrite(dm::dmcontrol, ackhavereset | dm::haltreq | dm::dmactive)) &&
           ok(target_.writeRegister(wchdm::csr7c0, wchdm::csr7c0Value));
+}
+
+bool Flash::haltAfterReset() {
+   for(uint32_t waited = 0;; waited += pollIntervalUs) {
+      const rvswd::Status status = target_.halt();
+      if(status != rvswd::Status::Timeout || waited >= resetHaltTimeoutUs) {
+         return ok(status);
+      }
+      platform_.delayUs(pollIntervalUs);
+   }
 }
 
 bool Flash::unlockController() {
