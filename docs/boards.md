@@ -20,7 +20,7 @@ The YD-CH32V307VCT6 board uses a CH32V307VCT6 (family CH32V30X, see [YD-CH32V307
 
 | Value | Use |
 |---|---|
-| Family | `STM32_FAMILY` of system-stm32, or `CH32_FAMILY` of [ch32v00x-system](https://gitlab.vandertogt.org/riscv/ch32v00x-system) for a family that starts with `CH32`. The toolchain file sets the CPU flags from it. |
+| Family | `STM32_FAMILY` of system-stm32, or `CH32_FAMILY` of [ch32v00x-system](https://github.com/armint/ch32v00x-system) for a family that starts with `CH32`. The toolchain file sets the CPU flags from it. |
 | Device | `STM32_DEVICE` of system-stm32 (the CMSIS device define), or `CH32_DEVICE` of ch32v00x-system. |
 | Crystal | `SYSTEM_STM32_HSE_VALUE` of system-stm32, or `CH32V00X_SYSTEM_HSE_VALUE` of ch32v00x-system, in Hz. 0 is a board without a crystal. |
 | Linker script | The memory linker script in `ldscripts/` of the system library, for example `mem-F103x8.ld` or `mem-ch32v307.ld`. |
@@ -440,5 +440,5 @@ The port is in progress.
 The image of this board is a stub: it starts the clock (144 MHz from the crystal) and blinks `LED2` (PB4).
 The firmware sources still need the STM32 layer, so the stub does not have them yet.
 
-The board uses the [ch32v00x-system](https://gitlab.vandertogt.org/riscv/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.
+The board uses the [ch32v00x-system](https://github.com/armint/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.
 The image has no bootloader: write it with a WCH-LinkE or another probe on the SWD header `P4` (PA13 SWDIO, PA14 SWCLK).

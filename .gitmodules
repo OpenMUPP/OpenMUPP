@@ -16,5 +16,5 @@
 	branch = master
 [submodule "dependencies/ch32v00x-system"]
 	path = dependencies/ch32v00x-system
-	url = ssh://git@gitlab.vandertogt.org:3022/riscv/ch32v00x-system.git
+	url = https://github.com/armint/ch32v00x-system.git
 	branch = main
