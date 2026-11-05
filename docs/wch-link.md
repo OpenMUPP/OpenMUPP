@@ -71,7 +71,7 @@ The option is only valid when `MUPP_PERSONALITIES` has `wch-link`.
 
 The WCH ID build also has the product string `WCH-Link`, the same as the WCH-LinkE.
 probe-rs finds a WCH-Link probe only by this product string (probe-rs 0.32.0).
-The manufacturer string stays `OpenMUPP`. `tools/mupp_personality.py` uses it to find the dongle.
+The manufacturer string stays `OpenMUPP`. `tools/mupp_probe.py` uses it to find the dongle.
 
 ## Connect a target
 
