@@ -36,6 +36,9 @@ void configureClocks() {
    // clock stayed on HSI, so the PLL as SYSCLK source means the crystal runs.
    SystemCoreClockUpdate();
    clockFromCrystal = (RCC->CFGR0 & RCC_CFGR0_SWS_MASK) == RCC_CFGR0_SWS_PLL;
+   // PCLK2 = 72 MHz: the ADC clock is PCLK2 / 8 at most (BoardPower.cpp), and must stay under 14 MHz. Before any
+   // USART or ADC setup: hw::Usart reads the prescaler when it sets the baud rate.
+   RCC->CFGR0 = (RCC->CFGR0 & ~RCC_CFGR0_PPRE2_MASK) | (4ul << 11);
 #else
    // SYSCLK 250 MHz from the crystal (HSE_VALUE, board/BoardChecks.cpp).
    // On failure the clock stays on HSI. USB runs from the HSI48 and the
