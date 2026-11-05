@@ -157,9 +157,10 @@ class Flash {
    static constexpr uint32_t operationTimeoutUs = 3'000'000;
    // The time that resetHalt() holds ndmreset
    static constexpr uint32_t resetPulseUs = 1'000;
-   // The time that resetHalt() waits for the halt. The CH32V307 halts
-   // about 9 ms after the reset, longer than one poll of halt().
-   static constexpr uint32_t resetHaltTimeoutUs = 100'000;
+   // The halt() calls of resetHalt(), each a poll of about 5 to 12 ms
+   // (rvswd::pollLimit): about 50 to 120 ms. The CH32V307 halts about 9 ms
+   // after the reset, longer than one poll at the high speed.
+   static constexpr uint32_t resetHaltAttempts = 10;
 
    Flash(Target &target, Platform &platform);
 
@@ -221,7 +222,7 @@ class Flash {
    [[nodiscard]] bool write(uint32_t address, uint32_t value);
    [[nodiscard]] bool unlockController();
    [[nodiscard]] bool waitIdle();
-   // Polls halt() until the hart halts, up to resetHaltTimeoutUs.
+   // Calls halt() until the hart halts, up to resetHaltAttempts times.
    [[nodiscard]] bool haltAfterReset();
    // Waits until the abstract command ends, after the module gave up on it.
    [[nodiscard]] bool waitCommand();

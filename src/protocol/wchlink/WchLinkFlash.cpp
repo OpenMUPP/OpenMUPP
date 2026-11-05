@@ -82,13 +82,11 @@ bool Flash::resetHalt() {
 }
 
 bool Flash::haltAfterReset() {
-   for(uint32_t waited = 0;; waited += pollIntervalUs) {
-      const rvswd::Status status = target_.halt();
-      if(status != rvswd::Status::Timeout || waited >= resetHaltTimeoutUs) {
-         return ok(status);
-      }
-      platform_.delayUs(pollIntervalUs);
+   rvswd::Status status = rvswd::Status::Timeout;
+   for(uint32_t i = 0; i < resetHaltAttempts && status == rvswd::Status::Timeout; ++i) {
+      status = target_.halt();
    }
+   return ok(status);
 }
 
 bool Flash::unlockController() {
