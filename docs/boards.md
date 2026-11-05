@@ -58,10 +58,13 @@ Some functions come from the pin map and the family, not from a separate field:
 
 - `board::adcChannelOf()` gives the ADC channel of the Vref pin.
   The channels of the STM32F103 come from RM0008. The channels of the STM32H523/H533 come from DS14539.
+  The CH32V307 has the same channels as the STM32F103 (CH32V307DS0 pin table).
 - `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
   On the STM32H5, only PA6 (TIM3_CH1) has a timer.
+  The CH32V307 has no timer yet. The WCH-Link personality adds it (port plan, phase P7).
 - `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
-  The crystal pins are PD0 and PD1 on the STM32F103, and PH0 and PH1 on the STM32H5.
+  The crystal pins are PD0 and PD1 on the STM32F103 and the CH32V307, and PH0 and PH1 on the STM32H5.
+  On the CH32V307, the USB high-speed pins PB6 and PB7 are also reserved.
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
   The setting frees all debug port pins that the board uses, and keeps the rest.
   The Mini uses PA14 for an LED, so it disables the debug port.
@@ -439,6 +442,27 @@ It is the test board for the port of the firmware to the CH32V307.
 The port is in progress.
 The image of this board is a stub: it starts the clock (144 MHz from the crystal) and blinks `LED2` (PB4).
 The firmware sources still need the STM32 layer, so the stub does not have them yet.
+
+The board definition is `src/board/boards/YdCh32V307.h`.
+The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.
+All signals are 3.3 V. The board has no level shifters and no target power switch.
+
+| Signal | Pin | Header pin |
+|---|---|---|
+| TCK / SWCLK | PB13 | P3-45 |
+| TDI | PB15 | P3-43 |
+| TDO | PB14 | P3-44 |
+| TMS / SWDIO (out and in) | PC11 | P3-21 |
+| SRST | PB12 | P3-46 |
+| TRST | PB9 | P3-3 |
+| RTCK | PA8 | P3-30 |
+| UART TX / RX (USART1) | PA9 / PA10 | P3-29 / P3-28 |
+| Vref sense (3.3 V maximum) | PB0 | P2-29 |
+| State LED (`LED2`, green, active high) | PB4 | on the board |
+| USB LED (`LED1`, red, active high) | PA15 | on the board |
+| Key (`USR`, active low) | PB3 | on the board |
+
+The board has no JTAG fast path yet.
 
 The board uses the [ch32v00x-system](https://github.com/armint/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.
 The image has no bootloader: write it with a WCH-LinkE or another probe on the SWD header `P4` (PA13 SWDIO, PA14 SWCLK).

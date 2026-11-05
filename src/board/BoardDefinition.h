@@ -19,7 +19,8 @@ namespace board {
 // pins of the JTAG fast path) and the reserved pins depend on it.
 enum class Family : uint8_t {
    Stm32F1, // STM32F103 (RM0008)
-   Stm32H5  // STM32H523/H533 (RM0481)
+   Stm32H5, // STM32H523/H533 (RM0481)
+   Ch32V30x // CH32V307 (CH32FV2x_V3xRM, CH32V307DS0)
 };
 
 enum class Port : uint8_t { A, B, C, D, E, F, G, H };
@@ -149,9 +150,10 @@ constexpr std::optional<uint8_t> adcChannelOfH5(Pin pin) {
 
 } // namespace detail
 
-// ADC input channel of a pin. Empty when the pin has no ADC input.
+// ADC input channel of a pin. Empty when the pin has no ADC input. The
+// CH32V307 has the channels of the STM32F103 (CH32V307DS0 pin table).
 constexpr std::optional<uint8_t> adcChannelOf(Family family, Pin pin) {
-   return family == Family::Stm32F1 ? detail::adcChannelOfF1(pin) : detail::adcChannelOfH5(pin);
+   return family == Family::Stm32H5 ? detail::adcChannelOfH5(pin) : detail::adcChannelOfF1(pin);
 }
 
 // One wire (SDI) of the WCH-Link personality: a timer makes the bits on
@@ -174,6 +176,9 @@ struct OneWireTimer {
 // DS14540 table 14 (STM32H5). Empty when the pin has no supported timer
 // channel.
 constexpr std::optional<OneWireTimer> oneWireTimerOf(Family family, Pin tmsOut) {
+   if(family == Family::Ch32V30x) {
+      return std::nullopt; // the CH32V307 timer comes with the WCH-Link personality (plan P7)
+   }
    if(family == Family::Stm32H5) {
       // TIM3_CH1 (AF2), TIM3_CH3 samples. GPDMA1 channels 3 and 4: the JTAG
       // fast path uses channels 0 to 2.
@@ -268,13 +273,19 @@ struct Definition {
 };
 
 // Pins that no board signal can use: USB D- and D+ (PA11, PA12) and the
-// crystal (PD0 and PD1 on the STM32F103, PH0 and PH1 on the STM32H5). The
+// crystal (PD0 and PD1 on the STM32F103 and the CH32V307, PH0 and PH1 on
+// the STM32H5). The CH32V307 also reserves the USBHS pins PB6 and PB7. The
 // crystal pins stay reserved on a board without a crystal. The SWD pins of
 // the dongle MCU (PA13, PA14) are not in this list, because a release
 // build of the Mini uses PA14 for an LED.
-constexpr std::array<Pin, 4> reservedPins(Family family) {
-   const Port crystal = family == Family::Stm32F1 ? Port::D : Port::H;
-   return { { { Port::A, 11 }, { Port::A, 12 }, { crystal, 0 }, { crystal, 1 } } };
+constexpr std::array<std::optional<Pin>, 6> reservedPins(Family family) {
+   const Port crystal = family == Family::Stm32H5 ? Port::H : Port::D;
+   std::array<std::optional<Pin>, 6> pins{ { Pin{ Port::A, 11 }, Pin{ Port::A, 12 }, Pin{ crystal, 0 }, Pin{ crystal, 1 } } };
+   if(family == Family::Ch32V30x) {
+      pins[4] = Pin{ Port::B, 6 };
+      pins[5] = Pin{ Port::B, 7 };
+   }
+   return pins;
 }
 
 namespace detail {
@@ -315,7 +326,8 @@ constexpr std::array<std::optional<Pin>, 18> allPins(const Definition &def) {
 // used twice (TMS out and in can be one pin), no reserved pin, a Vref pin
 // with an ADC channel, and the fixed fast path pins when the board has the
 // JTAG fast path. The crystal must be in the range of the family, and an
-// STM32F103 board must have one. Each board header checks its definition
+// STM32F103 or CH32V307 board must have one. A CH32V307 board has no JTAG
+// fast path yet (plan P8). Each board header checks its definition
 // with a static_assert.
 constexpr bool isValid(const Definition &def) {
    const auto pins = detail::allPins(def);
@@ -327,7 +339,7 @@ constexpr bool isValid(const Definition &def) {
          return false;
       }
       for(const auto &reserved : reservedPins(def.family)) {
-         if(*pins[i] == reserved) {
+         if(reserved && *pins[i] == *reserved) {
             return false;
          }
       }
@@ -338,6 +350,9 @@ constexpr bool isValid(const Definition &def) {
       }
    }
    if(def.jtagFastPath) {
+      if(def.family == Family::Ch32V30x) {
+         return false;
+      }
       const auto &d = def.debug;
       const Pin spi1Miso = def.family == Family::Stm32F1 ? Pin{ Port::B, 4 } : Pin{ Port::A, 6 };
       if(d.tck != Pin{ Port::B, 13 } || d.tdi != Pin{ Port::B, 15 } || d.tdo != Pin{ Port::B, 14 } ||
@@ -349,11 +364,19 @@ constexpr bool isValid(const Definition &def) {
       return false;
    }
    if(def.hseFrequency == 0) {
-      return def.family != Family::Stm32F1;
+      return def.family == Family::Stm32H5;
    }
-   // HSE crystal range: RM0008 7.2.1 (STM32F103), DS14539 (STM32H5)
-   const uint32_t maxHse = def.family == Family::Stm32F1 ? 16'000'000 : 50'000'000;
-   return def.hseFrequency >= 4'000'000 && def.hseFrequency <= maxHse;
+   // HSE crystal range: RM0008 7.2.1 (STM32F103), DS14539 (STM32H5),
+   // CH32V307DS0 (CH32V307, 3 to 25 MHz)
+   switch(def.family) {
+   case Family::Stm32F1:
+      return def.hseFrequency >= 4'000'000 && def.hseFrequency <= 16'000'000;
+   case Family::Stm32H5:
+      return def.hseFrequency >= 4'000'000 && def.hseFrequency <= 50'000'000;
+   case Family::Ch32V30x:
+      return def.hseFrequency >= 3'000'000 && def.hseFrequency <= 25'000'000;
+   }
+   return false;
 }
 
 // Serial wire JTAG (SWJ) debug port of the dongle MCU. On both families the
