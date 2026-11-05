@@ -23,6 +23,8 @@ defaults:
 
 env:
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-15.3.rel2-x86_64-arm-none-eabi
+  # The RISC-V GCC of the CH32 presets (cmake/gcc_riscv.cmake)
+  RISCV_GCC_TOOLCHAIN_PREFIX: /opt/xpack-riscv-none-elf-gcc-15.2.0-1
   # cmake/generate_version.cmake runs git in the checkout. The checkout belongs to another user than the
   # container user, so git refuses it ("dubious ownership") without this setting.
   GIT_CONFIG_COUNT: 1
@@ -81,6 +83,8 @@ jobs:
           - weacth523-cmsis-dap
           - weacth523-dual
           - weacth523-debug
+          # The stub image of the CH32V307 port: build and size check only
+          - ydch32v307
     steps:
       - uses: actions/checkout@v5
         with:
@@ -89,7 +93,7 @@ jobs:
       - run: ci/compile-preset.sh ${{ matrix.preset }}
       # Only the files with the board, the build type and the version in the name.
       - uses: actions/upload-artifact@v4
-        if: matrix.preset != 'mini-cmsis-dap-no-rv-bridge'
+        if: matrix.preset != 'mini-cmsis-dap-no-rv-bridge' && matrix.preset != 'ydch32v307'
         with:
           name: openmupp-${{ matrix.preset }}-${{ github.sha }}
           path: |

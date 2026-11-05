@@ -216,15 +216,19 @@ The jobs:
   This job keeps no artifacts.
 - `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
   The limit of a multi image or an image with the RISC-V bridge is 8 KB smaller, because the last flash sector holds the stored personality and the bridge mode.
+- `build-ydch32v307`: build of the stub image of the YD-CH32V307VCT6 board with the `ydch32v307` preset and the RISC-V GCC, plus the size check.
+  The CH32V307 port is in progress, so this job keeps no artifacts.
+  The job reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`.
 
-The build jobs of the Mini and the WeAct STM32H523 core board run in each pipeline.
+The build jobs of the Mini, the WeAct STM32H523 core board and the YD-CH32V307VCT6 board run in each pipeline.
 The build jobs of the ST-Link boards are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
 The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
-`build-mini`, `build-weacth523` and `run-unit-tests` update the cache, and the other jobs only read it.
+`build-mini`, `build-weacth523`, `build-ydch32v307` and `run-unit-tests` update the cache, and the other jobs only read it.
 `build-weacth523` has its own cache key, because the STM32H5 needs other CMSIS packages.
+`build-ydch32v307` has its own cache key, because the RISC-V build fetches other sources.
 In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
 Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.
