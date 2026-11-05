@@ -14,3 +14,7 @@
 	path = dependencies/openmupp-bootloader
 	url = ../openmupp-bootloader.git
 	branch = master
+[submodule "dependencies/ch32v00x-system"]
+	path = dependencies/ch32v00x-system
+	url = https://github.com/armint/ch32v00x-system.git
+	branch = main

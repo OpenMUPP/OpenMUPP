@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# RISC-V toolchain file for the CH32 boards. It has the same structure as
+# cmake/gcc_arm.cmake. The toolchain is the xPack riscv-none-elf-gcc (or a
+# toolchain with the same tool names, see TARGET_TRIPLET).
+# When trying to configure the cmake toolchain, hint that this is a cross-compiler and linking the normal test won´t work.
+set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
+
+GET_FILENAME_COMPONENT(CMAKE_DIR ${CMAKE_CURRENT_LIST_FILE} DIRECTORY)
+SET(CMAKE_MODULE_PATH ${CMAKE_DIR} ${CMAKE_MODULE_PATH})
+
+IF(NOT TARGET_TRIPLET)
+    SET(TARGET_TRIPLET "riscv-none-elf")
+    MESSAGE(STATUS "No TARGET_TRIPLET specified, using default: " ${TARGET_TRIPLET})
+ENDIF()
+
+IF(NOT GCC_TOOLCHAIN_PREFIX)
+    IF(NOT CMAKE_C_COMPILER)
+        SET(GCC_TOOLCHAIN_PREFIX "/usr")
+        MESSAGE(STATUS "No GCC_TOOLCHAIN_PREFIX specified, using default: " ${GCC_TOOLCHAIN_PREFIX})
+    ELSE()
+        string(REPLACE "bin/${TARGET_TRIPLET}-gcc" "" GCC_TOOLCHAIN_PREFIX "${CMAKE_C_COMPILER}")
+        MESSAGE(STATUS "No GCC_TOOLCHAIN_PREFIX specified, using default derived from CMAKE_C_COMPILER: " ${GCC_TOOLCHAIN_PREFIX})
+    ENDIF()
+ELSE()
+     FILE(TO_CMAKE_PATH "${GCC_TOOLCHAIN_PREFIX}" GCC_TOOLCHAIN_PREFIX)
+ENDIF()
+
+SET(TOOLCHAIN_BIN_DIR "${GCC_TOOLCHAIN_PREFIX}/bin")
+SET(TOOLCHAIN_INC_DIR "${GCC_TOOLCHAIN_PREFIX}/${TARGET_TRIPLET}/include")
+SET(TOOLCHAIN_LIB_DIR "${GCC_TOOLCHAIN_PREFIX}/${TARGET_TRIPLET}/lib")
+
+SET(CMAKE_SYSTEM_NAME Generic)
+SET(CMAKE_SYSTEM_PROCESSOR RISCV)
+SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
+
+IF (WIN32)
+    SET(TOOL_EXECUTABLE_SUFFIX ".exe")
+ELSE()
+    SET(TOOL_EXECUTABLE_SUFFIX "")
+ENDIF()
+
+SET(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+SET(CMAKE_C_COMPILER "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-gcc${TOOL_EXECUTABLE_SUFFIX}" CACHE INTERNAL "C compiler")
+SET(CMAKE_CXX_COMPILER "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-g++${TOOL_EXECUTABLE_SUFFIX}" CACHE INTERNAL "C++ compiler")
+SET(CMAKE_ASM_COMPILER "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-gcc${TOOL_EXECUTABLE_SUFFIX}" CACHE INTERNAL "assembler")
+
+SET(CMAKE_OBJCOPY "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-objcopy${TOOL_EXECUTABLE_SUFFIX}" CACHE INTERNAL "objcopy tool")
+SET(CMAKE_OBJDUMP "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-objdump${TOOL_EXECUTABLE_SUFFIX}" CACHE INTERNAL "objdump tool")
+SET(CMAKE_SIZE "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-size${TOOL_EXECUTABLE_SUFFIX}" CACHE INTERNAL "size tool")
+SET(CMAKE_DEBUGER "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-gdb${TOOL_EXECUTABLE_SUFFIX}" CACHE INTERNAL "debuger")
+SET(CMAKE_CPPFILT "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-c++filt${TOOL_EXECUTABLE_SUFFIX}" CACHE INTERNAL "C++filt")
+SET(CMAKE_AR "${TOOLCHAIN_BIN_DIR}/${TARGET_TRIPLET}-ar${TOOL_EXECUTABLE_SUFFIX}")
+SET(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> qcs <TARGET> <LINK_FLAGS> <OBJECTS>")
+SET(CMAKE_C_ARCHIVE_FINISH   true)
+
+# CPU flags of the MCU family. CMakeLists.txt sets CH32_FAMILY from BOARD
+# (cmake/Boards.cmake) before project(), so before this file runs. The
+# try_compile projects of CMake get CH32_FAMILY too. The flags are the
+# ones of docs/building.md in ch32v00x-system.
+LIST(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES CH32_FAMILY)
+IF(CH32_FAMILY STREQUAL "CH32V30X")
+    SET(MCU_FLAGS "-march=rv32imafc_zicsr_zifencei -mabi=ilp32f -fsingle-precision-constant")
+ELSE()
+    MESSAGE(FATAL_ERROR "cmake/gcc_riscv.cmake: no CPU flags for CH32_FAMILY '${CH32_FAMILY}'. Set a known BOARD.")
+ENDIF()
+SET(CMAKE_C_FLAGS_DEBUG "-Og -g -fstack-usage -fno-move-loop-invariants -g3 ${MCU_FLAGS}" CACHE INTERNAL "c compiler flags debug")
+SET(CMAKE_CXX_FLAGS_DEBUG "-Og -g -fstack-usage -fno-move-loop-invariants -g3 -fabi-version=0 ${MCU_FLAGS}" CACHE INTERNAL "cxx compiler flags debug")
+SET(CMAKE_ASM_FLAGS_DEBUG "-g ${MCU_FLAGS}" CACHE INTERNAL "asm compiler flags debug")
+SET(CMAKE_EXE_LINKER_FLAGS_DEBUG "-Xlinker -Map=output.map ${MCU_FLAGS}" CACHE INTERNAL "linker flags debug")
+
+SET(CMAKE_C_FLAGS_RELEASE "-Os -g -g3 ${MCU_FLAGS}" CACHE INTERNAL "c compiler flags release")
+SET(CMAKE_CXX_FLAGS_RELEASE "-Os -g -g3 -fabi-version=0 ${MCU_FLAGS}" CACHE INTERNAL "cxx compiler flags release")
+SET(CMAKE_ASM_FLAGS_RELEASE "${MCU_FLAGS}" CACHE INTERNAL "asm compiler flags release")
+SET(CMAKE_EXE_LINKER_FLAGS_RELEASE "-Xlinker -Map=output.map ${MCU_FLAGS}" CACHE INTERNAL "linker flags release")
+
+SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-Os -g -g3 ${MCU_FLAGS}" CACHE INTERNAL "c compiler flags relwithdebinfo")
+SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-Os -g -g3 -fabi-version=0 ${MCU_FLAGS}" CACHE INTERNAL "cxx compiler flags relwithdebinfo")
+SET(CMAKE_ASM_FLAGS_RELWITHDEBINFO "${MCU_FLAGS}" CACHE INTERNAL "asm compiler flags relwithdebinfo")
+SET(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "-Xlinker -Map=output.map ${MCU_FLAGS}" CACHE INTERNAL "linker flags relwithdebinfo")
+
+
+SET(CMAKE_FIND_ROOT_PATH "${GCC_TOOLCHAIN_PREFIX}/${TARGET_TRIPLET}" ${EXTRA_FIND_PATH})
+SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)

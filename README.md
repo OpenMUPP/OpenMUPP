@@ -65,6 +65,7 @@ OpenMUPP v1 is the main target. The other boards are for development, tests and 
 | `mini` | Versaloon Mini | 12 MHz | Secondary | target |
 | `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | 8 MHz | Secondary | WCH-Link one wire tested, SWD only (no JTAG pins) |
 | `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | Secondary | target, SWD only (no JTAG pins) |
+| `ydch32v307` | YD-CH32V307VCT6 development board, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board) | 8 MHz | Test board for the CH32V307 port | Port in progress: the image is a stub that blinks an LED |
 
 [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
 The board layer needs the direction pins, the split nRESET path and the power functions before the firmware can drive the board.
@@ -91,11 +92,13 @@ The submodules are:
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/system-stm32.
 - `libart-stm32`: STM32 adapters for libArT. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/libart-stm32.
 - `openmupp-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
+- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`ydch32v307`) use it. The primary repository is https://github.com/armint/ch32v00x-system.
 
 ## Requirements
 
 - CMake 3.20 or later. The `openmupp-bootloader` build and the CMake presets (`CMakePresets.json`) need CMake 3.21 or later.
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
+- For the CH32 boards only: the xPack RISC-V GCC (`riscv-none-elf`), for example 15.2.0-1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
 - Internet access at configure time: CMake FetchContent downloads CMSIS, ETL and doctest.
@@ -130,6 +133,8 @@ The build skips an image that does not fit, shows a warning and makes the other 
 With `-DMUPP_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/cmake.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality and without the RISC-V bridge. With the bridge, the Debug image does not fit behind a bootloader.
 The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
+The preset `ydch32v307` builds the stub image of the YD-CH32V307VCT6 board with the RISC-V GCC.
+It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.
 [docs/cmake.md](docs/cmake.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.
@@ -332,6 +337,7 @@ Some parts have a different license:
 - `cmake/ClangFormat.cmake` uses the Boost Software License 1.0. See [LICENSES/BSL-1.0.txt](LICENSES/BSL-1.0.txt).
 - The OpenOCD configuration files in `etc/openocd/` and `tools/stm32f1_clock.tcl` use GPL-2.0-or-later.
 - The submodules `libArT`, `libart-stm32` and `system-stm32` use the MIT license. Each submodule has its own license file.
+- The submodule `ch32v00x-system` uses the MIT license. Its WCH device files and SVD files keep the WCH terms (see its README). Only the CH32 boards use this submodule.
 - The build downloads other libraries with CMake `FetchContent`, for example the CMSIS headers of Arm and ST (Apache-2.0). These libraries keep their own licenses.
 
 The hardware design in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1) has its own license.

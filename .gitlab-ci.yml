@@ -8,6 +8,8 @@ variables:
   GIT_SUBMODULE_FORCE_HTTPS: "true"
   GIT_DEPTH: 0
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
+  # The RISC-V GCC of the CH32 presets (cmake/gcc_riscv.cmake)
+  RISCV_GCC_TOOLCHAIN_PREFIX: /opt/xpack-riscv-none-elf-gcc-15.2.0-1
 
 # Build on:
 # - Tags
@@ -189,3 +191,14 @@ build-mini-cmsis-dap-no-rv-bridge:
     VARIANT: -cmsis-dap-no-rv-bridge
     PROTOCOL_TAG: -cmsis-dap-no-rv-bridge
   artifacts: null
+
+# YD-CH32V307VCT6 (CH32V307, RISC-V): the stub image of the CH32V307 port,
+# with ch32v00x-system. Build and size check only, no artifacts. No cache:
+# the stub build fetches nothing with FetchContent.
+build-ydch32v307:
+  extends: .build-board-template
+  cache: []
+  variables:
+    BOARD: ydch32v307
+  artifacts: null
+

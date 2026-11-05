@@ -117,6 +117,13 @@ option(MUPP_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-li
 # cmsis-dap ignores the option.
 option(MUPP_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality" ON)
 
+# A CH32 board builds the stub image of the CH32V307 port and stops here
+# (cmake/Ch32StubImage.cmake).
+if (CMAKE_CROSSCOMPILING AND MUPP_MCU_VENDOR STREQUAL "CH32")
+    include(Ch32StubImage)
+    return()
+endif ()
+
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
 # native (test) build leaves the variables unset.
@@ -178,6 +185,8 @@ if (CMAKE_CROSSCOMPILING)
     # The shared sources (BoardSwd, BoardJtag, BoardGpio) stay: -gc-sections
     # drops what an image does not use.
     set(MUPP_FIRMWARE_SOURCES ${PROJECT_SOURCES})
+    # src/ch32v30x/ is the stub image of the CH32 boards (cmake/Ch32StubImage.cmake)
+    list(FILTER MUPP_FIRMWARE_SOURCES EXCLUDE REGEX "/src/ch32v30x/")
     set(_mupp_dropped_files ${MUPP_PERSONALITY_DROPPED_SOURCES})
     # The settings page: the stored personality of a multi image and the
     # stored mode of the RISC-V bridge. Only in a multi image and in an image
