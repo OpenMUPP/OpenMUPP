@@ -10,8 +10,8 @@
 
 int main() {
    RCC->APB2PCENR |= RCC_IOPBEN;
-   const GpioPin led(GPIOB, 4);
-   led.configureOutput(GpioPin::OutputMode::PushPull, GpioPin::OutputSpeed::Output2MHz);
+   const hw::GpioPin led(GPIOB, 4);
+   led.configure(hw::GpioPin::Mode::Output, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::None, hw::GpioPin::Speed::Medium);
    while(true) {
       led.toggle();
       // About 0.2 s at 144 MHz; the exact time does not matter
