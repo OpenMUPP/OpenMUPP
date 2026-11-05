@@ -92,11 +92,13 @@ The submodules are:
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/system-stm32.
 - `libart-stm32`: STM32 adapters for libArT. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/libart-stm32.
 - `openmupp-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
+- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`ydch32v307`) use it. The primary repository is https://gitlab.vandertogt.org/riscv/ch32v00x-system.
 
 ## Requirements
 
 - CMake 3.20 or later. The `openmupp-bootloader` build and the CMake presets (`CMakePresets.json`) need CMake 3.21 or later.
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
+- For the CH32 boards only: the xPack RISC-V GCC (`riscv-none-elf`), for example 15.2.0-1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
 - `clang-format`, for the `clangformat` target.
 - Internet access at configure time: CMake FetchContent downloads CMSIS, ETL and doctest.
@@ -335,6 +337,7 @@ Some parts have a different license:
 - `cmake/ClangFormat.cmake` uses the Boost Software License 1.0. See [LICENSES/BSL-1.0.txt](LICENSES/BSL-1.0.txt).
 - The OpenOCD configuration files in `etc/openocd/` and `tools/stm32f1_clock.tcl` use GPL-2.0-or-later.
 - The submodules `libArT`, `libart-stm32` and `system-stm32` use the MIT license. Each submodule has its own license file.
+- The submodule `ch32v00x-system` has no license file yet. Its WCH device files (for example `src/core_riscv.h`) are for use with WCH microcontrollers. Only the CH32 boards use this submodule.
 - The build downloads other libraries with CMake `FetchContent`, for example the CMSIS headers of Arm and ST (Apache-2.0). These libraries keep their own licenses.
 
 The hardware design in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1) has its own license.
