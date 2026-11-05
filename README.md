@@ -65,6 +65,7 @@ OpenMUPP v1 is the main target. The other boards are for development, tests and 
 | `mini` | Versaloon Mini | 12 MHz | Secondary | target |
 | `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | 8 MHz | Secondary | WCH-Link one wire tested, SWD only (no JTAG pins) |
 | `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | Secondary | target, SWD only (no JTAG pins) |
+| `ydch32v307` | YD-CH32V307VCT6 development board, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board) | 8 MHz | Test board for the CH32V307 port | Port in progress: the image is a stub that blinks an LED |
 
 [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
 The board layer needs the direction pins, the split nRESET path and the power functions before the firmware can drive the board.
@@ -130,6 +131,8 @@ The build skips an image that does not fit, shows a warning and makes the other 
 With `-DMUPP_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/cmake.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality and without the RISC-V bridge. With the bridge, the Debug image does not fit behind a bootloader.
 The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
+The preset `ydch32v307` builds the stub image of the YD-CH32V307VCT6 board with the RISC-V GCC.
+It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.
 [docs/cmake.md](docs/cmake.md#cmake-presets) describes them.
 The presets read `GCC_TOOLCHAIN_PREFIX` from the environment.

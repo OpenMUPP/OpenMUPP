@@ -80,6 +80,32 @@
       }
     },
     {
+      "name": "base-riscv",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "description": "Cross build with the RISC-V GCC (RISCV_GCC_TOOLCHAIN_PREFIX from the environment, default /usr)",
+      "toolchainFile": "${sourceDir}/cmake/gcc_riscv.cmake",
+      "cacheVariables": {
+        "GCC_TOOLCHAIN_PREFIX": {
+          "type": "STRING",
+          "value": "$env{RISCV_GCC_TOOLCHAIN_PREFIX}"
+        }
+      }
+    },
+    {
+      "name": "board-ydch32v307",
+      "description": "Board ydch32v307",
+      "hidden": true,
+      "inherits": [
+        "base-riscv"
+      ],
+      "cacheVariables": {
+        "BOARD": "ydch32v307"
+      }
+    },
+    {
       "name": "personalities-cmsis-dap",
       "description": "CMSIS-DAP personality",
       "hidden": true,
@@ -346,6 +372,13 @@
       ]
     },
     {
+      "name": "ydch32v307",
+      "displayName": "YD-CH32V307VCT6 (stub image)",
+      "inherits": [
+        "board-ydch32v307"
+      ]
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "description": "Native build of the unit tests (no toolchain file)",
@@ -455,6 +488,10 @@
     {
       "name": "weacth523-debug",
       "configurePreset": "weacth523-debug"
+    },
+    {
+      "name": "ydch32v307",
+      "configurePreset": "ydch32v307"
     },
     {
       "name": "host-tests",

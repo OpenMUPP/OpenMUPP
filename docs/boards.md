@@ -8,27 +8,31 @@ The other boards are for development and tests, or they are older probe hardware
 ## MCU family
 
 The board selects the MCU family of the dongle.
-The firmware knows two families: STM32F1 and STM32H5.
+The firmware knows three families: STM32F1, STM32H5 and CH32V30X.
 The Mini and the ST-Link/V2-1 use an STM32F103x8 or STM32F103xB (family STM32F1).
 The ST-Link/V2 mini clone uses an STM32F103 compatible MCU, with the same family.
 The ST-Link/V2 mini clone has its own document with the measured pin map: [ST-Link/V2 mini clone](stlinkv2-mini-clone.md).
 CMSIS has one device define (`STM32F103xB`) for both parts.
 The WeAct STM32H523 core board uses an STM32H523CC (family STM32H5, see [WeAct STM32H523 core board](#weact-stm32h523-core-board)).
+The YD-CH32V307VCT6 board uses a CH32V307VCT6 (family CH32V30X, see [YD-CH32V307VCT6 development board](#yd-ch32v307vct6-development-board)).
 
 `cmake/Boards.cmake` has one line for each board, with these values:
 
 | Value | Use |
 |---|---|
-| Family | `STM32_FAMILY` of system-stm32. The toolchain file `cmake/gcc_arm.cmake` sets the CPU flags from it. |
-| Device | `STM32_DEVICE` of system-stm32, the CMSIS device define. |
-| Crystal | `SYSTEM_STM32_HSE_VALUE` of system-stm32, in Hz. 0 is a board without a crystal. |
-| Linker script | The memory linker script in `ldscripts/` of system-stm32, for example `mem-F103x8.ld`. |
+| Family | `STM32_FAMILY` of system-stm32, or `CH32_FAMILY` of [ch32v00x-system](https://gitlab.vandertogt.org/riscv/ch32v00x-system) for a family that starts with `CH32`. The toolchain file sets the CPU flags from it. |
+| Device | `STM32_DEVICE` of system-stm32 (the CMSIS device define), or `CH32_DEVICE` of ch32v00x-system. |
+| Crystal | `SYSTEM_STM32_HSE_VALUE` of system-stm32, or `CH32V00X_SYSTEM_HSE_VALUE` of ch32v00x-system, in Hz. 0 is a board without a crystal. |
+| Linker script | The memory linker script in `ldscripts/` of the system library, for example `mem-F103x8.ld` or `mem-ch32v307.ld`. |
 | Flash | The flash size in bytes. The size limit of each application image comes from it. The STM32F1 boards use 64 KB, the flash of the STM32F103x8. |
 
 `CMakeLists.txt` reads `cmake/Boards.cmake` before `project()`.
-The toolchain file needs `STM32_FAMILY` before the compiler checks start.
+The toolchain file needs the family before the compiler checks start.
 `cmake/gcc_arm.cmake` has CPU flags for the STM32F1 (Cortex-M3) and the STM32H5 (Cortex-M33).
 Both families use soft float, as system-stm32 and libart-stm32.
+`cmake/gcc_riscv.cmake` has CPU flags for the CH32V30X (`rv32imafc`, single-precision float ABI `ilp32f`).
+A board needs the toolchain file of its architecture.
+With the wrong toolchain file, the configure step stops with an error.
 
 ## Board definitions
 
@@ -426,3 +430,15 @@ These levels are for R34 = 130 kΩ.
 The schematic has 191 kΩ.
 Then VPP is about 12 V with `VPP_12V_SEL` low and about 17 V with `VPP_12V_SEL` high.
 Do not apply VPP on a board with R34 = 191 kΩ.
+
+## YD-CH32V307VCT6 development board
+
+The board `ydch32v307` is the YD-CH32V307VCT6 development board V1.0.
+It has a CH32V307VCT6 (LQFP100), an 8 MHz crystal and a 32.768 kHz crystal.
+It is the test board for the port of the firmware to the CH32V307.
+The port is in progress.
+The image of this board is a stub: it starts the clock (144 MHz from the crystal) and blinks `LED2` (PB4).
+The firmware sources still need the STM32 layer, so the stub does not have them yet.
+
+The board uses the [ch32v00x-system](https://gitlab.vandertogt.org/riscv/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.
+The image has no bootloader: write it with a WCH-LinkE or another probe on the SWD header `P4` (PA13 SWDIO, PA14 SWCLK).
