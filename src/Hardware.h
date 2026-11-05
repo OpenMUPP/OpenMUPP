@@ -9,8 +9,9 @@
 
 namespace hardware {
 
-// True when the system clock runs at 72 MHz from the crystal. False when the
-// crystal or the PLL did not start: the clock then stays on HSI (8 MHz).
+// True when the system clock runs from the crystal (72 MHz on the STM32F1,
+// 250 MHz on the STM32H5, 144 MHz on the CH32V307). False when the crystal
+// or the PLL did not start: the clock then stays on HSI.
 bool isClockFromCrystal();
 
 // NVIC priorities (lower value = more urgent). The USART receive register

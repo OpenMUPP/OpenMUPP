@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Build of a CH32 board (MUPP_MCU_VENDOR CH32, cmake/Boards.cmake) while the
-# CH32V307 port is not complete. The image has the start-up code and the
-# clock set-up of ch32v00x-system and a stub main() (src/ch32v30x/). It
-# proves the toolchain, the library and the linker scripts. The firmware
-# sources need the STM32 layer, so they are not in this image yet.
+# CH32V307 port is not complete. The image has the start-up code of
+# ch32v00x-system, the board start-up of the firmware (clock, SysTick, board
+# pins: src/initialize_hardware.cpp) and a stub main() (src/ch32v30x/) that
+# flashes the state LED. The other firmware sources need USB and the probe
+# engines on the CH32V307, so they are not in this image yet.
 # Replace this file with the normal image build when the port is complete.
 #
 # CMakeLists.txt includes this file and stops: the personality options,
@@ -36,7 +37,11 @@ MESSAGE(STATUS "Building openmupp version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUI
 
 set(_target openmupp-standalone.elf)
 set(_name openmupp-standalone)
-add_executable(${_target} src/ch32v30x/StubMain.cpp)
+add_executable(${_target} src/ch32v30x/StubMain.cpp src/initialize_hardware.cpp src/board/BoardChecks.cpp)
+string(TOUPPER "${BOARD}" BOARD_UPPER)
+# Selects board::current (src/board/Board.h)
+target_compile_definitions(${_target} PRIVATE MUPP_BOARD_${BOARD_UPPER})
+target_include_directories(${_target} PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(${_target} PRIVATE art-build-config ch32v00x-system)
 target_link_options(${_target} PRIVATE -Wl,-Map,${_name}.map)
 set_target_properties(${_target} PROPERTIES LINK_DEPENDS

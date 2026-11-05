@@ -94,13 +94,16 @@ To add a board:
 
 ## Start-up and LEDs
 
-The system-stm32 start-up code calls `os_startup_initialize_hardware()` (`src/initialize_hardware.cpp`) before `main()`.
+The start-up code of system-stm32 (or ch32v00x-system on the CH32V307) calls `os_startup_initialize_hardware()` (`src/initialize_hardware.cpp`) before `main()`.
 This function does these steps:
 
 1. It sets the system clock from the board crystal, and the SysTick to 1 ms.
    The STM32F1 runs at 72 MHz.
    The STM32H5 runs at 250 MHz, with the instruction cache on.
+   On the CH32V307, `SystemInit()` of ch32v00x-system already set 144 MHz in `os_startup_initialize_hardware_early()`.
+   The function only reads the clock source: the PLL means that the crystal runs.
 2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
+   The CH32V307 skips this step. Its SWD pins (PA13, PA14) are not in the pin map, so SWD stays on.
    The Mini disables the debug port. A debug probe can then connect only under reset.
    With `MUPP_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
    Then a debug probe can run and step the firmware.
@@ -440,8 +443,11 @@ The board `ydch32v307` is the YD-CH32V307VCT6 development board V1.0.
 It has a CH32V307VCT6 (LQFP100), an 8 MHz crystal and a 32.768 kHz crystal.
 It is the test board for the port of the firmware to the CH32V307.
 The port is in progress.
-The image of this board is a stub: it starts the clock (144 MHz from the crystal) and blinks `LED2` (PB4).
-The firmware sources still need the STM32 layer, so the stub does not have them yet.
+The image of this board is a stub. It runs the board start-up of the firmware (see [Start-up and LEDs](#start-up-and-leds)):
+the clock (144 MHz from the crystal), the 1 ms SysTick and the safe state of the board pins.
+Then it flashes the state LED (`LED2`, PB4) for 50 ms once per second.
+If the crystal or the PLL does not start, the clock stays on HSI and the LED flashes fast (the clock fault pattern).
+The image does not have USB and the probe engines yet.
 
 The board definition is `src/board/boards/YdCh32V307.h`.
 The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.
