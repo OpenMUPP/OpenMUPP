@@ -154,6 +154,27 @@ TEST_CASE("WCH-Link flash: mass erase with the own algorithm (wlink erase)") {
    }
 }
 
+TEST_CASE("WCH-Link flash: the erase waits for a hart that halts late after the reset (CH32V307)") {
+   FlashBench fb(Wire::Two);
+   fb.flash.fill(MockWchFlash::flashBase, pattern(512, 1));
+   // The hart halts in the last halt() call
+   fb.bench.dm.resetHaltReads = wchlink::Flash::resetHaltAttempts * rvswd::pollLimit;
+   CHECK(fb.bench.transact(request(0x02, { 0x01 })) == reply(0x02, 0x01));
+   CHECK(fb.flash.massErases == 1);
+   CHECK(fb.bench.dm.halted);
+   fb.checkClean();
+}
+
+TEST_CASE("WCH-Link flash: a hart that halts after the last halt() call fails the erase") {
+   for(const uint32_t reads : { wchlink::Flash::resetHaltAttempts * rvswd::pollLimit + 1, UINT32_MAX }) {
+      CAPTURE(reads);
+      FlashBench fb(Wire::Two);
+      fb.bench.dm.resetHaltReads = reads;
+      CHECK(fb.bench.transact(request(0x02, { 0x01 })) == errorFrame);
+      CHECK(fb.flash.massErases == 0);
+   }
+}
+
 TEST_CASE("WCH-Link flash: 06 04 replies 00 without a target access") {
    FlashBench fb(Wire::Two);
    CHECK(fb.bench.transact(request(0x06, { 0x04 })) == reply(0x06, 0x00));

@@ -321,6 +321,9 @@ Each flash command starts with a reset that halts the hart:
 
 1. Write `dmcontrol` `80000003` (`haltreq`, `ndmreset`). Wait 1 ms.
 2. Write `dmcontrol` `80000001`, then halt (`haltreq` two times, the `dmstatus` poll).
+   Do the halt again until the hart halts, for a maximum of 10 halts.
+   One `dmstatus` poll takes approximately 5 ms to 12 ms, thus the maximum time is approximately 50 ms to 120 ms.
+   The CH32V307 halts approximately 9 ms after the reset. At the high speed, one `dmstatus` poll is shorter than this time.
 3. Write `dmcontrol` `90000001` (`ackhavereset`).
 4. Write CSR `0x7c0` with `0x00000300`, as the connect does.
 
