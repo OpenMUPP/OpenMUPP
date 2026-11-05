@@ -199,15 +199,15 @@ The firmware refuses a switch to a code that is not in the image.
 The key cycle uses the code order and skips the personalities that are not in the image.
 The settings page has room for four personality codes (`0` to `3`).
 A new personality gets the next code, one entry in `personality::everyPersonality` and one `MUPP_WITH_*` define in `personality::has()`.
-`tools/mupp_personality.py` sends the switch from the host.
+`tools/mupp_probe.py` sends the switch from the host.
 It needs the `pyusb` package:
 
 ```sh
-python3 tools/mupp_personality.py show
-python3 tools/mupp_personality.py switch cmsis-dap
-python3 tools/mupp_personality.py switch wch-link
-python3 tools/mupp_personality.py switch versaloon
-python3 tools/mupp_personality.py switch bootloader
+python3 tools/mupp_probe.py show
+python3 tools/mupp_probe.py switch cmsis-dap
+python3 tools/mupp_probe.py switch wch-link
+python3 tools/mupp_probe.py switch versaloon
+python3 tools/mupp_probe.py switch bootloader
 ```
 
 `switch bootloader` starts `openmupp-bootloader` (see [Bootloader code](firmware-update.md#bootloader-code)).

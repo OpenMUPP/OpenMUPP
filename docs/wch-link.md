@@ -32,7 +32,7 @@ The `wch-link` image has these properties:
   The switch commands of the other personalities (code `2`), the switch request on EP0 and the key switch to it.
   The WCH-Link protocol has no command that switches the personality.
   To leave the WCH-Link personality, use the switch request on EP0 or the key (see [Switch request on EP0](usb-device.md#switch-request-on-ep0)).
-  `tools/mupp_personality.py` sends the switch request on EP0, for example `python3 tools/mupp_personality.py switch versaloon`.
+  `tools/mupp_probe.py` sends the switch request on EP0, for example `python3 tools/mupp_probe.py switch versaloon`.
   The tool knows the WCH-Link personality by its USB ID (`1209:0001` or `1a86:8010`) and the product string `OpenMUPP WCH-Link`.
   It also accepts `Versaloon WCH-Link`, the product string of older firmware.
   With the ID `1a86:8010`, it also accepts `WCH-Link`, the product string of the WCH ID build, when the manufacturer string is `OpenMUPP`.
@@ -41,7 +41,7 @@ The `wch-link` image has these properties:
   The tool then tells you the ID, the bus and the address of the device, and it points to `etc/70-openmupp-wch-link.rules`.
   Copy this file to `/etc/udev/rules.d/` to fix the access.
   `--id` does not give access.
-  Use it for a dongle with a USB ID or a product string that the tool does not know, for example `python3 tools/mupp_personality.py --id 1234:5678 --active wch-link switch versaloon`.
+  Use it for a dongle with a USB ID or a product string that the tool does not know, for example `python3 tools/mupp_probe.py --id 1234:5678 --active wch-link switch versaloon`.
   The `wch-link` image has only one personality, so it stalls the switch request on EP0.
   While the WCH-Link personality is active, the image has no serial port, and the debug log of a `Debug` build is silent.
 
@@ -71,7 +71,7 @@ The option is only valid when `MUPP_PERSONALITIES` has `wch-link`.
 
 The WCH ID build also has the product string `WCH-Link`, the same as the WCH-LinkE.
 probe-rs finds a WCH-Link probe only by this product string (probe-rs 0.32.0).
-The manufacturer string stays `OpenMUPP`. `tools/mupp_personality.py` uses it to find the dongle.
+The manufacturer string stays `OpenMUPP`. `tools/mupp_probe.py` uses it to find the dongle.
 
 ## Connect a target
 

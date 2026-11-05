@@ -268,7 +268,19 @@ After `82 00`, the rail capacitance can keep the voltage above 1.8 V for some ti
 An `82 01` in this time is refused, because the firmware sees a target with its own supply.
 Thus, before `82 01`, wait until `82 02` gives a voltage below 1.8 V.
 
-Send the command with OpenOCD, for example a power cycle of the target.
+`tools/mupp_probe.py` sends the command from the host. It needs the `pyusb` package and no connection to the target:
+
+```sh
+python3 tools/mupp_probe.py power on
+python3 tools/mupp_probe.py power off
+python3 tools/mupp_probe.py power status
+```
+
+The tool shows the target voltage. It stops with exit code 1 when the firmware refuses the operation.
+`--serial` selects a dongle.
+
+In an OpenOCD session, `cmsis-dap cmd` sends the command, for example for a power cycle of the target.
+OpenOCD accepts this command only after `init`.
 The 200 ms wait is not tested on hardware:
 
 ```
@@ -462,7 +474,7 @@ A firmware without the stored mode refuses `81 03`, and stays in auto. The chang
 A firmware without the auto mode (on and off only) refuses `81 02` and `81 03`, so the bridge stays on after `shutdown`. Use the configs with a firmware that has the stored mode.
 Ctrl-C and SIGTERM also run `shutdown`.
 An error in a `-c` command after `init`, SIGKILL or a crash skips `pre_shutdown_commands`. Then the bridge stays on, and the next plain JTAG session finds the IDCODE `0x15653101`.
-Set the stored mode with `python3 tools/mupp_rv_bridge.py stored`, or replug the probe.
+Set the stored mode with `python3 tools/mupp_probe.py bridge stored`, or replug the probe.
 The CH32V00X config sets `riscv set_mem_access abstract`: the CH32V006 refuses the program buffer (`cmderr` 2).
 The configs use `-chain-position` and `set_mem_access`, because OpenOCD 0.12.0 does not know `-tap` and `mem_access`. Newer OpenOCD versions show a deprecation warning for them.
 The configs add a flash bank only when OpenOCD has the `ch32v` flash driver (see [Flash with OpenOCD](#flash-with-openocd)).
@@ -545,12 +557,12 @@ probe-rs cannot send a vendor command. In the auto mode, probe-rs needs no comma
 probe-rs info --protocol jtag
 ```
 
-To force the TAP, send the command with `tools/mupp_rv_bridge.py` before probe-rs starts:
+To force the TAP, send the command with `tools/mupp_probe.py bridge` before probe-rs starts:
 
 ```sh
-python3 tools/mupp_rv_bridge.py on
+python3 tools/mupp_probe.py bridge on
 probe-rs info --protocol jtag
-python3 tools/mupp_rv_bridge.py stored
+python3 tools/mupp_probe.py bridge stored
 ```
 
 The mode stays until a USB reset, a power cycle or the next `ID_DAP_Vendor1`.
@@ -564,8 +576,8 @@ The firmware stores it in the settings page, in the same record as the stored pe
 To store a mode, set bit 7 of the mode in `ID_DAP_Vendor1`, or use `--store`:
 
 ```sh
-python3 tools/mupp_rv_bridge.py off --store
-python3 tools/mupp_rv_bridge.py auto --store
+python3 tools/mupp_probe.py bridge off --store
+python3 tools/mupp_probe.py bridge auto --store
 ```
 
 - A command without bit 7 does not write the flash. Thus the OpenOCD configs, which send `81 01`, `81 02` and `81 03` in each session, do not wear the flash.
@@ -678,7 +690,7 @@ A last step checks the real JTAG port with an STM32F103 after the bridge was on.
 | Target | CH32V006K8U6 on one wire, with its own supply |
 | OpenOCD | `0.12.0+dev-01355-gcba596a3e`, `ch32v00x-cmsis-dap.cfg` with `WORKAREASIZE` `0x2000` |
 | GDB | `riscv-none-elf-gdb` (xPack GCC 15.2.0-1) |
-| probe-rs | 0.32.0, `--chip CH32V006K8U6 --protocol jtag`, after `tools/mupp_rv_bridge.py on` |
+| probe-rs | 0.32.0, `--chip CH32V006K8U6 --protocol jtag`, after `tools/mupp_probe.py bridge on` |
 | Test programs | A counter loop of 14 bytes in RAM at `0x20000000`. The same loop in flash at `0x00000000`, with 16 KB of random data after it. Each loop writes its counter to `0x20001000` |
 
 | Test | Tool | Result |
@@ -698,7 +710,7 @@ A last step checks the real JTAG port with an STM32F103 after the bridge was on.
 | `read` | probe-rs | Pass. 16 KB of flash agree with the image |
 | `download --verify` | probe-rs, built-in flash algorithm | Pass. 16 KB in 15.7 s, with the verify. After `probe-rs reset`, the program runs |
 | `gdb` | probe-rs | Fail, in probe-rs. See note 2 |
-| Bridge on after `mupp_rv_bridge.py on` | probe-rs | Pass. probe-rs does not reset the USB device when it opens it |
+| Bridge on after `mupp_probe.py bridge on` | probe-rs | Pass. probe-rs does not reset the USB device when it opens it |
 | Fast path first, then bridge on, in one USB session | Python script, then OpenOCD | Pass. See note 3 |
 
 Notes:
@@ -992,7 +1004,7 @@ The flash test uses a random image of 32 KiB, as in the JTAG hardware test. At 9
 
 | Test | Result |
 |---|---|
-| `mupp_rv_bridge.py on`, then `off`, then an OpenOCD JTAG session | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`). `reset halt` stops at the reset vector |
+| `mupp_probe.py bridge on`, then `off`, then an OpenOCD JTAG session | Pass. OpenOCD finds the two TAPs (`0x3ba00477`, `0x06414041`). `reset halt` stops at the reset vector |
 | The same switch before each flash run, then `program ... verify` and `dump_image` at 1000 kHz | Pass. The read-back agrees with the image |
 | The same at 9000 kHz (SPI fast path) | Pass. The read-back agrees with the image |
 | `cmsis-dap cmd 0x81 0x00` in a JTAG session, with the bridge already off | Pass. The next memory read works |
@@ -1007,7 +1019,7 @@ The configs in `etc/openocd/` switch the bridge only before the chain scan and a
 #### Auto mode hardware test
 
 This step checks the port that the [auto mode](#auto-mode) selects for each type of target.
-No tool sends `ID_DAP_Vendor1` in the sessions: `mupp_rv_bridge.py auto` sets the mode before each step.
+No tool sends `ID_DAP_Vendor1` in the sessions: `mupp_probe.py bridge auto` sets the mode before each step.
 OpenOCD uses `interface/cmsis-dap.cfg` with its own TAP and target lines, not the configs in `etc/openocd/`, because these configs send `81 01`.
 
 | Item | Value |
