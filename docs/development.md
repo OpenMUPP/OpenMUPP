@@ -226,9 +226,9 @@ A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
 
 The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
-`build-mini`, `build-weacth523`, `build-ydch32v307` and `run-unit-tests` update the cache, and the other jobs only read it.
+`build-mini`, `build-weacth523` and `run-unit-tests` update the cache, and the other jobs only read it.
 `build-weacth523` has its own cache key, because the STM32H5 needs other CMSIS packages.
-`build-ydch32v307` has its own cache key, because the RISC-V build fetches other sources.
+`build-ydch32v307` uses no cache, because its build fetches nothing.
 In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
 Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.

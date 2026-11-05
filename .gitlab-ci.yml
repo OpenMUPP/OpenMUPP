@@ -193,14 +193,11 @@ build-mini-cmsis-dap-no-rv-bridge:
   artifacts: null
 
 # YD-CH32V307VCT6 (CH32V307, RISC-V): the stub image of the CH32V307 port,
-# with ch32v00x-system. Build and size check only, no artifacts. Its own
-# cache key: the RISC-V build fetches other sources than the STM32 builds.
+# with ch32v00x-system. Build and size check only, no artifacts. No cache:
+# the stub build fetches nothing with FetchContent.
 build-ydch32v307:
   extends: .build-board-template
-  cache:
-    <<: *fetchcontent-cache
-    key: fetchcontent-firmware-ch32v307
-    policy: pull-push
+  cache: []
   variables:
     BOARD: ydch32v307
   artifacts: null
