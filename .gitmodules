@@ -18,3 +18,6 @@
 	path = dependencies/ch32v00x-system
 	url = https://github.com/armint/ch32v00x-system.git
 	branch = main
+[submodule "dependencies/ch32v00x-art"]
+	path = dependencies/ch32v00x-art
+	url = https://github.com/armint/ch32v00x-art.git
