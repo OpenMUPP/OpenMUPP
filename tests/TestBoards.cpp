@@ -245,7 +245,8 @@ TEST_CASE("isValid checks the CH32V307 rules") {
       def.leds.usb = Signal{ { Port::A, 14 }, Active::High };
    }
    SUBCASE("Vref pin without an ADC channel") {
-      def.vref->pin = Pin{ Port::A, 8 };
+      // PB8 is free on the YD board, so only the ADC rule rejects it.
+      def.vref->pin = Pin{ Port::B, 8 };
    }
 
    CHECK_FALSE(board::isValid(def));
@@ -428,7 +429,8 @@ TEST_CASE("isValid checks the crystal and the Vref pin") {
       def.hseFrequency = 0;
    }
    SUBCASE("Vref pin without an ADC channel") {
-      def.vref->pin = Pin{ Port::A, 8 };
+      // PB12 is free on the Mini, so only the ADC rule rejects it.
+      def.vref->pin = Pin{ Port::B, 12 };
    }
    SUBCASE("no divider") {
       def.vref->divider = 0;
