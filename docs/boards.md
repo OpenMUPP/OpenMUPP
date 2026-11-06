@@ -455,13 +455,13 @@ The image does not have USB and the probe engines yet.
 The option `MUPP_CH32_STUB_IMAGE=OFF` builds the firmware instead of the stub.
 Use it with `-DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_RV_BRIDGE=OFF`:
 the flash settings page of the CH32V307 does not exist yet, so only one personality without the RISC-V bridge builds.
-This image builds and links (37 KB). It has not run on hardware.
+This image builds and links (37 KB).
+On the YD board, USB, JTAG connect and SWD connect work.
 These parts are known to be incomplete:
 
 - USB runs at full speed (64-byte bulk endpoints). The descriptors have no 512-byte high-speed variant yet (decision D4).
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`). Their timing is not checked.
 - There is no bootloader entry and no flash settings.
-- The ADC clock needs PCLK2 = 72 MHz. `initialize_hardware.cpp` sets it.
 
 The board definition is `src/board/boards/YdCh32V307.h`.
 The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.

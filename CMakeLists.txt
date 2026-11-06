@@ -119,8 +119,7 @@ option(MUPP_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap pers
 
 # A CH32 board builds the stub image of the CH32V307 port and stops here
 # (cmake/Ch32StubImage.cmake), until the port is complete. OFF builds the
-# normal firmware image for the CH32 board (work in progress: it does not
-# compile yet).
+# normal firmware image for the CH32 board.
 option(MUPP_CH32_STUB_IMAGE "Build the stub image for a CH32 board instead of the firmware" ON)
 if (CMAKE_CROSSCOMPILING AND MUPP_MCU_VENDOR STREQUAL "CH32" AND MUPP_CH32_STUB_IMAGE)
     include(Ch32StubImage)
