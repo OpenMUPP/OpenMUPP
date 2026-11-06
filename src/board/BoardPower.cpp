@@ -73,9 +73,7 @@ void BoardPower::init() {
    Adc::enableClock();
    Adc::configureClock();
    const Adc adc(ADC1);
-#endif
-#if defined(__riscv)
-#elif defined(STM32F1)
+#if defined(STM32F1)
    // The STM32F103 calibrates an enabled ADC (RM0008 11.4)
    adc.enable();
    adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin)), sampling);
@@ -84,6 +82,7 @@ void BoardPower::init() {
    // The STM32H5 calibrates a disabled ADC (RM0481 28.4.8)
    adcReady_ = adc.powerUp() && adc.calibrate() && adc.enable();
    adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin)), sampling);
+#endif
 #endif
 }
 
