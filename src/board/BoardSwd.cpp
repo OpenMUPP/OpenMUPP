@@ -28,9 +28,10 @@ void SwdPins::init() {
    }
    configureOutput(pins.tck, true);
    configureOutput(pins.tmsOut, true);
-#if !defined(STM32F1)
+#if !defined(STM32F1) && !defined(__riscv)
    // The pull-up of swdioRelease() (board/BoardSwd.h). A pull-up on a
-   // push-pull output has no effect.
+   // push-pull output has no effect. The F1-style GPIO (STM32F1, CH32) has no pull on outputs
+   // (GpioPin::configure() asserts it): swdioRelease() sets the pull-up input instead.
    gpioPin(pins.tmsOut).configure(GpioPin::Mode::Output, GpioPin::OutputType::PushPull, GpioPin::Pull::Up, GpioPin::Speed::VeryHigh);
 #endif
 }
