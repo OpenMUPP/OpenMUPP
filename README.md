@@ -92,8 +92,8 @@ The submodules are:
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/system-stm32.
 - `libart-stm32`: STM32 adapters for libArT. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/libart-stm32.
 - `openmupp-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
-- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`ydch32v307`) use it. The primary repository is https://github.com/armint/ch32v00x-system.
-- `ch32v00x-art`: the libArT adapters for the CH32V30x (the USB device controller). Only the CH32 boards use it. The primary repository is https://github.com/armint/ch32v00x-art.
+- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`ydch32v307`) use it. Its `main` branch has the CH32V30x support. The primary repository is https://github.com/armint/ch32v00x-system.
+- `ch32v00x-art`: the libArT adapters for the CH32V30x (the USB device controller). Only the CH32 boards use it. Its default branch is `dev`, not `main`. The primary repository is https://github.com/armint/ch32v00x-art.
 
 ## Requirements
 

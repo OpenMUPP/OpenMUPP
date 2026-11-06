@@ -21,3 +21,4 @@
 [submodule "dependencies/ch32v00x-art"]
 	path = dependencies/ch32v00x-art
 	url = https://github.com/armint/ch32v00x-art.git
+	branch = dev
