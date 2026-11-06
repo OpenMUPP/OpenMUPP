@@ -196,6 +196,19 @@ std::array<char, 2 * hw::Uid::SizeBytes + 1> dapSerialNumber{};
 class DapPlatform final : public cmsisdap::Platform {
    public:
    uint32_t nowUs() override {
+#if defined(__riscv)
+      // The SysTick counter of the CH32V307 runs free at the core clock from SysTick_Config() on (64 bits,
+      // utils/Timekeeping.h), so it is the uptime in cycles. CNTH, CNT, CNTH again: a carry between the two
+      // reads shows as a changed high word.
+      uint32_t high;
+      uint32_t low;
+      do {
+         high = SysTick->CNTH;
+         low = SysTick->CNT;
+      } while(high != SysTick->CNTH);
+      const uint64_t cycles = (static_cast<uint64_t>(high) << 32) | low;
+      return static_cast<uint32_t>(cycles / (SystemCoreClock / 1000000u));
+#else
       const uint32_t primask = __get_PRIMASK();
       __disable_irq();
       const auto ticks = static_cast<uint64_t>(getUptimeTicks());
@@ -203,6 +216,7 @@ class DapPlatform final : public cmsisdap::Platform {
       const bool tickPending = (SCB->ICSR & SCB_ICSR_PENDSTSET_Msk) != 0;
       __set_PRIMASK(primask);
       return uptimeMicroseconds(ticks, SysTick->LOAD + 1, value, tickPending);
+#endif
    }
    void delayUs(uint32_t microseconds) override {
       // The pin wait of DAP_SWJ_Pins is up to 3 s
@@ -491,7 +505,11 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
 // On the STM32H5, a debugger reads zeros from the memory bus while the
 // core sleeps in WFI, and DBGMCU_CR has no DBG_SLEEP bit (#115).
 bool isDebuggerConnected() {
-#if defined(DCB)
+#if defined(__riscv)
+   // The QingKe V4F has no register that shows a debugger. Not checked: if WFI breaks the debug link of the probe
+   // MCU (PA13, PA14), return true here.
+   return false;
+#elif defined(DCB)
    return (DCB->DHCSR & DCB_DHCSR_C_DEBUGEN_Msk) != 0;
 #else
    return (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) != 0;
@@ -537,12 +555,21 @@ int main() {
       // USB poll has no pending interrupt to end the WFI: the interrupt
       // handler already ran, or the main loop queued the event itself (the
       // double-buffered OUT endpoint reports a waiting packet when it is
-      // armed again). With the interrupts masked, an interrupt still ends
-      // the WFI, and its handler runs after __enable_irq().
+      // armed again).
+#if defined(__riscv)
+      // The QingKe V4F does not end the WFI for a pending interrupt while MIE is 0 (measured on the
+      // CH32V307), so the interrupts stay enabled. An interrupt between the check and the WFI is not
+      // lost, but the core then sleeps until the next one: at most one SysTick (1 ms).
+      if(!isDebuggerConnected() && (!clockFromCrystal || !usbStack.hasPendingEvents())) {
+         __WFI();
+      }
+#else
+      // With the interrupts masked, an interrupt still ends the WFI, and its handler runs after __enable_irq().
       __disable_irq();
       if(!isDebuggerConnected() && (!clockFromCrystal || !usbStack.hasPendingEvents())) {
          __WFI();
       }
       __enable_irq();
+#endif
    }
 }

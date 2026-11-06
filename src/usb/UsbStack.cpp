@@ -4,9 +4,11 @@
 
 #include <array>
 #include <delaybusywait.h>
+#if !defined(__riscv)
 #include <peripherals/Rcc.h>
 #if !defined(STM32F1)
 #include <peripherals/Crs.h>
+#endif
 #endif
 #include <peripherals/Uid.h>
 
@@ -162,7 +164,7 @@ uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
    return endpointCount;
 }
 
-#if !defined(STM32F1)
+#if !defined(STM32F1) && !defined(__riscv)
 // USB clock of the STM32H5: HSI48, trimmed by the CRS from the USB SOF
 // packets. PA11 and PA12 are USB_DM and USB_DP on AF10. A failure leaves
 // USB without a clock, and the host sees no device.
@@ -189,7 +191,13 @@ void startUsbClock() {
 } // namespace
 
 UsbStack::UsbStack(Personality active, const Functions &functions)
+#if defined(__riscv)
+   // Full speed until the descriptors have the 512-byte bulk endpoints of high speed (decision D4): at high speed a
+   // bulk endpoint must have 512-byte packets, and the descriptors have 64.
+   : hardware_(endpointCountOf(active), hw::UsbDevice::Speed::Full)
+#else
    : hardware_(endpointCountOf(active))
+#endif
    , controller_(hardware_, events_)
    , active_(active)
    , device_(controller_, descriptorsOf(active))
@@ -252,11 +260,16 @@ void UsbStack::start() {
    hw::Uid::read(uid);
    serialNumber.set(uid);
 
+#if !defined(__riscv)
    if(board::current.usbPullUp) {
       hardware_.setPullupCallback(&UsbStack::setPullUp, nullptr);
    }
+#endif
 
-#if defined(STM32F1)
+#if defined(__riscv)
+   // The USBHS has an internal D+ pull-up. hw::UsbDevice::begin() starts the PHY clock from the crystal.
+   constexpr IRQn_Type usbIrq = USBHS_IRQn;
+#elif defined(STM32F1)
    if(!board::current.usbPullUp) {
       // Fixed D+ pull-up: a reset without disconnect() (debugger, watchdog)
       // leaves the host with the old device. D+ low shows a disconnect. The
@@ -271,8 +284,11 @@ void UsbStack::start() {
 #else
    startUsbClock();
 #endif
+#if !defined(__riscv)
+   constexpr auto usbIrq = hw::usbfs::Irq;
+#endif
    // Before begin(), which enables the interrupt (Hardware.h)
-   NVIC_SetPriority(hw::usbfs::Irq, hardware::usbIrqPriority);
+   NVIC_SetPriority(usbIrq, hardware::usbIrqPriority);
    controller_.begin();
    device_.start();
 }
@@ -314,6 +330,10 @@ void UsbStack::poll() {
 }
 
 void UsbStack::disconnect() {
+#if defined(__riscv)
+   NVIC_DisableIRQ(USBHS_IRQn);
+   controller_.disconnect();
+#else
    NVIC_DisableIRQ(hw::usbfs::Irq);
    if(const auto pullUp = board::current.usbPullUp) {
       board::write(*pullUp, false);
@@ -331,6 +351,7 @@ void UsbStack::disconnect() {
       board::configureOutput(board::Signal{ { board::Port::A, 12 }, board::Active::High }, false);
 #endif
    }
+#endif
    delaymS(disconnectMs);
 }
 

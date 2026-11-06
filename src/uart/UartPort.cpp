@@ -4,8 +4,17 @@
 
 #include <cmsis_device.h>
 #include <peripherals/GpioPin.h>
-#include <peripherals/Rcc.h>
 #include <utils/Interrupt.h>
+#if !defined(__riscv)
+#include <peripherals/Rcc.h>
+#else
+// The CH32V30x status register (STATR) has the bits of the STM32F1 SR at the same positions, with other names
+#define USART_SR_RXNE USART_STATR_RXNE
+#define USART_SR_ORE USART_STATR_ORE
+#define USART_SR_FE USART_STATR_FE
+#define USART_SR_NE USART_STATR_NE
+#define USART_SR_PE USART_STATR_PE
+#endif
 
 #include "Hardware.h"
 #include "board/Board.h"
@@ -41,7 +50,9 @@ constexpr Peripheral peripheralOf(uint8_t usart) {
 
 static_assert(board::current.uart.has_value(), "the UART bridge needs the UART of the board definition");
 constexpr board::Uart uartPins = *board::current.uart;
-#if defined(STM32F1)
+#if defined(__riscv)
+static_assert(uartPins.usart == 1, "the CH32V307 bridge supports USART1 (PA9, PA10)");
+#elif defined(STM32F1)
 static_assert(uartPins.usart >= 1 && uartPins.usart <= 3, "the STM32F103 has USART1 to USART3");
 #else
 static_assert(uartPins.usart >= 1 && uartPins.usart <= 2, "the STM32H5 bridge supports USART1 and USART2");
@@ -50,6 +61,9 @@ constexpr Peripheral peripheral = peripheralOf(uartPins.usart);
 static_assert(uartPins.tx == peripheral.tx && uartPins.rx == peripheral.rx, "the UART pins are not the default pins of the USART");
 
 void enableClock() {
+#if defined(__riscv)
+   RCC->APB2PCENR |= RCC_USART1EN | RCC_AFIOEN;
+#else
    if constexpr(uartPins.usart == 1) {
       Rcc::enableUSART1Clock();
    } else if constexpr(uartPins.usart == 2) {
@@ -57,6 +71,7 @@ void enableClock() {
    } else {
       Rcc::enableUSART3Clock();
    }
+#endif
 }
 
 // hw::Usart has no clear function for the receive errors of USART v2
@@ -103,7 +118,7 @@ void UartPort::start() {
    enableClock();
    // The TX pin idles high. The pull-up keeps an open RX pin at the idle
    // level, so it receives no noise.
-#if defined(STM32F1)
+#if defined(STM32F1) || defined(__riscv)
    board::gpioPin(uartPins.tx)
    .configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::None, hw::GpioPin::Speed::High);
    board::gpioPin(uartPins.rx).configure(hw::GpioPin::Mode::Input, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::Up);

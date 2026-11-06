@@ -27,7 +27,7 @@ There is one serial port only.
 `src/usb/UsbStack.cpp` runs the libArT USB device stack on the STM32F1 USB peripheral.
 The USB interrupt only puts the events into a queue.
 The main loop runs the USB protocol.
-At the end of each iteration, the main loop sleeps (`WFI`) until the next interrupt.
+At the end of each iteration, the main loop sleeps (`WFI`) until the next interrupt. On the CH32V307 the interrupts stay enabled during the `WFI`, because the QingKe V4F does not end a `WFI` for a pending interrupt while `MIE` is 0. A rare race can then add up to one SysTick (1 ms) of latency.
 It does not sleep while USB events wait in the queue (`UsbStack::hasPendingEvents()`).
 An event that arrives after the USB poll has no pending interrupt to stop the sleep.
 For example, the double-buffered OUT endpoint reports a waiting packet from the main loop when the endpoint is armed again.
