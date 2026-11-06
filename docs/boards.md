@@ -61,7 +61,7 @@ Some functions come from the pin map and the family, not from a separate field:
   The CH32V307 has the same channels as the STM32F103 (CH32V307DS0 pin table).
 - `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
   On the STM32H5, only PA6 (TIM3_CH1) has a timer.
-  The CH32V307 has no timer yet. The WCH-Link personality adds it (port plan, phase P7).
+  The CH32V307 has no timer yet. The WCH-Link personality on the CH32V307 adds it.
 - `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
   The crystal pins are PD0 and PD1 on the STM32F103 and the CH32V307, and PH0 and PH1 on the STM32H5.
   On the CH32V307, the USB high-speed pins PB6 and PB7 are also reserved.
@@ -79,10 +79,12 @@ Some functions come from the pin map and the family, not from a separate field:
 
 The build fails when a board definition is not valid.
 Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
-The build also fails when the family of the board definition is different from `STM32_FAMILY`.
+The build also fails when the family of the board definition is different from `STM32_FAMILY` (or the CH32 device, `CH32_DEVICE`).
 The JTAG fast path has fixed pins. TMS is on SPI1 MISO: PB4 on the STM32F103, PA6 on the STM32H5.
 PB4 can also be SPI1 MISO on the STM32H5. The pin map of the H5 boards uses PB4 for TRST, so the firmware uses PA6.
-The crystal range is 4 MHz to 16 MHz on the STM32F103, and 4 MHz to 50 MHz on the STM32H5.
+A CH32V307 board has no JTAG fast path yet.
+The crystal range is 4 MHz to 16 MHz on the STM32F103, 4 MHz to 50 MHz on the STM32H5, and 3 MHz to 25 MHz on the CH32V307.
+The clock code of ch32v00x-system supports only an 8 MHz crystal.
 
 To add a board:
 
