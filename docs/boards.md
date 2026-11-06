@@ -103,7 +103,8 @@ This function does these steps:
    On the CH32V307, `SystemInit()` of ch32v00x-system already set 144 MHz in `os_startup_initialize_hardware_early()`.
    The function only reads the clock source: the PLL means that the crystal runs.
 2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
-   The CH32V307 skips this step. Its SWD pins (PA13, PA14) are not in the pin map, so SWD stays on.
+   The CH32V307 skips this step, so SWD stays on.
+   A CH32V307 board must not use PA13 and PA14 (`isValid()`).
    The Mini disables the debug port. A debug probe can then connect only under reset.
    With `MUPP_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
    Then a debug probe can run and step the firmware.

@@ -238,6 +238,12 @@ TEST_CASE("isValid checks the CH32V307 rules") {
    SUBCASE("JTAG fast path (not ported)") {
       def.jtagFastPath = board::JtagFastPath{ .tckLink{ Port::C, 10 } };
    }
+   SUBCASE("SWD pin PA13 (no SW_CFG write)") {
+      def.leds.usb = Signal{ { Port::A, 13 }, Active::High };
+   }
+   SUBCASE("SWD pin PA14 (no SW_CFG write)") {
+      def.leds.usb = Signal{ { Port::A, 14 }, Active::High };
+   }
    SUBCASE("Vref pin without an ADC channel") {
       def.vref->pin = Pin{ Port::A, 8 };
    }

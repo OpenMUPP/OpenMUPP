@@ -322,13 +322,48 @@ constexpr std::array<std::optional<Pin>, 18> allPins(const Definition &def) {
 
 } // namespace detail
 
+// Serial wire JTAG (SWJ) debug port of the dongle MCU. On both families the
+// JTAG-DP uses PA15 (JTDI), PB3 (JTDO) and PB4 (NJTRST), and the SW-DP uses
+// PA13 (SWDIO) and PA14 (SWCLK). The STM32F103 frees the pins with
+// AFIO_MAPR.SWJ_CFG (RM0008 9.3.5). The STM32H5 has no AFIO: the pins are
+// AF0 after reset, and a GPIO mode frees each pin.
+enum class SwjConfig : uint8_t {
+   Full,    // JTAG-DP and SW-DP on
+   NoJtag,  // SW-DP only: frees PA15, PB3 and PB4
+   Disabled // no debug port: frees PA13 and PA14 too
+};
+
+// SW-DP pins of the dongle MCU: SWDIO (PA13) and SWCLK (PA14).
+inline constexpr std::array<Pin, 2> swdPins{ { { Port::A, 13 }, { Port::A, 14 } } };
+
+// The SWJ configuration that frees all pins of the definition and keeps as
+// much of the debug port as possible.
+constexpr SwjConfig swjConfig(const Definition &def) {
+   constexpr std::array<Pin, 3> jtagOnlyPins{ { { Port::A, 15 }, { Port::B, 3 }, { Port::B, 4 } } };
+   bool usesJtagOnlyPin = false;
+   for(const auto &pin : detail::allPins(def)) {
+      if(!pin) {
+         continue;
+      }
+      for(const auto &swd : swdPins) {
+         if(*pin == swd) {
+            return SwjConfig::Disabled;
+         }
+      }
+      for(const auto &jtag : jtagOnlyPins) {
+         usesJtagOnlyPin = usesJtagOnlyPin || *pin == jtag;
+      }
+   }
+   return usesJtagOnlyPin ? SwjConfig::NoJtag : SwjConfig::Full;
+}
+
 // True when the pins of the definition are valid: pin numbers 0-15, no pin
 // used twice (TMS out and in can be one pin), no reserved pin, a Vref pin
 // with an ADC channel, and the fixed fast path pins when the board has the
 // JTAG fast path. The crystal must be in the range of the family, and an
 // STM32F103 or CH32V307 board must have one. A CH32V307 board has no JTAG
-// fast path yet (plan P8). Each board header checks its definition
-// with a static_assert.
+// fast path yet (plan P8) and must not use PA13 and PA14 (SWD). Each board
+// header checks its definition with a static_assert.
 constexpr bool isValid(const Definition &def) {
    const auto pins = detail::allPins(def);
    for(std::size_t i = 0; i < pins.size(); ++i) {
@@ -363,6 +398,11 @@ constexpr bool isValid(const Definition &def) {
    if(def.vref && (!adcChannelOf(def.family, def.vref->pin) || def.vref->divider == 0)) {
       return false;
    }
+   // The CH32V30x keeps PA13/PA14 as SWD: the firmware does not write
+   // AFIO_PCFR1.SW_CFG on this family.
+   if(def.family == Family::Ch32V30x && swjConfig(def) == SwjConfig::Disabled) {
+      return false;
+   }
    if(def.hseFrequency == 0) {
       return def.family == Family::Stm32H5;
    }
@@ -377,41 +417,6 @@ constexpr bool isValid(const Definition &def) {
       return def.hseFrequency >= 3'000'000 && def.hseFrequency <= 25'000'000;
    }
    return false;
-}
-
-// Serial wire JTAG (SWJ) debug port of the dongle MCU. On both families the
-// JTAG-DP uses PA15 (JTDI), PB3 (JTDO) and PB4 (NJTRST), and the SW-DP uses
-// PA13 (SWDIO) and PA14 (SWCLK). The STM32F103 frees the pins with
-// AFIO_MAPR.SWJ_CFG (RM0008 9.3.5). The STM32H5 has no AFIO: the pins are
-// AF0 after reset, and a GPIO mode frees each pin.
-enum class SwjConfig : uint8_t {
-   Full,    // JTAG-DP and SW-DP on
-   NoJtag,  // SW-DP only: frees PA15, PB3 and PB4
-   Disabled // no debug port: frees PA13 and PA14 too
-};
-
-// SW-DP pins of the dongle MCU: SWDIO (PA13) and SWCLK (PA14).
-inline constexpr std::array<Pin, 2> swdPins{ { { Port::A, 13 }, { Port::A, 14 } } };
-
-// The SWJ configuration that frees all pins of the definition and keeps as
-// much of the debug port as possible.
-constexpr SwjConfig swjConfig(const Definition &def) {
-   constexpr std::array<Pin, 3> jtagOnlyPins{ { { Port::A, 15 }, { Port::B, 3 }, { Port::B, 4 } } };
-   bool usesJtagOnlyPin = false;
-   for(const auto &pin : detail::allPins(def)) {
-      if(!pin) {
-         continue;
-      }
-      for(const auto &swd : swdPins) {
-         if(*pin == swd) {
-            return SwjConfig::Disabled;
-         }
-      }
-      for(const auto &jtag : jtagOnlyPins) {
-         usesJtagOnlyPin = usesJtagOnlyPin || *pin == jtag;
-      }
-   }
-   return usesJtagOnlyPin ? SwjConfig::NoJtag : SwjConfig::Full;
 }
 
 // The definition of a debug build (MUPP_DEBUG_SWD): the same board without
