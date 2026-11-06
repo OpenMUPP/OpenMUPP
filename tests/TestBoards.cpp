@@ -220,8 +220,11 @@ TEST_CASE("YD-CH32V307VCT6 has the pin map of plan D10") {
 TEST_CASE("isValid checks the CH32V307 rules") {
    Definition def = board::ydCh32V307;
 
-   SUBCASE("USBHS pin") {
+   SUBCASE("USBHS pin PB6") {
       def.debug.trst = Pin{ Port::B, 6 };
+   }
+   SUBCASE("USBHS pin PB7") {
+      def.debug.trst = Pin{ Port::B, 7 };
    }
    SUBCASE("crystal pin") {
       def.key = Signal{ { Port::D, 1 }, Active::Low };
