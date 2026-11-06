@@ -460,7 +460,7 @@ This image builds and links (37 KB).
 On the YD board, USB, JTAG connect and SWD connect work.
 These parts are known to be incomplete:
 
-- USB runs at full speed (64-byte bulk endpoints). The descriptors have no 512-byte high-speed variant yet (decision D4).
+- USB runs at full speed (64-byte bulk endpoints). The descriptors have no 512-byte high-speed variant yet.
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`). Their timing is not checked.
 - There is no bootloader entry and no flash settings.
 
