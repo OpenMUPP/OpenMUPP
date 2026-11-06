@@ -555,12 +555,21 @@ int main() {
       // USB poll has no pending interrupt to end the WFI: the interrupt
       // handler already ran, or the main loop queued the event itself (the
       // double-buffered OUT endpoint reports a waiting packet when it is
-      // armed again). With the interrupts masked, an interrupt still ends
-      // the WFI, and its handler runs after __enable_irq().
+      // armed again).
+#if defined(__riscv)
+      // The QingKe V4F does not end the WFI for a pending interrupt while MIE is 0 (measured on the
+      // CH32V307), so the interrupts stay enabled. An interrupt between the check and the WFI is not
+      // lost, but the core then sleeps until the next one: at most one SysTick (1 ms).
+      if(!isDebuggerConnected() && (!clockFromCrystal || !usbStack.hasPendingEvents())) {
+         __WFI();
+      }
+#else
+      // With the interrupts masked, an interrupt still ends the WFI, and its handler runs after __enable_irq().
       __disable_irq();
       if(!isDebuggerConnected() && (!clockFromCrystal || !usbStack.hasPendingEvents())) {
          __WFI();
       }
       __enable_irq();
+#endif
    }
 }
