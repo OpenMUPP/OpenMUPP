@@ -455,6 +455,7 @@ The image does not have USB and the probe engines yet.
 The option `MUPP_CH32_STUB_IMAGE=OFF` builds the firmware instead of the stub.
 Use it with `-DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_RV_BRIDGE=OFF`:
 the flash settings page of the CH32V307 does not exist yet, so only one personality without the RISC-V bridge builds.
+The preset `ydch32v307-cmsis-dap` sets these options.
 This image builds and links (37 KB).
 On the YD board, USB, JTAG connect and SWD connect work.
 These parts are known to be incomplete:

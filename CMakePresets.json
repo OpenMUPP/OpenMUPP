@@ -379,6 +379,20 @@
       ]
     },
     {
+      "name": "ydch32v307-cmsis-dap",
+      "displayName": "YD-CH32V307VCT6, CMSIS-DAP without the RISC-V bridge (firmware image)",
+      "inherits": [
+        "board-ydch32v307",
+        "personalities-cmsis-dap-no-rv-bridge"
+      ],
+      "cacheVariables": {
+        "MUPP_CH32_STUB_IMAGE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "description": "Native build of the unit tests (no toolchain file)",
@@ -492,6 +506,10 @@
     {
       "name": "ydch32v307",
       "configurePreset": "ydch32v307"
+    },
+    {
+      "name": "ydch32v307-cmsis-dap",
+      "configurePreset": "ydch32v307-cmsis-dap"
     },
     {
       "name": "host-tests",
