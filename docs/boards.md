@@ -470,6 +470,10 @@ The board definition is `src/board/boards/YdCh32V307.h`.
 The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.
 All signals are 3.3 V. The board has no level shifters and no target power switch.
 
+![Pinout of the YD-CH32V307VCT6 development board](images/ydch32v307-pinout.svg)
+
+The image shows the headers P2 and P3 with the pin numbers and nets of the board schematic V1.0.
+
 | Signal | Pin | Header pin |
 |---|---|---|
 | TCK / SWCLK | PB13 | P3-45 |
