@@ -122,6 +122,7 @@ The default is `/usr`.
 | `weacth523` | WeAct STM32H523 core board | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
 | `ydch32v307` | YD-CH32V307VCT6 development board | none: the stub image of the CH32V307 port (board start-up and state LED) | Release |
 | `ydch32v307-cmsis-dap` | YD-CH32V307VCT6 development board | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` and `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image, not the stub (tag `-cmsis-dap-no-rv-bridge`) | Release |
+| `ydch32v307-wch-link` | YD-CH32V307VCT6 development board | `wch-link`, with `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image with the one-wire engine | Release |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
@@ -135,7 +136,7 @@ The `-cmsis-dap-wch-link` presets do not exist: use the `-dual` presets.
 For a dual image with `versaloon,cmsis-dap`, add `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `mupp-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
-CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, `mini-cmsis-dap-no-rv-bridge` and `ydch32v307`.
+CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, `mini-cmsis-dap-no-rv-bridge`, `ydch32v307` and the `ydch32v307-` presets.
 The other presets are for local builds only.
 CI uses these presets (see [Continuous integration](development.md#continuous-integration)).
 

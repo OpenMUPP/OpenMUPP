@@ -136,6 +136,7 @@ With `-DMUPP_STRICT_SIZE=ON`, the build stops with an error instead (see [Images
 The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 The preset `ydch32v307` builds the stub image of the YD-CH32V307VCT6 board with the RISC-V GCC.
 The preset `ydch32v307-cmsis-dap` builds the firmware image instead, with the CMSIS-DAP personality and without the RISC-V bridge (`-DMUPP_CH32_STUB_IMAGE=OFF`, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board)).
+The preset `ydch32v307-wch-link` builds the firmware image with the WCH-Link personality.
 It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.
 [docs/cmake.md](docs/cmake.md#cmake-presets) describes them.
