@@ -478,7 +478,7 @@ All signals are 3.3 V. The board has no level shifters and no target power switc
 | TMS / SWDIO (out and in) | PC11 | P3-21 |
 | TCK link (JTAG fast path) | PC10 | P3-22 |
 | SRST | PB12 | P3-46 |
-| TRST | PB9 | P3-3 |
+| TRST | PB9 | P3-5 |
 | RTCK | PA8 | P3-30 |
 | UART TX / RX (USART1) | PA9 / PA10 | P3-29 / P3-28 |
 | Vref sense (3.3 V maximum) | PB0 | P2-29 |
