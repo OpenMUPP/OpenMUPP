@@ -472,7 +472,8 @@ All signals are 3.3 V. The board has no level shifters and no target power switc
 
 ![Pinout of the YD-CH32V307VCT6 development board](images/ydch32v307-pinout.svg)
 
-The image shows the headers P2 and P3 with the pin numbers and nets of the board schematic V1.0.
+The image is a top view of the board. P3 is on the top edge and P2 is on the bottom edge.
+Pin 1 of the two headers is at the end with P4 and the USB2 connector. The nets come from the board schematic V1.0.
 
 | Signal | Pin | Header pin |
 |---|---|---|
