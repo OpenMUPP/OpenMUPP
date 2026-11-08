@@ -271,11 +271,23 @@ TEST_CASE("A CH32V307 board without the JTAG fast path is valid") {
    CHECK(board::isValid(def));
 }
 
-TEST_CASE("The CH32V307 has the ADC channels of the STM32F103 and no one-wire timer yet") {
+TEST_CASE("The CH32V307 has the ADC channels of the STM32F103 and the one-wire timer TIM10") {
    CHECK(board::adcChannelOf(V30x, { Port::B, 0 }) == 8);
    CHECK(board::adcChannelOf(V30x, { Port::C, 5 }) == 15);
    CHECK_FALSE(board::adcChannelOf(V30x, { Port::B, 2 }));
-   CHECK_FALSE(board::oneWireTimerOf(V30x, board::ydCh32V307.debug.tmsOut));
+   // TIM10_CH4 on PC11, TIM10_CH1 samples; TIM10_UP on DMA2 ch11, TIM10_CH1 on ch8
+   const auto timer = board::oneWireTimerOf(V30x, board::ydCh32V307.debug.tmsOut);
+   REQUIRE(timer);
+   CHECK(timer->timer == 10);
+   CHECK(timer->channel == 4);
+   CHECK_FALSE(timer->complementary);
+   CHECK_FALSE(timer->partialRemap);
+   CHECK(timer->sampleChannel == 1);
+   CHECK(timer->updateDma == 11);
+   CHECK(timer->sampleDma == 8);
+   // The pins of the STM32F103 timers have no timer on the CH32V307
+   CHECK_FALSE(board::oneWireTimerOf(V30x, { Port::B, 4 }));
+   CHECK_FALSE(board::oneWireTimerOf(V30x, { Port::B, 14 }));
    // PB6 and PB7 are normal pins on the other families: SRST of the mini
    // clone is PB6.
    CHECK(board::stLinkV2MiniClone.debug.srst == Pin{ Port::B, 6 });
@@ -340,7 +352,7 @@ TEST_CASE("adcChannelOf gives the STM32F103 ADC channel of a pin") {
 }
 
 TEST_CASE("oneWireTimerOf gives a timer channel on the SWDIO output of each board") {
-   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV21, board::stLinkV2MiniClone }) {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV21, board::stLinkV2MiniClone, board::ydCh32V307 }) {
       CAPTURE(def.name);
       const auto timer = board::oneWireTimerOf(def.family, def.debug.tmsOut);
       REQUIRE(timer);

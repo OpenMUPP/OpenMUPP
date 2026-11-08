@@ -61,7 +61,7 @@ Some functions come from the pin map and the family, not from a separate field:
   The CH32V307 has the same channels as the STM32F103 (CH32V307DS0 pin table).
 - `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
   On the STM32H5, only PA6 (TIM3_CH1) has a timer.
-  The CH32V307 has no timer yet. The WCH-Link personality on the CH32V307 adds it.
+  On the CH32V307, only PC11 (TIM10_CH4) has a timer.
 - `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
   The crystal pins are PD0 and PD1 on the STM32F103 and the CH32V307, and PH0 and PH1 on the STM32H5.
   On the CH32V307, the USB high-speed pins PB6 and PB7 are also reserved.
@@ -456,13 +456,14 @@ The option `MUPP_CH32_STUB_IMAGE=OFF` builds the firmware instead of the stub.
 Use it with `-DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_RV_BRIDGE=OFF`:
 the flash settings page of the CH32V307 does not exist yet, so only one personality without the RISC-V bridge builds.
 The preset `ydch32v307-cmsis-dap` sets these options.
+The preset `ydch32v307-wch-link` builds an image with only the WCH-Link personality. It has the one-wire engine (see [One-wire timer](wch-link.md#one-wire-timer)).
 This image builds and links (37 KB).
 On the YD board, USB, JTAG connect and SWD connect work.
 These parts are known to be incomplete:
 
 - USB runs at full speed (64-byte bulk endpoints). The descriptors have no 512-byte high-speed variant yet.
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`). Their timing is not checked.
-- The JTAG fast path (SPI and DMA) is not tested on hardware.
+- The JTAG fast path (SPI and DMA) and the one-wire engine (TIM10 and DMA2) are not tested on hardware.
 - There is no bootloader entry and no flash settings.
 
 The board definition is `src/board/boards/YdCh32V307.h`.
