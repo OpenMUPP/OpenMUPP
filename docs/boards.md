@@ -82,7 +82,7 @@ Examples are a pin that is used two times, or a crystal that is different from `
 The build also fails when the family of the board definition is different from `STM32_FAMILY` (or the CH32 device, `CH32_DEVICE`).
 The JTAG fast path has fixed pins. TMS is on SPI1 MISO: PB4 on the STM32F103, PA6 on the STM32H5.
 PB4 can also be SPI1 MISO on the STM32H5. The pin map of the H5 boards uses PB4 for TRST, so the firmware uses PA6.
-A CH32V307 board has no JTAG fast path yet.
+On the CH32V307, TMS is on SPI3 MISO (PC11) and the TCK link is on SPI3 SCK (PC10), with the SPI3 remap.
 The crystal range is 4 MHz to 16 MHz on the STM32F103, 4 MHz to 50 MHz on the STM32H5, and 3 MHz to 25 MHz on the CH32V307.
 The clock code of ch32v00x-system supports only an 8 MHz crystal.
 
@@ -462,6 +462,7 @@ These parts are known to be incomplete:
 
 - USB runs at full speed (64-byte bulk endpoints). The descriptors have no 512-byte high-speed variant yet.
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`). Their timing is not checked.
+- The JTAG fast path (SPI and DMA) is not tested on hardware.
 - There is no bootloader entry and no flash settings.
 
 The board definition is `src/board/boards/YdCh32V307.h`.
@@ -474,6 +475,7 @@ All signals are 3.3 V. The board has no level shifters and no target power switc
 | TDI | PB15 | P3-43 |
 | TDO | PB14 | P3-44 |
 | TMS / SWDIO (out and in) | PC11 | P3-21 |
+| TCK link (JTAG fast path) | PC10 | P3-22 |
 | SRST | PB12 | P3-46 |
 | TRST | PB9 | P3-3 |
 | RTCK | PA8 | P3-30 |
@@ -483,7 +485,14 @@ All signals are 3.3 V. The board has no level shifters and no target power switc
 | USB LED (`LED1`, red, active high) | PA15 | on the board |
 | Key (`USR`, active low) | PB3 | on the board |
 
-The board has no JTAG fast path yet.
+The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
+Connect a resistor of 330 Ω to 470 Ω from TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
+The resistor limits the current when other code drives PC10 as an output (for example UART4_TX or the microSD card).
+Its delay with the input capacitance of PC10 is approximately 5 ns, which is small at 9 MHz TCK.
+Do not use more than approximately 1 kΩ: the delay then decreases the TMS timing margin.
+A wire also works, but it does not give this protection.
+Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more).
+Keep the microSD slot empty: PC10 and PC11 are also DAT2 and DAT3 of the card.
 
 The board uses the [ch32v00x-system](https://github.com/armint/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.
 The image has no bootloader: write it with a WCH-LinkE or another probe on the SWD header `P4` (PA13 SWDIO, PA14 SWCLK).

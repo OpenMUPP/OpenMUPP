@@ -5,8 +5,9 @@
 // The JTAG engines, compiled with -O2 (CMakeLists.txt).
 template class jtag::BitBangPort<board::JtagPins>;
 template class jtag::BitBangPort<board::JtagPins, jtag::TckIdle::High>;
-// JtagSpi: BoardJtagFast.cpp (STM32F1) and BoardJtagFastH5.cpp (STM32H5)
-#if defined(STM32F1) || defined(STM32H5)
+// JtagSpi: BoardJtagFast.cpp (STM32F1), BoardJtagFastH5.cpp (STM32H5) and
+// BoardJtagFastV30x.cpp (CH32V307)
+#if defined(STM32F1) || defined(STM32H5) || defined(CH32V30x_D8C)
 template class jtag::FastPort<board::JtagPins, board::JtagSpi>;
 #endif
 

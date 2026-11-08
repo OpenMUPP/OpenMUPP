@@ -11,11 +11,15 @@ namespace board {
 // pins that the LQFP64 and QFN68 packages also have, for a future probe:
 // - TCK, TDI and TDO are on the SPI2 pins (PB13, PB15, PB14), as on the
 //   STM32F1 boards. One pin, PC11, is SWDIO out and in.
+// - JTAG fast path: TMS is on SPI3 MISO (PC11, remap). It needs a link
+//   from TCK (PB13) to SPI3 SCK (PC10): a 330-470 Ohm resistor, which
+//   limits the current if other code drives PC10. Keep the microSD slot
+//   empty: PC10 and PC11 are also its DAT2 and DAT3.
 // - The on-board LEDs are active high: LED2 (green, PB4) shows the state,
 //   LED1 (red, PA15) the USB state. The USR key (PB3) is active low.
 //
 // 3.3 V targets only: no level shifters, no power switch. The USB pull-up
-// is in the USBHS controller. No JTAG fast path yet (plan P8).
+// is in the USBHS controller.
 inline constexpr Definition ydCh32V307{
    .name = "ydch32v307",
    .hseFrequency = 8'000'000,
@@ -32,7 +36,7 @@ inline constexpr Definition ydCh32V307{
    .srst{ Port::B, 12 },
    .rtck = Pin{ Port::A, 8 },
    },
-   .jtagFastPath = std::nullopt,
+   .jtagFastPath = JtagFastPath{ .tckLink{ Port::C, 10 } },
    .uart = Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } },
    // Optional: wire the target supply (3.3 V maximum) to PB0
    .vref = VrefSense{ .pin{ Port::B, 0 }, .divider = 1 },

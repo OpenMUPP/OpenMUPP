@@ -640,28 +640,30 @@ A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `IN
 
 ### JTAG fast path
 
-On the Mini and the WeAct STM32H523, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
+On the Mini, the WeAct STM32H523 and the YD-CH32V307VCT6, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
 The STM32F1 driver is `src/board/BoardJtagFast.cpp` (SPI and DMA1). The STM32H5 driver is `src/board/BoardJtagFastH5.cpp` (SPI v2 and GPDMA1).
+The CH32V307 driver is `src/board/BoardJtagFastV30x.cpp` (SPI2, SPI3, DMA1 and DMA2). It is not tested on hardware.
 The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
 A board has the fast path when its definition has `jtagFastPath` (see [Boards](boards.md)).
 The ST-Link/V2-1 does not have it.
 
-| Signal | Pin | Peripheral | STM32F1 DMA1 channel | STM32H5 GPDMA1 channel |
-|---|---|---|---|---|
-| TCK | PB13 | SPI2 SCK, master | - | - |
-| TDO | PB14 | SPI2 MISO | 4 | 1 |
-| TDI | PB15 | SPI2 MOSI | 5 | 2 |
-| TCK link | PB3 | SPI1 SCK, slave (remapped on the STM32F1) | - | - |
-| TMS | PB4 (STM32F1), PA6 (STM32H5) | SPI1 MISO (remapped on the STM32F1) | 3 | 0 |
+| Signal | Pin | Peripheral | STM32F1 DMA1 channel | STM32H5 GPDMA1 channel | CH32V307 DMA channel |
+|---|---|---|---|---|---|
+| TCK | PB13 | SPI2 SCK, master | - | - | - |
+| TDO | PB14 | SPI2 MISO | 4 | 1 | DMA1 4 |
+| TDI | PB15 | SPI2 MOSI | 5 | 2 | DMA1 5 |
+| TCK link | PB3 (CH32V307: PC10) | SPI1 SCK, slave (remapped on the STM32F1). CH32V307: SPI3 SCK, slave, remapped | - | - | - |
+| TMS | PB4 (STM32F1), PA6 (STM32H5), PC11 (CH32V307) | SPI1 MISO (remapped on the STM32F1). CH32V307: SPI3 MISO, remapped | 3 | 0 | DMA2 2 |
 
-The board links TCK (PB13) to PB3, so TCK also clocks SPI1.
+The board links TCK (PB13) to the slave SCK pin, so TCK also clocks the slave SPI.
+The slave SPI is SPI1, or SPI3 on the CH32V307.
 Both SPIs use clock polarity high and the second clock edge, LSB first.
 TDI and TMS change at the falling edge.
 The target and SPI2 sample at the rising edge.
 The SPI clock idles high, so TCK also idles high between shifts.
 Only the rising edge clocks the TAP, so the idle level has no effect on the target.
 
-SPI1 makes TMS valid a time tv(SO) after the falling edge.
+The slave SPI makes TMS valid a time tv(SO) after the falling edge.
 The half period must be longer than tv(SO), the delay of the TCK link and the TMS setup time of the target.
 The smallest SPI divider is `jtag::spiMinShift`:
 
@@ -669,16 +671,19 @@ The smallest SPI divider is `jtag::spiMinShift`:
 |---|---|---|---|---|
 | STM32F1 | 36 MHz APB1 clock, divided by 4 to 256 | 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 | 2 (18 MHz, half period 27.8 ns) | 25 ns (STM32F103x8/B datasheet) |
 | STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 16 to 256 | 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) and 8 (15.6 MHz, not tested) | 11.5 ns on PA6 (DS14540 table 109) |
+| CH32V307 | 144 MHz APB1 clock, divided by 16 to 256 | 9000, 4500, 2250, 1125, 562.5 | 4 (36 MHz) and 8 (18 MHz, half period 27.8 ns, not tested) | 10 ns (CH32V307DS0 table 4-28) |
 
 Enable a smaller divider only after a hardware test at that speed passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
 
 - The SPI gives the fastest SPI speed that is not above the request.
-- Bit-bang gives the request. For the choice, its speed counts as the request, up to `jtag::bitBangMaxKHz`: 1000 kHz on the STM32F1, 3000 kHz on the STM32H5.
+- Bit-bang gives the request. For the choice, its speed counts as the request, up to `jtag::bitBangMaxKHz`: 1000 kHz on the STM32F1 and the CH32V307, 3000 kHz on the STM32H5.
 - The SPI wins when its speed is equal to or higher than the bit-bang speed.
 - Adaptive clocking (0 kHz) always uses bit-bang.
 
 STM32F1 examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 2.25 MHz SPI, 2000 kHz gives 1.125 MHz SPI, 1000 kHz gives 1 MHz bit-bang.
+The CH32V307 has the SPI speeds of the STM32F1, so the STM32F1 examples apply to it too.
+The bit-bang rate of the CH32V307 is not measured.
 STM32H5 examples: 7813 kHz and more give 7.8 MHz SPI, 4000 kHz gives 3.9 MHz SPI, 3000 kHz gives bit-bang, 2000 kHz gives bit-bang.
 On the STM32F1, the value of `jtag::bitBangMaxKHz` is conservative: 1000 kHz is the rate that was checked with the flash benchmark.
 The fastest rate of the bit-bang loop on the STM32F1 is not measured.

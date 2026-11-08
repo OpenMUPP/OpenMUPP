@@ -18,7 +18,7 @@ The Versaloon personality has the USB identity of the original Versaloon firmwar
 
 - It receives Versaloon commands and replies to the common commands, for example `GET_INFO`.
 - It runs the `USB_TO_ALL` command of OpenOCD, with the `INFO`, `DELAY`, `GPIO`, `JTAG_RAW`, `SWD` and `POWER` blocks. OpenOCD controls SRST and TRST through the `GPIO` block.
-- It shifts JTAG bits through the `JTAG_RAW` block, with a fixed TCK frequency or with adaptive clocking (RTCK). The Mini uses SPI and DMA up to 9 MHz TCK, the STM32H5 boards up to 7.8 MHz. The other bits and speeds use GPIO bit-bang.
+- It shifts JTAG bits through the `JTAG_RAW` block, with a fixed TCK frequency or with adaptive clocking (RTCK). The Mini uses SPI and DMA up to 9 MHz TCK, the STM32H5 boards up to 7.8 MHz. The YD-CH32V307VCT6 has the same fast path up to 9 MHz, not tested on hardware. The other bits and speeds use GPIO bit-bang.
 - It runs SWD transfers with GPIO bit-bang through the `SWD` block, at the SWCLK frequencies of the OpenOCD `vsllink` driver.
 - It switches the 3.3 V target supply through the `POWER` block, and replies the target voltage to `GET_TVCC`. It refuses to switch on a target that has its own supply.
 
