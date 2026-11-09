@@ -1,6 +1,7 @@
 # USB device
 
 The dongle is a USB full-speed composite device with the USB identity of the original Versaloon firmware.
+The CMSIS-DAP personality of the CH32V307 also runs at high speed (see [High speed](#high-speed-ch32v307)).
 Thus unmodified OpenOCD (`vsllink` driver) finds it.
 `src/usb/UsbDescriptors.h` has the descriptors.
 
@@ -86,11 +87,29 @@ It sends each response as one IN packet.
 A response of 64 bytes has no zero-length packet.
 The processor holds up to 4 packets.
 When all 4 slots are in use, the OUT endpoint NAKs until the host reads a response.
-`DAP_Info` reports the packet size 64 and the packet count 4.
+`DAP_Info` reports the packet size 64 (512 at high speed) and the packet count 4.
 When a bus reset or `SET_CONFIGURATION 0` closes the interface, the function calls `Processor::hostGone()`.
 A suspend only releases the target pins, because the USB transfer state stays.
 When a `DAP_QueueCommands` packet takes the last free slot, the processor runs the queue at once.
 Thus queued packets alone do not hold the OUT endpoint, and each queued packet gets its response.
+
+### High speed (CH32V307)
+
+The USBHS controller of the CH32V307 runs at high speed (480 Mbit/s) when the host or hub supports it.
+Only the CMSIS-DAP personality uses high speed.
+The WCH-Link personality has no high-speed descriptors, so `UsbStack` limits the controller to full speed for it.
+
+- At high speed, a bulk endpoint must have 512-byte packets (USB 2.0 section 5.8.3).
+  Thus the CMSIS-DAP personality has a second configuration descriptor with 512-byte bulk endpoints (`dap::highSpeedConfigurationDescriptor`).
+  The notification endpoint keeps 16 bytes and 16 ms (`bInterval` 8: 2^7 microframes).
+- The libArT `usb::Device` serves the configuration of the speed of the last bus reset.
+  It also serves the device qualifier and the other-speed configuration, as USB 2.0 requires of a high-speed device.
+- At `SET_CONFIGURATION`, `CmsisDapFunction` sets the packet size of the processor to the `wMaxPacketSize` of the endpoint: 64 or 512 bytes.
+  `DAP_Info` reports this value. The processor buffers have 512 bytes on the CH32V307 and 64 bytes on the STM32 boards.
+- The CDC-ACM serial port has an RX queue of 512 bytes, so that one high-speed packet fits.
+  It sends 64-byte IN packets. At high speed these are short packets, so no zero-length packet follows.
+- The USBHS packet pool has 4096 bytes. The high-speed endpoints use 2576 bytes:
+  the double-buffered DAP OUT endpoint (1024), the DAP IN endpoint (512), the notification endpoint (16) and the CDC data endpoints (1024).
 
 ### MS OS 2.0 descriptors
 

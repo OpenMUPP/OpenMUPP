@@ -205,7 +205,13 @@ class UsbStack {
    private:
 #if defined(MUPP_USB_SERIAL_PORT)
    // Queue sizes of the serial port
+#if defined(__riscv)
+   // One 512-byte packet of a high-speed bulk endpoint (art::usb::CdcAcmFunctionBase::kHighSpeedDataPacketSize)
+   static constexpr std::size_t serialRxSize = 512;
+   static_assert(serialRxSize >= art::usb::CdcAcmFunctionBase::kHighSpeedDataPacketSize);
+#else
    static constexpr std::size_t serialRxSize = 256;
+#endif
    static constexpr std::size_t serialTxSize = 256;
 #endif
 
