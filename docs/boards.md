@@ -463,8 +463,11 @@ These parts are known to be incomplete:
 
 - USB runs at full speed (64-byte bulk endpoints). The descriptors have no 512-byte high-speed variant yet.
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`).
-  The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)). The JTAG timing is not checked.
-- The JTAG fast path (SPI and DMA) and the one-wire engine (TIM10 and DMA2) are not tested on hardware.
+  The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)).
+  JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
+- The JTAG fast path (SPI and DMA) passes with OpenOCD and pyOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
+  With jumper wires, the TCK link must be a wire, not a resistor.
+- The one-wire engine (TIM10 and DMA2) is not tested on hardware.
 - There is no bootloader entry and no flash settings.
 
 The board definition is `src/board/boards/YdCh32V307.h`.
@@ -493,12 +496,20 @@ Pin 1 of the two headers is at the end with P4 and the USB2 connector. The nets 
 | Key (`USR`, active low) | PB3 | on the board |
 
 The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
-Connect a resistor of 330 Ω to 470 Ω from TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
-The resistor limits the current when other code drives PC10 as an output (for example UART4_TX or the microSD card).
-Its delay with the input capacitance of PC10 is approximately 5 ns, which is small at 9 MHz TCK.
-Do not use more than approximately 1 kΩ: the delay then decreases the TMS timing margin.
-A wire also works, but it does not give this protection.
+Connect TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
 Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more).
+
+On the YD board with jumper wires, use a wire for the link, not a resistor.
+A resistor of 330 Ω to 470 Ω made the fast path fail in this setup (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)):
+
+- The resistor and the capacitance of the wires (and of the analyzer probe) make the edges on PC10 slow.
+- SPI3 changes TMS on PC11 shortly after the falling edge on PC10. PC10 is then still near the input threshold.
+- A rising TMS edge on the next pin couples into PC10 as a short pulse, and SPI3 counts it as a clock. TMS is then one bit early.
+- OpenOCD does not see the fault, because each byte of its scans has one TMS value. pyOCD fails.
+
+A resistor limits the current when other code drives PC10 as an output (for example UART4_TX or the microSD card). The wire gives no such protection.
+On a probe PCB with short traces, the capacitance is much lower, and the delay of a 330 Ω to 470 Ω resistor is approximately 5 ns.
+This is not tested. Test a resistor on the PCB with pyOCD (`tools/pyocd_jtag_test.py`) at 9000 kHz, not only with OpenOCD.
 Keep the microSD slot empty: PC10 and PC11 are also DAT2 and DAT3 of the card.
 
 The board uses the [ch32v00x-system](https://github.com/armint/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.

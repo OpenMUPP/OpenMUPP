@@ -312,7 +312,7 @@ Thus the firmware does not use 15.6 MHz (`jtag::spiMinShift` is 4 on the STM32H5
 
 This section gives the SWD measurements on the CH32V307 at 144 MHz.
 The CH32V307 has no DWT. The pacer uses the low word of the SysTick counter (`SysTick->CNT`), which runs at the core clock (`src/board/CycleCounter.h`).
-JTAG and RVSWD on the CH32V307 are not measured.
+[CH32V307 JTAG](#ch32v307-jtag) gives the JTAG measurements. RVSWD on the CH32V307 is not measured.
 
 ### Setup
 
@@ -357,3 +357,71 @@ Findings:
   With the fix, the read of 32 KiB takes 0.26 s at 2000 kHz, 0.22 to 0.23 s at 3000 and 4000 kHz, and 0.16 s from 4500 kHz.
   The write takes 1.26 to 1.31 s from 1000 kHz: the flash of the STM32F103 limits it.
 
+## CH32V307 JTAG
+
+Measured on 2026-11-09 with the setup of [CH32V307](#ch32v307), with these changes:
+
+- Target: the same STM32F103ZET6 on JTAG (TCK, TMS, TDI, TDO), at 64 MHz. The chain has two TAPs: the DAP (IR length 4) and the boundary-scan TAP (IR length 5).
+- Logic analyzer: TCK on channel 5, measured on PC10 (the TCK link), and TMS on channel 7.
+  TDI and TDO are not measured.
+- Traffic: OpenOCD reads 8 KiB of SRAM in each session.
+- The checks of the JTAG-DP transfers of the firmware use `tools/pyocd_jtag_test.py`, and raw `DAP_JTAG_IDCODE` and `DAP_Transfer` commands.
+  OpenOCD does not use these transfers: it sends `DAP_JTAG_Sequence` for all scans (see [JTAG hardware test](cmsis-dap.md#jtag-hardware-test)).
+
+### Results
+
+| Request | Engine | Measured TCK | Shortest period |
+|---|---|---|---|
+| 100 kHz | bit-bang | 100.0 kHz (−0.01 %) | 9958 ns |
+| 500 kHz | bit-bang | 500.1 kHz (+0.01 %) | 1970 ns |
+| 1000 kHz | bit-bang | 1000.1 kHz (+0.01 %) | 970 ns |
+| 1124 kHz | bit-bang | 1106.4 kHz (−0.12 %) | 872 ns |
+| 1125 kHz | SPI | 1124.7 kHz | 886 ns |
+| 2250 kHz | SPI | 2249.0 kHz | 442 ns |
+| 4500 kHz | SPI | 4494.4 kHz | 218 ns |
+| 9000 kHz | SPI | 8981.7 kHz | 104 ns |
+
+The bit-bang rate at 1124 kHz is the nominal rate: a half period of 65 core cycles gives 1107.7 kHz.
+A request of 1125 kHz or more selects the SPI.
+The SPI rows include the bit-bang tail of each shift, so the mean is a little below the SPI rate.
+
+`tools/flash_benchmark.py` (JTAG, 32 KiB) passed all runs at 250 to 9000 kHz:
+
+| kHz | Write s | Read s | Read KiB/s |
+|---:|---:|---:|---:|
+| 250 | 3.51 | 2.89 | 11.1 |
+| 1000 | 2.19 | 1.64 | 19.5 |
+| 2250 | 1.99 | 1.46 | 21.9 |
+| 4500 | 1.92 | 1.39 | 23.1 |
+| 9000 | 1.90 | 1.37 | 23.3 |
+
+With the wire link, `tools/pyocd_jtag_test.py` passed at 1000, 2250, 4500 and 9000 kHz.
+
+### TCK link
+
+The first test used a resistor of 330 Ω to 470 Ω as the TCK link. This value comes from a probe PCB design with short traces.
+The test setup uses jumper wires and an analyzer probe on PC10, which have much more capacitance.
+With the resistor, OpenOCD passed at all speeds, but the JTAG-DP transfers of the firmware failed at all SPI speeds:
+pyOCD failed at 2250, 4500 and 9000 kHz, and passed at 1000 kHz (bit-bang).
+
+The analyzer showed the cause:
+
+- SPI3 changed TMS 20 to 32 ns after the falling edge on PC10. With the wire, the delay is 4 to 10 ns.
+  The bit-bang engine changes TMS 118 to 130 ns after the falling edge.
+- When TMS went from 0 to 1 during an SPI transfer, PC10 had a high pulse of 2 to 6 ns.
+  SPI3 counted the pulse as a clock edge, so the next TMS bits were one bit early.
+  In a DP scan, the TAP then did not go to Update-DR, and the transfer failed.
+- A slower output speed of the TMS pin (10 MHz instead of 50 MHz) did not remove the pulse.
+- With the wire, there was no pulse, and all checks passed.
+
+Thus the resistor fails with the capacitance of this setup. A resistor on a PCB is not tested.
+
+The scans of OpenOCD have one TMS value for each byte, so a TMS edge in the middle of an SPI transfer does not occur.
+Thus OpenOCD does not find a bad TCK link. Use pyOCD or the raw transfer commands for this check.
+
+### 18 MHz
+
+The firmware does not use the SPI rate of 18 MHz (`jtag::spiMinShift` is 4).
+The STM32F103 test target permits TCK only up to F_CPU / 6 (10.6 MHz at 64 MHz), so 18 MHz cannot be tested with it.
+The half period at 18 MHz is 27.8 ns. The measured TMS delay of 4 to 10 ns leaves 17 ns or more for the TMS setup time of the target and the cable delay.
+TDO must also come back within the half period. Test with a faster target before you lower `jtag::spiMinShift`.

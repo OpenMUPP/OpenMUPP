@@ -642,7 +642,7 @@ A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `IN
 
 On the Mini, the WeAct STM32H523 and the YD-CH32V307VCT6, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
 The STM32F1 driver is `src/board/BoardJtagFast.cpp` (SPI and DMA1). The STM32H5 driver is `src/board/BoardJtagFastH5.cpp` (SPI v2 and GPDMA1).
-The CH32V307 driver is `src/board/BoardJtagFastV30x.cpp` (SPI2, SPI3, DMA1 and DMA2). It is not tested on hardware.
+The CH32V307 driver is `src/board/BoardJtagFastV30x.cpp` (SPI2, SPI3, DMA1 and DMA2). It is tested from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
 The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
 A board has the fast path when its definition has `jtagFastPath` (see [Boards](boards.md)).
 The ST-Link/V2-1 does not have it.
@@ -671,7 +671,7 @@ The smallest SPI divider is `jtag::spiMinShift`:
 |---|---|---|---|---|
 | STM32F1 | 36 MHz APB1 clock, divided by 4 to 256 | 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 | 2 (18 MHz, half period 27.8 ns) | 25 ns (STM32F103x8/B datasheet) |
 | STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 16 to 256 | 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) and 8 (15.6 MHz, not tested) | 11.5 ns on PA6 (DS14540 table 109) |
-| CH32V307 | 144 MHz APB1 clock, divided by 16 to 256 | 9000, 4500, 2250, 1125, 562.5 | 4 (36 MHz) and 8 (18 MHz, half period 27.8 ns, not tested) | 10 ns (CH32V307DS0 table 4-28) |
+| CH32V307 | 144 MHz APB1 clock, divided by 16 to 256 | 9000, 4500, 2250, 1125, 562.5 | 4 (36 MHz) and 8 (18 MHz, half period 27.8 ns, not tested) | 10 ns (CH32V307DS0 table 4-28). Measured: 4 to 10 ns after the edge on PC10, with a wire as the TCK link |
 
 Enable a smaller divider only after a hardware test at that speed passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
@@ -683,7 +683,7 @@ Enable a smaller divider only after a hardware test at that speed passes.
 
 STM32F1 examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 2.25 MHz SPI, 2000 kHz gives 1.125 MHz SPI, 1000 kHz gives 1 MHz bit-bang.
 The CH32V307 has the SPI speeds of the STM32F1, so the STM32F1 examples apply to it too.
-The bit-bang rate of the CH32V307 is not measured.
+On the CH32V307, the bit-bang engine gives 1106 kHz at a request of 1124 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
 STM32H5 examples: 7813 kHz and more give 7.8 MHz SPI, 4000 kHz gives 3.9 MHz SPI, 3000 kHz gives bit-bang, 2000 kHz gives bit-bang.
 On the STM32F1, the value of `jtag::bitBangMaxKHz` is conservative: 1000 kHz is the rate that was checked with the flash benchmark.
 The fastest rate of the bit-bang loop on the STM32F1 is not measured.
