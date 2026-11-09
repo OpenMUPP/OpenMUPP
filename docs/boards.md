@@ -470,6 +470,11 @@ The board definition is `src/board/boards/YdCh32V307.h`.
 The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.
 All signals are 3.3 V. The board has no level shifters and no target power switch.
 
+![Pinout of the YD-CH32V307VCT6 development board](images/ydch32v307-pinout.svg)
+
+The image is a top view of the board. P3 is on the top edge and P2 is on the bottom edge.
+Pin 1 of the two headers is at the end with P4 and the USB2 connector. The nets come from the board schematic V1.0.
+
 | Signal | Pin | Header pin |
 |---|---|---|
 | TCK / SWCLK | PB13 | P3-45 |
@@ -478,7 +483,7 @@ All signals are 3.3 V. The board has no level shifters and no target power switc
 | TMS / SWDIO (out and in) | PC11 | P3-21 |
 | TCK link (JTAG fast path) | PC10 | P3-22 |
 | SRST | PB12 | P3-46 |
-| TRST | PB9 | P3-3 |
+| TRST | PB9 | P3-5 |
 | RTCK | PA8 | P3-30 |
 | UART TX / RX (USART1) | PA9 / PA10 | P3-29 / P3-28 |
 | Vref sense (3.3 V maximum) | PB0 | P2-29 |

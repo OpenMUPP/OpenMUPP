@@ -1,0 +1,526 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1400" viewBox="0 0 1400 1400" font-family="Liberation Sans, Arial, Helvetica, sans-serif">
+<rect width="1400" height="1400" fill="#ffffff"/>
+<text x="60" y="44" font-size="24" font-weight="bold" fill="#263238">OpenMUPP on the YD-CH32V307VCT6 development board (BOARD=ydch32v307)</text>
+<text x="60" y="70" font-size="15" fill="#546e7a">Probe signals only. 3.3 V targets only: no level shifters. SWDIO is one pin (PC11). Add a 330-470 Ω resistor from PB13 to PC10 (TCK link).</text>
+<text x="60" y="92" font-size="15" fill="#546e7a">Top view. Pin 1 of P2 and P3 is at the left, at the P4 and USB2 end. Nets from the board schematic V1.0.</text>
+<rect x="186" y="400" width="1096" height="600" rx="10" fill="#1f3b73" stroke="#0d2350" stroke-width="3"/>
+<rect x="978" y="665" width="334" height="97" rx="6" fill="#bcaaa4" stroke="#8d6e63" stroke-width="2"/>
+<text x="1145.0" y="718.5" font-size="14" font-weight="bold" fill="#3e2723" text-anchor="middle">Ethernet (not used)</text>
+<rect x="1222" y="775" width="90" height="56" rx="8" fill="#cfd8dc" stroke="#78909c" stroke-width="2"/>
+<text x="1212" y="808" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="end">USB1 (not used)</text>
+<rect x="504" y="575" width="140" height="140" fill="#212121" stroke="#9e9e9e" stroke-width="1.5"/>
+<text x="574.0" y="641.0" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">CH32V307</text>
+<text x="574.0" y="658.0" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">VCT6</text>
+<rect x="262" y="635" width="94" height="80" rx="4" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
+<text x="310" y="670" font-size="12" font-weight="bold" fill="#263238" text-anchor="middle">microSD</text>
+<text x="310" y="687" font-size="11" font-weight="bold" fill="#263238" text-anchor="middle">keep empty</text>
+<rect x="196" y="713" width="44" height="34" rx="5" fill="#cfd8dc" stroke="#607d8b" stroke-width="1.5"/>
+<circle cx="218" cy="730" r="10" fill="#37474f"/>
+<text x="248" y="735" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="start">BOOT0</text>
+<rect x="316" y="713" width="44" height="34" rx="5" fill="#cfd8dc" stroke="#607d8b" stroke-width="1.5"/>
+<circle cx="338" cy="730" r="10" fill="#37474f"/>
+<text x="368" y="735" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="start">USR (PB3)</text>
+<rect x="308" y="803" width="44" height="34" rx="5" fill="#cfd8dc" stroke="#607d8b" stroke-width="1.5"/>
+<circle cx="330" cy="820" r="10" fill="#37474f"/>
+<text x="360" y="825" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="start">RST</text>
+<rect x="416" y="764" width="18" height="12" rx="2" fill="#e53935" stroke="#ffffff"/>
+<text x="442" y="775" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">LED1 red: USB (PA15)</text>
+<rect x="416" y="789" width="18" height="12" rx="2" fill="#43a047" stroke="#ffffff"/>
+<text x="442" y="800" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">LED2 green: state (PB4)</text>
+<rect x="416" y="814" width="18" height="12" rx="2" fill="#e53935" stroke="#ffffff"/>
+<text x="442" y="825" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">PWR</text>
+<text x="40" y="528" font-size="13" font-weight="bold" fill="#455a64">P4: SWD of the</text>
+<text x="40" y="544" font-size="13" font-weight="bold" fill="#455a64">board MCU</text>
+<rect x="196" y="558" width="24" height="24" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="208" cy="570" r="5" fill="#2b2b2b"/>
+<line x1="197" y1="570" x2="110" y2="570" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="40" y="556" width="70" height="28" rx="6" fill="#c62828" stroke="#b0bec5"/>
+<text x="75" y="575" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">3V3</text>
+<circle cx="208" cy="606" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="208" cy="606" r="5" fill="#2b2b2b"/>
+<line x1="197" y1="606" x2="110" y2="606" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="40" y="592" width="70" height="28" rx="6" fill="#eceff1" stroke="#b0bec5"/>
+<text x="75" y="611" font-size="13" font-weight="bold" fill="#90a4ae" text-anchor="middle">SWDIO</text>
+<circle cx="208" cy="642" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="208" cy="642" r="5" fill="#2b2b2b"/>
+<line x1="197" y1="642" x2="110" y2="642" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="40" y="628" width="70" height="28" rx="6" fill="#eceff1" stroke="#b0bec5"/>
+<text x="75" y="647" font-size="13" font-weight="bold" fill="#90a4ae" text-anchor="middle">SWCLK</text>
+<circle cx="208" cy="678" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="208" cy="678" r="5" fill="#2b2b2b"/>
+<line x1="197" y1="678" x2="110" y2="678" stroke="#90a4ae" stroke-width="1.5"/>
+<rect x="40" y="664" width="70" height="28" rx="6" fill="#263238" stroke="#b0bec5"/>
+<text x="75" y="683" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">GND</text>
+<rect x="156" y="760" width="112" height="84" rx="8" fill="#cfd8dc" stroke="#78909c" stroke-width="2"/>
+<rect x="166" y="772" width="82" height="60" rx="10" fill="#90a4ae" stroke="#607d8b" stroke-width="1.5"/>
+<text x="207" y="802" transform="rotate(-90 207 802)" font-size="13" font-weight="bold" fill="#263238" text-anchor="middle" dominant-baseline="central">USB2</text>
+<text x="146" y="796" font-size="13" font-weight="bold" fill="#263238" text-anchor="end">USB2:</text>
+<text x="146" y="814" font-size="13" font-weight="bold" fill="#263238" text-anchor="end">to the host</text>
+<rect x="218" y="460" width="24" height="24" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="230" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="230" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="230" cy="428" r="5" fill="#2b2b2b"/>
+<rect x="218" y="960" width="24" height="24" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="230" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="230" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="230" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="213.0" y="336.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="230.0" y="365.0" transform="rotate(-90 230.0 365.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<rect x="213.0" y="490.0" width="34" height="58.0" rx="6" fill="#c62828" stroke="#c62828" stroke-width="1.2"/>
+<text x="230.0" y="519.0" transform="rotate(-90 230.0 519.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">3V3</text>
+<rect x="213.0" y="852.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="230.0" y="881.0" transform="rotate(-90 230.0 881.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<rect x="213.0" y="1006.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="230.0" y="1035.0" transform="rotate(-90 230.0 1035.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<circle cx="274" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="274" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="274" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="274" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="274" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="274" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="274" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="274" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="257.0" y="336.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="274.0" y="365.0" transform="rotate(-90 274.0 365.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<rect x="257.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="274.0" y="519.0" transform="rotate(-90 274.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">VBAK</text>
+<rect x="257.0" y="852.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="274.0" y="881.0" transform="rotate(-90 274.0 881.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<rect x="257.0" y="1006.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="274.0" y="1035.0" transform="rotate(-90 274.0 1035.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<circle cx="318" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="318" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="318" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="318" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="318" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="318" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="318" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="318" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="301.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="318.0" y="365.0" transform="rotate(-90 318.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PB8</text>
+<rect x="301.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="318.0" y="519.0" transform="rotate(-90 318.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB9</text>
+<rect x="301.0" y="552.0" width="34" height="48.2" rx="6" fill="#5e92f3" stroke="#5e92f3" stroke-width="1.2"/>
+<text x="318.0" y="576.1" transform="rotate(-90 318.0 576.1)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">TRST</text>
+<rect x="301.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="318.0" y="881.0" transform="rotate(-90 318.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE1</text>
+<rect x="301.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="318.0" y="1035.0" transform="rotate(-90 318.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE0</text>
+<circle cx="362" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="362" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="362" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="362" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="362" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="362" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="362" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="362" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="345.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="362.0" y="365.0" transform="rotate(-90 362.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB6</text>
+<rect x="345.0" y="261.4" width="34" height="70.6" rx="6" fill="#00897b" stroke="#00897b" stroke-width="1.2"/>
+<text x="362.0" y="296.7" transform="rotate(-90 362.0 296.7)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">USB2 D-</text>
+<rect x="345.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="362.0" y="519.0" transform="rotate(-90 362.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB7</text>
+<rect x="345.0" y="552.0" width="34" height="70.6" rx="6" fill="#00897b" stroke="#00897b" stroke-width="1.2"/>
+<text x="362.0" y="587.3" transform="rotate(-90 362.0 587.3)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">USB2 D+</text>
+<rect x="345.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="362.0" y="881.0" transform="rotate(-90 362.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE3</text>
+<rect x="345.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="362.0" y="1035.0" transform="rotate(-90 362.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE2</text>
+<circle cx="406" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="406" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="406" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="406" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="406" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="406" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="406" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="406" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="389.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="406.0" y="365.0" transform="rotate(-90 406.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB4</text>
+<rect x="389.0" y="205.1" width="34" height="126.9" rx="6" fill="#00897b" stroke="#00897b" stroke-width="1.2"/>
+<text x="406.0" y="268.6" transform="rotate(-90 406.0 268.6)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">LED2 (on board)</text>
+<rect x="389.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="406.0" y="519.0" transform="rotate(-90 406.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PB5</text>
+<rect x="389.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="406.0" y="881.0" transform="rotate(-90 406.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE5</text>
+<rect x="389.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="406.0" y="1035.0" transform="rotate(-90 406.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE4</text>
+<circle cx="450" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="450" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="450" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="450" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="450" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="450" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="450" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="450" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="433.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="450.0" y="365.0" transform="rotate(-90 450.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD7</text>
+<rect x="433.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="450.0" y="519.0" transform="rotate(-90 450.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB3</text>
+<rect x="433.0" y="552.0" width="34" height="68.8" rx="6" fill="#00897b" stroke="#00897b" stroke-width="1.2"/>
+<text x="450.0" y="586.4" transform="rotate(-90 450.0 586.4)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">USR key</text>
+<rect x="433.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="450.0" y="881.0" transform="rotate(-90 450.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC13</text>
+<rect x="433.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="450.0" y="1035.0" transform="rotate(-90 450.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE6</text>
+<circle cx="494" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="494" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="494" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="494" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="494" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="494" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="494" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="494" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="477.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="494.0" y="365.0" transform="rotate(-90 494.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD5</text>
+<rect x="477.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="494.0" y="519.0" transform="rotate(-90 494.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD6</text>
+<rect x="477.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="494.0" y="881.0" transform="rotate(-90 494.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC15</text>
+<rect x="477.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="494.0" y="1035.0" transform="rotate(-90 494.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC14</text>
+<circle cx="538" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="538" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="538" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="538" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="538" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="538" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="538" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="538" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="521.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="538.0" y="365.0" transform="rotate(-90 538.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD3</text>
+<rect x="521.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="538.0" y="519.0" transform="rotate(-90 538.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD4</text>
+<rect x="521.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="538.0" y="881.0" transform="rotate(-90 538.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC1</text>
+<rect x="521.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="538.0" y="1035.0" transform="rotate(-90 538.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC0</text>
+<circle cx="582" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="582" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="582" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="582" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="582" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="582" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="582" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="582" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="565.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="582.0" y="365.0" transform="rotate(-90 582.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD1</text>
+<rect x="565.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="582.0" y="519.0" transform="rotate(-90 582.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD2</text>
+<rect x="565.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="582.0" y="881.0" transform="rotate(-90 582.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC3</text>
+<rect x="565.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="582.0" y="1035.0" transform="rotate(-90 582.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC2</text>
+<circle cx="626" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="626" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="626" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="626" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="626" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="626" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="626" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="626" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="609.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="626.0" y="365.0" transform="rotate(-90 626.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC12</text>
+<rect x="609.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="626.0" y="519.0" transform="rotate(-90 626.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD0</text>
+<rect x="609.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="626.0" y="881.0" transform="rotate(-90 626.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA1</text>
+<rect x="609.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="626.0" y="1035.0" transform="rotate(-90 626.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA0</text>
+<circle cx="670" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="670" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="670" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="670" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="670" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="670" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="670" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="670" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="653.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="670.0" y="365.0" transform="rotate(-90 670.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PC10</text>
+<rect x="653.0" y="256.1" width="34" height="75.9" rx="6" fill="#fbc02d" stroke="#fbc02d" stroke-width="1.2"/>
+<text x="670.0" y="294.0" transform="rotate(-90 670.0 294.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">TCK link</text>
+<rect x="653.0" y="167.2" width="34" height="84.9" rx="6" fill="#fbc02d" stroke="#fbc02d" stroke-width="1.2"/>
+<text x="670.0" y="209.6" transform="rotate(-90 670.0 209.6)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">R to PB13</text>
+<rect x="653.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="670.0" y="519.0" transform="rotate(-90 670.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PC11</text>
+<rect x="653.0" y="552.0" width="34" height="56.3" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="670.0" y="580.1" transform="rotate(-90 670.0 580.1)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">SWDIO</text>
+<rect x="653.0" y="612.3" width="34" height="40.2" rx="6" fill="#5e92f3" stroke="#5e92f3" stroke-width="1.2"/>
+<text x="670.0" y="632.4" transform="rotate(-90 670.0 632.4)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">TMS</text>
+<rect x="653.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="670.0" y="881.0" transform="rotate(-90 670.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA3</text>
+<rect x="653.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="670.0" y="1035.0" transform="rotate(-90 670.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA2</text>
+<circle cx="714" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="714" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="714" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="714" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="714" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="714" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="714" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="714" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="697.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="714.0" y="365.0" transform="rotate(-90 714.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA14</text>
+<rect x="697.0" y="252.4" width="34" height="79.6" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="714.0" y="292.2" transform="rotate(-90 714.0 292.2)" font-size="13" font-weight="bold" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">P4 SWCLK</text>
+<rect x="697.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="714.0" y="519.0" transform="rotate(-90 714.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA15</text>
+<rect x="697.0" y="552.0" width="34" height="126.9" rx="6" fill="#00897b" stroke="#00897b" stroke-width="1.2"/>
+<text x="714.0" y="615.4" transform="rotate(-90 714.0 615.4)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">LED1 (on board)</text>
+<rect x="697.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="714.0" y="881.0" transform="rotate(-90 714.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA5</text>
+<rect x="697.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="714.0" y="1035.0" transform="rotate(-90 714.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA4</text>
+<circle cx="758" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="758" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="758" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="758" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="758" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="758" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="758" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="758" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="741.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="758.0" y="365.0" transform="rotate(-90 758.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA12</text>
+<rect x="741.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="758.0" y="519.0" transform="rotate(-90 758.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA13</text>
+<rect x="741.0" y="552.0" width="34" height="79.6" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="758.0" y="591.8" transform="rotate(-90 758.0 591.8)" font-size="13" font-weight="bold" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">P4 SWDIO</text>
+<rect x="741.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="758.0" y="881.0" transform="rotate(-90 758.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA7</text>
+<rect x="741.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="758.0" y="1035.0" transform="rotate(-90 758.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA6</text>
+<circle cx="802" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="802" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="802" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="802" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="802" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="802" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="802" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="802" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="785.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="802.0" y="365.0" transform="rotate(-90 802.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA10</text>
+<rect x="785.0" y="260.5" width="34" height="71.5" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="802.0" y="296.2" transform="rotate(-90 802.0 296.2)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">UART RX</text>
+<rect x="785.0" y="138.6" width="34" height="117.9" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="802.0" y="197.5" transform="rotate(-90 802.0 197.5)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">from target TX</text>
+<rect x="785.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="802.0" y="519.0" transform="rotate(-90 802.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA11</text>
+<rect x="785.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="802.0" y="881.0" transform="rotate(-90 802.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC5</text>
+<rect x="785.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="802.0" y="1035.0" transform="rotate(-90 802.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC4</text>
+<circle cx="846" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="846" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="846" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="846" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="846" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="846" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="846" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="846" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="829.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="846.0" y="365.0" transform="rotate(-90 846.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA8</text>
+<rect x="829.0" y="283.8" width="34" height="48.2" rx="6" fill="#5e92f3" stroke="#5e92f3" stroke-width="1.2"/>
+<text x="846.0" y="307.9" transform="rotate(-90 846.0 307.9)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">RTCK</text>
+<rect x="829.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="846.0" y="519.0" transform="rotate(-90 846.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA9</text>
+<rect x="829.0" y="552.0" width="34" height="71.5" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="846.0" y="587.8" transform="rotate(-90 846.0 587.8)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">UART TX</text>
+<rect x="829.0" y="627.5" width="34" height="103.6" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="846.0" y="679.3" transform="rotate(-90 846.0 679.3)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">to target RX</text>
+<rect x="829.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="846.0" y="881.0" transform="rotate(-90 846.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PB1</text>
+<rect x="829.0" y="1006.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="846.0" y="1035.0" transform="rotate(-90 846.0 1035.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB0</text>
+<rect x="829.0" y="1068.0" width="34" height="88.4" rx="6" fill="#ef6c00" stroke="#ef6c00" stroke-width="1.2"/>
+<text x="846.0" y="1112.2" transform="rotate(-90 846.0 1112.2)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">Vref sense</text>
+<rect x="829.0" y="1160.4" width="34" height="83.1" rx="6" fill="#ef6c00" stroke="#ef6c00" stroke-width="1.2"/>
+<text x="846.0" y="1202.0" transform="rotate(-90 846.0 1202.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">3.3 V max</text>
+<circle cx="890" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="890" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="890" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="890" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="890" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="890" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="890" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="890" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="873.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="890.0" y="365.0" transform="rotate(-90 890.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC8</text>
+<rect x="873.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="890.0" y="519.0" transform="rotate(-90 890.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC9</text>
+<rect x="873.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="890.0" y="881.0" transform="rotate(-90 890.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE7</text>
+<rect x="873.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="890.0" y="1035.0" transform="rotate(-90 890.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PB2</text>
+<circle cx="934" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="934" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="934" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="934" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="934" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="934" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="934" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="934" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="917.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="934.0" y="365.0" transform="rotate(-90 934.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC6</text>
+<rect x="917.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="934.0" y="519.0" transform="rotate(-90 934.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC7</text>
+<rect x="917.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="934.0" y="881.0" transform="rotate(-90 934.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE9</text>
+<rect x="917.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="934.0" y="1035.0" transform="rotate(-90 934.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE8</text>
+<circle cx="978" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="978" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="978" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="978" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="978" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="978" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="978" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="978" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="961.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="978.0" y="365.0" transform="rotate(-90 978.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD14</text>
+<rect x="961.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="978.0" y="519.0" transform="rotate(-90 978.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD15</text>
+<rect x="961.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="978.0" y="881.0" transform="rotate(-90 978.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE11</text>
+<rect x="961.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="978.0" y="1035.0" transform="rotate(-90 978.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE10</text>
+<circle cx="1022" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1022" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="1022" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1022" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="1022" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1022" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="1022" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1022" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="1005.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1022.0" y="365.0" transform="rotate(-90 1022.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD12</text>
+<rect x="1005.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1022.0" y="519.0" transform="rotate(-90 1022.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD13</text>
+<rect x="1005.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1022.0" y="881.0" transform="rotate(-90 1022.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE13</text>
+<rect x="1005.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1022.0" y="1035.0" transform="rotate(-90 1022.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE12</text>
+<circle cx="1066" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1066" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="1066" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1066" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="1066" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1066" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="1066" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1066" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="1049.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1066.0" y="365.0" transform="rotate(-90 1066.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD10</text>
+<rect x="1049.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1066.0" y="519.0" transform="rotate(-90 1066.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD11</text>
+<rect x="1049.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1066.0" y="881.0" transform="rotate(-90 1066.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE15</text>
+<rect x="1049.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1066.0" y="1035.0" transform="rotate(-90 1066.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PE14</text>
+<circle cx="1110" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1110" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="1110" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1110" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="1110" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1110" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="1110" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1110" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="1093.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1110.0" y="365.0" transform="rotate(-90 1110.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD8</text>
+<rect x="1093.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1110.0" y="519.0" transform="rotate(-90 1110.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD9</text>
+<rect x="1093.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1110.0" y="881.0" transform="rotate(-90 1110.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PB11</text>
+<rect x="1093.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1110.0" y="1035.0" transform="rotate(-90 1110.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PB10</text>
+<circle cx="1154" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1154" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="1154" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1154" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="1154" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1154" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="1154" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1154" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="1137.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1154.0" y="365.0" transform="rotate(-90 1154.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB14</text>
+<rect x="1137.0" y="291.8" width="34" height="40.2" rx="6" fill="#5e92f3" stroke="#5e92f3" stroke-width="1.2"/>
+<text x="1154.0" y="311.9" transform="rotate(-90 1154.0 311.9)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">TDO</text>
+<rect x="1137.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1154.0" y="519.0" transform="rotate(-90 1154.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB15</text>
+<rect x="1137.0" y="552.0" width="34" height="40.2" rx="6" fill="#5e92f3" stroke="#5e92f3" stroke-width="1.2"/>
+<text x="1154.0" y="572.1" transform="rotate(-90 1154.0 572.1)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">TDI</text>
+<rect x="1137.0" y="852.0" width="34" height="58.0" rx="6" fill="#c62828" stroke="#c62828" stroke-width="1.2"/>
+<text x="1154.0" y="881.0" transform="rotate(-90 1154.0 881.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">3V3</text>
+<rect x="1137.0" y="1006.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="1154.0" y="1035.0" transform="rotate(-90 1154.0 1035.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<circle cx="1198" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1198" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="1198" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1198" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="1198" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1198" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="1198" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1198" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="1181.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1198.0" y="365.0" transform="rotate(-90 1198.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB12</text>
+<rect x="1181.0" y="283.8" width="34" height="48.2" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="1198.0" y="307.9" transform="rotate(-90 1198.0 307.9)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">SRST</text>
+<rect x="1181.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="1198.0" y="519.0" transform="rotate(-90 1198.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PB13</text>
+<rect x="1181.0" y="552.0" width="34" height="56.3" rx="6" fill="#1565c0" stroke="#1565c0" stroke-width="1.2"/>
+<text x="1198.0" y="580.1" transform="rotate(-90 1198.0 580.1)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">SWCLK</text>
+<rect x="1181.0" y="612.3" width="34" height="40.2" rx="6" fill="#5e92f3" stroke="#5e92f3" stroke-width="1.2"/>
+<text x="1198.0" y="632.4" transform="rotate(-90 1198.0 632.4)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">TCK</text>
+<rect x="1181.0" y="852.0" width="34" height="58.0" rx="6" fill="#c62828" stroke="#c62828" stroke-width="1.2"/>
+<text x="1198.0" y="881.0" transform="rotate(-90 1198.0 881.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">3V3</text>
+<rect x="1181.0" y="1006.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="1198.0" y="1035.0" transform="rotate(-90 1198.0 1035.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<circle cx="1242" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1242" cy="472" r="5" fill="#2b2b2b"/>
+<circle cx="1242" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1242" cy="428" r="5" fill="#2b2b2b"/>
+<circle cx="1242" cy="972" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1242" cy="972" r="5" fill="#2b2b2b"/>
+<circle cx="1242" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
+<circle cx="1242" cy="928" r="5" fill="#2b2b2b"/>
+<rect x="1225.0" y="336.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="1242.0" y="365.0" transform="rotate(-90 1242.0 365.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<rect x="1225.0" y="490.0" width="34" height="58.0" rx="6" fill="#c62828" stroke="#c62828" stroke-width="1.2"/>
+<text x="1242.0" y="519.0" transform="rotate(-90 1242.0 519.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">5V</text>
+<rect x="1225.0" y="852.0" width="34" height="58.0" rx="6" fill="#c62828" stroke="#c62828" stroke-width="1.2"/>
+<text x="1242.0" y="881.0" transform="rotate(-90 1242.0 881.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">3V3</text>
+<rect x="1225.0" y="1006.0" width="34" height="58.0" rx="6" fill="#263238" stroke="#263238" stroke-width="1.2"/>
+<text x="1242.0" y="1035.0" transform="rotate(-90 1242.0 1035.0)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">GND</text>
+<text x="214" y="433" font-size="11" font-weight="bold" fill="#b0bec5" text-anchor="end">2</text>
+<text x="214" y="477" font-size="11" font-weight="bold" fill="#b0bec5" text-anchor="end">1</text>
+<text x="214" y="933" font-size="11" font-weight="bold" fill="#b0bec5" text-anchor="end">2</text>
+<text x="214" y="977" font-size="11" font-weight="bold" fill="#b0bec5" text-anchor="end">1</text>
+<text x="1258" y="433" font-size="11" font-weight="bold" fill="#b0bec5" text-anchor="start">48</text>
+<text x="1258" y="477" font-size="11" font-weight="bold" fill="#b0bec5" text-anchor="start">47</text>
+<text x="1258" y="933" font-size="11" font-weight="bold" fill="#b0bec5" text-anchor="start">48</text>
+<text x="1258" y="977" font-size="11" font-weight="bold" fill="#b0bec5" text-anchor="start">47</text>
+<text x="174" y="408" font-size="16" font-weight="bold" fill="#263238" text-anchor="end">P3</text>
+<text x="174" y="1004" font-size="16" font-weight="bold" fill="#263238" text-anchor="end">P2</text>
+<path d="M 1198 461 L 1198 450.0 L 670 450.0 L 670 439" fill="none" stroke="#fbc02d" stroke-width="4" stroke-dasharray="9 5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="920.0" y="442.0" width="72" height="16" rx="3" fill="#fff8e1" stroke="#8d6e1f" stroke-width="2"/>
+<text x="956.0" y="454.0" font-size="11" font-weight="bold" fill="#5d4037" text-anchor="middle">330-470 Ω</text>
+<text x="60" y="1270" font-size="14" fill="#263238">• USB2 (bottom left, USB high speed, PB6/PB7): connect the host here. USB1 and the Ethernet jack are not used.</text>
+<text x="60" y="1292" font-size="14" fill="#263238">• P4 (SWD of the CH32V307 itself, PA13/PA14): write the firmware here with a WCH-LinkE. Do not connect the target.</text>
+<text x="60" y="1314" font-size="14" fill="#263238">• TCK link: connect a 330-470 Ω resistor from PB13 (P3-45) to PC10 (P3-22). Do not connect PC10 to the target.</text>
+<text x="60" y="1336" font-size="14" fill="#263238">• Keep the microSD slot empty: PC10 and PC11 are also DAT2 and DAT3 of the card.</text>
+<rect x="60" y="1354" width="22" height="22" rx="5" fill="#1565c0" stroke="#b0bec5"/>
+<text x="90" y="1370" font-size="14" fill="#263238">SWD</text>
+<rect x="138.04" y="1354" width="22" height="22" rx="5" fill="#5e92f3" stroke="#b0bec5"/>
+<text x="168.04" y="1370" font-size="14" fill="#263238">JTAG</text>
+<rect x="224.76" y="1354" width="22" height="22" rx="5" fill="#7b1fa2" stroke="#b0bec5"/>
+<text x="254.76" y="1370" font-size="14" fill="#263238">UART bridge</text>
+<rect x="365.38" y="1354" width="22" height="22" rx="5" fill="#ef6c00" stroke="#b0bec5"/>
+<text x="395.38" y="1370" font-size="14" fill="#263238">Vref sense</text>
+<rect x="495.36" y="1354" width="22" height="22" rx="5" fill="#fbc02d" stroke="#b0bec5"/>
+<text x="525.36" y="1370" font-size="14" fill="#263238">Wire / link</text>
+<rect x="633.04" y="1354" width="22" height="22" rx="5" fill="#00897b" stroke="#b0bec5"/>
+<text x="663.04" y="1370" font-size="14" fill="#263238">On-board I/O</text>
+<rect x="780.38" y="1354" width="22" height="22" rx="5" fill="#c62828" stroke="#b0bec5"/>
+<text x="810.38" y="1370" font-size="14" fill="#263238">Power</text>
+<rect x="871.86" y="1354" width="22" height="22" rx="5" fill="#263238" stroke="#b0bec5"/>
+<text x="901.86" y="1370" font-size="14" fill="#263238">GND</text>
+<rect x="949.9" y="1354" width="22" height="22" rx="5" fill="#eceff1" stroke="#b0bec5"/>
+<text x="979.9" y="1370" font-size="14" fill="#263238">Not used</text>
+</svg>
