@@ -177,7 +177,7 @@ uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
 // High speed only for a personality with high-speed descriptors (512-byte
 // bulk endpoints, USB 2.0 section 5.8.3). The others have 64-byte bulk
 // endpoints, which are valid at full speed only.
-hw::UsbDevice::Speed maxSpeedOf([[maybe_unused]] Personality personality) {
+constexpr hw::UsbDevice::Speed maxSpeedOf([[maybe_unused]] Personality personality) {
 #if defined(MUPP_WITH_CMSIS_DAP)
    if(personality == Personality::CmsisDap) {
       return hw::UsbDevice::Speed::High;
@@ -185,6 +185,9 @@ hw::UsbDevice::Speed maxSpeedOf([[maybe_unused]] Personality personality) {
 #endif
    return hw::UsbDevice::Speed::Full;
 }
+#if defined(MUPP_WITH_WCH_LINK)
+static_assert(maxSpeedOf(Personality::WchLink) == hw::UsbDevice::Speed::Full, "WCH-Link has full-speed descriptors only");
+#endif
 #endif
 
 #if !defined(STM32F1) && !defined(__riscv)

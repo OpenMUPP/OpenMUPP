@@ -272,7 +272,7 @@ class Processor final : private TransferAbort {
    // The largest packet size: the buffers have this size. 512 (a
    // high-speed bulk endpoint) on the CH32V307 and in the host tests; 64
    // on the STM32 boards, which have full-speed USB only and less RAM.
-#if defined(__arm__)
+#if defined(__arm__) && !defined(UNIT_TESTING)
    static constexpr std::size_t maxPacketSize = fullSpeedPacketSize;
 #else
    static constexpr std::size_t maxPacketSize = 512;
