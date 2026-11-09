@@ -111,6 +111,27 @@ The WCH-Link personality has no high-speed descriptors, so `UsbStack` limits the
 - The USBHS packet pool has 4096 bytes. The high-speed endpoints use 2576 bytes:
   the double-buffered DAP OUT endpoint (1024), the DAP IN endpoint (512), the notification endpoint (16) and the CDC data endpoints (1024).
 
+Hardware test on the YD-CH32V307VCT6 (Linux, USB 3 port, target STM32F103ZET6 at 64 MHz):
+
+- The probe enumerates at 480 Mbit/s with 512-byte bulk endpoints. The device qualifier and the other-speed configuration are correct.
+- `DAP_Info` reports the packet size 512. OpenOCD and pyOCD use it.
+- OpenOCD passes on SWD (1000 to 20000 kHz) and JTAG (1000 to 9000 kHz). pyOCD passes on SWD at 1000 and 4500 kHz, and on JTAG at 1000 kHz.
+- The serial port receives 8 KiB at 115200 baud with no error. The DAP interface works after it.
+- Not tested: a full-speed host or hub, and Windows.
+
+`tools/flash_benchmark.py` with a 32 KiB image, the same wiring for both images (times in seconds):
+
+| Transport | kHz | Write, full speed | Write, high speed | Read, full speed | Read, high speed |
+|---|---:|---:|---:|---:|---:|
+| SWD | 1000 | 1.31 | 1.31 | 0.46 | 0.42 |
+| SWD | 4000 | 1.28 | 1.27 | 0.22 | 0.19 |
+| SWD | 4500 | 1.26 | 1.26 | 0.16 | 0.14 |
+| JTAG | 1000 | 2.19 | 1.60 | 1.65 | 1.08 |
+| JTAG | 4500 | 1.92 | 1.38 | 1.39 | 0.85 |
+| JTAG | 9000 | 1.91 | 1.39 | 1.37 | 0.82 |
+
+The flash of the target limits the SWD write. OpenOCD sends each JTAG scan as a `DAP_JTAG_Sequence` and waits for its response, so JTAG gains most from the shorter USB round trip.
+
 ### MS OS 2.0 descriptors
 
 Windows 8.1 and later bind WinUSB to interface 0 of the CMSIS-DAP personality with no driver installation.
