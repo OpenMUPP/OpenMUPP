@@ -255,10 +255,16 @@ void Processor::submit(art::span<const uint8_t> request) {
       return;
    }
    const std::size_t index = (requestFirst_ + requests_) % packetCount;
-   const std::size_t length = std::min(request.size(), requestBuffer_[index].size());
+   // One byte more than packetSize_ is kept, so execute() sees a request
+   // that is too long.
+   const std::size_t length = std::min(request.size(), packetSize_ + 1);
    std::copy_n(request.begin(), length, requestBuffer_[index].begin());
-   requestLength_[index] = static_cast<uint8_t>(length);
+   requestLength_[index] = static_cast<uint16_t>(length);
    ++requests_;
+}
+
+void Processor::setPacketSize(std::size_t size) {
+   packetSize_ = std::clamp(size, fullSpeedPacketSize, maxPacketSize);
 }
 
 bool Processor::runNext() {
@@ -288,7 +294,7 @@ art::span<uint8_t> Processor::request(std::size_t index) {
 
 bool Processor::isQueued(std::size_t index) {
    const auto packet = request(index);
-   return packet[0] == command::queueCommands && packet.size() <= packetSize;
+   return packet[0] == command::queueCommands && packet.size() <= packetSize_;
 }
 
 // The DAP_QueueCommands packets wait for the next packet with another
@@ -309,8 +315,8 @@ bool Processor::mustWait() {
 // Runs a packet and appends its response.
 void Processor::execute(art::span<const uint8_t> request) {
    const std::size_t slot = (responseFirst_ + responses_) % packetCount;
-   PacketWriter out({ responseBuffer_[slot].data(), packetSize });
-   if(request.size() > packetSize) {
+   PacketWriter out({ responseBuffer_[slot].data(), packetSize_ });
+   if(request.size() > packetSize_) {
       out.u8(command::invalid);
    } else {
       PacketReader in(request);
@@ -319,7 +325,7 @@ void Processor::execute(art::span<const uint8_t> request) {
          out.u8(command::invalid);
       }
    }
-   responseLength_[slot] = static_cast<uint8_t>(out.size());
+   responseLength_[slot] = static_cast<uint16_t>(out.size());
    ++responses_;
 }
 
@@ -560,7 +566,7 @@ bool Processor::uartTransfer(PacketReader &in, PacketWriter &out) {
    }
    const std::size_t written = uart_->write(txData);
    const std::size_t rxRoom = std::min<std::size_t>(rxWanted, out.room() - header);
-   std::array<uint8_t, packetSize> rxData{};
+   std::array<uint8_t, maxPacketSize> rxData{};
    const std::size_t received = uart_->read({ rxData.data(), rxRoom });
    out.u8(command::uartTransfer);
    out.u8(uart_->status());
@@ -577,7 +583,7 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
    }
    out.u8(command::info);
    const auto text = [&out](const char *value) {
-      const std::size_t length = value == nullptr ? 0 : std::min(std::strlen(value), packetSize - 3);
+      const std::size_t length = value == nullptr ? 0 : std::min(std::strlen(value), fullSpeedPacketSize - 3);
       if(length == 0) {
          out.u8(0);
          return;
@@ -633,7 +639,7 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
       break;
    case infoId::packetSize:
       out.u8(2);
-      out.u16(static_cast<uint16_t>(packetSize));
+      out.u16(static_cast<uint16_t>(packetSize_));
       break;
    default:
       // Not available: the target device and board, the test domain timer,
