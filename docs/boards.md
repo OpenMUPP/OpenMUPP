@@ -462,7 +462,8 @@ On the YD board, USB, JTAG connect and SWD connect work.
 These parts are known to be incomplete:
 
 - USB runs at full speed (64-byte bulk endpoints). The descriptors have no 512-byte high-speed variant yet.
-- The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`). Their timing is not checked.
+- The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`).
+  The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)). The JTAG timing is not checked.
 - The JTAG fast path (SPI and DMA) and the one-wire engine (TIM10 and DMA2) are not tested on hardware.
 - There is no bootloader entry and no flash settings.
 
