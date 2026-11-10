@@ -682,7 +682,7 @@ A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `IN
 
 On the Mini, the WeAct STM32H523 and the YD-CH32V307VCT6, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
 The STM32F1 driver is `src/board/BoardJtagFast.cpp` (SPI and DMA1). The STM32H5 driver is `src/board/BoardJtagFastH5.cpp` (SPI v2 and GPDMA1).
-The CH32V307 driver is `src/board/BoardJtagFastV30x.cpp` (SPI2, SPI3, DMA1 and DMA2). It is tested with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)). With jumper wires, its JTAG-DP transfers fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
+The CH32V307 driver is `src/board/BoardJtagFastV30x.cpp` (SPI2, SPI3, DMA1 and DMA2). It is tested with OpenOCD and pyOCD from 1125 to 9000 kHz, with a wire as the TCK link (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)). With a resistor as the link, its JTAG-DP transfers fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
 A board has the fast path when its definition has `jtagFastPath` (see [Boards](boards.md)).
 The ST-Link/V2-1 does not have it.
@@ -711,7 +711,7 @@ The smallest SPI divider is `jtag::spiMinShift`:
 |---|---|---|---|---|
 | STM32F1 | 36 MHz APB1 clock, divided by 4 to 256 | 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 | 2 (18 MHz, half period 27.8 ns) | 25 ns (STM32F103x8/B datasheet) |
 | STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 16 to 256 | 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) and 8 (15.6 MHz, not tested) | 11.5 ns on PA6 (DS14540 table 109) |
-| CH32V307 | 144 MHz APB1 clock, divided by 16 to 256 | 9000, 4500, 2250, 1125, 562.5 | 4 (36 MHz) and 8 (18 MHz, half period 27.8 ns, not tested) | 10 ns (CH32V307DS0 table 4-28). Measured: 4 to 32 ns after the edge on PC10 with jumper wires. TMS crosstalk into PC10 breaks JTAG-DP transfers ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)) |
+| CH32V307 | 144 MHz APB1 clock, divided by 16 to 256 | 9000, 4500, 2250, 1125, 562.5 | 4 (36 MHz) and 8 (18 MHz, half period 27.8 ns, not tested) | 10 ns (CH32V307DS0 table 4-28). Measured with jumper wires: 4 to 10 ns after the edge on PC10 with a wire link, 20 to 32 ns with a 2.2 kΩ link. A resistor link breaks JTAG-DP transfers ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)) |
 
 Enable a smaller divider only after a hardware test at that speed passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:

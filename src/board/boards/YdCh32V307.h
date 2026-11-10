@@ -12,10 +12,9 @@ namespace board {
 // - TCK, TDI and TDO are on the SPI2 pins (PB13, PB15, PB14), as on the
 //   STM32F1 boards. One pin, PC11, is SWDIO out and in.
 // - JTAG fast path: TMS is on SPI3 MISO (PC11, remap). It needs a link
-//   from TCK (PB13) to SPI3 SCK (PC10). A rising TMS edge on PC11 couples
-//   into PC10 as an extra SPI3 clock, with a wire or a resistor as the link
-//   (docs/clock-pacing.md, issue #16). A link on a PCB must keep PC10 away
-//   from PC11. It is not tested. Keep the microSD slot empty:
+//   from TCK (PB13) to SPI3 SCK (PC10). Use a wire: with a resistor, SPI3
+//   counts extra clocks on PC10 (docs/clock-pacing.md, issue #16). The link
+//   on a probe PCB is not tested. Keep the microSD slot empty:
 //   PC10 and PC11 are also its DAT2 and DAT3.
 // - The on-board LEDs are active high: LED2 (green, PB4) shows the state,
 //   LED1 (red, PA15) the USB state. The USR key (PB3) is active low.
