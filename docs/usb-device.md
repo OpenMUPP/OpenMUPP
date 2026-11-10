@@ -1,6 +1,7 @@
 # USB device
 
 The dongle is a USB full-speed composite device with the USB identity of the original Versaloon firmware.
+The CMSIS-DAP personality of the CH32V307 also runs at high speed (see [High speed](#high-speed-ch32v307)).
 Thus unmodified OpenOCD (`vsllink` driver) finds it.
 `src/usb/UsbDescriptors.h` has the descriptors.
 
@@ -86,11 +87,50 @@ It sends each response as one IN packet.
 A response of 64 bytes has no zero-length packet.
 The processor holds up to 4 packets.
 When all 4 slots are in use, the OUT endpoint NAKs until the host reads a response.
-`DAP_Info` reports the packet size 64 and the packet count 4.
+`DAP_Info` reports the packet size 64 (512 at high speed) and the packet count 4.
 When a bus reset or `SET_CONFIGURATION 0` closes the interface, the function calls `Processor::hostGone()`.
 A suspend only releases the target pins, because the USB transfer state stays.
 When a `DAP_QueueCommands` packet takes the last free slot, the processor runs the queue at once.
 Thus queued packets alone do not hold the OUT endpoint, and each queued packet gets its response.
+
+### High speed (CH32V307)
+
+The USBHS controller of the CH32V307 runs at high speed (480 Mbit/s) when the host or hub supports it.
+Only the CMSIS-DAP personality uses high speed.
+The WCH-Link personality has no high-speed descriptors, so `UsbStack` limits the controller to full speed for it.
+
+- At high speed, a bulk endpoint must have 512-byte packets (USB 2.0 section 5.8.3).
+  Thus the CMSIS-DAP personality has a second configuration descriptor with 512-byte bulk endpoints (`dap::highSpeedConfigurationDescriptor`).
+  The notification endpoint keeps 16 bytes and 16 ms (`bInterval` 8: 2^7 microframes).
+- The libArT `usb::Device` serves the configuration of the speed of the last bus reset.
+  It also serves the device qualifier and the other-speed configuration, as USB 2.0 requires of a high-speed device.
+- At `SET_CONFIGURATION`, `CmsisDapFunction` sets the packet size of the processor to the `wMaxPacketSize` of the endpoint: 64 or 512 bytes.
+  `DAP_Info` reports this value. The processor buffers have 512 bytes on the CH32V307 and 64 bytes on the STM32 boards.
+- The CDC-ACM serial port has an RX queue of 512 bytes, so that one high-speed packet fits.
+  It sends 64-byte IN packets. At high speed these are short packets, so no zero-length packet follows.
+- The USBHS packet pool has 4096 bytes. The high-speed endpoints use 2576 bytes:
+  the double-buffered DAP OUT endpoint (1024), the DAP IN endpoint (512), the notification endpoint (16) and the CDC data endpoints (1024).
+
+Hardware test on the YD-CH32V307VCT6 (Linux, USB 3 port, target STM32F103ZET6 at 64 MHz):
+
+- The probe enumerates at 480 Mbit/s with 512-byte bulk endpoints. The device qualifier and the other-speed configuration are correct.
+- `DAP_Info` reports the packet size 512. OpenOCD and pyOCD use it.
+- OpenOCD passes on SWD (1000 to 20000 kHz) and JTAG (1000 to 9000 kHz). pyOCD passes on SWD at 1000 and 4500 kHz, and on JTAG at 1000 kHz.
+- The serial port receives 8 KiB at 115200 baud with no error. The DAP interface works after it.
+- Not tested: a full-speed host or hub, and Windows.
+
+`tools/flash_benchmark.py` with a 32 KiB image, the same wiring for both images (times in seconds):
+
+| Transport | kHz | Write, full speed | Write, high speed | Read, full speed | Read, high speed |
+|---|---:|---:|---:|---:|---:|
+| SWD | 1000 | 1.31 | 1.31 | 0.46 | 0.42 |
+| SWD | 4000 | 1.28 | 1.27 | 0.22 | 0.19 |
+| SWD | 4500 | 1.26 | 1.26 | 0.16 | 0.14 |
+| JTAG | 1000 | 2.19 | 1.60 | 1.65 | 1.08 |
+| JTAG | 4500 | 1.92 | 1.38 | 1.39 | 0.85 |
+| JTAG | 9000 | 1.91 | 1.39 | 1.37 | 0.82 |
+
+The flash of the target limits the SWD write. OpenOCD sends each JTAG scan as a `DAP_JTAG_Sequence` and waits for its response, so JTAG gains most from the shorter USB round trip.
 
 ### MS OS 2.0 descriptors
 
@@ -640,28 +680,30 @@ A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `IN
 
 ### JTAG fast path
 
-On the Mini and the WeAct STM32H523, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
+On the Mini, the WeAct STM32H523 and the YD-CH32V307VCT6, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
 The STM32F1 driver is `src/board/BoardJtagFast.cpp` (SPI and DMA1). The STM32H5 driver is `src/board/BoardJtagFastH5.cpp` (SPI v2 and GPDMA1).
+The CH32V307 driver is `src/board/BoardJtagFastV30x.cpp` (SPI2, SPI3, DMA1 and DMA2). It is tested with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)). With jumper wires, its JTAG-DP transfers fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
 A board has the fast path when its definition has `jtagFastPath` (see [Boards](boards.md)).
 The ST-Link/V2-1 does not have it.
 
-| Signal | Pin | Peripheral | STM32F1 DMA1 channel | STM32H5 GPDMA1 channel |
-|---|---|---|---|---|
-| TCK | PB13 | SPI2 SCK, master | - | - |
-| TDO | PB14 | SPI2 MISO | 4 | 1 |
-| TDI | PB15 | SPI2 MOSI | 5 | 2 |
-| TCK link | PB3 | SPI1 SCK, slave (remapped on the STM32F1) | - | - |
-| TMS | PB4 (STM32F1), PA6 (STM32H5) | SPI1 MISO (remapped on the STM32F1) | 3 | 0 |
+| Signal | Pin | Peripheral | STM32F1 DMA1 channel | STM32H5 GPDMA1 channel | CH32V307 DMA channel |
+|---|---|---|---|---|---|
+| TCK | PB13 | SPI2 SCK, master | - | - | - |
+| TDO | PB14 | SPI2 MISO | 4 | 1 | DMA1 4 |
+| TDI | PB15 | SPI2 MOSI | 5 | 2 | DMA1 5 |
+| TCK link | PB3 (CH32V307: PC10) | SPI1 SCK, slave (remapped on the STM32F1). CH32V307: SPI3 SCK, slave, remapped | - | - | - |
+| TMS | PB4 (STM32F1), PA6 (STM32H5), PC11 (CH32V307) | SPI1 MISO (remapped on the STM32F1). CH32V307: SPI3 MISO, remapped | 3 | 0 | DMA2 2 |
 
-The board links TCK (PB13) to PB3, so TCK also clocks SPI1.
+The board links TCK (PB13) to the slave SCK pin, so TCK also clocks the slave SPI.
+The slave SPI is SPI1, or SPI3 on the CH32V307.
 Both SPIs use clock polarity high and the second clock edge, LSB first.
 TDI and TMS change at the falling edge.
 The target and SPI2 sample at the rising edge.
 The SPI clock idles high, so TCK also idles high between shifts.
 Only the rising edge clocks the TAP, so the idle level has no effect on the target.
 
-SPI1 makes TMS valid a time tv(SO) after the falling edge.
+The slave SPI makes TMS valid a time tv(SO) after the falling edge.
 The half period must be longer than tv(SO), the delay of the TCK link and the TMS setup time of the target.
 The smallest SPI divider is `jtag::spiMinShift`:
 
@@ -669,16 +711,19 @@ The smallest SPI divider is `jtag::spiMinShift`:
 |---|---|---|---|---|
 | STM32F1 | 36 MHz APB1 clock, divided by 4 to 256 | 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 | 2 (18 MHz, half period 27.8 ns) | 25 ns (STM32F103x8/B datasheet) |
 | STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 16 to 256 | 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) and 8 (15.6 MHz, not tested) | 11.5 ns on PA6 (DS14540 table 109) |
+| CH32V307 | 144 MHz APB1 clock, divided by 16 to 256 | 9000, 4500, 2250, 1125, 562.5 | 4 (36 MHz) and 8 (18 MHz, half period 27.8 ns, not tested) | 10 ns (CH32V307DS0 table 4-28). Measured: 4 to 32 ns after the edge on PC10 with jumper wires. TMS crosstalk into PC10 breaks JTAG-DP transfers ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)) |
 
 Enable a smaller divider only after a hardware test at that speed passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
 
 - The SPI gives the fastest SPI speed that is not above the request.
-- Bit-bang gives the request. For the choice, its speed counts as the request, up to `jtag::bitBangMaxKHz`: 1000 kHz on the STM32F1, 3000 kHz on the STM32H5.
+- Bit-bang gives the request. For the choice, its speed counts as the request, up to `jtag::bitBangMaxKHz`: 1000 kHz on the STM32F1 and the CH32V307, 3000 kHz on the STM32H5.
 - The SPI wins when its speed is equal to or higher than the bit-bang speed.
 - Adaptive clocking (0 kHz) always uses bit-bang.
 
 STM32F1 examples: 9000 kHz and more give 9 MHz SPI, 4500 kHz gives 4.5 MHz SPI, 4000 kHz gives 2.25 MHz SPI, 2000 kHz gives 1.125 MHz SPI, 1000 kHz gives 1 MHz bit-bang.
+The CH32V307 has the SPI speeds of the STM32F1, so the STM32F1 examples apply to it too.
+On the CH32V307, the bit-bang engine gives 1106 kHz at a request of 1124 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
 STM32H5 examples: 7813 kHz and more give 7.8 MHz SPI, 4000 kHz gives 3.9 MHz SPI, 3000 kHz gives bit-bang, 2000 kHz gives bit-bang.
 On the STM32F1, the value of `jtag::bitBangMaxKHz` is conservative: 1000 kHz is the rate that was checked with the flash benchmark.
 The fastest rate of the bit-bang loop on the STM32F1 is not measured.

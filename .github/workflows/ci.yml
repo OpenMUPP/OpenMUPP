@@ -86,6 +86,7 @@ jobs:
           # The stub image and the firmware image of the CH32V307 port: build and size check only
           - ydch32v307
           - ydch32v307-cmsis-dap
+          - ydch32v307-wch-link
     steps:
       - uses: actions/checkout@v5
         with:

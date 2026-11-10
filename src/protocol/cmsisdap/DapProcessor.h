@@ -266,9 +266,18 @@ class PacketWriter;
 
 class Processor final : private TransferAbort {
    public:
-   // The size of a packet, and the packets in flight. DAP_Info reports
-   // both.
-   static constexpr std::size_t packetSize = 64;
+   // The packet size of a full-speed USB bulk endpoint, the size after
+   // construction.
+   static constexpr std::size_t fullSpeedPacketSize = 64;
+   // The largest packet size: the buffers have this size. 512 (a
+   // high-speed bulk endpoint) on the CH32V307 and in the host tests; 64
+   // on the STM32 boards, which have full-speed USB only and less RAM.
+#if defined(__arm__) && !defined(UNIT_TESTING)
+   static constexpr std::size_t maxPacketSize = fullSpeedPacketSize;
+#else
+   static constexpr std::size_t maxPacketSize = 512;
+#endif
+   // The packets in flight. DAP_Info reports it and packetSize().
    static constexpr std::size_t packetCount = 4;
    // The pulse of DAP_ResetTarget on SRST
    static constexpr uint32_t resetPulseUs = 10'000;
@@ -299,8 +308,16 @@ class Processor final : private TransferAbort {
       return requests_ + responses_ < packetCount;
    }
 
+   // The packet size of the transport: fullSpeedPacketSize up to
+   // maxPacketSize, else it is clamped. Set it while no packet is in flight
+   // (after hostGone()): the stored packets keep their length.
+   void setPacketSize(std::size_t size);
+   [[nodiscard]] std::size_t packetSize() const {
+      return packetSize_;
+   }
+
    // Stores a request packet for run(). Needs canSubmit(). A packet of more
-   // than packetSize bytes gives ID_DAP_Invalid.
+   // than packetSize() bytes gives ID_DAP_Invalid.
    void submit(art::span<const uint8_t> request);
 
    // Runs the next stored packet. Returns false when no packet can run:
@@ -344,9 +361,9 @@ class Processor final : private TransferAbort {
    private:
    enum class Port : uint8_t { None, Swd, Jtag };
 
-   using Packet = std::array<uint8_t, packetSize>;
+   using Packet = std::array<uint8_t, maxPacketSize>;
    // One byte more than a packet: a longer request gives ID_DAP_Invalid.
-   using Request = std::array<uint8_t, packetSize + 1>;
+   using Request = std::array<uint8_t, maxPacketSize + 1>;
 
    [[nodiscard]] bool processCommand(PacketReader &in, PacketWriter &out, bool nested);
    void execute(art::span<const uint8_t> request);
@@ -412,19 +429,20 @@ class Processor final : private TransferAbort {
    uint32_t matchMask_{ 0 };
    uint32_t clockHz_{ defaultClockHz };
    uint32_t errorCount_{ 0 };
+   std::size_t packetSize_{ fullSpeedPacketSize };
 
    // The request packets in order: the packet that runs, the
    // DAP_QueueCommands packets that wait, and the packets that submit()
    // stored. And the response packets.
    std::array<Request, packetCount> requestBuffer_{};
-   std::array<uint8_t, packetCount> requestLength_{};
+   std::array<uint16_t, packetCount> requestLength_{};
    std::size_t requestFirst_{ 0 };
    std::size_t requests_{ 0 };
    bool running_{ false };
    // The requests at the front that DAP_TransferAbort stops
    std::size_t abortRequests_{ 0 };
    std::array<Packet, packetCount> responseBuffer_{};
-   std::array<uint8_t, packetCount> responseLength_{};
+   std::array<uint16_t, packetCount> responseLength_{};
    std::size_t responseFirst_{ 0 };
    std::size_t responses_{ 0 };
 };

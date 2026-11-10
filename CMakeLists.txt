@@ -215,12 +215,16 @@ if (CMAKE_CROSSCOMPILING)
     # app-8k image), the JTAG fast path on SPI v1 and DMA1, and the one-wire
     # engine of WCH-Link on the timers and DMA1. STM32H5 only: the entry into
     # the ROM bootloader, the JTAG fast path on SPI v2 and GPDMA, and the
-    # one-wire engine on TIM3 and GPDMA.
+    # one-wire engine on TIM3 and GPDMA. CH32V30X only: the JTAG fast path
+    # on SPI2, SPI3, DMA1 and DMA2, and the one-wire engine on TIM10 and DMA2.
     if (NOT STM32_FAMILY STREQUAL "STM32F1")
         list(APPEND _mupp_dropped_files "src/boot/Bootloader\\.cpp" "src/board/BoardJtagFast\\.cpp" "src/board/BoardRvSwd\\.cpp")
     endif ()
     if (NOT STM32_FAMILY STREQUAL "STM32H5")
         list(APPEND _mupp_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp" "src/board/BoardRvSwdH5\\.cpp")
+    endif ()
+    if (NOT CH32_FAMILY STREQUAL "CH32V30X")
+        list(APPEND _mupp_dropped_files "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp")
     endif ()
     foreach (_file ${_mupp_dropped_files})
         list(FILTER MUPP_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
@@ -319,7 +323,8 @@ if (CMAKE_CROSSCOMPILING)
     # They use -O2 instead of -Os. It comes after the -Os of
     # COMMON_OPTIONS, so it wins.
     set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardJtagFastH5.cpp
-            src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp src/board/BoardRvSwdH5.cpp PROPERTIES COMPILE_OPTIONS -O2)
+            src/board/BoardJtagFastV30x.cpp src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp src/board/BoardRvSwdH5.cpp
+            src/board/BoardRvSwdV30x.cpp PROPERTIES COMPILE_OPTIONS -O2)
     # Apply unified build configuration
     target_link_libraries(openmupp-objects PUBLIC art-build-config art::core ${MUPP_VENDOR_LIBS})
     target_include_directories(openmupp-objects PUBLIC ${PROJECT_INCLUDE_DIRS})

@@ -547,7 +547,7 @@ The width of a low pulse is the value of the bit. Thus code cannot make the bits
 On the Mini dongle, waits on the cycle counter gave a 1 of 120 to 530 ns, and the CH32V003 did not answer.
 Constants for the time of the code worked, but only for one board, one clock and one build.
 
-A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `src/board/BoardRvSwdH5.cpp` on the STM32H5). The engine (`src/rvswd/RvSwdEngine.h`) gives it the bits of a frame.
+A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `src/board/BoardRvSwdH5.cpp` on the STM32H5, `src/board/BoardRvSwdV30x.cpp` on the CH32V307). The engine (`src/rvswd/RvSwdEngine.h`) gives it the bits of a frame.
 
 | Board | SWDIO output | Timer channel | Update DMA | Sample channel and DMA |
 |---|---|---|---|---|
@@ -555,8 +555,9 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `sr
 | ST-Link/V2-1 | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | WeAct STM32H523 | PA6 | TIM3_CH1 (AF2) | TIM3_UP, GPDMA1 channel 3 | TIM3_CH3, GPDMA1 channel 4 |
+| YD-CH32V307VCT6 (not tested on hardware) | PC11 | TIM10_CH4, default map | TIM10_UP, DMA2 channel 11 | TIM10_CH1, DMA2 channel 8 |
 
-`board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz on the STM32F1, 250 MHz on the STM32H5).
+`board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz on the STM32F1, 250 MHz on the STM32H5, 144 MHz on the CH32V307).
 The JTAG fast path of the STM32H5 uses GPDMA1 channels 0 to 2, thus the one-wire engine uses channels 3 and 4.
 
 The STM32H5 engine works as the STM32F1 engine, with these differences:
@@ -565,6 +566,15 @@ The STM32H5 engine works as the STM32F1 engine, with these differences:
 - A GPDMA channel counts bytes, and gets the timer request from `REQSEL`.
 - The pin changes between output, alternate function and input in `MODER`, and to open drain in `OTYPER`. `PUPDR` keeps the pull-up in all modes.
 - The end period is 262 µs (65536 ticks at 250 MHz). This is long enough to stop the counter.
+
+The CH32V307 engine works as the STM32F1 engine, with these differences:
+
+- TIM10 is an advanced timer. Its output needs `BDTR.MOE`, also on a channel without a complementary output.
+- The output channel is CH4, so the burst has 6 words: `ATRLR`, `RPTCR`, then `CH1CVR` to `CH4CVR`.
+  On the STM32F1, a burst of 5 words did not end in time (see the DMA budget below). The CH32V307 bus runs at 144 MHz.
+  A hardware test must show that 6 words end within the shortest bit (620 ns).
+- The interrupt lock clears `mstatus.MIE`. The QingKe core has no `PRIMASK`.
+- The end period is 455 µs (65536 ticks at 144 MHz).
 
 - **Edges.** The timer runs in PWM mode 1 with an inverted output: low for CCR ticks, then high until ARR.
   On each update event, a DMA burst writes ARR and the CCRs of the next bit. No code runs between two bits.

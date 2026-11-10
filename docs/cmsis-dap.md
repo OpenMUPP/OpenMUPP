@@ -52,7 +52,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - A `MUPP_DEBUG_CDC` build has no UART bridge and no `DAP_UART_*` commands.
 - On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
-- 64-byte packets, and up to 4 packets in flight.
+- 64-byte packets, and up to 4 packets in flight. On the CH32V307 at high speed, 512-byte packets (see [High speed](usb-device.md#high-speed-ch32v307)).
 - The LEDs show the target power, the command activity, the probe errors and the USB state. `DAP_HostStatus` does not change them. See [boards.md](boards.md#start-up-and-leds).
 - The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs passed on JTAG at 1000 kHz in the multi image test (see [usb-device.md](usb-device.md#multi-image-hardware-test)). Windows (also the driverless WinUSB binding), the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
 
@@ -143,6 +143,8 @@ During a USB suspend, `CmsisDapFunction::poll()` runs no packet. The stored pack
 A packet that arrives during a command waits until that command ends.
 The USB function sends the response packets in order.
 The packet size is 64 bytes, and up to 4 packets are in flight.
+The transport can set a larger packet size with `setPacketSize()`, up to `Processor::maxPacketSize`: 512 bytes on the CH32V307, 64 bytes on the STM32 boards.
+Set it while no packet is in flight. `CmsisDapFunction` sets it at `SET_CONFIGURATION` from the endpoint size.
 Call `canSubmit()` before `submit()`.
 Each packet without a response takes one of the 4 slots.
 

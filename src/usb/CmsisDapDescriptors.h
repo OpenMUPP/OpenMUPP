@@ -5,7 +5,8 @@
 // USB identity and descriptors of the CMSIS-DAP personality: a composite
 // device with the CMSIS-DAP v2 interface and one CDC-ACM serial port.
 //
-//   Interface 0     vendor class 0xFF, bulk OUT 0x03, bulk IN 0x82, 64 bytes.
+//   Interface 0     vendor class 0xFF, bulk OUT 0x03, bulk IN 0x82, 64 bytes
+//                   (512 bytes at high speed).
 //                   The interface string contains "CMSIS-DAP": the host
 //                   tools find a CMSIS-DAP v2 interface by that string.
 //   Interfaces 1-2  CDC-ACM with IAD, as in the Versaloon personality
@@ -22,6 +23,10 @@
 // (usb/UsbDescriptors.h), so the packet memory budget does not change. Only
 // one personality is active in an image. The Versaloon identity stays the
 // default.
+//
+// High speed (CH32V307 only): the same configuration with 512-byte bulk
+// endpoints (USB 2.0 section 5.8.3), and a device qualifier. UsbStack lets
+// the controller connect at high speed only with these descriptors.
 //
 // Hardware-independent: the host unit tests check the descriptors.
 // The USB stack serves them, with the serial number string from the chip
@@ -41,8 +46,13 @@ inline constexpr uint16_t productId = 0x0001;
 inline constexpr uint8_t dapInterface = 0;
 inline constexpr uint8_t outEndpoint = versaloonOutEndpoint;
 inline constexpr uint8_t inEndpoint = versaloonInEndpoint;
-// One CMSIS-DAP command or response is one packet.
+// One CMSIS-DAP command or response is one packet: 64 bytes at full speed,
+// 512 bytes at high speed (cmsisdap::Processor::setPacketSize()).
 inline constexpr uint16_t packetSize = 64;
+inline constexpr uint16_t highSpeedPacketSize = 512;
+// bInterval of the notification endpoint at high speed: 2^(8-1) microframes
+// of 125 us, 16 ms as at full speed.
+inline constexpr uint8_t cdcNotificationHighSpeedInterval = 8;
 
 // String descriptor indexes. Index 0 is the LANGID table.
 enum StringIndex : uint8_t {
@@ -78,35 +88,42 @@ inline constexpr char16_t dapInterfaceGuid[] = u"{CDB3B5AD-293B-4663-AA36-1AAE46
 
 // Miscellaneous/common/IAD device class: Windows then groups the two CDC
 // interfaces through the IAD and binds its CDC driver to the pair.
-inline constexpr auto deviceDescriptor = desc::device(desc::DeviceFields{
-.bcdUSB = bcdUsb,
-.bDeviceClass = desc::classcode::kMiscellaneous,
-.bDeviceSubClass = desc::classcode::kMiscellaneousSubclassCommon,
-.bDeviceProtocol = desc::classcode::kMiscellaneousProtocolIad,
-.idVendor = vendorId,
-.idProduct = productId,
-.bcdDevice = static_cast<uint16_t>(toBcd(VERSION_MAJOR) << 8 | toBcd(VERSION_MINOR)),
-.iManufacturer = stringManufacturer,
-.iProduct = stringProduct,
-.iSerialNumber = stringSerialNumber,
-});
+inline constexpr desc::DeviceFields deviceFields{
+   .bcdUSB = bcdUsb,
+   .bDeviceClass = desc::classcode::kMiscellaneous,
+   .bDeviceSubClass = desc::classcode::kMiscellaneousSubclassCommon,
+   .bDeviceProtocol = desc::classcode::kMiscellaneousProtocolIad,
+   .idVendor = vendorId,
+   .idProduct = productId,
+   .bcdDevice = static_cast<uint16_t>(toBcd(VERSION_MAJOR) << 8 | toBcd(VERSION_MINOR)),
+   .iManufacturer = stringManufacturer,
+   .iProduct = stringProduct,
+   .iSerialNumber = stringSerialNumber,
+};
+inline constexpr auto deviceDescriptor = desc::device(deviceFields);
 
-inline constexpr auto configurationDescriptor = desc::configuration(
-desc::ConfigurationFields{ .maxPowerMilliamps = maxPowerMilliamps },
-desc::interfaceDescriptor(desc::InterfaceFields{ dapInterface, 0, desc::classcode::kVendorSpecific, 0, 0, stringInterface },
-                          desc::endpoint(outEndpoint, art::usb::EndpointType::Bulk, packetSize),
-                          desc::endpoint(inEndpoint, art::usb::EndpointType::Bulk, packetSize)),
-desc::interfaceAssociation(cdcControlInterface, 2, desc::classcode::kCdc, desc::cdc::kSubclassAcm, 0, stringSerialPort),
-desc::interfaceDescriptor(
-desc::InterfaceFields{ cdcControlInterface, 0, desc::classcode::kCdc, desc::cdc::kSubclassAcm, 0, stringSerialPort },
-desc::cdcHeader(),
-desc::cdcCallManagement(0, cdcDataInterface),
-desc::cdcAcm(),
-desc::cdcUnion(cdcControlInterface, cdcDataInterface),
-desc::endpoint(cdcNotificationEndpoint, art::usb::EndpointType::Interrupt, cdcNotificationPacketSize, cdcNotificationInterval)),
-desc::interfaceDescriptor(desc::InterfaceFields{ cdcDataInterface, 0, desc::classcode::kCdcData, 0, 0, 0 },
-                          desc::endpoint(cdcDataOutEndpoint, art::usb::EndpointType::Bulk, cdcDataPacketSize),
-                          desc::endpoint(cdcDataInEndpoint, art::usb::EndpointType::Bulk, cdcDataPacketSize)));
+// The configuration at a bulk packet size and a notification bInterval.
+constexpr auto makeConfiguration(uint16_t bulkPacketSize, uint8_t notificationInterval) {
+   return desc::configuration(
+   desc::ConfigurationFields{ .maxPowerMilliamps = maxPowerMilliamps },
+   desc::interfaceDescriptor(desc::InterfaceFields{ dapInterface, 0, desc::classcode::kVendorSpecific, 0, 0, stringInterface },
+                             desc::endpoint(outEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
+                             desc::endpoint(inEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)),
+   desc::interfaceAssociation(cdcControlInterface, 2, desc::classcode::kCdc, desc::cdc::kSubclassAcm, 0, stringSerialPort),
+   desc::interfaceDescriptor(desc::InterfaceFields{ cdcControlInterface, 0, desc::classcode::kCdc, desc::cdc::kSubclassAcm, 0, stringSerialPort },
+                             desc::cdcHeader(), desc::cdcCallManagement(0, cdcDataInterface), desc::cdcAcm(),
+                             desc::cdcUnion(cdcControlInterface, cdcDataInterface),
+                             desc::endpoint(cdcNotificationEndpoint, art::usb::EndpointType::Interrupt,
+                                            cdcNotificationPacketSize, notificationInterval)),
+   desc::interfaceDescriptor(desc::InterfaceFields{ cdcDataInterface, 0, desc::classcode::kCdcData, 0, 0, 0 },
+                             desc::endpoint(cdcDataOutEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
+                             desc::endpoint(cdcDataInEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)));
+}
+
+static_assert(packetSize == cdcDataPacketSize, "the DAP and CDC bulk endpoints have the same size");
+inline constexpr auto configurationDescriptor = makeConfiguration(packetSize, cdcNotificationInterval);
+inline constexpr auto highSpeedConfigurationDescriptor = makeConfiguration(highSpeedPacketSize, cdcNotificationHighSpeedInterval);
+inline constexpr auto deviceQualifierDescriptor = desc::deviceQualifier(deviceFields);
 
 inline constexpr auto languageDescriptor = desc::languages(desc::kLanguageEnglishUs);
 inline constexpr auto manufacturerDescriptor = desc::stringDescriptor(u"OpenMUPP");

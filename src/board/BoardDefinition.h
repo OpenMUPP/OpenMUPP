@@ -69,7 +69,8 @@ struct DebugPins {
 // is PB4 on the STM32F103 (SPI1 remap). On the STM32H5 it is PA6: PB4 can
 // also be SPI1 MISO there, but the pin map of the H5 boards (#89) uses PB4
 // for TRST. SPI1 is a slave and gets its clock from TCK through a board
-// link to SPI1 SCK (PB3).
+// link to SPI1 SCK (PB3). The CH32V307 uses SPI3 (remap) as the slave: TMS
+// on SPI3 MISO (PC11), and the link to SPI3 SCK (PC10).
 struct JtagFastPath {
    Pin tckLink;
 
@@ -157,11 +158,12 @@ constexpr std::optional<uint8_t> adcChannelOf(Family family, Pin pin) {
 }
 
 // One wire (SDI) of the WCH-Link personality: a timer makes the bits on
-// the SWDIO output pin (board/BoardRvSwd.cpp, board/BoardRvSwdH5.cpp). The
-// output channel is on the pin; the sample channel has no pin output. The
-// DMA channels serve the update event and the sample compare of the timer:
-// DMA1 channels on the STM32F103, GPDMA1 channels on the STM32H5 (the
-// GPDMA request comes from the timer and the channel).
+// the SWDIO output pin (board/BoardRvSwd.cpp, board/BoardRvSwdH5.cpp,
+// board/BoardRvSwdV30x.cpp). The output channel is on the pin; the sample
+// channel has no pin output. The DMA channels serve the update event and
+// the sample compare of the timer: DMA1 channels on the STM32F103, GPDMA1
+// channels on the STM32H5 (the GPDMA request comes from the timer and the
+// channel), DMA2 channels on the CH32V307.
 struct OneWireTimer {
    uint8_t timer;         // TIMn
    uint8_t channel;       // output channel, 1-4
@@ -173,11 +175,16 @@ struct OneWireTimer {
 };
 
 // The timer of a SWDIO output pin: RM0008 9.3.7 and table 78 (STM32F103),
-// DS14540 table 14 (STM32H5). Empty when the pin has no supported timer
-// channel.
+// DS14540 table 14 (STM32H5), CH32FV2x_V3xRM tables 10-22 and 11-3
+// (CH32V307). Empty when the pin has no supported timer channel.
 constexpr std::optional<OneWireTimer> oneWireTimerOf(Family family, Pin tmsOut) {
    if(family == Family::Ch32V30x) {
-      return std::nullopt; // the CH32V307 timer comes with the WCH-Link personality (plan P7)
+      // TIM10_CH4 (default map), TIM10_CH1 samples. TIM10_UP on DMA2 ch11,
+      // TIM10_CH1 on ch8. The JTAG fast path uses DMA2 ch2.
+      if(tmsOut == Pin{ Port::C, 11 }) {
+         return OneWireTimer{ 10, 4, false, false, 1, 11, 8 };
+      }
+      return std::nullopt;
    }
    if(family == Family::Stm32H5) {
       // TIM3_CH1 (AF2), TIM3_CH3 samples. GPDMA1 channels 3 and 4: the JTAG
@@ -361,8 +368,8 @@ constexpr SwjConfig swjConfig(const Definition &def) {
 // used twice (TMS out and in can be one pin), no reserved pin, a Vref pin
 // with an ADC channel, and the fixed fast path pins when the board has the
 // JTAG fast path. The crystal must be in the range of the family, and an
-// STM32F103 or CH32V307 board must have one. A CH32V307 board has no JTAG
-// fast path yet (plan P8) and must not use PA13 and PA14 (SWD). Each board
+// STM32F103 or CH32V307 board must have one. A CH32V307 board must not use
+// PA13 and PA14 (SWD). Each board
 // header checks its definition with a static_assert.
 constexpr bool isValid(const Definition &def) {
    const auto pins = detail::allPins(def);
@@ -385,13 +392,15 @@ constexpr bool isValid(const Definition &def) {
       }
    }
    if(def.jtagFastPath) {
-      if(def.family == Family::Ch32V30x) {
-         return false;
-      }
       const auto &d = def.debug;
-      const Pin spi1Miso = def.family == Family::Stm32F1 ? Pin{ Port::B, 4 } : Pin{ Port::A, 6 };
+      // The MISO and SCK pins of the slave SPI
+      const bool v30x = def.family == Family::Ch32V30x;
+      const Pin slaveMiso = v30x                          ? Pin{ Port::C, 11 } :
+                            def.family == Family::Stm32F1 ? Pin{ Port::B, 4 } :
+                                                            Pin{ Port::A, 6 };
+      const Pin slaveSck = v30x ? Pin{ Port::C, 10 } : Pin{ Port::B, 3 };
       if(d.tck != Pin{ Port::B, 13 } || d.tdi != Pin{ Port::B, 15 } || d.tdo != Pin{ Port::B, 14 } ||
-         d.tmsOut != spi1Miso || def.jtagFastPath->tckLink != Pin{ Port::B, 3 }) {
+         d.tmsOut != slaveMiso || def.jtagFastPath->tckLink != slaveSck) {
          return false;
       }
    }

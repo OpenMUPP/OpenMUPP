@@ -393,6 +393,20 @@
       }
     },
     {
+      "name": "ydch32v307-wch-link",
+      "displayName": "YD-CH32V307VCT6, WCH-Link (firmware image)",
+      "inherits": [
+        "board-ydch32v307",
+        "personalities-wch-link"
+      ],
+      "cacheVariables": {
+        "MUPP_CH32_STUB_IMAGE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "description": "Native build of the unit tests (no toolchain file)",
@@ -510,6 +524,10 @@
     {
       "name": "ydch32v307-cmsis-dap",
       "configurePreset": "ydch32v307-cmsis-dap"
+    },
+    {
+      "name": "ydch32v307-wch-link",
+      "configurePreset": "ydch32v307-wch-link"
     },
     {
       "name": "host-tests",

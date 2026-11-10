@@ -211,3 +211,13 @@ build-ydch32v307-cmsis-dap:
     BOARD: ydch32v307
     VARIANT: -cmsis-dap
   artifacts: null
+
+# YD-CH32V307VCT6: the firmware image with the WCH-Link personality. It is
+# the CH32 image that links the one-wire engine (TIM10 and DMA2). Build and
+# size check only, no artifacts.
+build-ydch32v307-wch-link:
+  extends: .build-board-template
+  variables:
+    BOARD: ydch32v307
+    VARIANT: -wch-link
+  artifacts: null

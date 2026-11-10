@@ -41,6 +41,11 @@ static_assert(switchRequestCode != dap::msOs20VendorCode);
 // The two personalities share the endpoint numbers, so the OUT endpoint is
 // double-buffered in each.
 static_assert(dap::outEndpoint == versaloonOutEndpoint);
+#if defined(__riscv)
+// The USBHS packet pool at high speed: the double-buffered DAP OUT endpoint,
+// the DAP IN endpoint and the CDC-ACM endpoints.
+static_assert(3 * dap::highSpeedPacketSize + cdcNotificationPacketSize + 2 * dap::highSpeedPacketSize <= hw::UsbDevice::PacketMemorySize);
+#endif
 #endif
 #if defined(MUPP_WITH_VERSALOON)
 // The packet memory: the buffer descriptor table, EP0 (64 bytes each way),
@@ -98,6 +103,10 @@ const art::usb::Descriptors dapDescriptors{
    .configuration = desc::asSpan(dap::configurationDescriptor),
    .strings = art::span<const art::span<const uint8_t>>(dapStrings.data(), dapStrings.size()),
    .bos = desc::asSpan(dap::bosDescriptor),
+#if defined(__riscv)
+   .highSpeedConfiguration = desc::asSpan(dap::highSpeedConfigurationDescriptor),
+   .deviceQualifier = desc::asSpan(dap::deviceQualifierDescriptor),
+#endif
 };
 
 // Answers the request of Windows for the MS OS 2.0 descriptor set
@@ -164,6 +173,23 @@ uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
    return endpointCount;
 }
 
+#if defined(__riscv)
+// High speed only for a personality with high-speed descriptors (512-byte
+// bulk endpoints, USB 2.0 section 5.8.3). The others have 64-byte bulk
+// endpoints, which are valid at full speed only.
+constexpr hw::UsbDevice::Speed maxSpeedOf([[maybe_unused]] Personality personality) {
+#if defined(MUPP_WITH_CMSIS_DAP)
+   if(personality == Personality::CmsisDap) {
+      return hw::UsbDevice::Speed::High;
+   }
+#endif
+   return hw::UsbDevice::Speed::Full;
+}
+#if defined(MUPP_WITH_WCH_LINK)
+static_assert(maxSpeedOf(Personality::WchLink) == hw::UsbDevice::Speed::Full, "WCH-Link has full-speed descriptors only");
+#endif
+#endif
+
 #if !defined(STM32F1) && !defined(__riscv)
 // USB clock of the STM32H5: HSI48, trimmed by the CRS from the USB SOF
 // packets. PA11 and PA12 are USB_DM and USB_DP on AF10. A failure leaves
@@ -192,9 +218,7 @@ void startUsbClock() {
 
 UsbStack::UsbStack(Personality active, const Functions &functions)
 #if defined(__riscv)
-   // Full speed until the descriptors have the 512-byte bulk endpoints of high speed (decision D4): at high speed a
-   // bulk endpoint must have 512-byte packets, and the descriptors have 64.
-   : hardware_(endpointCountOf(active), hw::UsbDevice::Speed::Full)
+   : hardware_(endpointCountOf(active), maxSpeedOf(active))
 #else
    : hardware_(endpointCountOf(active))
 #endif

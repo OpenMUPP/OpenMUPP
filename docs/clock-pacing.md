@@ -88,14 +88,15 @@ The design does not use these options:
   On the STM32F103, the code of a timed SWD half period is about 23 to 28 cycles.
   Thus a request of 1.8 MHz gives 1.3 to 1.56 MHz.
   The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
-- The untimed SWD engine (`delay` 0, or 3 MHz and more in CMSIS-DAP) does not use the pacer.
-  Its rate depends on the code: 2.42 to 2.7 MHz on the Mini.
+- The untimed SWD engine (`delay` 0, or `swd::maxClockHz` and more in CMSIS-DAP) does not use the pacer.
+  Its rate depends on the code: 2.42 to 2.7 MHz on the Mini, 4.0 MHz on the CH32V307.
   At `delay` 0, this is faster than the 1.85 MHz of the table.
-  In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz` (3 MHz), so a request does not give a faster clock.
+  In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`, so a request does not give a faster clock.
+  `swd::maxClockHz` is 3 MHz on the STM32 and 4.5 MHz on the CH32V307 (see [CH32V307](#ch32v307)).
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
-- The Mini and the WeAct STM32H523 are measured.
+- The Mini, the WeAct STM32H523 and the YD-CH32V307VCT6 (SWD only) are measured.
   The ST-Link/V2-1 is not measured.
 
 ## Measurements
@@ -307,3 +308,134 @@ The shortest single bit-bang period at 3900 kHz was 246 ns, as in the bit-bang r
 The SPI speed of 15.6 MHz is not measured: the STM32F103 permits TCK only up to F_CPU / 6 (10.6 MHz at 64 MHz).
 Thus the firmware does not use 15.6 MHz (`jtag::spiMinShift` is 4 on the STM32H5).
 
+## CH32V307
+
+This section gives the SWD measurements on the CH32V307 at 144 MHz.
+The CH32V307 has no DWT. The pacer uses the low word of the SysTick counter (`SysTick->CNT`), which runs at the core clock (`src/board/CycleCounter.h`).
+[CH32V307 JTAG](#ch32v307-jtag) gives the JTAG measurements. RVSWD on the CH32V307 is not measured.
+
+### Setup
+
+- Probe: YD-CH32V307VCT6 (CH32V307VCT6 at 144 MHz), the `ydch32v307-cmsis-dap` image. SWCLK is PB13, SWDIO is PC11.
+- Target: STM32F103ZET6 on SWD, at 64 MHz (`tools/stm32f1_clock.tcl`), or at its reset clock (8 MHz HSI) for the reads of the SWCLK test.
+- Logic analyzer: Saleae Logic Pro 8 at 500 MS/s (2 ns resolution), SWCLK on channel 5, SWDIO on channel 7.
+  A glitch filter of 20 ns is on both channels.
+- Traffic: OpenOCD with `interface/cmsis-dap.cfg` and `target/stm32f1x.cfg`, two reads of 32 KiB of SRAM (`dump_image`) in each session.
+  The capture is 1 s long.
+
+`tools/clock_rate.py` calculates the rate. The nominal period is two half periods of `ceil(144 MHz / (2 × request))` core cycles.
+
+### Results
+
+Measured on 2026-11-09. "Before" is the firmware with `swd::maxClockHz` at 3 MHz. "After" is the firmware with 4.5 MHz.
+The rate is the mean over the runs. "(median)" means that the code makes each period longer than 1.3 times the nominal period, so there are no runs and the value is the median of all periods.
+
+| Request | Before | After | Engine after the fix | Shortest period, after |
+|---|---|---|---|---|
+| 250 kHz | 249.8 kHz (−0.08 %) | — | timed | — |
+| 1000 kHz | 999.5 kHz (−0.05 %) | — | timed | — |
+| 2000 kHz | 2001.4 kHz (+0.07 %) | 2001.5 kHz (+0.07 %) | timed | 470 ns |
+| 2500 kHz | 2480.5 kHz (−0.09 %) | — | timed | — |
+| 2900 kHz | 2872.3 kHz (−0.28 %), median 2762 kHz | 2872.4 kHz (−0.27 %), median 2762 kHz | timed | 340 ns |
+| 3000 kHz | 3979.4 kHz, untimed | 2717.4 kHz (median) | timed | 336 ns |
+| 4000 kHz | 3980.2 kHz, untimed | 2487.6 kHz (median) | timed | 336 ns |
+| 4400 kHz | — | 2439.0 kHz (median) | timed | 336 ns |
+| 4500 kHz | — | 3979.1 kHz | untimed | 218 ns |
+| 5000 to 20000 kHz | 4000.0 kHz (median), untimed | 4000.0 kHz (median) at 20000 kHz | untimed | 218 ns |
+
+Findings:
+
+- Up to 2.5 MHz, the mean rate is within 0.1 % of the nominal period.
+- The code of a timed half period is about 26 cycles: the timed engine gives 2.76 MHz at most (median).
+  The timed rate decreases when the request increases above this limit: 4 MHz gives 2.49 MHz, 4.4 MHz gives 2.44 MHz.
+- At 2900 kHz, single periods of 340 ns are shorter than the nominal period of 347 ns (2 % short). These are the late edges of [Late edges](#late-edges).
+- The untimed engine gives 4.0 MHz (median period 250 ns). The shortest period is 218 ns (4.6 MHz).
+- Before the fix, the untimed engine ran from 3 MHz. Thus a request of 3 MHz gave 3.98 MHz, 33 % faster than the request.
+  `swd::maxClockHz` is now 4.5 MHz on the RISC-V build. The value is above the untimed rate, with a margin for a change of the code layout.
+  A request from 2.8 MHz to 4.5 MHz now gives the timed code limit (2.44 to 2.76 MHz).
+- All reads were correct. `tools/flash_benchmark.py` passed at 250 to 20000 kHz before the fix, and at 2000 to 20000 kHz after the fix.
+  With the fix, the read of 32 KiB takes 0.26 s at 2000 kHz, 0.22 to 0.23 s at 3000 and 4000 kHz, and 0.16 s from 4500 kHz.
+  The write takes 1.26 to 1.31 s from 1000 kHz: the flash of the STM32F103 limits it.
+
+## CH32V307 JTAG
+
+Measured on 2026-11-09 with the setup of [CH32V307](#ch32v307), with these changes:
+
+- Target: the same STM32F103ZET6 on JTAG (TCK, TMS, TDI, TDO), at 64 MHz. The chain has two TAPs: the DAP (IR length 4) and the boundary-scan TAP (IR length 5).
+- Logic analyzer: TCK on channel 5, measured on PC10 (the TCK link), and TMS on channel 7.
+  TDI and TDO are not measured.
+- Traffic: OpenOCD reads 8 KiB of SRAM in each session.
+- The checks of the JTAG-DP transfers of the firmware use `tools/pyocd_jtag_test.py`, and raw `DAP_JTAG_IDCODE` and `DAP_Transfer` commands.
+  OpenOCD does not use these transfers: it sends `DAP_JTAG_Sequence` for all scans (see [JTAG hardware test](cmsis-dap.md#jtag-hardware-test)).
+
+### Results
+
+| Request | Engine | Measured TCK | Shortest period |
+|---|---|---|---|
+| 100 kHz | bit-bang | 100.0 kHz (−0.01 %) | 9958 ns |
+| 500 kHz | bit-bang | 500.1 kHz (+0.01 %) | 1970 ns |
+| 1000 kHz | bit-bang | 1000.1 kHz (+0.01 %) | 970 ns |
+| 1124 kHz | bit-bang | 1106.4 kHz (−0.12 %) | 872 ns |
+| 1125 kHz | SPI | 1124.7 kHz | 886 ns |
+| 2250 kHz | SPI | 2249.0 kHz | 442 ns |
+| 4500 kHz | SPI | 4494.4 kHz | 218 ns |
+| 9000 kHz | SPI | 8981.7 kHz | 104 ns |
+
+The bit-bang rate at 1124 kHz is the nominal rate: a half period of 65 core cycles gives 1107.7 kHz.
+A request of 1125 kHz or more selects the SPI.
+The SPI rows include the bit-bang tail of each shift, so the mean is a little below the SPI rate.
+
+`tools/flash_benchmark.py` (JTAG, 32 KiB) passed all runs at 250 to 9000 kHz:
+
+| kHz | Write s | Read s | Read KiB/s |
+|---:|---:|---:|---:|
+| 250 | 3.51 | 2.89 | 11.1 |
+| 1000 | 2.19 | 1.64 | 19.5 |
+| 2250 | 1.99 | 1.46 | 21.9 |
+| 4500 | 1.92 | 1.39 | 23.1 |
+| 9000 | 1.90 | 1.37 | 23.3 |
+
+On 2026-11-09, with the wire link, `tools/pyocd_jtag_test.py` passed at 1000, 2250, 4500 and 9000 kHz.
+On 2026-11-10, with the same wire and the same firmware code, it failed at all SPI speeds (see [TCK link](#tck-link)).
+
+### TCK link
+
+The first test used a resistor of 330 Ω to 470 Ω as the TCK link. This value comes from a probe PCB design with short traces.
+The test setup uses jumper wires and an analyzer probe on PC10, which have much more capacitance.
+With the resistor, OpenOCD passed at all speeds, but the JTAG-DP transfers of the firmware failed at all SPI speeds:
+pyOCD failed at 2250, 4500 and 9000 kHz, and passed at 1000 kHz (bit-bang).
+
+The analyzer showed the cause:
+
+- SPI3 changed TMS 20 to 32 ns after the falling edge on PC10.
+  The bit-bang engine changes TMS 118 to 130 ns after the falling edge.
+- When TMS went from 0 to 1 during an SPI transfer, PC10 had a high pulse of 2 to 6 ns.
+  SPI3 counted the pulse as a clock edge, so the next TMS bits were one bit early.
+  In a DP scan, the TAP then did not go to Update-DR, and the transfer failed.
+- A slower output speed of the TMS pin (10 MHz instead of 50 MHz) did not remove the pulse.
+
+On 2026-11-09, a wire replaced the resistor. The analyzer then showed no pulse and a TMS delay of 4 to 10 ns, and all checks passed.
+
+On 2026-11-10, the fault came back with the same wire, at all SPI speeds (1125 to 9000 kHz):
+
+- TMS on PC11 rose 32 ns after a falling edge on PC10, and PC10 had a high pulse of 2 ns.
+  This is crosstalk from the TMS wire (PC11) into the TCK link wire (PC10) on the neighbor pin.
+- A DPACC scan had 42 counted edges on PC10 instead of 41.
+- With the TMS pin at 2 MHz output speed, `DAP_Transfer` passed at 1125 and 4500 kHz and failed at 9000 kHz.
+  At 10 MHz output speed, there was no change.
+
+Thus the resistor did not cause the fault. It only made the margin smaller.
+With jumper wires, the result depends on how the PC10 and PC11 wires lie, so a pass does not repeat reliably.
+The fix is open in [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16).
+A TCK link on a PCB is not tested.
+
+The scans of OpenOCD have one TMS value for each shift, so a TMS edge in the middle of an SPI transfer does not occur.
+Thus OpenOCD does not find a bad TCK link. Use pyOCD or the raw transfer commands for this check.
+
+### 18 MHz
+
+The firmware does not use the SPI rate of 18 MHz (`jtag::spiMinShift` is 4).
+The STM32F103 test target permits TCK only up to F_CPU / 6 (10.6 MHz at 64 MHz), so 18 MHz cannot be tested with it.
+The half period at 18 MHz is 27.8 ns. The TMS delay of 4 to 10 ns (2026-11-09) leaves 17 ns or more for the TMS setup time of the target and the cable delay.
+This delay is not confirmed: on 2026-11-10, the delay was 32 ns, which leaves no margin at 18 MHz.
+TDO must also come back within the half period. Test with a faster target before you lower `jtag::spiMinShift`.
