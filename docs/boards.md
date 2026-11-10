@@ -468,7 +468,8 @@ These parts are known to be incomplete:
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
   JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. 1125 kHz is not tested with the wire. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
-- The one-wire engine (TIM10 and DMA2) is not tested on hardware.
+- The one-wire engine (TIM10 and DMA2) passes with wlink and minichlink on a CH32V003 (see [CH32V003 on the YD-CH32V307VCT6](wch-link.md#ch32v003-on-the-yd-ch32v307vct6-one-wire)).
+  The two-wire engine is not tested on this board.
 - There is no bootloader entry and no flash settings.
 
 The board definition is `src/board/boards/YdCh32V307.h`.

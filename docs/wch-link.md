@@ -555,7 +555,7 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `sr
 | ST-Link/V2-1 | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | WeAct STM32H523 | PA6 | TIM3_CH1 (AF2) | TIM3_UP, GPDMA1 channel 3 | TIM3_CH3, GPDMA1 channel 4 |
-| YD-CH32V307VCT6 (not tested on hardware) | PC11 | TIM10_CH4, default map | TIM10_UP, DMA2 channel 11 | TIM10_CH1, DMA2 channel 8 |
+| YD-CH32V307VCT6 | PC11 | TIM10_CH4, default map | TIM10_UP, DMA2 channel 11 | TIM10_CH1, DMA2 channel 8 |
 
 `board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz on the STM32F1, 250 MHz on the STM32H5, 144 MHz on the CH32V307).
 The JTAG fast path of the STM32H5 uses GPDMA1 channels 0 to 2, thus the one-wire engine uses channels 3 and 4.
@@ -572,7 +572,7 @@ The CH32V307 engine works as the STM32F1 engine, with these differences:
 - TIM10 is an advanced timer. Its output needs `BDTR.MOE`, also on a channel without a complementary output.
 - The output channel is CH4, so the burst has 6 words: `ATRLR`, `RPTCR`, then `CH1CVR` to `CH4CVR`.
   On the STM32F1, a burst of 5 words did not end in time (see the DMA budget below). The CH32V307 bus runs at 144 MHz.
-  A hardware test must show that 6 words end within the shortest bit (620 ns).
+  The test with a CH32V003 passes (see [CH32V003 on the YD-CH32V307VCT6](#ch32v003-on-the-yd-ch32v307vct6-one-wire)). The wire times of this engine are not measured.
 - The interrupt lock clears `mstatus.MIE`. The QingKe core has no `PRIMASK`.
 - The end period is 455 µs (65536 ticks at 144 MHz).
 
@@ -672,7 +672,7 @@ Results with the timer:
 | `wlink protect` | Passed. The protection starts at the next reset, as on the WCH-LinkE. |
 | `wlink unprotect` | Passed. The protection ends at once, and the chip erases the flash. The 16-bit write of the option bytes works: they then read `RDPR` `0xa5`, `USER` `0x17`, `DATA0` `0x00`, `DATA1` `0xff`, `WRPR0` and `WRPR1` `0xff`. |
 | `minichlink -i`, `-w` | Passed. A write of 16 KB takes 5.2 s. Three wlink dumps after the write are the same as the image (the stale acknowledge of the earlier test does not occur). |
-| `minichlink -r` | Passed for a read of 16,380 bytes (0.9 s), and it is the same as the wlink dump. A read that ends at `0x08004000` (the end of the flash) fails with `cmderr` 3 (exception). The code before the timer gave the same result, so the probe is not the cause. minichlink seems to read one word after the end of the read. A check with a WCH-LinkE is open. |
+| `minichlink -r` | Passed for a read of 16,380 bytes (0.9 s), and it is the same as the wlink dump. A read that ends at `0x08004000` (the end of the flash) fails with `cmderr` 3 (exception). The code before the timer gave the same result. On the YD-CH32V307VCT6, the same read passes (see [CH32V003 on the YD-CH32V307VCT6](#ch32v003-on-the-yd-ch32v307vct6-one-wire)). Thus the cause is not known. A check with a WCH-LinkE is open. |
 
 ### CH32V208 with the timer image
 
@@ -743,7 +743,36 @@ Results after the two fixes:
 | `wlink protect`, `wlink unprotect` | Passed. A protected dump reads `0xff`. After the unprotect, the flash is erased, and the option bytes are the same as in the first test. |
 | `minichlink -i`, `-r`, `-w` | Passed. A write of 160 KB takes 26.6 s. A read of 160 KB takes 5.4 s, and it is the same as the image. Three wlink dumps after the write are the same as the image. |
 
+### CH32V003 on the YD-CH32V307VCT6 (one wire)
+
+This test covers the one-wire engine of the CH32V307 (TIM10 and DMA2).
+
+| Item | Value |
+|---|---|
+| Probe | YD-CH32V307VCT6, `ydch32v307-wch-link` image with `MUPP_WCH_LINK_WCH_USB_ID`, USB at full speed |
+| Target | CH32V003F4P6 board with its own supply. SWIO (PD1) on SWDIO (PC11, P3-21). |
+| Pull-up | 2.2 kΩ from SWDIO to 3.3 V |
+| Host | Linux, wlink 0.1.3, minichlink |
+| Test image | 16 KB of random data, with a `j .` loop at address 0 |
+
+Results:
+
+| Item | Result |
+|---|---|
+| `wlink status` | Passed, 6 of 6 runs. wlink shows the chip ID `0x00300500`, 16 KB flash, `misa` `RV32CEX`, `marchid` `WCH-V2A` and `dmstatus` `0x4c0382`. |
+| `wlink dump`, `wlink regs` | Passed. A dump of the full flash (16 KB) takes 1.4 s. Two dumps are the same. |
+| `wlink halt`, `resume`, `reset` | Passed. |
+| `wlink erase` | Passed, 0.03 s. The programmed flash then reads `0xff`. |
+| `wlink flash` | Passed. 16 KB take 4.0 s (the full wlink run). Three dumps after the program are the same as the image. |
+| `wlink protect` | Passed. After a reset, wlink shows the flash as protected, and a dump reads `0xff`. |
+| `wlink unprotect` | Passed. The chip erases the flash. The option bytes then read `RDPR` `0xa5`, `USER` `0x17`, `DATA0` `0x00`, `DATA1` `0xff`, `WRPR0` and `WRPR1` `0xff`. |
+| `minichlink -i`, `-w` | Passed. A write of 16 KB takes 4.6 s. Three wlink dumps after the write are the same as the image. |
+| `minichlink -r` | Passed. A read of 16,380 bytes takes 0.7 s. A read of the full flash (16,384 bytes, to `0x08004000`) also passes. Both reads are the same as the image. On the Mini, the read of the full flash fails (see [CH32V003 (one wire)](#ch32v003-one-wire)). |
+
+The wire times are not measured with a logic analyzer.
+
 Open items:
 
-- The minichlink read of the full CH32V003 flash with a WCH-LinkE.
+- The minichlink read of the full CH32V003 flash with a WCH-LinkE. On the Mini, it fails. On the YD-CH32V307VCT6, it passes.
+- The two-wire engine on the YD-CH32V307VCT6 (CH32V20x).
 - The WCH OpenOCD fork (if time allows).

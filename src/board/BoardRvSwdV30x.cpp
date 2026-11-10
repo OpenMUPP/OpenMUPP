@@ -18,7 +18,8 @@
 // - The output is TIM10_CH4 (PC11, default map), so the burst has 6 words:
 //   ATRLR, RPTCR, then CH1CVR to CH4CVR. On the STM32F1 a burst of 5 words
 //   did not end within the shortest bit (620 ns) at 72 MHz. The CH32V307
-//   bus runs at 144 MHz. A hardware test must show that 6 words fit.
+//   bus runs at 144 MHz. The frames work with a CH32V003 (docs/wch-link.md),
+//   but the wire times are not measured.
 // - The requests are on DMA2: TIM10_UP on channel 11, TIM10_CH1 (the
 //   sample) on channel 8 (RM table 11-3).
 //
