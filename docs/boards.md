@@ -459,9 +459,10 @@ The preset `ydch32v307-cmsis-dap` sets these options.
 The preset `ydch32v307-wch-link` builds an image with only the WCH-Link personality. It has the one-wire engine (see [One-wire timer](wch-link.md#one-wire-timer)).
 This image builds and links (37 KB).
 On the YD board, USB, JTAG connect and SWD connect work.
+The CMSIS-DAP image runs USB at high speed with 512-byte packets (see [High speed](usb-device.md#high-speed-ch32v307)).
+The WCH-Link image runs USB at full speed.
 These parts are known to be incomplete:
 
-- USB runs at full speed (64-byte bulk endpoints). The descriptors have no 512-byte high-speed variant yet.
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`).
   The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)).
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.

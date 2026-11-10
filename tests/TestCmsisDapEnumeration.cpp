@@ -103,6 +103,102 @@ TEST_CASE("SET_CONFIGURATION opens the endpoints of all three CMSIS-DAP interfac
    CHECK(controller.isArmed(dapOut));
 }
 
+TEST_CASE("The high-speed configuration differs only in the packet sizes and the notification interval") {
+   const Bytes fullSpeed = bytes(usb::dap::configurationDescriptor);
+   const Bytes highSpeed = bytes(usb::dap::highSpeedConfigurationDescriptor);
+   REQUIRE(fullSpeed.size() == highSpeed.size());
+   std::vector<std::size_t> changed;
+   for(std::size_t offset = 0; offset < fullSpeed.size(); offset += fullSpeed[offset]) {
+      REQUIRE(fullSpeed[offset] >= 2);
+      for(std::size_t i = offset; i < offset + fullSpeed[offset]; ++i) {
+         if(fullSpeed[i] != highSpeed[i]) {
+            changed.push_back(i - offset);
+         }
+      }
+      if(fullSpeed[offset + 1] == 0x05) {
+         const uint16_t fullSize = static_cast<uint16_t>(fullSpeed[offset + 4] | fullSpeed[offset + 5] << 8);
+         const uint16_t highSize = static_cast<uint16_t>(highSpeed[offset + 4] | highSpeed[offset + 5] << 8);
+         if((fullSpeed[offset + 3] & 0x03) == 0x02) {
+            CHECK(fullSize == 64);
+            CHECK(highSize == 512);
+         } else {
+            CHECK(highSize == fullSize);
+            CHECK(highSpeed[offset + 6] == usb::dap::cdcNotificationHighSpeedInterval);
+         }
+      }
+   }
+   // Only bytes 4 and 5 (wMaxPacketSize) of the four bulk endpoints and byte
+   // 6 (bInterval) of the notification endpoint.
+   CHECK(changed == std::vector<std::size_t>{ 4, 5, 4, 5, 6, 4, 5, 4, 5 });
+
+   // The qualifier: bcdUSB, the class, bMaxPacketSize0 64, one configuration
+   CHECK(bytes(usb::dap::deviceQualifierDescriptor) == Bytes{ 10, 6, 0x01, 0x02, 0xEF, 0x02, 0x01, 64, 1, 0 });
+}
+
+TEST_CASE("At high speed the DAP packet is 512 bytes") {
+   DapBench bench;
+   bench.controller().setHighSpeed(true);
+   bench.enumerate();
+   auto &controller = bench.controller();
+   for(const uint8_t address : { dapOut, dapIn, uint8_t{ 0x04 }, uint8_t{ 0x84 } }) {
+      CAPTURE(int(address));
+      REQUIRE(controller.endpoint(address).has_value());
+      CHECK(controller.endpoint(address)->maxPacketSize == 512);
+   }
+   CHECK(bench.descriptor(DescriptorType::DeviceQualifier, 0, 10).data == bytes(usb::dap::deviceQualifierDescriptor));
+
+   // DAP_Info packet size
+   REQUIRE(bench.write({ 0x00, 0xFF }));
+   CHECK(bench.read() == Bytes{ 0x00, 0x02, 0x00, 0x02 });
+
+   // DAP_TransferBlock: 126 reads of DP CTRL/STAT fit one 508-byte response.
+   REQUIRE(bench.write({ 0x02, 0x01 }));
+   CHECK(bench.read() == Bytes{ 0x02, 0x01 });
+   REQUIRE(bench.write({ 0x06, 0x00, 126, 0x00, 0x06 }));
+   const auto block = bench.read();
+   REQUIRE(block.has_value());
+   CHECK(block->size() == 4 + 126 * 4);
+   CHECK(Bytes(block->begin(), block->begin() + 4) == Bytes{ 0x06, 126, 0x00, 0x01 });
+   CHECK(bench.swd.transfers == 126);
+
+   // A request longer than 64 bytes is valid at high speed.
+   Bytes info(100, 0);
+   info[1] = 0xFE;
+   REQUIRE(bench.write(info));
+   CHECK(bench.read() == Bytes{ 0x00, 0x01, static_cast<uint8_t>(cmsisdap::Processor::packetCount) });
+
+   // Back to full speed after a bus reset at full speed
+   controller.setHighSpeed(false);
+   bench.enumerate();
+   CHECK(controller.endpoint(dapIn)->maxPacketSize == 64);
+   REQUIRE(bench.write({ 0x00, 0xFF }));
+   CHECK(bench.read() == Bytes{ 0x00, 0x02, 0x40, 0x00 });
+}
+
+TEST_CASE("The processor clamps the packet size and rejects a longer request") {
+   DapBench bench;
+   auto &processor = bench.processor;
+   processor.setPacketSize(8);
+   CHECK(processor.packetSize() == cmsisdap::Processor::fullSpeedPacketSize);
+   processor.setPacketSize(4096);
+   CHECK(processor.packetSize() == cmsisdap::Processor::maxPacketSize);
+
+   // One byte more than the packet size gives ID_DAP_Invalid.
+   Bytes request(cmsisdap::Processor::maxPacketSize + 1, 0);
+   request[1] = 0xFE;
+   processor.submit(request);
+   processor.run();
+   REQUIRE(processor.hasResponse());
+   CHECK(Bytes(processor.response().begin(), processor.response().end()) == Bytes{ 0xFF });
+   processor.popResponse();
+   request.pop_back();
+   processor.submit(request);
+   processor.run();
+   REQUIRE(processor.hasResponse());
+   CHECK(Bytes(processor.response().begin(), processor.response().end()) ==
+         Bytes{ 0x00, 0x01, static_cast<uint8_t>(cmsisdap::Processor::packetCount) });
+}
+
 TEST_CASE("DAP_Info over USB: one response packet per command") {
    DapBench bench;
    bench.enumerate();

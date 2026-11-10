@@ -17,6 +17,10 @@
 // response sent yet. When no slot is free, the OUT endpoint NAKs until a
 // response is sent. DAP_Info reports the same packet count to the host.
 //
+// The packet size is the wMaxPacketSize of the bulk endpoints at the bus
+// speed: 64 bytes at full speed, 512 bytes at high speed. The function
+// gives it to the processor at SET_CONFIGURATION, and DAP_Info reports it.
+//
 // When the host closes the interface (bus reset or deconfigure), the
 // function calls Processor::hostGone(): it disconnects the target, releases
 // the pins, and drops the queued packets and the unsent responses. A suspend
@@ -37,7 +41,8 @@ namespace usb {
 
 class CmsisDapFunction final : public art::usb::VendorBulkFunction {
    public:
-   static_assert(dap::packetSize == cmsisdap::Processor::packetSize, "The USB packet carries one DAP packet");
+   static_assert(dap::packetSize == cmsisdap::Processor::fullSpeedPacketSize, "The USB packet carries one DAP packet");
+   static_assert(dap::highSpeedPacketSize >= cmsisdap::Processor::maxPacketSize, "A DAP packet fits a USB packet");
 
    // The processor must outlive the function.
    explicit CmsisDapFunction(cmsisdap::Processor &processor);
@@ -57,6 +62,7 @@ class CmsisDapFunction final : public art::usb::VendorBulkFunction {
    protected:
    bool dataReceived(art::span<const uint8_t> packet) override;
    void transferSent() override;
+   void dataPathOpened() override;
    void dataPathClosed() override;
    void suspended() override;
    void resumed() override;

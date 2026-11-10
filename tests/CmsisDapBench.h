@@ -6,8 +6,8 @@
 // controller of libArT as the host: the descriptors, the CMSIS-DAP function
 // on a processor with fake hardware, and a placeholder for the CDC-ACM
 // function. With a personality switch, also the switch request on EP0
-// before the MS OS 2.0 request (usb/SwitchRequest.h), as in UsbStack. For
-// the CMSIS-DAP USB tests.
+// before the MS OS 2.0 request (usb/SwitchRequest.h), as in UsbStack. The
+// device has the high-speed descriptors too. For the CMSIS-DAP USB tests.
 
 #include "protocol/cmsisdap/DapProcessor.h"
 #include "usb/CmsisDapDescriptors.h"
@@ -222,6 +222,10 @@ class DapBench {
       .configuration = usb::desc::asSpan(usb::dap::configurationDescriptor),
       .strings = art::span<const art::span<const uint8_t>>(strings_.data(), strings_.size()),
       .bos = usb::desc::asSpan(usb::dap::bosDescriptor),
+      // As on the CH32V307. The fake controller is at full speed until
+      // controller().setHighSpeed(true).
+      .highSpeedConfiguration = usb::desc::asSpan(usb::dap::highSpeedConfigurationDescriptor),
+      .deviceQualifier = usb::desc::asSpan(usb::dap::deviceQualifierDescriptor),
    };
    art::usb::msos20::DescriptorSetHandler msOs20Handler_{ usb::dap::msOs20VendorCode,
                                                           usb::desc::asSpan(usb::dap::msOs20DescriptorSet) };
