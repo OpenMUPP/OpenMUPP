@@ -466,8 +466,8 @@ These parts are known to be incomplete:
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`).
   The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)).
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
-- The JTAG fast path (SPI and DMA) passes with OpenOCD and pyOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
-  With jumper wires, the TCK link must be a wire, not a resistor.
+- The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
+  With jumper wires, JTAG-DP transfers (pyOCD, `DAP_Transfer`) fail at these speeds, because of crosstalk from TMS into the TCK link ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 - The one-wire engine (TIM10 and DMA2) is not tested on hardware.
 - There is no bootloader entry and no flash settings.
 
@@ -500,13 +500,14 @@ The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-p
 Connect TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
 Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more).
 
-On the YD board with jumper wires, use a wire for the link, not a resistor.
-A resistor of 330 Ω to 470 Ω made the fast path fail in this setup (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)):
+On the YD board with jumper wires, JTAG-DP transfers on the fast path fail, with a wire or with a resistor of 330 Ω to 470 Ω as the link (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag) and [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)):
 
-- The resistor and the capacitance of the wires (and of the analyzer probe) make the edges on PC10 slow.
-- SPI3 changes TMS on PC11 shortly after the falling edge on PC10. PC10 is then still near the input threshold.
+- SPI3 changes TMS on PC11 shortly after the falling edge on PC10.
 - A rising TMS edge on the next pin couples into PC10 as a short pulse, and SPI3 counts it as a clock. TMS is then one bit early.
-- OpenOCD does not see the fault, because each byte of its scans has one TMS value. pyOCD fails.
+- A resistor makes the edges on PC10 slower, so the fault occurs more easily. A wire passed on one day and failed on the next day.
+- OpenOCD does not see the fault, because each shift of its scans has one TMS value. pyOCD fails.
+
+Keep the PC10 wire away from the PC11 wire. Use pyOCD or `DAP_Transfer` to check the link, not only OpenOCD.
 
 A resistor limits the current when other code drives PC10 as an output (for example UART4_TX or the microSD card). The wire gives no such protection.
 On a probe PCB with short traces, the capacitance is much lower, and the delay of a 330 Ω to 470 Ω resistor is approximately 5 ns.

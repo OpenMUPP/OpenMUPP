@@ -395,7 +395,8 @@ The SPI rows include the bit-bang tail of each shift, so the mean is a little be
 | 4500 | 1.92 | 1.39 | 23.1 |
 | 9000 | 1.90 | 1.37 | 23.3 |
 
-With the wire link, `tools/pyocd_jtag_test.py` passed at 1000, 2250, 4500 and 9000 kHz.
+On 2026-11-09, with the wire link, `tools/pyocd_jtag_test.py` passed at 1000, 2250, 4500 and 9000 kHz.
+On 2026-11-10, with the same wire and the same firmware code, it failed at all SPI speeds (see [TCK link](#tck-link)).
 
 ### TCK link
 
@@ -406,22 +407,35 @@ pyOCD failed at 2250, 4500 and 9000 kHz, and passed at 1000 kHz (bit-bang).
 
 The analyzer showed the cause:
 
-- SPI3 changed TMS 20 to 32 ns after the falling edge on PC10. With the wire, the delay is 4 to 10 ns.
+- SPI3 changed TMS 20 to 32 ns after the falling edge on PC10.
   The bit-bang engine changes TMS 118 to 130 ns after the falling edge.
 - When TMS went from 0 to 1 during an SPI transfer, PC10 had a high pulse of 2 to 6 ns.
   SPI3 counted the pulse as a clock edge, so the next TMS bits were one bit early.
   In a DP scan, the TAP then did not go to Update-DR, and the transfer failed.
 - A slower output speed of the TMS pin (10 MHz instead of 50 MHz) did not remove the pulse.
-- With the wire, there was no pulse, and all checks passed.
 
-Thus the resistor fails with the capacitance of this setup. A resistor on a PCB is not tested.
+On 2026-11-09, a wire replaced the resistor. The analyzer then showed no pulse and a TMS delay of 4 to 10 ns, and all checks passed.
 
-The scans of OpenOCD have one TMS value for each byte, so a TMS edge in the middle of an SPI transfer does not occur.
+On 2026-11-10, the fault came back with the same wire, at all SPI speeds (1125 to 9000 kHz):
+
+- TMS on PC11 rose 32 ns after a falling edge on PC10, and PC10 had a high pulse of 2 ns.
+  This is crosstalk from the TMS wire (PC11) into the TCK link wire (PC10) on the neighbor pin.
+- A DPACC scan had 42 counted edges on PC10 instead of 41.
+- With the TMS pin at 2 MHz output speed, `DAP_Transfer` passed at 1125 and 4500 kHz and failed at 9000 kHz.
+  At 10 MHz output speed, there was no change.
+
+Thus the resistor did not cause the fault. It only made the margin smaller.
+With jumper wires, the result depends on how the PC10 and PC11 wires lie, so a pass does not repeat reliably.
+The fix is open in [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16).
+A TCK link on a PCB is not tested.
+
+The scans of OpenOCD have one TMS value for each shift, so a TMS edge in the middle of an SPI transfer does not occur.
 Thus OpenOCD does not find a bad TCK link. Use pyOCD or the raw transfer commands for this check.
 
 ### 18 MHz
 
 The firmware does not use the SPI rate of 18 MHz (`jtag::spiMinShift` is 4).
 The STM32F103 test target permits TCK only up to F_CPU / 6 (10.6 MHz at 64 MHz), so 18 MHz cannot be tested with it.
-The half period at 18 MHz is 27.8 ns. The measured TMS delay of 4 to 10 ns leaves 17 ns or more for the TMS setup time of the target and the cable delay.
+The half period at 18 MHz is 27.8 ns. The TMS delay of 4 to 10 ns (2026-11-09) leaves 17 ns or more for the TMS setup time of the target and the cable delay.
+This delay is not confirmed: on 2026-11-10, the delay was 32 ns, which leaves no margin at 18 MHz.
 TDO must also come back within the half period. Test with a faster target before you lower `jtag::spiMinShift`.
