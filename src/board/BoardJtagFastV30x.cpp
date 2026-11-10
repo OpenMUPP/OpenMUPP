@@ -125,7 +125,8 @@ void JtagSpi::init() {
 
    // A late TMS byte gives a wrong TMS bit (the slave has no underrun flag),
    // a late TDO read loses a TDO byte. A late TDI byte only stops the
-   // clock. At equal priority, the lower channel of DMA1 wins.
+   // clock. TMS runs on DMA2, in parallel with DMA1. In DMA1, TDO has a
+   // higher priority than TDI.
    configureChannel(tmsChannel(), SPI3->DATAR, Dma::Direction::MemoryToPeripheral, Dma::ChannelPriority::very_high);
    configureChannel(tdoChannel(), SPI2->DATAR, Dma::Direction::PeripheralToMemory, Dma::ChannelPriority::very_high);
    configureChannel(tdiChannel(), SPI2->DATAR, Dma::Direction::MemoryToPeripheral, Dma::ChannelPriority::high);
