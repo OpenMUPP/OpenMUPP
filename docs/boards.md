@@ -467,7 +467,7 @@ These parts are known to be incomplete:
   The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)).
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
-  JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at these speeds only with a wire as the TCK link. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
+  JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. 1125 kHz is not tested with the wire. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 - The one-wire engine (TIM10 and DMA2) is not tested on hardware.
 - There is no bootloader entry and no flash settings.
 
@@ -503,8 +503,8 @@ Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more)
 Use a wire as the link. With a resistor as the link, JTAG-DP transfers on the fast path fail (see [TCK link](clock-pacing.md#tck-link) and [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)):
 
 - With 2.2 kΩ, a rising TMS edge on PC11 couples into PC10 as a short pulse. SPI3 counts it as a clock, and TMS is then one bit early.
-- With 330 Ω, some AP memory reads return incorrect data. An analyzer probe on PC10 removes the fault.
-- OpenOCD does not see the fault, because each shift of its scans has one TMS value. pyOCD fails.
+- With 330 Ω, some AP memory reads return incorrect data. An analyzer probe on PC10 removes the fault. The cause is not measured.
+- OpenOCD does not see the 2.2 kΩ fault, because each shift of its scans has one TMS value. OpenOCD is not tested with 330 Ω. pyOCD fails with both resistors.
 
 Use pyOCD or `DAP_Transfer` to check the link, not only OpenOCD.
 
