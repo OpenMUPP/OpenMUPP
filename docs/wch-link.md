@@ -773,6 +773,6 @@ The wire times are not measured with a logic analyzer.
 
 Open items:
 
-- The minichlink read of the full CH32V003 flash with a WCH-LinkE. On the Mini it fails, on the YD-CH32V307VCT6 it passes.
+- The minichlink read of the full CH32V003 flash with a WCH-LinkE. On the Mini, it fails. On the YD-CH32V307VCT6, it passes.
 - The two-wire engine on the YD-CH32V307VCT6 (CH32V20x).
 - The WCH OpenOCD fork (if time allows).
