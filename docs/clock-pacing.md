@@ -359,11 +359,11 @@ Findings:
 
 ## CH32V307 JTAG
 
-Measured on 2026-11-09 with the setup of [CH32V307](#ch32v307), with these changes:
+Measured on 2026-11-09 and 2026-11-10 with the setup of [CH32V307](#ch32v307), with these changes:
 
 - Target: the same STM32F103ZET6 on JTAG (TCK, TMS, TDI, TDO), at 64 MHz. The chain has two TAPs: the DAP (IR length 4) and the boundary-scan TAP (IR length 5).
-- Logic analyzer: TCK on channel 5, measured on PC10 (the TCK link), and TMS on channel 7.
-  TDI and TDO are not measured.
+- Logic analyzer on 2026-11-09: TCK on channel 5 and TMS on channel 7. TDI and TDO are not measured.
+- Logic analyzer on 2026-11-10: TDO on channel 4, PB13 on channel 5, TMS on channel 6 and PC10 on channel 7.
 - Traffic: OpenOCD reads 8 KiB of SRAM in each session.
 - The checks of the JTAG-DP transfers of the firmware use `tools/pyocd_jtag_test.py`, and raw `DAP_JTAG_IDCODE` and `DAP_Transfer` commands.
   OpenOCD does not use these transfers: it sends `DAP_JTAG_Sequence` for all scans (see [JTAG hardware test](cmsis-dap.md#jtag-hardware-test)).
@@ -395,47 +395,62 @@ The SPI rows include the bit-bang tail of each shift, so the mean is a little be
 | 4500 | 1.92 | 1.39 | 23.1 |
 | 9000 | 1.90 | 1.37 | 23.3 |
 
-On 2026-11-09, with the wire link, `tools/pyocd_jtag_test.py` passed at 1000, 2250, 4500 and 9000 kHz.
-On 2026-11-10, with the same wire and the same firmware code, it failed at all SPI speeds (see [TCK link](#tck-link)).
+On 2026-11-09, with a wire as the link, `tools/pyocd_jtag_test.py` passed at 1000, 2250, 4500 and 9000 kHz.
+With a resistor as the link, it failed at the SPI speeds that were tested (see [TCK link](#tck-link)).
 
 ### TCK link
 
-The first test used a resistor of 330 Ω to 470 Ω as the TCK link. This value comes from a probe PCB design with short traces.
-The test setup uses jumper wires and an analyzer probe on PC10, which have much more capacitance.
-With the resistor, OpenOCD passed at all speeds, but the JTAG-DP transfers of the firmware failed at all SPI speeds:
-pyOCD failed at 2250, 4500 and 9000 kHz, and passed at 1000 kHz (bit-bang).
+These tests used three links from PB13 to PC10. All tests used jumper wires to the target. The analyzer probes are given for each test.
 
-The analyzer showed the cause:
+| Link | OpenOCD | `tools/pyocd_jtag_test.py` at SPI speeds |
+|---|---|---|
+| Resistor of 2.2 kΩ | Pass | Fail at 2250, 4500 and 9000 kHz: TMS crosstalk into the TCK link |
+| Resistor of 330 Ω | Not tested | Fail at 1125, 4500 and 9000 kHz without an analyzer probe on PC10. Pass at 1125 to 9000 kHz with a probe on PC10 |
+| Wire | Pass | Pass at 2250, 4500 and 9000 kHz (2026-11-09). 1125 kHz is not tested |
 
-- SPI3 changed TMS 20 to 32 ns after the falling edge on PC10.
+The resistor of 2.2 kΩ was fitted by mistake, in place of a resistor of 330 Ω to 470 Ω.
+The value of 330 Ω to 470 Ω comes from a probe PCB design with short traces.
+At 1000 kHz (bit-bang), pyOCD passed with all three links.
+
+With the resistor of 2.2 kΩ, the analyzer showed the cause:
+
+- SPI3 changed TMS 20 to 32 ns after the falling edge of TCK.
   The bit-bang engine changes TMS 118 to 130 ns after the falling edge.
-- When TMS went from 0 to 1 during an SPI transfer, PC10 had a high pulse of 2 to 6 ns.
+- When TMS went from 0 to 1 during an SPI transfer, TCK had a high pulse of 2 to 6 ns.
   SPI3 counted the pulse as a clock edge, so the next TMS bits were one bit early.
   In a DP scan, the TAP then did not go to Update-DR, and the transfer failed.
-- A slower output speed of the TMS pin (10 MHz instead of 50 MHz) did not remove the pulse.
-
-On 2026-11-09, a wire replaced the resistor. The analyzer then showed no pulse and a TMS delay of 4 to 10 ns, and all checks passed.
-
-On 2026-11-10, the fault came back with the same wire, at all SPI speeds (1125 to 9000 kHz):
-
-- TMS on PC11 rose 32 ns after a falling edge on PC10, and PC10 had a high pulse of 2 ns.
-  This is crosstalk from the TMS wire (PC11) into the TCK link wire (PC10) on the neighbor pin.
-- A DPACC scan had 42 counted edges on PC10 instead of 41.
+- A DPACC scan had 42 counted edges instead of 41.
 - With the TMS pin at 2 MHz output speed, `DAP_Transfer` passed at 1125 and 4500 kHz and failed at 9000 kHz.
   At 10 MHz output speed, there was no change.
 
-Thus the resistor did not cause the fault. It only made the margin smaller.
-With jumper wires, the result depends on how the PC10 and PC11 wires lie, so a pass does not repeat reliably.
-The fix is open in [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16).
-A TCK link on a PCB is not tested.
+The resistor and the capacitance of the wires make a slow edge on PC10.
+A slow edge stays near the input threshold for a long time, so a small pulse from the TMS wire (PC11) on the neighbor pin is counted as a clock.
+
+With the resistor of 330 Ω (2026-11-10):
+
+- Probes on PB13 and TMS, no probe on PC10: raw `DAP_Transfer` commands showed no short pulses on PB13, and the TMS bits at each TCK edge were correct.
+- Probes on PB13, PC10, TMS and TDO: no short pulses on PB13 or PC10. PC10 is approximately 4 ns after PB13.
+- Raw `DAP_Transfer` commands to DP registers and AP registers passed at 1125 to 9000 kHz.
+  A RAM test of 20 blocks of 8 KiB also passed at 1125, 4500 and 9000 kHz.
+- Without an analyzer probe on PC10, pyOCD failed at 1125, 4500 and 9000 kHz ("core #0 is not halted").
+  Some AP memory reads (DRW) after an AP write (TAR) returned incorrect data. This did not occur at each read.
+- With an analyzer probe on PC10, pyOCD passed at 1000 to 9000 kHz. When the probe was removed, pyOCD failed again.
+
+Thus the fault with the resistor of 330 Ω depends on the load on PC10. The cause is not measured.
+A possible cause is a small pulse on PC10 that the capacitance of the probe (some pF) removes. The analyzer cannot show such a pulse, because the probe on PC10 removes the fault.
+
+On the YD board, use a wire as the link.
+For a probe PCB, it is not known if a resistor or a wire is better. [Issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16) tracks this.
+A small capacitor from PC10 to GND (10 to 22 pF) can possibly give the same effect as the analyzer probe. This is not tested, and the cause above is not confirmed.
 
 The scans of OpenOCD have one TMS value for each shift, so a TMS edge in the middle of an SPI transfer does not occur.
-Thus OpenOCD does not find a bad TCK link. Use pyOCD or the raw transfer commands for this check.
+Thus OpenOCD does not find the TMS crosstalk of the 2.2 kΩ link. OpenOCD is not tested with the 330 Ω link.
+Use pyOCD or the raw transfer commands to check a TCK link.
 
 ### 18 MHz
 
 The firmware does not use the SPI rate of 18 MHz (`jtag::spiMinShift` is 4).
 The STM32F103 test target permits TCK only up to F_CPU / 6 (10.6 MHz at 64 MHz), so 18 MHz cannot be tested with it.
-The half period at 18 MHz is 27.8 ns. The TMS delay of 4 to 10 ns (2026-11-09) leaves 17 ns or more for the TMS setup time of the target and the cable delay.
-This delay is not confirmed: on 2026-11-10, the delay was 32 ns, which leaves no margin at 18 MHz.
+The half period at 18 MHz is 27.8 ns. With the wire, the TMS delay of 4 to 10 ns leaves 17 ns or more for the TMS setup time of the target and the cable delay.
+With the resistor of 2.2 kΩ, the delay was up to 32 ns, which leaves no margin at 18 MHz.
 TDO must also come back within the half period. Test with a faster target before you lower `jtag::spiMinShift`.

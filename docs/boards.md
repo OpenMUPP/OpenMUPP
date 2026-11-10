@@ -467,7 +467,7 @@ These parts are known to be incomplete:
   The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)).
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
-  With jumper wires, JTAG-DP transfers (pyOCD, `DAP_Transfer`) fail at these speeds, because of crosstalk from TMS into the TCK link ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
+  JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. 1125 kHz is not tested with the wire. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 - The one-wire engine (TIM10 and DMA2) is not tested on hardware.
 - There is no bootloader entry and no flash settings.
 
@@ -500,18 +500,16 @@ The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-p
 Connect TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
 Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more).
 
-On the YD board with jumper wires, JTAG-DP transfers on the fast path fail, with a wire or with a resistor of 330 Ω to 470 Ω as the link (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag) and [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)):
+Use a wire as the link. With a resistor as the link, JTAG-DP transfers on the fast path fail (see [TCK link](clock-pacing.md#tck-link) and [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)):
 
-- SPI3 changes TMS on PC11 shortly after the falling edge on PC10.
-- A rising TMS edge on the next pin couples into PC10 as a short pulse, and SPI3 counts it as a clock. TMS is then one bit early.
-- A resistor makes the edges on PC10 slower, so the fault occurs more easily. A wire passed on one day and failed on the next day.
-- OpenOCD does not see the fault, because each shift of its scans has one TMS value. pyOCD fails.
+- With 2.2 kΩ, a rising TMS edge on PC11 couples into PC10 as a short pulse. SPI3 counts it as a clock, and TMS is then one bit early.
+- With 330 Ω, some AP memory reads return incorrect data. An analyzer probe on PC10 removes the fault. The cause is not measured.
+- OpenOCD does not see the 2.2 kΩ fault, because each shift of its scans has one TMS value. OpenOCD is not tested with 330 Ω. pyOCD fails with both resistors.
 
-Keep the PC10 wire away from the PC11 wire. Use pyOCD or `DAP_Transfer` to check the link, not only OpenOCD.
+Use pyOCD or `DAP_Transfer` to check the link, not only OpenOCD.
 
 A resistor limits the current when other code drives PC10 as an output (for example UART4_TX or the microSD card). The wire gives no such protection.
-On a probe PCB with short traces, the capacitance is much lower, and the delay of a 330 Ω to 470 Ω resistor is approximately 5 ns.
-This is not tested. Test a resistor on the PCB with pyOCD (`tools/pyocd_jtag_test.py`) at 9000 kHz, not only with OpenOCD.
+For a probe PCB, it is not known if a resistor or a wire is better. Test the link on the PCB with pyOCD (`tools/pyocd_jtag_test.py`) at 9000 kHz, not only with OpenOCD.
 Keep the microSD slot empty: PC10 and PC11 are also DAT2 and DAT3 of the card.
 
 The board uses the [ch32v00x-system](https://github.com/armint/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.
