@@ -42,6 +42,11 @@ void CmsisDapFunction::transferSent() {
    }
 }
 
+void CmsisDapFunction::dataPathOpened() {
+   // No packet is in flight: dataPathClosed() emptied the processor.
+   processor_.setPacketSize(packetSize());
+}
+
 void CmsisDapFunction::dataPathClosed() {
    suspended_ = false;
    processor_.hostGone();

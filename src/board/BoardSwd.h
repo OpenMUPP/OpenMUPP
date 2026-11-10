@@ -38,7 +38,8 @@ class SwdPins {
    // PUPDR keeps the pull-up of init() in both directions, so only the mode
    // changes.
    [[gnu::always_inline]] void swdioRelease() {
-#if defined(STM32F1)
+#if defined(STM32F1) || defined(__riscv)
+      // F1-style GPIO (also CH32): the pull-up is a pull input with ODR high.
       SwdioOut::setConfig<pullUpInput>();
       SwdioOut::set();
 #else
@@ -59,7 +60,7 @@ class SwdPins {
    }
 
    private:
-#if defined(STM32F1)
+#if defined(STM32F1) || defined(__riscv)
    // Input with pull: ODR high selects the pull-up.
    static constexpr uint8_t pullUpInput =
    hw::gpio_f1::pinConfig(hw::GpioPin::Mode::Input, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::Up);

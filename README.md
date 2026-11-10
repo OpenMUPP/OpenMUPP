@@ -92,7 +92,8 @@ The submodules are:
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/system-stm32.
 - `libart-stm32`: STM32 adapters for libArT. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/libart-stm32.
 - `openmupp-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
-- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`ydch32v307`) use it. The primary repository is https://github.com/armint/ch32v00x-system.
+- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`ydch32v307`) use it. Its `main` branch has the CH32V30x support. The primary repository is https://github.com/armint/ch32v00x-system.
+- `ch32v00x-art`: the libArT adapters for the CH32V30x (the USB device controller). Only the CH32 boards use it. Its default branch is `dev`, not `main`. The primary repository is https://github.com/armint/ch32v00x-art.
 
 ## Requirements
 
@@ -134,6 +135,8 @@ With `-DMUPP_STRICT_SIZE=ON`, the build stops with an error instead (see [Images
 `mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality and without the RISC-V bridge. With the bridge, the Debug image does not fit behind a bootloader.
 The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
 The preset `ydch32v307` builds the stub image of the YD-CH32V307VCT6 board with the RISC-V GCC.
+The preset `ydch32v307-cmsis-dap` builds the firmware image instead, with the CMSIS-DAP personality and without the RISC-V bridge (`-DMUPP_CH32_STUB_IMAGE=OFF`, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board)).
+The preset `ydch32v307-wch-link` builds the firmware image with the WCH-Link personality.
 It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.
 [docs/cmake.md](docs/cmake.md#cmake-presets) describes them.

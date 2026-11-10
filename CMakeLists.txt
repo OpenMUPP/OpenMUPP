@@ -118,8 +118,10 @@ option(MUPP_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-li
 option(MUPP_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality" ON)
 
 # A CH32 board builds the stub image of the CH32V307 port and stops here
-# (cmake/Ch32StubImage.cmake).
-if (CMAKE_CROSSCOMPILING AND MUPP_MCU_VENDOR STREQUAL "CH32")
+# (cmake/Ch32StubImage.cmake), until the port is complete. OFF builds the
+# normal firmware image for the CH32 board.
+option(MUPP_CH32_STUB_IMAGE "Build the stub image for a CH32 board instead of the firmware" ON)
+if (CMAKE_CROSSCOMPILING AND MUPP_MCU_VENDOR STREQUAL "CH32" AND MUPP_CH32_STUB_IMAGE)
     include(Ch32StubImage)
     return()
 endif ()
@@ -201,6 +203,8 @@ if (CMAKE_CROSSCOMPILING)
         set(MUPP_SETTINGS_PAGE_SIZE 1024)
     elseif (_mupp_settings AND STM32_FAMILY STREQUAL "STM32H5")
         set(MUPP_SETTINGS_PAGE_SIZE 8192)
+    elseif (_mupp_settings AND MUPP_MCU_VENDOR STREQUAL "CH32")
+        message(FATAL_ERROR "Board ${BOARD}: the flash settings page of the CH32V307 is not ported yet (P6), so only a single personality without the RISC-V bridge builds (MUPP_PERSONALITIES=${MUPP_PERSONALITY_SET}, MUPP_CMSIS_DAP_RV_BRIDGE=${MUPP_RV_BRIDGE}).")
     elseif (_mupp_settings)
         message(FATAL_ERROR "Board ${BOARD}: a multi image or the RISC-V bridge (MUPP_PERSONALITIES=${MUPP_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have.")
     else ()
@@ -211,12 +215,16 @@ if (CMAKE_CROSSCOMPILING)
     # app-8k image), the JTAG fast path on SPI v1 and DMA1, and the one-wire
     # engine of WCH-Link on the timers and DMA1. STM32H5 only: the entry into
     # the ROM bootloader, the JTAG fast path on SPI v2 and GPDMA, and the
-    # one-wire engine on TIM3 and GPDMA.
+    # one-wire engine on TIM3 and GPDMA. CH32V30X only: the JTAG fast path
+    # on SPI2, SPI3, DMA1 and DMA2, and the one-wire engine on TIM10 and DMA2.
     if (NOT STM32_FAMILY STREQUAL "STM32F1")
         list(APPEND _mupp_dropped_files "src/boot/Bootloader\\.cpp" "src/board/BoardJtagFast\\.cpp" "src/board/BoardRvSwd\\.cpp")
     endif ()
     if (NOT STM32_FAMILY STREQUAL "STM32H5")
         list(APPEND _mupp_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp" "src/board/BoardRvSwdH5\\.cpp")
+    endif ()
+    if (NOT CH32_FAMILY STREQUAL "CH32V30X")
+        list(APPEND _mupp_dropped_files "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp")
     endif ()
     foreach (_file ${_mupp_dropped_files})
         list(FILTER MUPP_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
@@ -257,8 +265,16 @@ if (CMAKE_CROSSCOMPILING)
     # The main stack is 2 KB, because the STM32F103 has only 20 KB RAM, and
     # the link fails when less than the full stack is free. Each image sets
     # __flash_offset and __flash_length (mupp_add_app_image).
-    set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32/ldscripts)
-    set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_end=${MUPP_SETTINGS_PAGE_SIZE} -Wl,--defsym=__main_stack_size=2048 -Wl,--defsym=__minimum_stack_size=2048 -T${MUPP_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    if (MUPP_MCU_VENDOR STREQUAL "CH32")
+        # The scripts of ch32v00x-system (no settings page, no flash offset yet)
+        set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/ch32v00x-system/ldscripts)
+        set(MUPP_LIBS_LD "")
+        set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} -T${MUPP_LDSCRIPT} -Tsections.ld -Tnoheap.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    else ()
+        set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32/ldscripts)
+        set(MUPP_LIBS_LD "${MUPP_LDSCRIPT_DIR}/libs.ld")
+        set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_end=${MUPP_SETTINGS_PAGE_SIZE} -Wl,--defsym=__main_stack_size=2048 -Wl,--defsym=__minimum_stack_size=2048 -T${MUPP_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+    endif ()
 endif ()
 
 # Central interface target to unify compile/link flags and defines across all used libraries and executables
@@ -269,11 +285,23 @@ if (CMAKE_CROSSCOMPILING)
     if (NOT TARGET art::core)
         add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libArT")
     endif ()
-    if (NOT TARGET system-stm32)
-        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32")
-    endif ()
-    if (NOT TARGET art::stm32)
-        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libart-stm32")
+    # The system library and the libArT port of the MCU vendor
+    if (MUPP_MCU_VENDOR STREQUAL "CH32")
+        set(MUPP_VENDOR_LIBS ch32v00x-art ch32v00x-system)
+        if (NOT TARGET ch32v00x-system)
+            add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/ch32v00x-system")
+        endif ()
+        if (NOT TARGET ch32v00x-art)
+            add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/ch32v00x-art")
+        endif ()
+    else ()
+        set(MUPP_VENDOR_LIBS art::stm32 system-stm32)
+        if (NOT TARGET system-stm32)
+            add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32")
+        endif ()
+        if (NOT TARGET art::stm32)
+            add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libart-stm32")
+        endif ()
     endif ()
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
@@ -295,9 +323,10 @@ if (CMAKE_CROSSCOMPILING)
     # They use -O2 instead of -Os. It comes after the -Os of
     # COMMON_OPTIONS, so it wins.
     set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardJtagFastH5.cpp
-            src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp src/board/BoardRvSwdH5.cpp PROPERTIES COMPILE_OPTIONS -O2)
+            src/board/BoardJtagFastV30x.cpp src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp src/board/BoardRvSwdH5.cpp
+            src/board/BoardRvSwdV30x.cpp PROPERTIES COMPILE_OPTIONS -O2)
     # Apply unified build configuration
-    target_link_libraries(openmupp-objects PUBLIC art-build-config art::core art::stm32 system-stm32)
+    target_link_libraries(openmupp-objects PUBLIC art-build-config art::core ${MUPP_VENDOR_LIBS})
     target_include_directories(openmupp-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
 
     # The application image header (magic, length, CRC32) of
@@ -330,8 +359,11 @@ if (CMAKE_CROSSCOMPILING)
         # system-stm32 is an OBJECT library (start-up code, vector table).
         # CMake adds the objects of an OBJECT library only to the target
         # that links it directly, so each image links the libraries again.
-        target_link_libraries(${_target} PUBLIC openmupp-objects art::core art::stm32 system-stm32)
-        target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit} -Wl,-Map,${_name}.map)
+        target_link_libraries(${_target} PUBLIC openmupp-objects art::core ${MUPP_VENDOR_LIBS})
+        target_link_options(${_target} PUBLIC -Wl,-Map,${_name}.map)
+        if (NOT MUPP_MCU_VENDOR STREQUAL "CH32")
+            target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit})
+        endif ()
         # FW_UPDATE enters the bootloader only behind openmupp-bootloader.
         # The legacy bootloader of app-10k does not know the boot request
         # (hasBootloaderEntry in src/main.cpp). On the STM32H5, the
@@ -341,7 +373,7 @@ if (CMAKE_CROSSCOMPILING)
         endif ()
         # Relink when a linker script or the size check changes
         set_target_properties(${_target} PROPERTIES LINK_DEPENDS
-                "${MUPP_LDSCRIPT_DIR}/${MUPP_LDSCRIPT};${MUPP_LDSCRIPT_DIR}/libs.ld;${MUPP_LDSCRIPT_DIR}/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
+                "${MUPP_LDSCRIPT_DIR}/${MUPP_LDSCRIPT};${MUPP_LIBS_LD};${MUPP_LDSCRIPT_DIR}/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
 
         ADD_DUMP_TARGET(${_target})
         PRINT_SIZE_OF_TARGETS(${_target})

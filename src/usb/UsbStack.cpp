@@ -4,9 +4,11 @@
 
 #include <array>
 #include <delaybusywait.h>
+#if !defined(__riscv)
 #include <peripherals/Rcc.h>
 #if !defined(STM32F1)
 #include <peripherals/Crs.h>
+#endif
 #endif
 #include <peripherals/Uid.h>
 
@@ -39,6 +41,11 @@ static_assert(switchRequestCode != dap::msOs20VendorCode);
 // The two personalities share the endpoint numbers, so the OUT endpoint is
 // double-buffered in each.
 static_assert(dap::outEndpoint == versaloonOutEndpoint);
+#if defined(__riscv)
+// The USBHS packet pool at high speed: the double-buffered DAP OUT endpoint,
+// the DAP IN endpoint and the CDC-ACM endpoints.
+static_assert(3 * dap::highSpeedPacketSize + cdcNotificationPacketSize + 2 * dap::highSpeedPacketSize <= hw::UsbDevice::PacketMemorySize);
+#endif
 #endif
 #if defined(MUPP_WITH_VERSALOON)
 // The packet memory: the buffer descriptor table, EP0 (64 bytes each way),
@@ -96,6 +103,10 @@ const art::usb::Descriptors dapDescriptors{
    .configuration = desc::asSpan(dap::configurationDescriptor),
    .strings = art::span<const art::span<const uint8_t>>(dapStrings.data(), dapStrings.size()),
    .bos = desc::asSpan(dap::bosDescriptor),
+#if defined(__riscv)
+   .highSpeedConfiguration = desc::asSpan(dap::highSpeedConfigurationDescriptor),
+   .deviceQualifier = desc::asSpan(dap::deviceQualifierDescriptor),
+#endif
 };
 
 // Answers the request of Windows for the MS OS 2.0 descriptor set
@@ -162,7 +173,24 @@ uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
    return endpointCount;
 }
 
-#if !defined(STM32F1)
+#if defined(__riscv)
+// High speed only for a personality with high-speed descriptors (512-byte
+// bulk endpoints, USB 2.0 section 5.8.3). The others have 64-byte bulk
+// endpoints, which are valid at full speed only.
+constexpr hw::UsbDevice::Speed maxSpeedOf([[maybe_unused]] Personality personality) {
+#if defined(MUPP_WITH_CMSIS_DAP)
+   if(personality == Personality::CmsisDap) {
+      return hw::UsbDevice::Speed::High;
+   }
+#endif
+   return hw::UsbDevice::Speed::Full;
+}
+#if defined(MUPP_WITH_WCH_LINK)
+static_assert(maxSpeedOf(Personality::WchLink) == hw::UsbDevice::Speed::Full, "WCH-Link has full-speed descriptors only");
+#endif
+#endif
+
+#if !defined(STM32F1) && !defined(__riscv)
 // USB clock of the STM32H5: HSI48, trimmed by the CRS from the USB SOF
 // packets. PA11 and PA12 are USB_DM and USB_DP on AF10. A failure leaves
 // USB without a clock, and the host sees no device.
@@ -189,7 +217,11 @@ void startUsbClock() {
 } // namespace
 
 UsbStack::UsbStack(Personality active, const Functions &functions)
+#if defined(__riscv)
+   : hardware_(endpointCountOf(active), maxSpeedOf(active))
+#else
    : hardware_(endpointCountOf(active))
+#endif
    , controller_(hardware_, events_)
    , active_(active)
    , device_(controller_, descriptorsOf(active))
@@ -252,11 +284,16 @@ void UsbStack::start() {
    hw::Uid::read(uid);
    serialNumber.set(uid);
 
+#if !defined(__riscv)
    if(board::current.usbPullUp) {
       hardware_.setPullupCallback(&UsbStack::setPullUp, nullptr);
    }
+#endif
 
-#if defined(STM32F1)
+#if defined(__riscv)
+   // The USBHS has an internal D+ pull-up. hw::UsbDevice::begin() starts the PHY clock from the crystal.
+   constexpr IRQn_Type usbIrq = USBHS_IRQn;
+#elif defined(STM32F1)
    if(!board::current.usbPullUp) {
       // Fixed D+ pull-up: a reset without disconnect() (debugger, watchdog)
       // leaves the host with the old device. D+ low shows a disconnect. The
@@ -271,8 +308,11 @@ void UsbStack::start() {
 #else
    startUsbClock();
 #endif
+#if !defined(__riscv)
+   constexpr auto usbIrq = hw::usbfs::Irq;
+#endif
    // Before begin(), which enables the interrupt (Hardware.h)
-   NVIC_SetPriority(hw::usbfs::Irq, hardware::usbIrqPriority);
+   NVIC_SetPriority(usbIrq, hardware::usbIrqPriority);
    controller_.begin();
    device_.start();
 }
@@ -314,6 +354,10 @@ void UsbStack::poll() {
 }
 
 void UsbStack::disconnect() {
+#if defined(__riscv)
+   NVIC_DisableIRQ(USBHS_IRQn);
+   controller_.disconnect();
+#else
    NVIC_DisableIRQ(hw::usbfs::Irq);
    if(const auto pullUp = board::current.usbPullUp) {
       board::write(*pullUp, false);
@@ -331,6 +375,7 @@ void UsbStack::disconnect() {
       board::configureOutput(board::Signal{ { board::Port::A, 12 }, board::Active::High }, false);
 #endif
    }
+#endif
    delaymS(disconnectMs);
 }
 

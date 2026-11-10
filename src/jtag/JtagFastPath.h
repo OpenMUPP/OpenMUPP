@@ -58,8 +58,11 @@ namespace jtag {
 // Shift 2 (31.25 MHz, half period 16 ns) leaves 4.5 ns. Shift 3 (15.6 MHz)
 // is not tested: the STM32F103 test target allows 10.6 MHz at most. Thus
 // the H5 starts at shift 4 (7.8 MHz, the fastest tested rate). Lower the
-// value only after a hardware test at that rate passes.
-#if defined(STM32H5)
+// value only after a hardware test at that rate passes. CH32V307: the SPI
+// clock is 144 MHz and tv(SO) is 10 ns (CH32V307DS0 table 4-28). Shift 3
+// (18 MHz, half period 27.8 ns) is not tested, so it starts at shift 4
+// (9 MHz, the fastest rate of the STM32F103).
+#if defined(STM32H5) || defined(CH32V30x_D8C)
 inline constexpr uint8_t spiMinShift = 4;
 #else
 inline constexpr uint8_t spiMinShift = 2;

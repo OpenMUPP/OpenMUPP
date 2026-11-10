@@ -16,7 +16,7 @@ using hw::GpioPin;
 
 // A source with the divider of the board has a high impedance: the longest
 // sample time keeps the error small.
-#if defined(STM32F1)
+#if defined(STM32F1) || defined(__riscv)
 constexpr Adc::SamplingCycles sampling = Adc::SamplingCycles::Cycles239_5;
 #else
 constexpr Adc::SamplingCycles sampling = Adc::SamplingCycles::Cycles640_5;
@@ -39,8 +39,8 @@ void BoardPower::init() {
    Adc::enableClock();
    Adc::configureClock();
    const Adc adc(ADC1);
-#if defined(STM32F1)
-   // The STM32F103 calibrates an enabled ADC (RM0008 11.4)
+#if defined(STM32F1) || defined(__riscv)
+   // The STM32F103 and the CH32V307 calibrate an enabled ADC (RM0008 11.4)
    adc.enable();
    adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin)), sampling);
    adcReady_ = adc.calibrate();

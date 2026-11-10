@@ -11,20 +11,23 @@
 // counter.
 //
 // JtagSpi: the SPI and DMA of the fast path (BoardJtagFast.cpp on the
-// STM32F1, BoardJtagFastH5.cpp on the STM32H5). Its pins are fixed (see
-// board::isValid()):
+// STM32F1, BoardJtagFastH5.cpp on the STM32H5, BoardJtagFastV30x.cpp on the
+// CH32V307). Its pins are fixed (see board::isValid()):
 //
 //   SPI2 master: SCK = TCK (PB13), MISO = TDO (PB14), MOSI = TDI (PB15)
 //   SPI1 slave: SCK = TCK link (PB3), MISO = TMS (PB4 remapped on the
 //   STM32F1, PA6 on the STM32H5)
+//   CH32V307 SPI3 slave (remapped): SCK = TCK link (PC10), MISO = TMS (PC11)
 //   STM32F1 DMA1: channel 3 = SPI1 TX (TMS), 4 = SPI2 RX (TDO),
 //   5 = SPI2 TX (TDI)
 //   STM32H5 GPDMA1: channel 0 = SPI1 TX (TMS), 1 = SPI2 RX (TDO),
 //   2 = SPI2 TX (TDI)
+//   CH32V307: DMA2 channel 2 = SPI3 TX (TMS), DMA1 channel 4 = SPI2 RX
+//   (TDO), DMA1 channel 5 = SPI2 TX (TDI)
 //
-// SPI1 MOSI and NSS stay GPIO: SPI1 ignores its receive data, and its NSS
-// is software. The pins are GPIO between transfers, so the bit-bang engine
-// and the SWD engine can use them.
+// The MOSI and NSS pins of the slave stay GPIO: the slave ignores its
+// receive data, and its NSS is software. The pins are GPIO between
+// transfers, so the bit-bang engine and the SWD engine can use them.
 
 #include <cmsis_device.h>
 #include <cstdint>
@@ -91,8 +94,8 @@ class JtagSpi {
    [[nodiscard]] bool transfer(JtagPins &pins, const uint8_t *tdi, const uint8_t *tms, uint8_t *tdo, uint32_t bytes);
 
    private:
-   // SPI2 clock (APB1 on the STM32F1, the kernel clock on the STM32H5);
-   // init() reads it from the RCC.
+   // SPI2 clock (APB1 on the STM32F1 and the CH32V307, the kernel clock on
+   // the STM32H5); init() reads it from the RCC.
    uint32_t clockHz_{ 36'000'000 };
    uint8_t shift_{ jtag::spiMinShift };
 };
@@ -106,6 +109,6 @@ using BoardJtag = std::conditional_t<current.hasJtagFastPath(), jtag::FastPort<J
 // bit-bang with TCK idle high.
 extern template class jtag::BitBangPort<board::JtagPins>;
 extern template class jtag::BitBangPort<board::JtagPins, jtag::TckIdle::High>;
-#if defined(STM32F1) || defined(STM32H5)
+#if defined(STM32F1) || defined(STM32H5) || defined(CH32V30x_D8C)
 extern template class jtag::FastPort<board::JtagPins, board::JtagSpi>;
 #endif

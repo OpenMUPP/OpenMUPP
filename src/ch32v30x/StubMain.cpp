@@ -1,22 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Stub image of the CH32V307 boards (cmake/Ch32StubImage.cmake) until the
-// port is complete. The start-up code of ch32v00x-system calls SystemInit()
-// (144 MHz from the 8 MHz crystal) before main(). main() blinks LED2 (PB4)
-// of the YD-CH32V307VCT6, so the image also shows on hardware that it runs.
+// Image of the CH32V307 boards (cmake/Ch32StubImage.cmake) until the port is
+// complete. os_startup_initialize_hardware() (initialize_hardware.cpp) set the
+// clock, the 1 ms SysTick and the board pins before main(). main() flashes the
+// state LED: a short flash once per second, or the fast clock-fault pattern
+// when the crystal did not start. USB and the probe engines are not in it yet.
 
-#include <peripherals/GpioPin.h>
-#include <wch_device.h>
+#include <cmsis_device.h>
+#include <utils/Timekeeping.h>
+
+#include "Hardware.h"
+#include "Heartbeat.h"
+#include "board/Leds.h"
 
 int main() {
-   RCC->APB2PCENR |= RCC_IOPBEN;
-   const GpioPin led(GPIOB, 4);
-   led.configureOutput(GpioPin::OutputMode::PushPull, GpioPin::OutputSpeed::Output2MHz);
-   while(true) {
-      led.toggle();
-      // About 0.2 s at 144 MHz; the exact time does not matter
-      for(uint32_t i = 0; i < 4'000'000; i = i + 1) {
-         asm volatile("");
-      }
+   constexpr Heartbeat running{ Heartbeat::Pattern{ .periodMs = 1000, .onMs = 50 } };
+   constexpr Heartbeat clockFault{ Heartbeat::clockFault };
+   const bool clockFromCrystal = hardware::isClockFromCrystal();
+   const board::StateShow flash = clockFromCrystal ? board::StateShow::Activity : board::StateShow::Fault;
+   const Heartbeat &heartbeat = clockFromCrystal ? running : clockFault;
+   for(;;) {
+      const auto nowMs = static_cast<uint64_t>(getUptimeTicks());
+      board::showState(heartbeat.isOn(nowMs) ? flash : board::StateShow::Idle);
+      // The SysTick ends the WFI
+      __WFI();
    }
 }

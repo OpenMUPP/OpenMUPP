@@ -58,10 +58,13 @@ Some functions come from the pin map and the family, not from a separate field:
 
 - `board::adcChannelOf()` gives the ADC channel of the Vref pin.
   The channels of the STM32F103 come from RM0008. The channels of the STM32H523/H533 come from DS14539.
+  The CH32V307 has the same channels as the STM32F103 (CH32V307DS0 pin table).
 - `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
   On the STM32H5, only PA6 (TIM3_CH1) has a timer.
+  On the CH32V307, only PC11 (TIM10_CH4) has a timer.
 - `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
-  The crystal pins are PD0 and PD1 on the STM32F103, and PH0 and PH1 on the STM32H5.
+  The crystal pins are PD0 and PD1 on the STM32F103 and the CH32V307, and PH0 and PH1 on the STM32H5.
+  On the CH32V307, the USB high-speed pins PB6 and PB7 are also reserved.
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
   The setting frees all debug port pins that the board uses, and keeps the rest.
   The Mini uses PA14 for an LED, so it disables the debug port.
@@ -76,10 +79,12 @@ Some functions come from the pin map and the family, not from a separate field:
 
 The build fails when a board definition is not valid.
 Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
-The build also fails when the family of the board definition is different from `STM32_FAMILY`.
+The build also fails when the family of the board definition is different from `STM32_FAMILY` (or the CH32 device, `CH32_DEVICE`).
 The JTAG fast path has fixed pins. TMS is on SPI1 MISO: PB4 on the STM32F103, PA6 on the STM32H5.
 PB4 can also be SPI1 MISO on the STM32H5. The pin map of the H5 boards uses PB4 for TRST, so the firmware uses PA6.
-The crystal range is 4 MHz to 16 MHz on the STM32F103, and 4 MHz to 50 MHz on the STM32H5.
+On the CH32V307, TMS is on SPI3 MISO (PC11) and the TCK link is on SPI3 SCK (PC10), with the SPI3 remap.
+The crystal range is 4 MHz to 16 MHz on the STM32F103, 4 MHz to 50 MHz on the STM32H5, and 3 MHz to 25 MHz on the CH32V307.
+The clock code of ch32v00x-system supports only an 8 MHz crystal.
 
 To add a board:
 
@@ -91,13 +96,17 @@ To add a board:
 
 ## Start-up and LEDs
 
-The system-stm32 start-up code calls `os_startup_initialize_hardware()` (`src/initialize_hardware.cpp`) before `main()`.
+The start-up code of system-stm32 (or ch32v00x-system on the CH32V307) calls `os_startup_initialize_hardware()` (`src/initialize_hardware.cpp`) before `main()`.
 This function does these steps:
 
 1. It sets the system clock from the board crystal, and the SysTick to 1 ms.
    The STM32F1 runs at 72 MHz.
    The STM32H5 runs at 250 MHz, with the instruction cache on.
+   On the CH32V307, `SystemInit()` of ch32v00x-system already set 144 MHz in `os_startup_initialize_hardware_early()`.
+   The function only reads the clock source: the PLL means that the crystal runs.
 2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
+   The CH32V307 skips this step, so SWD stays on.
+   A CH32V307 board must not use PA13 and PA14 (`isValid()`).
    The Mini disables the debug port. A debug probe can then connect only under reset.
    With `MUPP_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
    Then a debug probe can run and step the firmware.
@@ -437,8 +446,73 @@ The board `ydch32v307` is the YD-CH32V307VCT6 development board V1.0.
 It has a CH32V307VCT6 (LQFP100), an 8 MHz crystal and a 32.768 kHz crystal.
 It is the test board for the port of the firmware to the CH32V307.
 The port is in progress.
-The image of this board is a stub: it starts the clock (144 MHz from the crystal) and blinks `LED2` (PB4).
-The firmware sources still need the STM32 layer, so the stub does not have them yet.
+The image of this board is a stub. It runs the board start-up of the firmware (see [Start-up and LEDs](#start-up-and-leds)):
+the clock (144 MHz from the crystal), the 1 ms SysTick and the safe state of the board pins.
+Then it flashes the state LED (`LED2`, PB4) for 50 ms once per second.
+If the crystal or the PLL does not start, the clock stays on HSI and the LED flashes fast (the clock fault pattern).
+The image does not have USB and the probe engines yet.
+
+The option `MUPP_CH32_STUB_IMAGE=OFF` builds the firmware instead of the stub.
+Use it with `-DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_RV_BRIDGE=OFF`:
+the flash settings page of the CH32V307 does not exist yet, so only one personality without the RISC-V bridge builds.
+The preset `ydch32v307-cmsis-dap` sets these options.
+The preset `ydch32v307-wch-link` builds an image with only the WCH-Link personality. It has the one-wire engine (see [One-wire timer](wch-link.md#one-wire-timer)).
+This image builds and links (37 KB).
+On the YD board, USB, JTAG connect and SWD connect work.
+The CMSIS-DAP image runs USB at high speed with 512-byte packets (see [High speed](usb-device.md#high-speed-ch32v307)).
+The WCH-Link image runs USB at full speed.
+These parts are known to be incomplete:
+
+- The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`).
+  The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)).
+  JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
+- The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
+  With jumper wires, JTAG-DP transfers (pyOCD, `DAP_Transfer`) fail at these speeds, because of crosstalk from TMS into the TCK link ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
+- The one-wire engine (TIM10 and DMA2) is not tested on hardware.
+- There is no bootloader entry and no flash settings.
+
+The board definition is `src/board/boards/YdCh32V307.h`.
+The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.
+All signals are 3.3 V. The board has no level shifters and no target power switch.
+
+![Pinout of the YD-CH32V307VCT6 development board](images/ydch32v307-pinout.svg)
+
+The image is a top view of the board. P3 is on the top edge and P2 is on the bottom edge.
+Pin 1 of the two headers is at the end with P4 and the USB2 connector. The nets come from the board schematic V1.0.
+
+| Signal | Pin | Header pin |
+|---|---|---|
+| TCK / SWCLK | PB13 | P3-45 |
+| TDI | PB15 | P3-43 |
+| TDO | PB14 | P3-44 |
+| TMS / SWDIO (out and in) | PC11 | P3-21 |
+| TCK link (JTAG fast path) | PC10 | P3-22 |
+| SRST | PB12 | P3-46 |
+| TRST | PB9 | P3-5 |
+| RTCK | PA8 | P3-30 |
+| UART TX / RX (USART1) | PA9 / PA10 | P3-29 / P3-28 |
+| Vref sense (3.3 V maximum) | PB0 | P2-29 |
+| State LED (`LED2`, green, active high) | PB4 | on the board |
+| USB LED (`LED1`, red, active high) | PA15 | on the board |
+| Key (`USR`, active low) | PB3 | on the board |
+
+The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
+Connect TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
+Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more).
+
+On the YD board with jumper wires, JTAG-DP transfers on the fast path fail, with a wire or with a resistor of 330 Ω to 470 Ω as the link (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag) and [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)):
+
+- SPI3 changes TMS on PC11 shortly after the falling edge on PC10.
+- A rising TMS edge on the next pin couples into PC10 as a short pulse, and SPI3 counts it as a clock. TMS is then one bit early.
+- A resistor makes the edges on PC10 slower, so the fault occurs more easily. A wire passed on one day and failed on the next day.
+- OpenOCD does not see the fault, because each shift of its scans has one TMS value. pyOCD fails.
+
+Keep the PC10 wire away from the PC11 wire. Use pyOCD or `DAP_Transfer` to check the link, not only OpenOCD.
+
+A resistor limits the current when other code drives PC10 as an output (for example UART4_TX or the microSD card). The wire gives no such protection.
+On a probe PCB with short traces, the capacitance is much lower, and the delay of a 330 Ω to 470 Ω resistor is approximately 5 ns.
+This is not tested. Test a resistor on the PCB with pyOCD (`tools/pyocd_jtag_test.py`) at 9000 kHz, not only with OpenOCD.
+Keep the microSD slot empty: PC10 and PC11 are also DAT2 and DAT3 of the card.
 
 The board uses the [ch32v00x-system](https://github.com/armint/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.
 The image has no bootloader: write it with a WCH-LinkE or another probe on the SWD header `P4` (PA13 SWDIO, PA14 SWCLK).

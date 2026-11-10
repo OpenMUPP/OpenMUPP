@@ -6,6 +6,7 @@
 #include "board/boards/StLinkV21.h"
 #include "board/boards/StLinkV2MiniClone.h"
 #include "board/boards/WeActH523.h"
+#include "board/boards/YdCh32V307.h"
 
 #include <doctest/doctest.h>
 
@@ -20,6 +21,7 @@ namespace {
 
 constexpr Family F1 = Family::Stm32F1;
 constexpr Family H5 = Family::Stm32H5;
+constexpr Family V30x = Family::Ch32V30x;
 
 // An STM32H5 test board with a 24 MHz crystal and the TCK link on PB3. It
 // tests the STM32H5 rules apart from the board definitions.
@@ -186,6 +188,113 @@ TEST_CASE("All boards are valid") {
    CHECK(board::isValid(board::stLinkV21));
    CHECK(board::isValid(board::stLinkV2MiniClone));
    CHECK(board::isValid(board::weActH523));
+   CHECK(board::isValid(board::ydCh32V307));
+}
+
+TEST_CASE("YD-CH32V307VCT6 has the pin map of plan D10") {
+   const Definition &yd = board::ydCh32V307;
+
+   CHECK(yd.name == "ydch32v307");
+   CHECK(yd.family == V30x);
+   CHECK(yd.hseFrequency == 8'000'000);
+   CHECK(yd.debug.tck == Pin{ Port::B, 13 });
+   CHECK(yd.debug.tdi == Pin{ Port::B, 15 });
+   CHECK(yd.debug.tdo == Pin{ Port::B, 14 });
+   // One pin is SWDIO out and in
+   CHECK(yd.debug.tmsOut == Pin{ Port::C, 11 });
+   CHECK(yd.debug.tmsIn == Pin{ Port::C, 11 });
+   CHECK(yd.debug.srst == Pin{ Port::B, 12 });
+   CHECK(yd.debug.trst == Pin{ Port::B, 9 });
+   CHECK(yd.debug.rtck == Pin{ Port::A, 8 });
+   CHECK(yd.uart == board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } });
+   CHECK(yd.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 1 });
+   CHECK(yd.leds.state == Signal{ { Port::B, 4 }, Active::High });
+   CHECK(yd.leds.usb == Signal{ { Port::A, 15 }, Active::High });
+   CHECK_FALSE(yd.leds.power);
+   CHECK(yd.key == Signal{ { Port::B, 3 }, Active::Low });
+   REQUIRE(yd.hasJtagFastPath());
+   CHECK(yd.jtagFastPath->tckLink == Pin{ Port::C, 10 });
+   CHECK_FALSE(yd.powerSwitch);
+   CHECK_FALSE(yd.usbPullUp);
+}
+
+TEST_CASE("isValid checks the CH32V307 rules") {
+   Definition def = board::ydCh32V307;
+
+   SUBCASE("USBHS pin PB6") {
+      def.debug.trst = Pin{ Port::B, 6 };
+   }
+   SUBCASE("USBHS pin PB7") {
+      def.debug.trst = Pin{ Port::B, 7 };
+   }
+   SUBCASE("crystal pin") {
+      def.key = Signal{ { Port::D, 1 }, Active::Low };
+   }
+   SUBCASE("crystal too slow") {
+      def.hseFrequency = 2'000'000;
+   }
+   SUBCASE("crystal too fast") {
+      def.hseFrequency = 26'000'000;
+   }
+   SUBCASE("no crystal") {
+      def.hseFrequency = 0;
+   }
+   SUBCASE("JTAG fast path link on the SPI1 SCK of the STM32F103 (PB3)") {
+      def.key.reset();
+      def.jtagFastPath->tckLink = Pin{ Port::B, 3 };
+   }
+   SUBCASE("JTAG fast path TMS not on SPI3 MISO (PC11)") {
+      def.debug.tmsOut = Pin{ Port::C, 12 };
+      def.debug.tmsIn = Pin{ Port::C, 12 };
+   }
+   SUBCASE("SWD pin PA13 (no SW_CFG write)") {
+      def.leds.usb = Signal{ { Port::A, 13 }, Active::High };
+   }
+   SUBCASE("SWD pin PA14 (no SW_CFG write)") {
+      def.leds.usb = Signal{ { Port::A, 14 }, Active::High };
+   }
+   SUBCASE("Vref pin without an ADC channel") {
+      // PB8 is free on the YD board, so only the ADC rule rejects it.
+      def.vref->pin = Pin{ Port::B, 8 };
+   }
+
+   CHECK_FALSE(board::isValid(def));
+}
+
+TEST_CASE("A CH32V307 board without the JTAG fast path is valid") {
+   Definition def = board::ydCh32V307;
+   def.jtagFastPath.reset();
+   CHECK(board::isValid(def));
+   // PC12 is free when the fast path does not need PC11 for TMS
+   def.debug.tmsOut = Pin{ Port::C, 12 };
+   def.debug.tmsIn = Pin{ Port::C, 12 };
+   CHECK(board::isValid(def));
+}
+
+TEST_CASE("The CH32V307 has the ADC channels of the STM32F103 and the one-wire timer TIM10") {
+   CHECK(board::adcChannelOf(V30x, { Port::B, 0 }) == 8);
+   CHECK(board::adcChannelOf(V30x, { Port::C, 5 }) == 15);
+   CHECK_FALSE(board::adcChannelOf(V30x, { Port::B, 2 }));
+   // TIM10_CH4 on PC11, TIM10_CH1 samples; TIM10_UP on DMA2 ch11, TIM10_CH1 on ch8
+   const auto timer = board::oneWireTimerOf(V30x, board::ydCh32V307.debug.tmsOut);
+   REQUIRE(timer);
+   CHECK(timer->timer == 10);
+   CHECK(timer->channel == 4);
+   CHECK_FALSE(timer->complementary);
+   CHECK_FALSE(timer->partialRemap);
+   CHECK(timer->sampleChannel == 1);
+   CHECK(timer->updateDma == 11);
+   CHECK(timer->sampleDma == 8);
+   // The pins of the STM32F103 timers have no timer on the CH32V307
+   CHECK_FALSE(board::oneWireTimerOf(V30x, { Port::B, 4 }));
+   CHECK_FALSE(board::oneWireTimerOf(V30x, { Port::B, 14 }));
+   // PB6 and PB7 are normal pins on the other families: SRST of the mini
+   // clone is PB6.
+   CHECK(board::stLinkV2MiniClone.debug.srst == Pin{ Port::B, 6 });
+   CHECK(board::isValid(board::stLinkV2MiniClone));
+   Definition def = board::weActH523;
+   def.debug.trst = Pin{ Port::B, 7 };
+   CHECK(board::isValid(def));
 }
 
 TEST_CASE("isValid rejects pin conflicts") {
@@ -243,7 +352,7 @@ TEST_CASE("adcChannelOf gives the STM32F103 ADC channel of a pin") {
 }
 
 TEST_CASE("oneWireTimerOf gives a timer channel on the SWDIO output of each board") {
-   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV21, board::stLinkV2MiniClone }) {
+   for(const Definition &def : { board::mini, board::otherUse, board::stLinkV21, board::stLinkV2MiniClone, board::ydCh32V307 }) {
       CAPTURE(def.name);
       const auto timer = board::oneWireTimerOf(def.family, def.debug.tmsOut);
       REQUIRE(timer);
@@ -351,7 +460,8 @@ TEST_CASE("isValid checks the crystal and the Vref pin") {
       def.hseFrequency = 0;
    }
    SUBCASE("Vref pin without an ADC channel") {
-      def.vref->pin = Pin{ Port::A, 8 };
+      // PB12 is free on the Mini, so only the ADC rule rejects it.
+      def.vref->pin = Pin{ Port::B, 12 };
    }
    SUBCASE("no divider") {
       def.vref->divider = 0;

@@ -20,6 +20,7 @@ These options select the board, the personality and the debug features:
 | `MUPP_LTO` | `ON` in a `Release` build, else `OFF` | Link-time optimisation (LTO) of the firmware and of the libraries. The images are about 13 % smaller. The option sets `CMAKE_INTERPROCEDURAL_OPTIMIZATION`. CMake then makes the libraries with `gcc-ar` and `gcc-ranlib`, because `ar` and `ranlib` give no symbol index for LTO objects. |
 | `MUPP_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
 | `MUPP_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [debug-log.md](debug-log.md)). Not allowed in a `Release` build, and not allowed when `wch-link` is the only personality. In a multi image, the log is silent while the WCH-Link personality is active. |
+| `MUPP_CH32_STUB_IMAGE` | `ON` | CH32 boards only. `ON`: the build makes the stub image (board start-up and state LED). `OFF`: the build makes the firmware image. It works with one personality and without the RISC-V bridge only (no flash settings page yet). |
 | `MUPP_STRICT_SIZE` | `OFF` (CI: `ON`) | What the build does when an image does not fit its flash limit (see [Images that do not fit](#images-that-do-not-fit)). `OFF`: the build skips the image with a warning and continues. `ON`: the build stops with an error. |
 | `MUPP_SKIP_IMAGES` | empty | Application images to leave out of the build: a list of `standalone`, `app-8k` and `app-10k`, separated by `,` or `;`, for example `app-8k,app-10k`. Without `app-8k`, the build makes no `with-bootloader` image. On a board with a bootloader, the standalone image of a build without `app-10k` has no check against the `app-10k` limit. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the GNU toolchain: the Arm GNU Toolchain, or the RISC-V GCC for a CH32 board. |
@@ -119,7 +120,9 @@ The default is `/usr`.
 | `weacth523-debug` | WeAct STM32H523 core board | `cmsis-dap` | Debug |
 | `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
 | `weacth523` | WeAct STM32H523 core board | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
-| `ydch32v307` | YD-CH32V307VCT6 development board | none: the stub image of the CH32V307 port | Release |
+| `ydch32v307` | YD-CH32V307VCT6 development board | none: the stub image of the CH32V307 port (board start-up and state LED) | Release |
+| `ydch32v307-cmsis-dap` | YD-CH32V307VCT6 development board | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` and `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image, not the stub (tag `-cmsis-dap-no-rv-bridge`) | Release |
+| `ydch32v307-wch-link` | YD-CH32V307VCT6 development board | `wch-link`, with `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image with the one-wire engine | Release |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
@@ -133,7 +136,7 @@ The `-cmsis-dap-wch-link` presets do not exist: use the `-dual` presets.
 For a dual image with `versaloon,cmsis-dap`, add `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `mupp-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
-CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, and `mini-cmsis-dap-no-rv-bridge`.
+CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, `mini-cmsis-dap-no-rv-bridge`, `ydch32v307` and the `ydch32v307-` presets.
 The other presets are for local builds only.
 CI uses these presets (see [Continuous integration](development.md#continuous-integration)).
 

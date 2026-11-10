@@ -195,10 +195,15 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 }
 
 // From this SWCLK, the engine runs untimed on a slow core, as at delay 0.
-// The untimed rate changes with the code layout: 2.42 to 2.7 MHz on the
-// Mini (#118). Thus a request from this value does not give a faster
-// clock. Measure again after a change of the engine.
+// The value is above the untimed rate, so a request from this value does
+// not give a faster clock. The untimed rate changes with the code layout:
+// 2.42 to 2.7 MHz on the Mini (#118), 4.0 MHz on the CH32V307 at 144 MHz
+// (docs/clock-pacing.md). Measure again after a change of the engine.
+#if defined(__riscv)
+inline constexpr uint32_t maxClockHz = 4'500'000;
+#else
 inline constexpr uint32_t maxClockHz = 3'000'000;
+#endif
 
 // The cycles of the code of a timed half period, rounded up: 23 to 28 on
 // the STM32F103 (1.3 to 1.56 MHz at 72 MHz, it changes with the code
@@ -213,6 +218,12 @@ inline constexpr uint32_t timedCodeCycles = 28;
 constexpr bool runsUntimed(uint32_t coreHz) {
    return halfPeriodCyclesOfHz(coreHz, maxClockHz) < timedCodeCycles;
 }
+
+#if defined(__riscv)
+// The CH32V307 (144 MHz) keeps the untimed engine: it is faster than the
+// timed code limit (2.76 MHz).
+static_assert(runsUntimed(144'000'000));
+#endif
 
 // The SWD port of the SWD block on bit-banged pins.
 template <typename Pins>
@@ -270,7 +281,7 @@ class BitBangPort final : public protocol::SwdPort {
    // CMSIS-DAP: SWCLK in Hz, rounded down to the nearest available rate.
    // From maxClockHz, the engine runs untimed on a slow core (as at delay
    // 0). The code limits the timed rate: 1.3 to 1.56 MHz on the STM32F103
-   // (#117), 5.2 to 6.1 MHz on the STM32H5.
+   // (#117), 2.76 MHz on the CH32V307, 5.2 to 6.1 MHz on the STM32H5.
    void setClockHz(uint32_t hz) {
       if(hz >= maxClockHz && runsUntimed(pins_.coreHz())) {
          setHalfCycles(halfPeriodCycles(pins_.coreHz(), 0), false);

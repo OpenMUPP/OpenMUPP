@@ -219,6 +219,10 @@ The jobs:
 - `build-ydch32v307`: build of the stub image of the YD-CH32V307VCT6 board with the `ydch32v307` preset and the RISC-V GCC, plus the size check.
   The CH32V307 port is in progress, so this job keeps no artifacts.
   The job reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`.
+- `build-ydch32v307-cmsis-dap`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap` preset, plus the size check.
+  This build finds CH32 build errors in the shared code. This job keeps no artifacts.
+- `build-ydch32v307-wch-link`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-wch-link` preset, plus the size check.
+  It is the CH32 image that links the one-wire engine. This job keeps no artifacts.
 
 The build jobs of the Mini, the WeAct STM32H523 core board and the YD-CH32V307VCT6 board run in each pipeline.
 The build jobs of the ST-Link boards are manual: start them in the pipeline view of GitLab.

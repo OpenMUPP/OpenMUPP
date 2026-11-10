@@ -2,7 +2,8 @@
 
 #pragma once
 
-// The USB composite device of the dongle on the STM32F1 USB peripheral:
+// The USB composite device of the dongle on the USB peripheral of the MCU
+// (STM32F1 USB FS, STM32H5 USB FS, CH32V307 USBHS):
 // the protocol interface of one personality and, in most personalities,
 // one CDC-ACM serial port. Target only.
 //
@@ -42,7 +43,11 @@
 #include <cstdint>
 #include <usb/CdcAcmFunction.h>
 #include <usb/Device.h>
+#if defined(__riscv)
+#include <usb/Ch32UsbDeviceController.h>
+#else
 #include <usb/Stm32UsbDeviceController.h>
+#endif
 
 #include "personality/Personality.h"
 #include "usb/SerialEventQueue.h"
@@ -58,7 +63,11 @@
 #include "usb/WchLinkFunction.h"
 #endif
 
-#if !defined(ART_STM32_HAS_USB_DEVICE_CONTROLLER)
+#if defined(__riscv)
+#if !defined(ART_CH32_HAS_USB_DEVICE_CONTROLLER)
+#error "ch32v00x-art has no USB device controller for this device"
+#endif
+#elif !defined(ART_STM32_HAS_USB_DEVICE_CONTROLLER)
 #error "libart-stm32 has no USB device controller for this device"
 #endif
 
@@ -196,7 +205,13 @@ class UsbStack {
    private:
 #if defined(MUPP_USB_SERIAL_PORT)
    // Queue sizes of the serial port
+#if defined(__riscv)
+   // One 512-byte packet of a high-speed bulk endpoint (art::usb::CdcAcmFunctionBase::kHighSpeedDataPacketSize)
+   static constexpr std::size_t serialRxSize = 512;
+   static_assert(serialRxSize >= art::usb::CdcAcmFunctionBase::kHighSpeedDataPacketSize);
+#else
    static constexpr std::size_t serialRxSize = 256;
+#endif
    static constexpr std::size_t serialTxSize = 256;
 #endif
 
@@ -210,7 +225,11 @@ class UsbStack {
 
    hw::UsbDevice hardware_;
    SerialEventQueue<16> events_;
+#if defined(__riscv)
+   Ch32UsbDeviceController controller_;
+#else
    Stm32UsbDeviceController controller_;
+#endif
    personality::Personality active_;
    art::usb::Device device_;
 #if defined(MUPP_WITH_VERSALOON)
