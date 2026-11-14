@@ -189,7 +189,7 @@ The Mini uses one of these bootloaders:
 
 - The Versaloon bootloader uses 8 KB or 32 KB. The existing boards have it.
   The 8 KB bootloader runs the `app-8k` image.
-  The 32 KB bootloader is on the newer Mini, with 128 KB flash or more. It runs the `app-32k` image.
+  The 32 KB bootloader is on the newer Mini, with 128 KB flash. It runs the `app-32k` image.
   Hold the key (PB9) down while you connect the board to USB to start it.
   It does not know the boot request, so `VERSALOON_FW_UPDATE` does not start it.
 - `openmupp-bootloader` uses 8 KB. It runs the `app-8k` image.

@@ -78,7 +78,7 @@ set(PROJECT_INCLUDE_DIRS
 #   app-8k      8192    0x08002000, behind openmupp-bootloader or the 8 KB
 #                       Versaloon bootloader
 #   app-32k     32768   0x08008000, behind the 32 KB Versaloon bootloader of
-#                       the newer Mini, 128 KB flash or more
+#                       the newer Mini (128 KB flash)
 # The boards in MUPP_BOOTLOADER_BOARDS get standalone and app-8k, and the
 # boards in MUPP_BOOTLOADER_32K_BOARDS also app-32k. The other boards have
 # no bootloader and get the standalone image only.

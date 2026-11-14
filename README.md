@@ -164,7 +164,7 @@ Each image has a different start address:
 |---|---|---|---|
 | `standalone` | `0x08000000` | 64 KB | No bootloader. Write it with a debug probe. |
 | `app-8k` | `0x08002000` | 56 KB | Behind the 8 KB `openmupp-bootloader` or the 8 KB Versaloon bootloader. |
-| `app-32k` | `0x08008000` | 96 KB | Behind the 32 KB Versaloon bootloader of the newer Mini, with 128 KB flash or more. |
+| `app-32k` | `0x08008000` | 96 KB | Behind the 32 KB Versaloon bootloader of the newer Mini, with 128 KB flash. |
 
 The Mini gets all three images.
 The `app-32k` image is linked for 128 KB flash. Do not use it on a part with 64 KB flash.
@@ -193,7 +193,7 @@ Select the image for the bootloader on the board:
 | Board | Bootloader | Image | Start address |
 |---|---|---|---|
 | Mini or OtherUse | Versaloon bootloader, 8 KB | `app-8k` | `0x08002000` |
-| Newer Mini, 128 KB flash or more | Versaloon bootloader, 32 KB | `app-32k` | `0x08008000` |
+| Newer Mini, 128 KB flash | Versaloon bootloader, 32 KB | `app-32k` | `0x08008000` |
 | Mini | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | ST-Link/V2-1 or ST-Link/V2 mini clone | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | Any board, debug probe | none | `standalone` | `0x08000000` |
