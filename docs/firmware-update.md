@@ -24,6 +24,7 @@ To start `openmupp-bootloader`, use one of these methods:
   On an MB1136 Nucleo that is not broken off, SWO also connects to PB3 of the target MCU through SB15. If the target drives PB3 low, open SB15. Other Nucleo boards use other bridges. Read the user manual of your board.
 
 Only the `app-8k` image accepts the commands.
+Behind the 8 KB Versaloon bootloader, the firmware only starts again, because that bootloader does not know the boot request.
 On the STM32H5, the commands and the key start the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
 To start a Versaloon bootloader, hold the key (PB9) down while you connect the board to USB.
 
@@ -79,6 +80,7 @@ The option `--id` does not fix this: the tool must open the device to send the r
 ### Stored personality
 
 A multi image stores its personality in the flash page at `0x0800FC00`.
+In the `app-32k` image, the page is at `0x0801FC00`.
 An image with the RISC-V bridge stores the bridge mode in the same page (see [Stored mode](cmsis-dap.md#stored-mode)).
 `stm32flash -w` erases only the pages of the image, so an update keeps the stored personality and the stored mode.
 A mass erase of the flash also erases this page.
@@ -90,7 +92,7 @@ The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 
 | Status | Meaning |
 |---|---|
-| `0x00` | Accepted. The firmware starts the bootloader. |
+| `0x00` | Accepted. The firmware starts the bootloader. Behind the 8 KB Versaloon bootloader, the firmware only starts again, because that bootloader does not know the boot request. |
 | `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. On the STM32F1, the `standalone` image has no bootloader. The 32 KB Versaloon bootloader of the `app-32k` image does not know the boot request. The firmware continues to run. |
 
 The `standalone` image of the WeAct STM32H523 core board accepts the command and starts the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).

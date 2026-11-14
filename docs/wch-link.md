@@ -181,7 +181,7 @@ Without these measures, the `app-8k` image had a margin of 308 bytes only.
 
 The `app-8k` image now has a margin of 7,436 bytes.
 The data and BSS use 16.4 KB.
-A `Debug` build has no LTO. A `Debug` build of the combined image fits no image: the build skips all images (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
+A `Debug` build has no LTO. A `Debug` build of the combined image fits only the `app-32k` image: the build skips the other images (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
 
 ## Implementation
 

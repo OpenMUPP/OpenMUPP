@@ -129,7 +129,7 @@ build-mini:
     PROTOCOL_TAG: -cmsis-dap
 
 # The CMSIS-DAP personality with the debug log on the CDC port. Without the
-# RISC-V bridge: with it, the Debug image does not fit behind a bootloader.
+# RISC-V bridge: with it, the Debug image does not fit behind an 8 KB bootloader.
 build-mini-debug:
   extends: .build-board-template
   variables:

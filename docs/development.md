@@ -25,7 +25,7 @@ All images use the same object files.
 Only `src/main.cpp` is compiled for each image, because `MUPP_HAS_BOOTLOADER_ENTRY` changes it.
 The memory linker script of the board links the `standalone` and `app-8k` images. The scripts are in `ldscripts/` of system-stm32. The STM32F1 boards use `mem-F103x8.ld` (see [MCU family](boards.md#mcu-family)).
 The `app-32k` image uses the script of a part with 128 KB flash or more, `mem-F103xB.ld` for the Mini (`MUPP_BOOTLOADER_32K_<board>` in `cmake/Boards.cmake`).
-CMake gives it the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
+CMake gives each image the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
 The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
 For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
 

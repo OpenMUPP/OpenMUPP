@@ -70,7 +70,7 @@ With `MUPP_STRICT_SIZE=OFF`, the build skips an image that does not fit:
 - The `.elf` and `.map` files of a skipped image stay in the build directory. Do not program them.
 
 An example: the Release build of `versaloon,cmsis-dap,wch-link` for the Mini fits all images, but the `app-8k` image uses 95 % of its limit.
-A larger set of personalities can fit only the `standalone` and `app-32k` images.
+A larger image, for example a `Debug` build, can fit only the `app-32k` image.
 
 With `MUPP_STRICT_SIZE=ON`, the FLASH region has no slack, and the link of an image that does not fit fails.
 The post-build step does not run.
