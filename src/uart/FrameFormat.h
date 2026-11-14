@@ -49,13 +49,38 @@ struct FrameFormat {
 // ends, so each end gets about half of it.
 inline constexpr uint32_t maxBaudErrorPercent = 2;
 
+// On the CH32V307, PCLK2 is HCLK / 2 during each Vref measurement, and the
+// divider of USART1 is (divider + 1) / 2 then (board/BoardPower.cpp). Thus a
+// baud rate must also be valid with that divider at half the UART clock.
+// The CH32V307 boards have the UART bridge on USART1.
+#if defined(CH32V30x_D8C)
+inline constexpr bool uartClockHalves = true;
+#else
+inline constexpr bool uartClockHalves = false;
+#endif
+
+// True when uartClock / divider is at most maxBaudErrorPercent off baudRate.
+// The check of baudRateDivider(), for the divider at half the UART clock.
+constexpr bool withinBaudError(uint32_t baudRate, uint32_t uartClock, uint32_t divider) {
+   // |uartClock / divider - baudRate| <= baudRate * max / 100, without
+   // the rounding of the division.
+   const uint64_t real = uartClock;
+   const uint64_t wanted = uint64_t{ divider } * baudRate;
+   const uint64_t error = real > wanted ? real - wanted : wanted - real;
+   return error * 100 <= wanted * maxBaudErrorPercent;
+}
+
 // Divider of the baud rate generator (BRR with 16x oversampling: fCK / baud,
 // 4 fraction bits) for a UART clock of uartClock Hz. Empty when the divider
 // is out of the range of BRR (16 to 0xFFFF), or when the real baud rate is
 // more than maxBaudErrorPercent off. At 72 MHz the range is 1099 to 4.5 M
 // baud; above 2.88 M baud only some rates are within the error. At 250 MHz
 // (STM32H5) the range is 3815 to 15.6 M baud: the USART prescaler would
-// give lower rates, but this code does not use it.
+// give lower rates, but this code does not use it. On the CH32V307
+// (uartClockHalves) the range is 2198 to 4.59 M baud, from the divider limits
+// at 144 MHz and at 72 MHz; above 2.88 M baud only some rates are within the
+// error.
+template <bool alsoHalfClock = uartClockHalves>
 constexpr std::optional<uint32_t> baudRateDivider(uint32_t baudRate, uint32_t uartClock) {
    if(baudRate == 0) {
       return std::nullopt;
@@ -76,6 +101,12 @@ constexpr std::optional<uint32_t> baudRateDivider(uint32_t baudRate, uint32_t ua
    const uint64_t error = real > wanted ? real - wanted : wanted - real;
    if(error * 100 > wanted * maxBaudErrorPercent) {
       return std::nullopt;
+   }
+   if constexpr(alsoHalfClock) {
+      const auto half = static_cast<uint32_t>((divider + 1) / 2);
+      if(half < 16 || !withinBaudError(baudRate, uartClock / 2, half)) {
+         return std::nullopt;
+      }
    }
    return static_cast<uint32_t>(divider);
 }

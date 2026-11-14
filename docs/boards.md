@@ -464,7 +464,12 @@ The WCH-Link image runs USB at full speed.
 These parts are known to be incomplete:
 
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`).
-  The SWD timing is measured: 2.76 MHz timed at most, 4.0 MHz untimed (see [CH32V307](clock-pacing.md#ch32v307)).
+  The SWD timing is measured: 3.27 MHz timed at most, 5.1 MHz untimed (see [PCLK2 at 144 MHz](clock-pacing.md#pclk2-at-144-mhz)).
+- PCLK2 is HCLK (144 MHz). Each Vref measurement sets PCLK2 to HCLK / 2 (ADC clock 12 MHz), and the ADC clock is off between the measurements.
+  USART1 (UART bridge) is also on APB2, so the firmware also changes the baud rate divider of USART1. Thus the baud rate stays the same.
+  At each change, one bit on the TX line is up to about 110 ns longer or shorter. The dongle measures Vref each 100 ms.
+  The UART bridge accepts only the baud rates that are valid at the two clocks: 2198 baud to 4.59 Mbaud (see [Line coding](uart-bridge.md#line-coding)).
+  With 4300 Vref measurements each second, the UART loopback to a second probe passed at 115200, 1000000 and 1500000 baud.
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
   JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. 1125 kHz is not tested with the wire. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
