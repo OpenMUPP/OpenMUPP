@@ -357,6 +357,9 @@ if (CMAKE_CROSSCOMPILING)
         if (image STREQUAL "app-32k")
             # The 32 KB Versaloon bootloader is on parts with 128 KB flash or
             # more (cmake/Boards.cmake, MUPP_BOOTLOADER_32K_<board>).
+            if (NOT DEFINED MUPP_BOOTLOADER_32K_${BOARD})
+                message(FATAL_ERROR "Board ${BOARD}: set MUPP_BOOTLOADER_32K_${BOARD} in cmake/Boards.cmake")
+            endif ()
             list(GET MUPP_BOOTLOADER_32K_${BOARD} 0 _ldscript)
             list(GET MUPP_BOOTLOADER_32K_${BOARD} 1 _flash_size)
             if (_flash_size LESS 131072)
