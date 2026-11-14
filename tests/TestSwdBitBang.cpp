@@ -963,3 +963,42 @@ TEST_CASE("SWD bit-bang: Pins sets the untimed NOP pads") {
    CHECK(port.transfer(readApDrw, data) == pswd::ackOk);
    CHECK(data == 0x5a5a);
 }
+
+namespace {
+struct UnrolledPins : MockSwdPins {
+   using MockSwdPins::MockSwdPins;
+   static constexpr bool unrolledBits = true;
+};
+} // namespace
+
+TEST_CASE("SWD bit-bang: Pins::unrolledBits gives the same transfers") {
+   static_assert(!swd::unrolledBits<MockSwdPins>());
+   static_assert(swd::unrolledBits<UnrolledPins>());
+   for(const uint16_t delay : { 0, 1 }) {
+      CAPTURE(delay);
+      UnrolledPins pins(1);
+      BitBangPort<UnrolledPins> port(pins);
+      port.init();
+      port.configure(1, 0, delay);
+      CHECK(port.isTimed() == (delay != 0));
+      for(const uint32_t value : { 0x00000000u, 0x80000001u, 0xFFFFFFFFu, 0x12345678u }) {
+         CAPTURE(value);
+         uint32_t data = value;
+         CHECK(port.transfer(writeAbort, data) == pswd::ackOk);
+         CHECK(pins.transfers.back().request == writeAbort);
+         CHECK(pins.transfers.back().written == value);
+         CHECK(pins.transfers.back().writtenParity == pswd::parity(value));
+         pins.readData = ~value;
+         data = 0;
+         CHECK(port.transfer(readApDrw, data) == pswd::ackOk);
+         CHECK(data == ~value);
+      }
+      // A WAIT ACK from the unrolled ACK read
+      pins.acks.push_back(pswd::ackWait);
+      uint32_t data = 0;
+      CHECK((port.transfer(readApDrw, data) & 7u) == pswd::ackWait);
+      CHECK(pins.contentions == 0);
+      CHECK(pins.undrivenSamples == 0);
+      CHECK(pins.desyncs == 0);
+   }
+}
