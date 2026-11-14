@@ -95,9 +95,9 @@ The design does not use these options:
   On the CH32V307, a logic analyzer measured 1846.6 kHz, and a read of 32 KiB took 0.406 s.
   When `delay` 0 was untimed on the CH32V307, it gave 4.87 MHz, and a read of 32 KiB took 0.251 s.
   In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`.
-  `swd::maxClockHz` is 3 MHz on the STM32 and 4.5 MHz on the CH32V307 (see [CH32V307](#ch32v307)).
-  On the STM32, a request thus does not give a faster clock.
-  On the CH32V307, the untimed rate is above `swd::maxClockHz`: a request from 4.5 MHz gives 9.6 MHz.
+  `swd::maxClockHz` is 3 MHz on the STM32 and 11 MHz on the CH32V307 (see [CH32V307 final rates](#ch32v307-final-rates)).
+  The value is above the untimed rate. Thus the untimed engine is not faster than the request (median).
+  On the CH32V307, a request from 3.3 MHz to less than 11 MHz gives the timed code limit, 2.8 to 3.27 MHz (median).
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
@@ -369,13 +369,17 @@ Findings:
 - At 2900 kHz, single periods of 340 ns are shorter than the nominal period of 347 ns (2 % short). These are the late edges of [Late edges](#late-edges).
 - The untimed engine gives 4.0 MHz (median period 250 ns). The shortest period is 218 ns (4.6 MHz).
 - Before the fix, the untimed engine ran from 3 MHz. Thus a request of 3 MHz gave 3.98 MHz, 33 % faster than the request.
-  `swd::maxClockHz` is now 4.5 MHz on the RISC-V build. The value is above the untimed rate, with a margin for a change of the code layout.
-  A request from 2.8 MHz to 4.5 MHz now gives the timed code limit (2.44 to 2.76 MHz).
+  `swd::maxClockHz` was then 4.5 MHz on the RISC-V build. The value was above the untimed rate, with a margin for a change of the code layout.
+  A request from 2.8 MHz to 4.5 MHz then gave the timed code limit (2.44 to 2.76 MHz).
 - All reads were correct. `tools/flash_benchmark.py` passed at 250 to 20000 kHz before the fix, and at 2000 to 20000 kHz after the fix.
   With the fix, the read of 32 KiB takes 0.26 s at 2000 kHz, 0.22 to 0.23 s at 3000 and 4000 kHz, and 0.16 s from 4500 kHz.
   The write takes 1.26 to 1.31 s from 1000 kHz: the flash of the STM32F103 limits it.
 
 ### PCLK2 at 144 MHz
+
+Until [CH32V307 final rates](#ch32v307-final-rates), `swd::maxClockHz` was 4.5 MHz.
+Thus the measurements at a request of 4500 kHz in this section and in the sections up to the final rates are for the untimed engine.
+Now a request of 4500 kHz gives the timed engine. Request 11000 kHz or more for the untimed engine.
 
 The results above are for PCLK2 at HCLK / 2 (72 MHz). The GPIO ports are on APB2.
 Since 2026-11-14, PCLK2 is HCLK (144 MHz), so each GPIO access stalls the core for fewer cycles.
@@ -433,7 +437,6 @@ Findings:
 - All reads were correct. With the pad at 0, writes of 32 KiB of random data to SRAM (`load_image`, then `verify_image` and a read) were also correct, at 4500 kHz and at 1000 kHz.
 - No SWDIO change was in the same sample as a rising edge of SWCLK.
 - The target was the STM32H523 at its reset clock, with short wires. A long cable or a slower target can need a lower request: the timed engine then gives the clock.
-  A request from 4.5 MHz (`swd::maxClockHz`) gives the untimed rate. For the timed engine (3.27 MHz at most), request less than 4.5 MHz.
 - The STM32 code did not change: the disassembly of the Mini image is the same.
 
 ## CH32V307 unrolled bits
@@ -498,6 +501,35 @@ Measured on 2026-11-14 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz), 
 | Write 32 KiB | 0.083 s | 0.082 s |
 
 All reads and writes were correct. The timed rates did not change. The STM32 code did not change.
+
+## CH32V307 final rates
+
+The SWD engine on the CH32V307 has these changes: PCLK2 at 144 MHz, `delay` 0 timed, the NOP pads of `board::SwdPins`, the unrolled bits, and the SWDIO direction with one store.
+`swd::maxClockHz` is 11 MHz on the RISC-V build: the value is above the untimed rate (9.6 MHz, median), with a margin for a change of the code layout.
+
+Measured on 2026-11-14 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz).
+Reads: two reads of 32 KiB of SRAM (`dump_image`) in each session. Writes: `load_image` of 32 KiB of random data, then `verify_image` and a read.
+
+| Request | Engine | Median rate | Mean rate of the runs | Shortest period | Read 32 KiB | Write 32 KiB |
+|---|---|---|---|---|---|---|
+| 250 kHz | timed | 249.6 kHz | 249.9 kHz (−0.04 %) | 3882 ns | 1.584 s | - |
+| 1000 kHz | timed | 1000.0 kHz | 999.4 kHz (−0.06 %) | 964 ns | 0.425 s | 0.425 s |
+| 2000 kHz | timed | 2049.2 kHz | 2002.5 kHz (+0.12 %) | 470 ns | 0.234 s | - |
+| 2900 kHz | timed | 2941.2 kHz | 2873.1 kHz (−0.24 %) | 300 ns | 0.178 s | - |
+| 4000 kHz | timed | 3268.0 kHz | - | 298 ns | 0.173 s | - |
+| 4500 kHz | timed | 2824.9 kHz | - | 298 ns | 0.178 s | - |
+| 10000 kHz | timed | 3125.0 kHz | - | 298 ns | 0.165 s | - |
+| 11000 kHz | untimed | 9615.4 kHz | 9360.1 kHz | 90 ns | 0.078 s | 0.082 s |
+| 20000 kHz | untimed | 9615.4 kHz | 9360.1 kHz | 90 ns | 0.078 s | 0.082 s |
+
+Findings:
+
+- All reads and writes were correct. No SWDIO change was in the same sample as a rising edge of SWCLK.
+- From 4000 to 10000 kHz, the code limits the timed engine to 2.8 to 3.27 MHz (median). Thus the gap between the timed limit and `swd::maxClockHz` is large: request 11000 kHz or more for the untimed engine.
+- The untimed engine: SWDIO setup time 18 ns at minimum, high half period before a read 48 ns at minimum.
+- Compared with the start (PCLK2 at 72 MHz, untimed 3.98 MHz), a read of 32 KiB at the fastest request takes 0.078 s instead of 0.139 s.
+- Not measured again: the JTAG bit-bang rate (`jtag::bitBangMaxKHz`, 1000 kHz). The JTAG engine does not use the SWD code, and [PCLK2 at 144 MHz](#pclk2-at-144-mhz) measured it without change.
+  `tools/flash_benchmark.py` supports only STM32F1 targets, so the benchmark did not run.
 
 ## CH32V307 JTAG
 

@@ -208,14 +208,13 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 }
 
 // From this SWCLK, the engine runs untimed on a slow core, as at delay 0.
-// On the STM32, the value is above the untimed rate (2.42 to 2.7 MHz on
-// the Mini, #118), so a request from this value does not give a faster
-// clock. On the CH32V307 at 144 MHz, the untimed rate (9.6 MHz,
-// docs/clock-pacing.md) is above this value: a request from 4.5 MHz gives
-// 9.6 MHz. The untimed rate changes with the code layout. Measure again
-// after a change of the engine.
+// The value is above the untimed rate, with a margin, so a request from
+// this value does not give a faster clock: 2.42 to 2.7 MHz on the Mini
+// (#118), 9.6 MHz (median) on the CH32V307 at 144 MHz
+// (docs/clock-pacing.md). The untimed rate changes with the code layout.
+// Measure again after a change of the engine.
 #if defined(__riscv)
-inline constexpr uint32_t maxClockHz = 4'500'000;
+inline constexpr uint32_t maxClockHz = 11'000'000;
 #else
 inline constexpr uint32_t maxClockHz = 3'000'000;
 #endif
