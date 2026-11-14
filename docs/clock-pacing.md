@@ -96,8 +96,8 @@ The design does not use these options:
   When `delay` 0 was untimed on the CH32V307, it gave 4.87 MHz, and a read of 32 KiB took 0.251 s.
   In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`.
   `swd::maxClockHz` is 3 MHz on the STM32 and 11 MHz on the CH32V307 (see [CH32V307 final rates](#ch32v307-final-rates)).
-  The value is above the untimed rate, so a request does not give a faster clock (median).
-  On the CH32V307, a request from 3.3 MHz to 11 MHz gives the timed code limit, 2.8 to 3.27 MHz (median).
+  The value is above the untimed rate. Thus the untimed engine is not faster than the request (median).
+  On the CH32V307, a request from 3.3 MHz to less than 11 MHz gives the timed code limit, 2.8 to 3.27 MHz (median).
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
@@ -369,13 +369,17 @@ Findings:
 - At 2900 kHz, single periods of 340 ns are shorter than the nominal period of 347 ns (2 % short). These are the late edges of [Late edges](#late-edges).
 - The untimed engine gives 4.0 MHz (median period 250 ns). The shortest period is 218 ns (4.6 MHz).
 - Before the fix, the untimed engine ran from 3 MHz. Thus a request of 3 MHz gave 3.98 MHz, 33 % faster than the request.
-  `swd::maxClockHz` is now 4.5 MHz on the RISC-V build. The value is above the untimed rate, with a margin for a change of the code layout.
-  A request from 2.8 MHz to 4.5 MHz now gives the timed code limit (2.44 to 2.76 MHz).
+  `swd::maxClockHz` was then 4.5 MHz on the RISC-V build. The value was above the untimed rate, with a margin for a change of the code layout.
+  A request from 2.8 MHz to 4.5 MHz then gave the timed code limit (2.44 to 2.76 MHz).
 - All reads were correct. `tools/flash_benchmark.py` passed at 250 to 20000 kHz before the fix, and at 2000 to 20000 kHz after the fix.
   With the fix, the read of 32 KiB takes 0.26 s at 2000 kHz, 0.22 to 0.23 s at 3000 and 4000 kHz, and 0.16 s from 4500 kHz.
   The write takes 1.26 to 1.31 s from 1000 kHz: the flash of the STM32F103 limits it.
 
 ### PCLK2 at 144 MHz
+
+Until [CH32V307 final rates](#ch32v307-final-rates), `swd::maxClockHz` was 4.5 MHz.
+Thus the measurements at a request of 4500 kHz in this section and in the sections up to the final rates are for the untimed engine.
+Now a request of 4500 kHz gives the timed engine. Request 11000 kHz or more for the untimed engine.
 
 The results above are for PCLK2 at HCLK / 2 (72 MHz). The GPIO ports are on APB2.
 Since 2026-11-14, PCLK2 is HCLK (144 MHz), so each GPIO access stalls the core for fewer cycles.
@@ -433,7 +437,6 @@ Findings:
 - All reads were correct. With the pad at 0, writes of 32 KiB of random data to SRAM (`load_image`, then `verify_image` and a read) were also correct, at 4500 kHz and at 1000 kHz.
 - No SWDIO change was in the same sample as a rising edge of SWCLK.
 - The target was the STM32H523 at its reset clock, with short wires. A long cable or a slower target can need a lower request: the timed engine then gives the clock.
-  At the time of this measurement, `swd::maxClockHz` was 4.5 MHz, so a request of 4500 kHz gave the untimed engine.
 - The STM32 code did not change: the disassembly of the Mini image is the same.
 
 ## CH32V307 unrolled bits
