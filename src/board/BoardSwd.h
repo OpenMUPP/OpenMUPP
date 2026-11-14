@@ -92,6 +92,20 @@ class SwdPins {
       return SystemCoreClock;
    }
 
+#if defined(__riscv)
+   protected:
+   // The direction change with a read-modify-write of hw::FastPin, without
+   // the words of begin(): RvSwdPins uses it.
+   [[gnu::always_inline]] static void swdioDriveReadModifyWrite(bool level) {
+      SwdioOut::write(level);
+      SwdioOut::setOutput();
+   }
+   [[gnu::always_inline]] static void swdioReleaseReadModifyWrite() {
+      SwdioOut::setConfig<pullUpInput>();
+      SwdioOut::set();
+   }
+#endif
+
    private:
 #if defined(STM32F1) || defined(__riscv)
    // Input with pull: ODR high selects the pull-up.

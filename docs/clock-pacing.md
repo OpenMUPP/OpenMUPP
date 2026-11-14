@@ -474,18 +474,19 @@ Findings:
 
 ## CH32V307 SWDIO direction
 
-A transfer changes the SWDIO direction 3 times.
-Before, each change was a read-modify-write of `GPIOC->CFGHR` with the interrupts off (`hw::FastPin::setConfig()`).
+A transfer stores the SWDIO direction 3 times (read) or 4 times (write). Two of these stores change the direction.
+Before, each store was a read-modify-write of `GPIOC->CFGHR` with the interrupts off (`hw::FastPin::setConfig()`).
 Now `board::SwdPins::begin()` reads `CFGHR` once at the start of each operation, and calculates the word for SWDIO output and the word for SWDIO input.
-Each direction change is then one store.
+Each direction store is then one store to `CFGHR`.
 
 This is safe because no code changes the other pins of `CFGHR` during an operation:
 
 - No interrupt handler configures a GPIO pin.
 - The serial service of the UART bridge (`protocol::Background`) does not configure GPIO pins.
-- The other users of PC8 to PC15 (the JTAG fast path on PC10, the one-wire RVSWD engine on PC11) run only between operations. The one-wire engine changes only the field of SWDIO.
+- The JTAG fast path (PC10, PC11) runs only between operations.
 
-The RVSWD engine uses the same pins (`board::RvSwdPins`), and it calls `begin()` before each frame and each line reset.
+The RVSWD engine (`board::RvSwdPins`) uses the same pins, but it keeps the read-modify-write of `hw::FastPin`.
+Its one-wire frame also changes the SWDIO field during the frame, and no RVSWD target was available to test the stored words.
 
 Measured on 2026-11-14 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz), at a request of 4500 kHz:
 
