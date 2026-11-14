@@ -75,15 +75,16 @@ set(PROJECT_INCLUDE_DIRS
 # the STM32F1 boards). The value is the space in bytes in front
 # of the application:
 #   standalone  0       0x08000000, no bootloader: flash with a debug probe
-#   app-8k      8192    0x08002000, behind openmupp-bootloader (8 KB)
-#   app-10k     10240   0x08002800, behind the legacy Versaloon bootloader
-#                       (10 KB) of the existing boards
+#   app-8k      8192    0x08002000, behind openmupp-bootloader or the 8 KB
+#                       Versaloon bootloader
+#   app-32k     32768   0x08008000, behind the 32 KB Versaloon bootloader of
+#                       the newer Mini (128 KB flash)
 # The boards in MUPP_BOOTLOADER_BOARDS get standalone and app-8k, and the
-# boards in MUPP_LEGACY_BOOTLOADER_BOARDS also app-10k. The other boards have
+# boards in MUPP_BOOTLOADER_32K_BOARDS also app-32k. The other boards have
 # no bootloader and get the standalone image only.
 set(MUPP_APP_OFFSET_standalone 0)
 set(MUPP_APP_OFFSET_app-8k 8192)
-set(MUPP_APP_OFFSET_app-10k 10240)
+set(MUPP_APP_OFFSET_app-32k 32768)
 # Build openmupp-bootloader (dependencies/openmupp-bootloader, cmake/Bootloader.cmake)
 # for the board. Only for boards that the bootloader supports.
 option(MUPP_BUILD_BOOTLOADER "Build openmupp-bootloader for the board" ON)
@@ -93,10 +94,10 @@ option(MUPP_BUILD_BOOTLOADER "Build openmupp-bootloader for the board" ON)
 # 64 KB larger (MUPP_FLASH_SLACK), so that the link does not fail. The
 # CI build jobs set ON: each image of each CI build must fit.
 option(MUPP_STRICT_SIZE "Stop the build when an image does not fit its flash limit, instead of skipping the image" OFF)
-# Application images to leave out, for example app-10k: CI leaves it out of
-# a strict build of a set of personalities that does not fit it.
+# Application images to leave out, for example app-32k: CI leaves an image
+# out of a strict build of a set of personalities that does not fit it.
 # A CMake list or a comma-separated list, as MUPP_PERSONALITIES.
-set(MUPP_SKIP_IMAGES "" CACHE STRING "Application images to leave out of the build (standalone, app-8k, app-10k)")
+set(MUPP_SKIP_IMAGES "" CACHE STRING "Application images to leave out of the build (standalone, app-8k, app-32k)")
 
 # USB personalities of the firmware image (cmake/Personalities.cmake):
 # versaloon, cmsis-dap and wch-link. An image with more than one personality
@@ -134,8 +135,8 @@ if (CMAKE_CROSSCOMPILING)
         set(CMAKE_BUILD_TYPE Release)
     endif ()
 
-    if (BOARD IN_LIST MUPP_LEGACY_BOOTLOADER_BOARDS)
-        set(MUPP_APP_IMAGES standalone app-8k app-10k)
+    if (BOARD IN_LIST MUPP_BOOTLOADER_32K_BOARDS)
+        set(MUPP_APP_IMAGES standalone app-8k app-32k)
     elseif (BOARD IN_LIST MUPP_BOOTLOADER_BOARDS)
         set(MUPP_APP_IMAGES standalone app-8k)
     else ()
@@ -143,8 +144,8 @@ if (CMAKE_CROSSCOMPILING)
     endif ()
     string(REPLACE "," ";" _mupp_skip_images "${MUPP_SKIP_IMAGES}")
     foreach (_image ${_mupp_skip_images})
-        if (NOT _image MATCHES "^(standalone|app-8k|app-10k)$")
-            message(FATAL_ERROR "MUPP_SKIP_IMAGES: unknown image '${_image}', use standalone, app-8k or app-10k")
+        if (NOT _image MATCHES "^(standalone|app-8k|app-32k)$")
+            message(FATAL_ERROR "MUPP_SKIP_IMAGES: unknown image '${_image}', use standalone, app-8k or app-32k")
         endif ()
     endforeach ()
     if (_mupp_skip_images)
@@ -264,7 +265,8 @@ if (CMAKE_CROSSCOMPILING)
     # settings page is the reserved flash at the end (__flash_reserved_start).
     # The main stack is 2 KB, because the STM32F103 has only 20 KB RAM, and
     # the link fails when less than the full stack is free. Each image sets
-    # __flash_offset and __flash_length (mupp_add_app_image).
+    # __flash_offset and __flash_length, and on STM32 the memory script
+    # (mupp_add_app_image): the app-32k image uses the script of a larger part.
     if (MUPP_MCU_VENDOR STREQUAL "CH32")
         # The scripts of ch32v00x-system (no settings page, no flash offset yet)
         set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/ch32v00x-system/ldscripts)
@@ -273,7 +275,7 @@ if (CMAKE_CROSSCOMPILING)
     else ()
         set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32/ldscripts)
         set(MUPP_LIBS_LD "${MUPP_LDSCRIPT_DIR}/libs.ld")
-        set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_end=${MUPP_SETTINGS_PAGE_SIZE} -Wl,--defsym=__main_stack_size=2048 -Wl,--defsym=__minimum_stack_size=2048 -T${MUPP_LDSCRIPT} -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+        set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_end=${MUPP_SETTINGS_PAGE_SIZE} -Wl,--defsym=__main_stack_size=2048 -Wl,--defsym=__minimum_stack_size=2048 -Tlibs.ld -Tsections.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
     endif ()
 endif ()
 
@@ -333,7 +335,7 @@ if (CMAKE_CROSSCOMPILING)
     # openmupp-bootloader. The bootloader starts only an image with a valid
     # header. The tool is in the bootloader submodule.
     set(_mupp_stamp_cmake "${PROJECT_SOURCE_DIR}/dependencies/openmupp-bootloader/cmake/MuppStampImage.cmake")
-    if ("app-8k" IN_LIST MUPP_APP_IMAGES OR "app-10k" IN_LIST MUPP_APP_IMAGES)
+    if ("app-8k" IN_LIST MUPP_APP_IMAGES OR "app-32k" IN_LIST MUPP_APP_IMAGES)
         if (NOT EXISTS "${_mupp_stamp_cmake}")
             message(FATAL_ERROR "${_mupp_stamp_cmake} not found. The images behind a bootloader need it. "
                     "Run: git submodule update --init --recursive")
@@ -350,7 +352,21 @@ if (CMAKE_CROSSCOMPILING)
         set(_target openmupp-${image}.elf)
         set(_name openmupp-${image})
         set(_offset ${MUPP_APP_OFFSET_${image}})
-        math(EXPR _limit "${MUPP_FLASH_SIZE} - ${_offset} - ${MUPP_SETTINGS_PAGE_SIZE}")
+        set(_ldscript ${MUPP_LDSCRIPT})
+        set(_flash_size ${MUPP_FLASH_SIZE})
+        if (image STREQUAL "app-32k")
+            # The 32 KB Versaloon bootloader is on parts with 128 KB flash or
+            # more (cmake/Boards.cmake, MUPP_BOOTLOADER_32K_<board>).
+            if (NOT DEFINED MUPP_BOOTLOADER_32K_${BOARD})
+                message(FATAL_ERROR "Board ${BOARD}: set MUPP_BOOTLOADER_32K_${BOARD} in cmake/Boards.cmake")
+            endif ()
+            list(GET MUPP_BOOTLOADER_32K_${BOARD} 0 _ldscript)
+            list(GET MUPP_BOOTLOADER_32K_${BOARD} 1 _flash_size)
+            if (_flash_size LESS 131072)
+                message(FATAL_ERROR "Board ${BOARD}: the app-32k image needs 128 KB flash or more, MUPP_BOOTLOADER_32K_${BOARD} gives ${_flash_size} bytes")
+            endif ()
+        endif ()
+        math(EXPR _limit "${_flash_size} - ${_offset} - ${MUPP_SETTINGS_PAGE_SIZE}")
         set(MUPP_APP_LIMIT_${image} ${_limit} PARENT_SCOPE)
         # The FLASH region of the link, with the slack: the size check
         # below compares the image with the real limit.
@@ -361,11 +377,13 @@ if (CMAKE_CROSSCOMPILING)
         # that links it directly, so each image links the libraries again.
         target_link_libraries(${_target} PUBLIC openmupp-objects art::core ${MUPP_VENDOR_LIBS})
         target_link_options(${_target} PUBLIC -Wl,-Map,${_name}.map)
+        # The memory script comes before libs.ld and sections.ld of
+        # LINKER_OPTIONS: the options of the target come first.
         if (NOT MUPP_MCU_VENDOR STREQUAL "CH32")
-            target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit})
+            target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit} -T${_ldscript})
         endif ()
         # FW_UPDATE enters the bootloader only behind openmupp-bootloader.
-        # The legacy bootloader of app-10k does not know the boot request
+        # The Versaloon bootloaders do not know the boot request
         # (hasBootloaderEntry in src/main.cpp). On the STM32H5, the
         # standalone image enters the ROM bootloader.
         if (image STREQUAL "app-8k" OR (image STREQUAL "standalone" AND STM32_FAMILY STREQUAL "STM32H5"))
@@ -373,7 +391,7 @@ if (CMAKE_CROSSCOMPILING)
         endif ()
         # Relink when a linker script or the size check changes
         set_target_properties(${_target} PROPERTIES LINK_DEPENDS
-                "${MUPP_LDSCRIPT_DIR}/${MUPP_LDSCRIPT};${MUPP_LIBS_LD};${MUPP_LDSCRIPT_DIR}/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
+                "${MUPP_LDSCRIPT_DIR}/${_ldscript};${MUPP_LIBS_LD};${MUPP_LDSCRIPT_DIR}/sections.ld;${PROJECT_SOURCE_DIR}/cmake/ImageSize.cmake")
 
         ADD_DUMP_TARGET(${_target})
         PRINT_SIZE_OF_TARGETS(${_target})
@@ -408,15 +426,6 @@ if (CMAKE_CROSSCOMPILING)
         mupp_add_app_image(${_image})
         string(APPEND _images_list "openmupp-${_image}.bin ${MUPP_APP_LIMIT_${_image}}\n")
     endforeach ()
-    # The firmware must fit behind the legacy bootloader on all STM32F1 boards
-    # (docs/firmware-update.md). A board without the app-10k image checks its
-    # standalone image against the app-10k limit too. MUPP_SKIP_IMAGES=app-10k
-    # on a board with the legacy bootloader (MUPP_LEGACY_BOOTLOADER_BOARDS)
-    # turns this check off. The legacy bootloader is STM32F1 only.
-    if (NOT BOARD IN_LIST MUPP_LEGACY_BOOTLOADER_BOARDS AND "standalone" IN_LIST MUPP_APP_IMAGES AND STM32_FAMILY STREQUAL "STM32F1")
-        math(EXPR _limit "${MUPP_FLASH_SIZE} - ${MUPP_APP_OFFSET_app-10k} - ${MUPP_SETTINGS_PAGE_SIZE}")
-        string(APPEND _images_list "openmupp-standalone.bin ${_limit}\n")
-    endif ()
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/mupp-images.txt" "${_images_list}")
 
     include(Bootloader)

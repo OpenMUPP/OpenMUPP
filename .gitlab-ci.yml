@@ -70,7 +70,7 @@ run-tool-tests:
     - cd "$CI_PROJECT_DIR"
     - python3 -m unittest discover -s tools -p "test_*.py" -v
 
-# Builds the application images of the board (standalone, app-8k, app-10k;
+# Builds the application images of the board (standalone, app-8k, app-32k;
 # README "Build the firmware") with the configure preset ${BOARD}${VARIANT}
 # (CMakePresets.json). Release by default; a Debug build has the debug log on
 # the CDC port and SWD on. The job sets MUPP_STRICT_SIZE, so the linker
@@ -98,8 +98,8 @@ run-tool-tests:
     - while read -r image limit; do ci/check-size.sh "${BUILDDIR}/${image}" "${limit}"; done < "${BUILDDIR}/mupp-images.txt"
   # Only the .hex and .bin files that a user writes, with the board, the
   # image, the build type and the version in the name (README "Build the
-  # firmware"): standalone, app-8k, app-10k and with-bootloader. The ST-Link
-  # boards have no app-10k image. No .elf, .map or bootloader-only files.
+  # firmware"): standalone, app-8k, app-32k and with-bootloader. Only the Mini
+  # has the app-32k image. No .elf, .map or bootloader-only files.
   # A tag of a multi image has a "+": encode it as %2B in a download URL.
   artifacts:
     name: "openmupp-${BOARD}${PROTOCOL_TAG}-${BUILD_TYPE}-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
@@ -129,7 +129,7 @@ build-mini:
     PROTOCOL_TAG: -cmsis-dap
 
 # The CMSIS-DAP personality with the debug log on the CDC port. Without the
-# RISC-V bridge: with it, the Debug image does not fit behind a bootloader.
+# RISC-V bridge: with it, the Debug image does not fit behind an 8 KB bootloader.
 build-mini-debug:
   extends: .build-board-template
   variables:

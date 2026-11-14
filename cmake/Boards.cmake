@@ -40,9 +40,13 @@ set(MUPP_BOARD_weacth523   STM32H5 STM32H523xx 8000000  mem-H523xC.ld 262144)
 set(MUPP_BOARD_ydch32v307  CH32V30X CH32V30x_D8C 8000000 mem-ch32v307.ld 262144)
 # Boards that openmupp-bootloader supports (cmake/Bootloader.cmake)
 set(MUPP_BOOTLOADER_BOARDS mini otheruse stlinkv21 stlinkv2miniclone)
-# Boards that shipped with the legacy Versaloon bootloader (10 KB). Only
-# they get the app-10k image.
-set(MUPP_LEGACY_BOOTLOADER_BOARDS mini otheruse)
+# Boards that also ship with the 32 KB Versaloon bootloader: the newer
+# Versaloon Mini, with an STM32F103 with 128 KB flash. They get the
+# app-32k image. MUPP_BOOTLOADER_32K_<board> gives the memory linker script
+# and the flash size in bytes of that part, because the board entry above
+# uses only 64 KB. The flash size must be 128 KB or more.
+set(MUPP_BOOTLOADER_32K_BOARDS mini)
+set(MUPP_BOOTLOADER_32K_mini mem-F103xB.ld 131072)
 set(BOARD "mini" CACHE STRING "Board to build for: ${MUPP_BOARDS}")
 set_property(CACHE BOARD PROPERTY STRINGS ${MUPP_BOARDS})
 

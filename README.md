@@ -163,18 +163,19 @@ Each image has a different start address:
 | Image | Start address | Flash for the application | Use |
 |---|---|---|---|
 | `standalone` | `0x08000000` | 64 KB | No bootloader. Write it with a debug probe. |
-| `app-8k` | `0x08002000` | 56 KB | Behind the new 8 KB `openmupp-bootloader`. |
-| `app-10k` | `0x08002800` | 54 KB | Behind the legacy 10 KB Versaloon bootloader of the existing boards. |
+| `app-8k` | `0x08002000` | 56 KB | Behind the 8 KB `openmupp-bootloader` or the 8 KB Versaloon bootloader. |
+| `app-32k` | `0x08008000` | 96 KB | Behind the 32 KB Versaloon bootloader of the newer Mini, with 128 KB flash. |
 
 The Mini gets all three images.
-The ST-Link/V2-1 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image. They never had the legacy bootloader, so they get no `app-10k` image.
+The `app-32k` image is linked for 128 KB flash. Do not use it on a part with 64 KB flash.
+The OtherUse, the ST-Link/V2-1 and the ST-Link/V2 mini clone get the `standalone` and the `app-8k` image.
 The WeAct STM32H523 core board gets the `standalone` image only, with 256 KB flash.
 A multi image or an image with the RISC-V bridge has less flash, because the end of the flash holds the stored personality and the bridge mode.
 This is 1 KB (one flash page) on the STM32F103 boards and 8 KB (one flash sector) on the STM32H5 board.
 
 The build writes these files into the build directory:
 
-- `openmupp-<image>.elf`, `.hex` and `.bin` for each image, for example `openmupp-app-10k.bin`.
+- `openmupp-<image>.elf`, `.hex` and `.bin` for each image, for example `openmupp-app-32k.bin`.
 - `openmupp-bootloader/openmupp-bootloader-<board>.hex` (and `.elf`, `.bin`): the bootloader for the board.
   Only the STM32F1 boards have a bootloader: the Mini, the ST-Link/V2-1 and the ST-Link/V2 mini clone.
 - `openmupp-with-bootloader.hex` and `.bin`: the combined image of a board with a bootloader.
@@ -191,30 +192,37 @@ Select the image for the bootloader on the board:
 
 | Board | Bootloader | Image | Start address |
 |---|---|---|---|
-| Existing Mini | Legacy Versaloon bootloader, 10 KB | `app-10k` | `0x08002800` |
-| New Mini | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
+| Mini or OtherUse | Versaloon bootloader, 8 KB | `app-8k` | `0x08002000` |
+| Newer Mini, 128 KB flash | Versaloon bootloader, 32 KB | `app-32k` | `0x08008000` |
+| Mini | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | ST-Link/V2-1 or ST-Link/V2 mini clone | `openmupp-bootloader`, 8 KB | `app-8k` | `0x08002000` |
 | Any board, debug probe | none | `standalone` | `0x08000000` |
 
 The images behind a bootloader have an application image header with a CRC32 (see [docs/firmware-update.md](docs/firmware-update.md#application-image-header)).
 `openmupp-bootloader` starts only an image with a valid header.
 
-### Board with the legacy bootloader
+### Board with a Versaloon bootloader
 
-An existing board keeps its legacy 10 KB bootloader.
+A board can keep its Versaloon bootloader (8 KB or 32 KB).
 To write the firmware, do these steps:
 
 1. Start the bootloader. Hold the key (PB9) down while you connect the board to USB.
    A new serial port shows, for example `/dev/ttyACM0`.
-2. Write the `.bin` file of the `app-10k` image with `stm32flash`:
+2. Write the `.bin` file of the image for the bootloader with `stm32flash`:
 
    ```sh
-   stm32flash -w openmupp-app-10k.bin -v -S 0x08002800 /dev/ttyACM0
+   # Versaloon bootloader, 8 KB
+   stm32flash -w openmupp-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
+   # Versaloon bootloader, 32 KB
+   stm32flash -w openmupp-app-32k.bin -v -S 0x08008000 /dev/ttyACM0
    ```
 
 3. Disconnect the board and connect it again. The firmware starts.
 
-The `app-10k` image refuses `VERSALOON_FW_UPDATE`, because the legacy bootloader does not know the boot request.
+The Versaloon bootloaders do not know the boot request of `VERSALOON_FW_UPDATE`.
+The `app-32k` image refuses the command.
+The `app-8k` image accepts it, but behind the 8 KB Versaloon bootloader the firmware only starts again.
+Use the key to start a Versaloon bootloader.
 
 ### Board with openmupp-bootloader
 

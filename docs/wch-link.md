@@ -138,7 +138,7 @@ The size of the `standalone` image (Release build):
 | Mini | 22,156 bytes | 65,536 bytes |
 | ST-Link/V2-1 | 22,124 bytes | 65,536 bytes |
 
-The `app-8k` image has the limit 57,344 bytes, and the `app-10k` image has the limit 55,296 bytes (see [Flash layout](firmware-update.md#flash-layout-and-size-limit)).
+The `app-8k` image has the limit 57,344 bytes (see [Flash layout](firmware-update.md#flash-layout-and-size-limit)).
 Each image uses less than half of its limit.
 CI checks each image against its limit (`ci/check-size.sh`).
 
@@ -159,31 +159,29 @@ It has no third descriptor set and no switch code.
 | Dual image | 41,488 bytes | 64,512 bytes |
 | Dual image with the WCH-Link objects | 51,312 bytes | 64,512 bytes |
 | Same, `app-8k` | 51,304 bytes | 56,320 bytes |
-| Same, `app-10k` | 51,312 bytes | 54,272 bytes |
 
 The WCH-Link code adds 9.8 KB.
 The wire engine and the debug module layer are templates, and they are a large part of this size.
-The `app-10k` image has a margin of 2,960 bytes only.
+The `app-8k` image has a margin of 5,016 bytes only.
 A third descriptor set and the switch code use some of this margin.
 The data and BSS grow from 15.9 KB to 16.4 KB. The RAM has 19.75 KB.
 
-Thus a combined image fits in the first 64 KB, but the margin for the legacy bootloader is small.
+Thus a combined image fits in the first 64 KB, but the margin behind an 8 KB bootloader is small.
 It does not need the other 64 KB of flash.
 
 The firmware now builds the combined image: `-DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
 A Release build of the Mini measured these sizes (`.bin` files, with the one-wire timer and the switch request on EP0).
 The build uses link-time optimisation (LTO, option `MUPP_LTO`), has no heap code of newlib and has no 64-bit division.
-Without these measures, the `app-10k` image did not fit: it was 1,740 bytes too large.
+Without these measures, the `app-8k` image had a margin of 308 bytes only.
 
 | Image (Mini, Release) | Without the measures | Size | Limit |
 |---|---|---|---|
 | `standalone` | 56,012 bytes | 48,876 bytes | 64,512 bytes |
 | `app-8k` | 56,012 bytes | 48,884 bytes | 56,320 bytes |
-| `app-10k` | Does not fit | 48,876 bytes | 54,272 bytes |
 
-The `app-10k` image now has a margin of 5,396 bytes.
+The `app-8k` image now has a margin of 7,436 bytes.
 The data and BSS use 16.4 KB.
-A `Debug` build has no LTO. A `Debug` build of the combined image fits no image: the build skips all images (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
+A `Debug` build has no LTO. A `Debug` build of the combined image fits only the `app-32k` image: the build skips the other images (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
 
 ## Implementation
 
