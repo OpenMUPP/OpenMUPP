@@ -7,7 +7,7 @@ This document is for developers of the firmware: build outputs, tests, the flash
 The README shows how to build the firmware.
 The build writes these files into the build directory:
 
-- `openmupp-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-10k`).
+- `openmupp-<image>.elf`, `.hex` and `.bin` for each application image (`standalone`, `app-8k`, `app-32k`).
   The README lists the images and their start addresses.
 - Copies of the `.hex` and `.bin` files with the board, the image, the build type and the version in the name.
   An example is `openmupp-mini-vsl-app-8k-Release-v0.1.0.hex`.
@@ -23,7 +23,8 @@ An image that does not fit its limit has no `.hex` and `.bin` files, and no copi
 
 All images use the same object files.
 Only `src/main.cpp` is compiled for each image, because `MUPP_HAS_BOOTLOADER_ENTRY` changes it.
-One memory linker script of the board links all images. The scripts are in `ldscripts/` of system-stm32. The STM32F1 boards use `mem-F103x8.ld` (see [MCU family](boards.md#mcu-family)).
+The memory linker script of the board links the `standalone` and `app-8k` images. The scripts are in `ldscripts/` of system-stm32. The STM32F1 boards use `mem-F103x8.ld` (see [MCU family](boards.md#mcu-family)).
+The `app-32k` image uses the script of a part with 128 KB flash or more, `mem-F103xB.ld` for the Mini (`MUPP_BOOTLOADER_32K_<board>` in `cmake/Boards.cmake`).
 CMake gives it the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
 The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
 For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
@@ -33,7 +34,7 @@ The target is `openmupp-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
-Only the boards with the legacy bootloader (`MUPP_LEGACY_BOOTLOADER_BOARDS`: the Mini) get the `app-10k` image.
+Only the boards with the 32 KB Versaloon bootloader (`MUPP_BOOTLOADER_32K_BOARDS`: the Mini) get the `app-32k` image.
 There is no bootloader for the WeAct STM32H523 core board, and no bootloader when `MUPP_BUILD_BOOTLOADER` is `OFF`.
 
 ## Unit tests
@@ -237,7 +238,7 @@ In CI, CMake checks each cached source against the declared tag, and fetches it 
 Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.
 The build jobs keep only the `.hex` and `.bin` files from `build/<preset>` as artifacts, with the board, the image, the build type and the version in the name.
-The Mini has the `standalone`, `app-8k`, `app-10k` and `with-bootloader` images.
+The Mini has the `standalone`, `app-8k`, `app-32k` and `with-bootloader` images.
 The ST-Link/V2-1 and the ST-Link/V2 mini clone have the `standalone`, `app-8k` and `with-bootloader` images.
 The artifacts have no `.elf` or `.map` files, and no bootloader image alone.
 The tag of a multi image has a `+`, also in the name of the artifact archive and of the matrix job.

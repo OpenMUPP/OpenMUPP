@@ -22,7 +22,7 @@ These options select the board, the personality and the debug features:
 | `MUPP_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [debug-log.md](debug-log.md)). Not allowed in a `Release` build, and not allowed when `wch-link` is the only personality. In a multi image, the log is silent while the WCH-Link personality is active. |
 | `MUPP_CH32_STUB_IMAGE` | `ON` | CH32 boards only. `ON`: the build makes the stub image (board start-up and state LED). `OFF`: the build makes the firmware image. It works with one personality and without the RISC-V bridge only (no flash settings page yet). |
 | `MUPP_STRICT_SIZE` | `OFF` (CI: `ON`) | What the build does when an image does not fit its flash limit (see [Images that do not fit](#images-that-do-not-fit)). `OFF`: the build skips the image with a warning and continues. `ON`: the build stops with an error. |
-| `MUPP_SKIP_IMAGES` | empty | Application images to leave out of the build: a list of `standalone`, `app-8k` and `app-10k`, separated by `,` or `;`, for example `app-8k,app-10k`. Without `app-8k`, the build makes no `with-bootloader` image. On a board with a bootloader, the standalone image of a build without `app-10k` has no check against the `app-10k` limit. |
+| `MUPP_SKIP_IMAGES` | empty | Application images to leave out of the build: a list of `standalone`, `app-8k` and `app-32k`, separated by `,` or `;`, for example `app-8k,app-32k`. Without `app-8k`, the build makes no `with-bootloader` image. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the GNU toolchain: the Arm GNU Toolchain, or the RISC-V GCC for a CH32 board. |
 
 The `MUPP_` options had the `VSL_` prefix before.
@@ -69,8 +69,8 @@ With `MUPP_STRICT_SIZE=OFF`, the build skips an image that does not fit:
 - When the build skips the `app-8k` image, it also skips the combined image (`cmake/CombinedImage.cmake`).
 - The `.elf` and `.map` files of a skipped image stay in the build directory. Do not program them.
 
-An example: the Release build of `versaloon,cmsis-dap,wch-link` for the Mini makes the `standalone`, `app-8k` and combined images.
-It skips the `app-10k` image.
+An example: the Release build of `versaloon,cmsis-dap,wch-link` for the Mini fits all images, but the `app-8k` image uses 95 % of its limit.
+A larger set of personalities can fit only the `standalone` and `app-32k` images.
 
 With `MUPP_STRICT_SIZE=ON`, the FLASH region has no slack, and the link of an image that does not fit fails.
 The post-build step does not run.
@@ -110,7 +110,7 @@ The default is `/usr`.
 | `mini-cmsis-dap`, `stlinkv21-cmsis-dap`, `stlinkv2miniclone-cmsis-dap` | Mini, ST-Link/V2-1, ST-Link/V2 mini clone | `cmsis-dap` | Release |
 | `mini-cmsis-dap-no-rv-bridge` | Mini | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` (tag `-cmsis-dap-no-rv-bridge`) | Release |
 | `mini-dual`, `stlinkv21-dual`, `stlinkv2miniclone-dual` | Mini, ST-Link/V2-1, ST-Link/V2 mini clone | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
-| `mini-debug` | Mini | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF`: with the bridge, the `app-8k` and `app-10k` images do not fit (tag `-cmsis-dap-no-rv-bridge`) | Debug |
+| `mini-debug` | Mini | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF`: with the bridge, the `app-8k` image does not fit (tag `-cmsis-dap-no-rv-bridge`) | Debug |
 | `mini-wch-link`, `stlinkv21-wch-link`, `stlinkv2miniclone-wch-link` | Mini, ST-Link/V2-1, ST-Link/V2 mini clone | `wch-link` | Release |
 | `mini-wch-link-wch-id` | Mini | `wch-link`, with `MUPP_WCH_LINK_WCH_USB_ID=ON` | Release |
 | `mini`, `stlinkv21`, `stlinkv2miniclone` | Mini, ST-Link/V2-1, ST-Link/V2 mini clone | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
