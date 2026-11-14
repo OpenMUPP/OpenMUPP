@@ -584,8 +584,8 @@ class BitBangPort final : public protocol::SwdPort {
    // unrolledBits<Pins>(), else the loop.
    template <bool Timed, uint32_t Count>
    [[gnu::always_inline]] void writeBits(pacing::ClockPacer &pacer, uint32_t value) {
-      if constexpr(!Timed && unrolledBits<Pins>()) {
-         writeUnrolled(pacer, value, std::make_index_sequence<Count>{});
+      if constexpr(unrolledBits<Pins>()) {
+         writeUnrolled<Timed>(pacer, value, std::make_index_sequence<Count>{});
       } else {
          writeBits<Timed>(pacer, value, Count);
       }
@@ -593,31 +593,31 @@ class BitBangPort final : public protocol::SwdPort {
 
    template <bool Timed, uint32_t Count>
    [[gnu::always_inline]] uint32_t readBits(pacing::ClockPacer &pacer) {
-      if constexpr(!Timed && unrolledBits<Pins>()) {
-         return readUnrolled(pacer, std::make_index_sequence<Count>{});
+      if constexpr(unrolledBits<Pins>()) {
+         return readUnrolled<Timed>(pacer, std::make_index_sequence<Count>{});
       } else {
          return readBits<Timed>(pacer, Count);
       }
    }
 
-   template <std::size_t... I>
+   template <bool Timed, std::size_t... I>
    [[gnu::always_inline]] void writeUnrolled(pacing::ClockPacer &pacer, uint32_t value, std::index_sequence<I...>) {
-      (writeBit<false>(pacer, ((value >> I) & 1u) != 0), ...);
+      (writeBit<Timed>(pacer, ((value >> I) & 1u) != 0), ...);
    }
 
-   template <std::size_t... I>
+   template <bool Timed, std::size_t... I>
    [[gnu::always_inline]] uint32_t readUnrolled(pacing::ClockPacer &pacer, std::index_sequence<I...>) {
       uint32_t value = 0;
-      (readUnrolledBit<I>(pacer, value), ...);
+      (readUnrolledBit<Timed, I>(pacer, value), ...);
       return value;
    }
 
    // The empty asm makes the value ready before the next bit: the code of
    // each bit stays in its high half period. There it gives the target
    // time to drive SWDIO, and no code is left for after the last bit.
-   template <std::size_t I>
+   template <bool Timed, std::size_t I>
    [[gnu::always_inline]] void readUnrolledBit(pacing::ClockPacer &pacer, uint32_t &value) {
-      value |= static_cast<uint32_t>(readBit<false>(pacer)) << I;
+      value |= static_cast<uint32_t>(readBit<Timed>(pacer)) << I;
       asm volatile("" : "+r"(value));
    }
 
