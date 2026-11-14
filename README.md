@@ -314,6 +314,7 @@ The Python scripts in `tools/` need Python 3.
 | `tools/probe_hw_test.py` | Runs the hardware test of a multi image on an STM32F1 target and a UART loopback. It tests the Versaloon personality with OpenOCD (SWD and JTAG). It then switches to the CMSIS-DAP personality and tests it with OpenOCD, pyOCD and probe-rs. It also runs the UART loopback tests. It erases the flash of the target. | `pyusb`, `pyserial`, OpenOCD, pyOCD, probe-rs (`--skip` for a missing tool) |
 | `tools/wch_link_frames_2wire.py`, `tools/wch_link_frames_1wire.py` | Decode the wire frames of a WCH-LinkE from a logic analyzer CSV file: 54-clock frames on two wires, 41-pulse frames on one wire (see [docs/wch-link-protocol.md](docs/wch-link-protocol.md#wire-frame-format)). | none |
 | `tools/clock_rate.py` | Measures the clock rate of a bit-bang engine from a logic analyzer CSV file (see [docs/clock-pacing.md](docs/clock-pacing.md#measurements)). | none |
+| `tools/swd_timing.py` | Measures the SWCLK half periods, the SWDIO setup time and the gaps between transfers from a logic analyzer CSV file (see [docs/clock-pacing.md](docs/clock-pacing.md#measurements)). | none |
 
 The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 
