@@ -52,6 +52,13 @@
 // runs delay 0 timed (Pins::timedAtDelayZero): its timed code makes
 // 1.85 MHz, and the untimed engine would give 9.6 MHz.
 //
+// With Pins::untimedMinPeriodCycles (the CH32V307), a CMSIS-DAP request
+// above the timed range runs untimed with extra NOPs in each half period
+// (untimedPadFor()). The pad makes the shortest period not shorter than
+// the request, and an interrupt only makes a period longer. Each small pad
+// has its own instance of the engine. The larger pads use one instance
+// with the NOP sled of the pins (Pins::padSled()).
+//
 // A transfer:
 //
 //   request (8 bits) | turnaround | ACK (3 bits) | data phase | idle
@@ -210,9 +217,9 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 // From this SWCLK, the engine runs untimed on a slow core, as at delay 0.
 // The value is above the untimed rate, with a margin, so a request from
 // this value does not give a faster clock: 2.42 to 2.7 MHz on the Mini
-// (#118), 9.6 MHz (median) on the CH32V307 at 144 MHz
-// (docs/clock-pacing.md). The untimed rate changes with the code layout.
-// Measure again after a change of the engine.
+// (#118). The untimed rate changes with the code layout. Measure again
+// after a change of the engine. 9.6 MHz (median) on the CH32V307 at
+// 144 MHz.
 #if defined(__riscv)
 inline constexpr uint32_t maxClockHz = 11'000'000;
 #else
@@ -232,12 +239,6 @@ inline constexpr uint32_t timedCodeCycles = 28;
 constexpr bool runsUntimed(uint32_t coreHz) {
    return halfPeriodCyclesOfHz(coreHz, maxClockHz) < timedCodeCycles;
 }
-
-#if defined(__riscv)
-// The CH32V307 (144 MHz) keeps the untimed engine from maxClockHz: it is
-// faster than the timed code limit (3.27 MHz, docs/clock-pacing.md).
-static_assert(runsUntimed(144'000'000));
-#endif
 
 // True when Pins::timedAtDelayZero is true: Versaloon delay 0 then runs
 // timed at 1.85 MHz, the rate of the OpenOCD table. The untimed engine is
@@ -284,13 +285,81 @@ constexpr bool unrolledBits() {
    }
 }
 
-// Count NOP instructions in one asm statement. Literal lines, not .rept:
-// the compiler counts the lines of an asm statement as its size, and that
-// size changes the code layout around it.
+// The pace of an operation: timedPace for the timed engine, sledPace for
+// the untimed engine with the NOP sled of the pins (Pins::padSled()), else
+// the extra NOPs of the untimed engine in each half period.
+inline constexpr uint32_t timedPace = UINT32_MAX;
+inline constexpr uint32_t sledPace = UINT32_MAX - 1;
+
+// Pins::untimedMinPeriodCycles: the shortest SWCLK period of the untimed
+// engine without extra NOPs, in core cycles, measured on the wire. With it,
+// a request with a half period below Pins::untimedBelowHalfCycles runs
+// untimed with extra NOPs, not timed. An interrupt only makes the untimed
+// engine slower, so the clock is never faster than the request. 0: no
+// padded engine.
+template <typename Pins>
+constexpr uint32_t untimedMinPeriodCycles() {
+   if constexpr(requires { Pins::untimedMinPeriodCycles; }) {
+      static_assert(Pins::untimedBelowHalfCycles >= timedCodeCycles);
+      return Pins::untimedMinPeriodCycles;
+   } else {
+      return 0;
+   }
+}
+
+// The count of pads: 0 to the pad of the longest period that runs untimed.
+// A half period below untimedBelowHalfCycles is a period of
+// 2 * untimedBelowHalfCycles - 2 cycles or less. 1: only pad 0, no padded
+// engine.
+template <typename Pins>
+constexpr uint32_t untimedPadCount() {
+   constexpr uint32_t minPeriod = untimedMinPeriodCycles<Pins>();
+   if constexpr(minPeriod == 0) {
+      return 1;
+   } else {
+      return intdiv::ceilDiv(2 * Pins::untimedBelowHalfCycles - 2 - minPeriod, 2u) + 1;
+   }
+}
+
+// The extra NOPs in each half period, so that the shortest period
+// (untimedMinPeriodCycles + 2 * pad) is not shorter than the period of hz.
+template <typename Pins>
+constexpr uint32_t untimedPadFor(uint32_t coreHz, uint32_t hz) {
+   constexpr uint32_t minPeriod = untimedMinPeriodCycles<Pins>();
+   const uint32_t period = intdiv::ceilDiv(coreHz, hz == 0 ? 1u : hz);
+   const uint32_t pad = period > minPeriod ? intdiv::ceilDiv(period - minPeriod, 2u) : 0;
+   return pad < untimedPadCount<Pins>() ? pad : untimedPadCount<Pins>() - 1;
+}
+
+// Pins::padSledCycles: the cycles of a jump into the NOP sled of the pins
+// with 0 NOPs (Pins::setPadSled(), Pins::padSled()). A pad from this value
+// runs in one instance with the sled; the smaller pads have one instance
+// each. 0: no sled, one instance for each pad.
+template <typename Pins>
+constexpr uint32_t padSledCycles() {
+   if constexpr(requires { Pins::padSledCycles; }) {
+      return Pins::padSledCycles;
+   } else {
+      return 0;
+   }
+}
+
+// The pads with their own instance of the untimed engine
+template <typename Pins>
+constexpr uint32_t untimedPadInstances() {
+   constexpr uint32_t sled = padSledCycles<Pins>();
+   return sled != 0 && sled < untimedPadCount<Pins>() ? sled : untimedPadCount<Pins>();
+}
+
+// Count NOP instructions in asm statements of up to 6 lines. Literal lines,
+// not .rept: the compiler counts the lines of an asm statement as its size,
+// and that size changes the code layout around it.
 template <uint32_t Count>
 [[gnu::always_inline]] inline void nops() {
-   static_assert(Count <= 6, "Add a NOP line below");
-   if constexpr(Count == 1) {
+   if constexpr(Count > 6) {
+      nops<6>();
+      nops<Count - 6>();
+   } else if constexpr(Count == 1) {
       asm volatile("nop");
    } else if constexpr(Count == 2) {
       asm volatile("nop\n\tnop");
@@ -363,7 +432,19 @@ class BitBangPort final : public protocol::SwdPort {
    // From maxClockHz, the engine runs untimed on a slow core (as at delay
    // 0). The code limits the timed rate: 1.3 to 1.56 MHz on the STM32F103
    // (#117), 3.27 MHz on the CH32V307, 5.2 to 6.1 MHz on the STM32H5.
+   //
+   // With Pins::untimedMinPeriodCycles, a request with a half period
+   // shorter than Pins::untimedBelowHalfCycles runs untimed, with
+   // untimedPadFor() extra NOPs: the shortest period is then not shorter
+   // than the request.
    void setClockHz(uint32_t hz) {
+      if constexpr(untimedPadCount<Pins>() > 1) {
+         const uint32_t coreHz = pins_.coreHz();
+         if(halfPeriodCyclesOfHz(coreHz, hz) < Pins::untimedBelowHalfCycles) {
+            setHalfCycles(halfPeriodCycles(coreHz, 0), false, untimedPadFor<Pins>(coreHz, hz));
+            return;
+         }
+      }
       if(hz >= maxClockHz && runsUntimed(pins_.coreHz())) {
          setHalfCycles(halfPeriodCycles(pins_.coreHz(), 0), false);
       } else {
@@ -371,24 +452,38 @@ class BitBangPort final : public protocol::SwdPort {
       }
    }
 
+   // Without pads (untimedPadCount() 1), the plain branch: the same code
+   // as before the pads on the STM32 boards.
    void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) override {
-      if(isTimed()) {
-         sequenceOut<true>(bitCount, data);
+      if constexpr(untimedPadCount<Pins>() == 1) {
+         if(isTimed()) {
+            sequenceOut<timedPace>(bitCount, data);
+         } else {
+            sequenceOut<0>(bitCount, data);
+         }
       } else {
-         sequenceOut<false>(bitCount, data);
+         withPace([&]<uint32_t Pace>() { sequenceOut<Pace>(bitCount, data); });
       }
    }
 
    void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) override {
-      if(isTimed()) {
-         sequenceIn<true>(bitCount, data);
+      if constexpr(untimedPadCount<Pins>() == 1) {
+         if(isTimed()) {
+            sequenceIn<timedPace>(bitCount, data);
+         } else {
+            sequenceIn<0>(bitCount, data);
+         }
       } else {
-         sequenceIn<false>(bitCount, data);
+         withPace([&]<uint32_t Pace>() { sequenceIn<Pace>(bitCount, data); });
       }
    }
 
    uint8_t transfer(uint8_t request, uint32_t &data) override {
-      return isTimed() ? transfer<true>(request, data) : transfer<false>(request, data);
+      if constexpr(untimedPadCount<Pins>() == 1) {
+         return isTimed() ? transfer<timedPace>(request, data) : transfer<0>(request, data);
+      } else {
+         return withPace([&]<uint32_t Pace>() { return transfer<Pace>(request, data); });
+      }
    }
 
    [[nodiscard]] uint32_t halfCycles() const {
@@ -401,46 +496,52 @@ class BitBangPort final : public protocol::SwdPort {
       return timed_;
    }
 
+   // The extra NOPs of the untimed engine in each half period (see
+   // setClockHz())
+   [[nodiscard]] uint32_t untimedPad() const {
+      return pad_;
+   }
+
    private:
-   // Timed: wait for each half period. Untimed: no wait, and no read of the
-   // cycle counter.
-   template <bool Timed>
+   // Pace timedPace: wait for each half period. Else untimed: no wait, no
+   // read of the cycle counter, and Pace more NOPs in each half period.
+   template <uint32_t Pace>
    void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) {
       if(bitCount == 0) {
          return;
       }
       begin();
-      auto pacer = startPacer<Timed>();
+      auto pacer = startPacer<Pace>();
       pins_.swdioDrive((data[0] & 1u) != 0);
       for(uint32_t i = 0; i < bitCount; ++i) {
          if(i % 8 == 0) {
             background_.poll(pins_);
          }
-         writeBit<Timed>(pacer, ((data[i / 8] >> (i % 8)) & 1u) != 0);
+         writeBit<Pace>(pacer, ((data[i / 8] >> (i % 8)) & 1u) != 0);
       }
    }
 
-   template <bool Timed>
+   template <uint32_t Pace>
    void sequenceIn(uint16_t bitCount, art::span<uint8_t> data) {
       begin();
-      auto pacer = startPacer<Timed>();
+      auto pacer = startPacer<Pace>();
       pins_.swdioRelease();
       for(uint32_t i = 0; i < bitCount; ++i) {
          if(i % 8 == 0) {
             background_.poll(pins_);
          }
-         if(readBit<Timed>(pacer)) {
+         if(readBit<Pace>(pacer)) {
             data[i / 8] = static_cast<uint8_t>(data[i / 8] | 1u << (i % 8));
          }
       }
    }
 
-   template <bool Timed>
+   template <uint32_t Pace>
    uint8_t transfer(uint8_t request, uint32_t &data) {
       begin();
       for(uint32_t attempt = 0;; ++attempt) {
          background_.poll(pins_);
-         const uint8_t ack = transferOnce<Timed>(request, data);
+         const uint8_t ack = transferOnce<Pace>(request, data);
          if(ack != ackWait) {
             return ack;
          }
@@ -450,24 +551,55 @@ class BitBangPort final : public protocol::SwdPort {
          if(rules_.abortOnWait) {
             // An ABORT write gets OK also with STICKYORUN set.
             uint32_t clear = orunErrClr;
-            static_cast<void>(transferOnce<Timed>(abortRequest, clear));
+            static_cast<void>(transferOnce<Pace>(abortRequest, clear));
          }
       }
    }
 
-   void setHalfCycles(uint32_t halfCycles, bool timed) {
+   void setHalfCycles(uint32_t halfCycles, bool timed, uint32_t pad = 0) {
       halfCycles_ = halfCycles;
       timed_ = timed;
+      if constexpr(untimedPadCount<Pins>() > 1) {
+         pad_ = pad;
+      } else {
+         static_cast<void>(pad);
+      }
+   }
+
+   // Calls fn with the pace of the operation: timedPace, or the pad of the
+   // untimed engine. One instance of the engine code for each pad.
+   template <typename Fn>
+   [[gnu::always_inline]] auto withPace(Fn fn) {
+      if(isTimed()) {
+         return fn.template operator()<timedPace>();
+      }
+      if constexpr(untimedPadInstances<Pins>() < untimedPadCount<Pins>()) {
+         if(pad_ >= untimedPadInstances<Pins>()) {
+            pins_.setPadSled(pad_ - padSledCycles<Pins>());
+            return fn.template operator()<sledPace>();
+         }
+      }
+      return withPad(fn, std::make_index_sequence<untimedPadInstances<Pins>()>{});
+   }
+
+   template <typename Fn, std::size_t... P>
+   [[gnu::always_inline]] auto withPad(Fn fn, std::index_sequence<P...>) {
+      using Result = decltype(fn.template operator()<0>());
+      using Entry = Result (*)(Fn &);
+      static constexpr std::array<Entry, sizeof...(P)> table{ [](Fn &f) -> Result {
+         return f.template operator()<P>();
+      }... };
+      return table[pad_](fn);
    }
 
    // The pacer of one operation: a local, so its deadline stays in a
    // register. A member pacer was loaded and stored at each edge, because
    // the compiler assumes that a GPIO store can change it (#117). The first
    // half period starts now.
-   template <bool Timed>
+   template <uint32_t Pace>
    [[gnu::always_inline]] pacing::ClockPacer startPacer() {
       pacing::ClockPacer pacer;
-      if constexpr(Timed) {
+      if constexpr(Pace == timedPace) {
          pacer.setHalfCycles(halfCycles_);
          pacer.start(pins_);
       }
@@ -481,24 +613,24 @@ class BitBangPort final : public protocol::SwdPort {
 
    // One transfer. Returns the ACK and the FAULT, ACK error and parity
    // flags.
-   template <bool Timed>
+   template <uint32_t Pace>
    uint8_t transferOnce(uint8_t request, uint32_t &data) {
-      auto pacer = startPacer<Timed>();
+      auto pacer = startPacer<Pace>();
       pins_.swdioDrive(true);
-      writeBits<Timed, 8>(pacer, request);
+      writeBits<Pace, 8>(pacer, request);
       pins_.swdioRelease();
-      clocks<Timed>(pacer, turnaround_);
-      const auto ack = static_cast<uint8_t>(readBits<Timed, 3>(pacer));
+      clocks<Pace>(pacer, turnaround_);
+      const auto ack = static_cast<uint8_t>(readBits<Pace, 3>(pacer));
       uint8_t result = ack;
       const bool ackError = ack != ackOk && ack != ackWait && ack != ackFault;
       if(!rules_.dataPhase && (ack == ackWait || ack == ackFault)) {
          // No data phase: the turnaround back to the host
-         clocks<Timed>(pacer, turnaround_);
+         clocks<Pace>(pacer, turnaround_);
       } else if((request & readRequest) != 0 || (ackError && rules_.releaseOnAckError)) {
          // A read, or the back-off after a protocol error: SWDIO released
-         const uint32_t value = readBits<Timed, 32>(pacer);
-         const bool parityBit = readBit<Timed>(pacer);
-         clocks<Timed>(pacer, turnaround_);
+         const uint32_t value = readBits<Pace, 32>(pacer);
+         const bool parityBit = readBit<Pace>(pacer);
+         clocks<Pace>(pacer, turnaround_);
          if(ack == ackOk) {
             if(parityBit != parity(value)) {
                result |= parityErrorFlag;
@@ -507,10 +639,10 @@ class BitBangPort final : public protocol::SwdPort {
             }
          }
       } else {
-         clocks<Timed>(pacer, turnaround_);
+         clocks<Pace>(pacer, turnaround_);
          pins_.swdioDrive((data & 1u) != 0);
-         writeBits<Timed, 32>(pacer, data);
-         writeBit<Timed>(pacer, parity(data));
+         writeBits<Pace, 32>(pacer, data);
+         writeBit<Pace>(pacer, parity(data));
       }
       if(ack == ackFault) {
          result |= faultFlag;
@@ -519,113 +651,118 @@ class BitBangPort final : public protocol::SwdPort {
       }
       pins_.swdioDrive(false);
       if(ack == ackOk || !rules_.idleOnlyAfterOk) {
-         writeBits<Timed>(pacer, 0, rules_.idleCycles);
+         writeBits<Pace>(pacer, 0, rules_.idleCycles);
       }
       return result;
    }
 
    // Waits for the end of the high (High) or low half period. The SWCLK
    // edge must follow.
-   template <bool Timed, bool High>
+   template <uint32_t Pace, bool High>
    [[gnu::always_inline]] void waitHalfPeriod(pacing::ClockPacer &pacer) {
-      if constexpr(Timed) {
+      if constexpr(Pace == timedPace) {
          pacer.wait(pins_);
       } else {
-         nops<untimedPadNopsOf<Pins, High>()>();
+         if constexpr(Pace == sledPace) {
+            nops<untimedPadNopsOf<Pins, High>()>();
+            pins_.padSled();
+         } else {
+            nops<untimedPadNopsOf<Pins, High>() + Pace>();
+         }
       }
    }
 
    // The SWCLK edge after waitHalfPeriod()
-   template <bool Timed>
+   template <uint32_t Pace>
    [[gnu::always_inline]] void swclk(pacing::ClockPacer &pacer, bool level) {
       pins_.swclk(level);
-      if constexpr(Timed) {
+      if constexpr(Pace == timedPace) {
          pacer.edge(pins_);
       }
    }
 
-   template <bool Timed>
+   template <uint32_t Pace>
    [[gnu::always_inline]] void writeBit(pacing::ClockPacer &pacer, bool level) {
-      waitHalfPeriod<Timed, true>(pacer);
-      swclk<Timed>(pacer, false);
+      waitHalfPeriod<Pace, true>(pacer);
+      swclk<Pace>(pacer, false);
       pins_.swdioWrite(level);
-      waitHalfPeriod<Timed, false>(pacer);
-      swclk<Timed>(pacer, true);
+      waitHalfPeriod<Pace, false>(pacer);
+      swclk<Pace>(pacer, true);
    }
 
-   template <bool Timed>
+   template <uint32_t Pace>
    [[gnu::always_inline]] bool readBit(pacing::ClockPacer &pacer) {
-      waitHalfPeriod<Timed, true>(pacer);
-      swclk<Timed>(pacer, false);
-      waitHalfPeriod<Timed, false>(pacer);
+      waitHalfPeriod<Pace, true>(pacer);
+      swclk<Pace>(pacer, false);
+      waitHalfPeriod<Pace, false>(pacer);
       const bool level = pins_.swdio();
-      swclk<Timed>(pacer, true);
+      swclk<Pace>(pacer, true);
       return level;
    }
 
-   template <bool Timed>
+   template <uint32_t Pace>
    [[gnu::always_inline]] void writeBits(pacing::ClockPacer &pacer, uint32_t value, uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
-         writeBit<Timed>(pacer, (value & 1u) != 0);
+         writeBit<Pace>(pacer, (value & 1u) != 0);
          value >>= 1;
       }
    }
 
-   template <bool Timed>
+   template <uint32_t Pace>
    [[gnu::always_inline]] uint32_t readBits(pacing::ClockPacer &pacer, uint32_t count) {
       uint32_t value = 0;
       for(uint32_t i = 0; i < count; ++i) {
-         value |= static_cast<uint32_t>(readBit<Timed>(pacer)) << i;
+         value |= static_cast<uint32_t>(readBit<Pace>(pacer)) << i;
       }
       return value;
    }
 
    // A fixed count of bits: unrolled in the untimed engine when
    // unrolledBits<Pins>(), else the loop.
-   template <bool Timed, uint32_t Count>
+   template <uint32_t Pace, uint32_t Count>
    [[gnu::always_inline]] void writeBits(pacing::ClockPacer &pacer, uint32_t value) {
-      if constexpr(!Timed && unrolledBits<Pins>()) {
-         writeUnrolled(pacer, value, std::make_index_sequence<Count>{});
+      if constexpr(Pace != timedPace && unrolledBits<Pins>()) {
+         writeUnrolled<Pace>(pacer, value, std::make_index_sequence<Count>{});
       } else {
-         writeBits<Timed>(pacer, value, Count);
+         writeBits<Pace>(pacer, value, Count);
       }
    }
 
-   template <bool Timed, uint32_t Count>
+   template <uint32_t Pace, uint32_t Count>
    [[gnu::always_inline]] uint32_t readBits(pacing::ClockPacer &pacer) {
-      if constexpr(!Timed && unrolledBits<Pins>()) {
-         return readUnrolled(pacer, std::make_index_sequence<Count>{});
+      if constexpr(Pace != timedPace && unrolledBits<Pins>()) {
+         return readUnrolled<Pace>(pacer, std::make_index_sequence<Count>{});
       } else {
-         return readBits<Timed>(pacer, Count);
+         return readBits<Pace>(pacer, Count);
       }
    }
 
-   template <std::size_t... I>
+   template <uint32_t Pace, std::size_t... I>
    [[gnu::always_inline]] void writeUnrolled(pacing::ClockPacer &pacer, uint32_t value, std::index_sequence<I...>) {
-      (writeBit<false>(pacer, ((value >> I) & 1u) != 0), ...);
+      (writeBit<Pace>(pacer, ((value >> I) & 1u) != 0), ...);
    }
 
-   template <std::size_t... I>
+   template <uint32_t Pace, std::size_t... I>
    [[gnu::always_inline]] uint32_t readUnrolled(pacing::ClockPacer &pacer, std::index_sequence<I...>) {
       uint32_t value = 0;
-      (readUnrolledBit<I>(pacer, value), ...);
+      (readUnrolledBit<Pace, I>(pacer, value), ...);
       return value;
    }
 
    // The empty asm makes the value ready before the next bit: the code of
    // each bit stays in its high half period. There it gives the target
    // time to drive SWDIO, and no code is left for after the last bit.
-   template <std::size_t I>
+   template <uint32_t Pace, std::size_t I>
    [[gnu::always_inline]] void readUnrolledBit(pacing::ClockPacer &pacer, uint32_t &value) {
-      value |= static_cast<uint32_t>(readBit<false>(pacer)) << I;
+      value |= static_cast<uint32_t>(readBit<Pace>(pacer)) << I;
       asm volatile("" : "+r"(value));
    }
 
    // Clock cycles with SWDIO released, for a turnaround
-   template <bool Timed>
+   template <uint32_t Pace>
    [[gnu::always_inline]] void clocks(pacing::ClockPacer &pacer, uint32_t count) {
       for(uint32_t i = 0; i < count; ++i) {
-         static_cast<void>(readBit<Timed>(pacer));
+         static_cast<void>(readBit<Pace>(pacer));
       }
    }
 
@@ -638,6 +775,8 @@ class BitBangPort final : public protocol::SwdPort {
    RetryStop *stop_{ nullptr };
    uint32_t halfCycles_{ 0 };
    bool timed_{ true };
+   // The extra NOPs of the untimed engine in each half period
+   uint32_t pad_{ 0 };
 };
 
 } // namespace swd
