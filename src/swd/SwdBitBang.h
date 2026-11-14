@@ -23,6 +23,9 @@
 //
 // Optional: static constexpr bool timedAtDelayZero = true runs delay 0
 // timed also on a slow core (see timedAtDelayZero()).
+// static constexpr uint32_t untimedHighPadNops and untimedLowPadNops set
+// the NOP pads of the untimed engine (default untimedPadNops, see
+// untimedPadNopsOf()).
 //
 // SWCLK is high between bits. One bit (ADIv5, B4.2):
 //
@@ -39,7 +42,7 @@
 //
 // At delay 0 (1.85 MHz) and from maxClockHz, the engine runs untimed on a
 // slow core (see runsUntimed()): it does not read the cycle counter, and
-// each half period is the loop code and untimedPadNops NOP instructions.
+// each half period is the loop code and the NOP pads (untimedPadNopsOf()).
 // Thus its rate depends on the code: 2.42 to 2.7 MHz on the Mini
 // (docs/clock-pacing.md, #118). The original firmware bursts at 2.25 to
 // 3 MHz. On a fast core, delay 0 is timed at 1.85 MHz. The CH32V307 also
@@ -140,11 +143,12 @@ using protocol::swd::retryOutFlag;
 // Hz: a period of 2 * (delay + 1) us.
 inline constexpr std::array<uint32_t, 6> fixedClockHz{ 1'850'000, 235'000, 130'000, 102'000, 85'000, 72'000 };
 
-// Untimed (delay 0): NOP instructions in each half period. They keep a
-// minimum low half period, so SWDIO has a setup time before the rising
-// edge, and the target has time to drive SWDIO before the read. With the
-// loop code, one bit takes about 27 to 30 cycles: 2.42 to 2.7 MHz measured
-// at delay 0 on the Mini, it changes with the code layout.
+// Untimed (delay 0): the default count of NOP instructions in each half
+// period. They keep a minimum low half period, so SWDIO has a setup time
+// before the rising edge, and the target has time to drive SWDIO before
+// the read. With the loop code, one bit takes about 27 to 30 cycles: 2.42
+// to 2.7 MHz measured at delay 0 on the Mini, it changes with the code
+// layout.
 inline constexpr uint32_t untimedPadNops = 6;
 
 // The DP ABORT write (encoded request) and its ORUNERRCLR bit
@@ -240,6 +244,43 @@ constexpr bool timedAtDelayZero() {
       return Pins::timedAtDelayZero;
    } else {
       return false;
+   }
+}
+
+// The NOP count at the end of the high half period (High) or of the low
+// half period: Pins::untimedHighPadNops or Pins::untimedLowPadNops, else
+// untimedPadNops. The low-half pad gives the SWDIO setup time before the
+// rising edge. The high half has the loop code, and the target drives
+// SWDIO after the rising edge, so its pad only limits the rate.
+template <typename Pins, bool High>
+constexpr uint32_t untimedPadNopsOf() {
+   if constexpr(High && requires { Pins::untimedHighPadNops; }) {
+      return Pins::untimedHighPadNops;
+   } else if constexpr(!High && requires { Pins::untimedLowPadNops; }) {
+      return Pins::untimedLowPadNops;
+   } else {
+      return untimedPadNops;
+   }
+}
+
+// Count NOP instructions in one asm statement. Literal lines, not .rept:
+// the compiler counts the lines of an asm statement as its size, and that
+// size changes the code layout around it.
+template <uint32_t Count>
+[[gnu::always_inline]] inline void nops() {
+   static_assert(Count <= 6, "Add a NOP line below");
+   if constexpr(Count == 1) {
+      asm volatile("nop");
+   } else if constexpr(Count == 2) {
+      asm volatile("nop\n\tnop");
+   } else if constexpr(Count == 3) {
+      asm volatile("nop\n\tnop\n\tnop");
+   } else if constexpr(Count == 4) {
+      asm volatile("nop\n\tnop\n\tnop\n\tnop");
+   } else if constexpr(Count == 5) {
+      asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop");
+   } else if constexpr(Count == 6) {
+      asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop");
    }
 }
 
@@ -462,14 +503,14 @@ class BitBangPort final : public protocol::SwdPort {
       return result;
    }
 
-   // Waits for the end of the half period. The SWCLK edge must follow.
-   template <bool Timed>
+   // Waits for the end of the high (High) or low half period. The SWCLK
+   // edge must follow.
+   template <bool Timed, bool High>
    [[gnu::always_inline]] void waitHalfPeriod(pacing::ClockPacer &pacer) {
       if constexpr(Timed) {
          pacer.wait(pins_);
       } else {
-         static_assert(untimedPadNops == 6, "Change the NOP count below too");
-         asm volatile("nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop");
+         nops<untimedPadNopsOf<Pins, High>()>();
       }
    }
 
@@ -484,18 +525,18 @@ class BitBangPort final : public protocol::SwdPort {
 
    template <bool Timed>
    [[gnu::always_inline]] void writeBit(pacing::ClockPacer &pacer, bool level) {
-      waitHalfPeriod<Timed>(pacer);
+      waitHalfPeriod<Timed, true>(pacer);
       swclk<Timed>(pacer, false);
       pins_.swdioWrite(level);
-      waitHalfPeriod<Timed>(pacer);
+      waitHalfPeriod<Timed, false>(pacer);
       swclk<Timed>(pacer, true);
    }
 
    template <bool Timed>
    [[gnu::always_inline]] bool readBit(pacing::ClockPacer &pacer) {
-      waitHalfPeriod<Timed>(pacer);
+      waitHalfPeriod<Timed, true>(pacer);
       swclk<Timed>(pacer, false);
-      waitHalfPeriod<Timed>(pacer);
+      waitHalfPeriod<Timed, false>(pacer);
       const bool level = pins_.swdio();
       swclk<Timed>(pacer, true);
       return level;

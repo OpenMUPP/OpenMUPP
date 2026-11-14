@@ -938,3 +938,28 @@ TEST_CASE("SWD bit-bang: Pins::timedAtDelayZero runs delay 0 timed on a slow cor
    port.configure(1, 0, 1);
    CHECK(port.isTimed());
 }
+
+namespace {
+struct PadPins : MockSwdPins {
+   using MockSwdPins::MockSwdPins;
+   static constexpr uint32_t untimedHighPadNops = 0;
+   static constexpr uint32_t untimedLowPadNops = 3;
+};
+} // namespace
+
+TEST_CASE("SWD bit-bang: Pins sets the untimed NOP pads") {
+   static_assert(swd::untimedPadNopsOf<MockSwdPins, true>() == swd::untimedPadNops);
+   static_assert(swd::untimedPadNopsOf<MockSwdPins, false>() == swd::untimedPadNops);
+   static_assert(swd::untimedPadNopsOf<PadPins, true>() == 0);
+   static_assert(swd::untimedPadNopsOf<PadPins, false>() == 3);
+   // The untimed engine with other pads gives the same transfer
+   PadPins pins(1);
+   BitBangPort<PadPins> port(pins);
+   port.init();
+   port.configure(1, 0, 0);
+   CHECK_FALSE(port.isTimed());
+   uint32_t data = 0;
+   pins.readData = 0x5a5a;
+   CHECK(port.transfer(readApDrw, data) == pswd::ackOk);
+   CHECK(data == 0x5a5a);
+}
