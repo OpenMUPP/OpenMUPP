@@ -89,7 +89,7 @@ The design does not use these options:
   Thus a request of 1.8 MHz gives 1.3 to 1.56 MHz.
   The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
 - The untimed SWD engine (`delay` 0, or `swd::maxClockHz` and more in CMSIS-DAP) does not use the pacer.
-  Its rate depends on the code: 2.42 to 2.7 MHz on the Mini, 4.0 MHz on the CH32V307.
+  Its rate depends on the code: 2.42 to 2.7 MHz on the Mini, 5.1 MHz on the CH32V307 (see [PCLK2 at 144 MHz](#pclk2-at-144-mhz)).
   At `delay` 0, this is faster than the 1.85 MHz of the table.
   In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`, so a request does not give a faster clock.
   `swd::maxClockHz` is 3 MHz on the STM32 and 4.5 MHz on the CH32V307 (see [CH32V307](#ch32v307)).
@@ -356,6 +356,36 @@ Findings:
 - All reads were correct. `tools/flash_benchmark.py` passed at 250 to 20000 kHz before the fix, and at 2000 to 20000 kHz after the fix.
   With the fix, the read of 32 KiB takes 0.26 s at 2000 kHz, 0.22 to 0.23 s at 3000 and 4000 kHz, and 0.16 s from 4500 kHz.
   The write takes 1.26 to 1.31 s from 1000 kHz: the flash of the STM32F103 limits it.
+
+### PCLK2 at 144 MHz
+
+The results above are for PCLK2 at HCLK / 2 (72 MHz). The GPIO ports are on APB2.
+Since 2026-11-14, PCLK2 is HCLK (144 MHz), so each GPIO access stalls the core for fewer cycles.
+The ADC clock must be 14 MHz or less, and the slowest ADC clock from 144 MHz is 18 MHz.
+Thus `BoardPower.cpp` sets PCLK2 to HCLK / 2 only while the ADC measures Vref (see [YD-CH32V307VCT6](boards.md#yd-ch32v307vct6-development-board)).
+
+Measured on 2026-11-14 with the setup of [CH32V307](#ch32v307), with these changes:
+
+- Target: STM32H523 on SWD at its reset clock.
+- Logic analyzer: SWDIO on channel 0, SWCLK on channel 1.
+- Traffic: two reads of 32 KiB of SRAM (`dump_image`) in each session.
+
+| Request | Engine | PCLK2 72 MHz | PCLK2 144 MHz | Read 32 KiB, 72 MHz | Read 32 KiB, 144 MHz |
+|---|---|---|---|---|---|
+| 1000 kHz | timed | 999.1 kHz | 999.8 kHz | 0.425 s | 0.424 s |
+| 2000 kHz | timed | 2001.7 kHz | 2001.7 kHz | 0.237 s | 0.236 s |
+| 2900 kHz | timed | 2872.6 kHz | 2878.3 kHz | 0.195 s | 0.178 s |
+| 4000 kHz | timed | 2404 kHz (median) | 3268 kHz (median) | 0.197 s | 0.173 s |
+| 4500 to 20000 kHz | untimed | 3980.0 kHz | 5103.9 kHz | 0.139 s | 0.117 s |
+
+Findings:
+
+- The untimed engine is 28 % faster: the median period is 194 ns (high half period 112 ns, low half period 82 ns).
+  The SWDIO setup time before the rising edge of SWCLK is 60 ns at minimum.
+- The timed engine gives 3.27 MHz at most (median), not 2.76 MHz.
+- At 2900 kHz, the shortest single period is 298 ns, 14 % shorter than the nominal period (347 ns). With PCLK2 at 72 MHz, it was 346 ns. These are [late edges](#late-edges).
+- The JTAG TCK rates (1000 kHz bit-bang, 2250 to 9000 kHz SPI) did not change.
+- All reads were correct.
 
 ## CH32V307 JTAG
 

@@ -23,9 +23,10 @@
 // - The requests are on DMA2: TIM10_UP on channel 11, TIM10_CH1 (the
 //   sample) on channel 8 (RM table 11-3).
 //
-// TIM10 runs at the core clock: PCLK2 is HCLK / 2 (initialize_hardware.cpp),
-// and the timer clock is twice PCLK2 when the APB2 prescaler is not 1 (RM
-// clock tree). The timer ticks are core cycles.
+// TIM10 runs at the core clock: PCLK2 is HCLK (initialize_hardware.cpp), and
+// the timer clock is PCLK2 when the APB2 prescaler is 1 (RM clock tree).
+// During a Vref measurement PCLK2 is HCLK / 2, and the timer clock is twice
+// PCLK2, so it stays the same. The timer ticks are core cycles.
 template class rvswd::RvSwdEngine<board::RvSwdPins>;
 
 namespace board {
