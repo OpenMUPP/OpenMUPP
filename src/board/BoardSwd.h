@@ -32,6 +32,10 @@ class SwdPins {
    static constexpr uint32_t untimedHighPadNops = 2;
    static constexpr uint32_t untimedLowPadNops = 0;
    static constexpr bool unrolledBits = true;
+   // The timed engine locks the interrupts from the last read of the
+   // counter to the edge, and reads the counter once for each half period
+   // (pacing::ClockPacer::waitLocked()).
+   static constexpr bool lockedEdges = true;
 #endif
 
    void init();
@@ -93,6 +97,21 @@ class SwdPins {
    }
 
 #if defined(__riscv)
+   // QingKe: mstatus.MIE (bit 3) is the global interrupt enable. One csrrci
+   // reads and clears it. __disable_irq() of ch32v00x-system also clears
+   // MPIE, so the lock does not use it. unlockIrq() sets the bit of
+   // lockIrq(): a csrs of 0 changes nothing, so it needs no branch.
+   [[gnu::always_inline]] uint32_t lockIrq() {
+      uint32_t mstatus = 0;
+      asm volatile("csrrci %0, mstatus, %1" : "=r"(mstatus) : "i"(mstatusMie) : "memory");
+      return mstatus & mstatusMie;
+   }
+   [[gnu::always_inline]] void unlockIrq(uint32_t mie) {
+      asm volatile("csrs mstatus, %0" : : "r"(mie) : "memory");
+   }
+#endif
+
+#if defined(__riscv)
    protected:
    // The direction change with a read-modify-write of hw::FastPin, without
    // the words of begin(): RvSwdPins uses it.
@@ -128,6 +147,8 @@ class SwdPins {
    // Set by begin()
    uint32_t swdioOutputWord_{ 0 };
    uint32_t swdioInputWord_{ 0 };
+
+   static constexpr uint32_t mstatusMie = 1u << 3;
 #endif
 };
 

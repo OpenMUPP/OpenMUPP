@@ -6,8 +6,8 @@
 // (rvswd/RvSwdEngine.h). Target only. The pins of the SWD engine
 // (board/BoardSwd.h): SWCLK is the TCK pin, SWDIO the TMS pins. The
 // one-wire interface of the CH32V00x uses SWDIO only. The idle level of
-// SWCLK is low, and the interrupt lock is PRIMASK (mstatus.MIE on the
-// CH32V307). A one-wire frame runs on the timer of board::oneWireTimerOf()
+// SWCLK is low, and the interrupt lock is PRIMASK (mstatus.MIE of SwdPins
+// on the CH32V307). A one-wire frame runs on the timer of board::oneWireTimerOf()
 // with two DMA channels (BoardRvSwd.cpp on the STM32F1, BoardRvSwdH5.cpp on the STM32H5,
 // BoardRvSwdV30x.cpp on the CH32V307).
 
@@ -45,24 +45,8 @@ class RvSwdPins : public SwdPins {
    // See rvswd/RvSwdEngine.h. Call it with the interrupts locked.
    bool oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t &samples);
 
-#if defined(__riscv)
-   // QingKe: mstatus.MIE (bit 3) is the global interrupt enable. One csrrc
-   // reads and clears it. __disable_irq() of ch32v00x-system also clears
-   // MPIE, so the lock does not use it.
-   [[gnu::always_inline]] uint32_t lockIrq() {
-      uint32_t mstatus = 0;
-      asm volatile("csrrc %0, mstatus, %1" : "=r"(mstatus) : "r"(mstatusMie) : "memory");
-      return mstatus & mstatusMie;
-   }
-   [[gnu::always_inline]] void unlockIrq(uint32_t mie) {
-      if(mie != 0) {
-         asm volatile("csrs mstatus, %0" : : "r"(mstatusMie) : "memory");
-      }
-   }
-
-   private:
-   static constexpr uint32_t mstatusMie = 1u << 3;
-#else
+#if !defined(__riscv)
+   // The CH32V307 has the lock of SwdPins.
    [[gnu::always_inline]] uint32_t lockIrq() {
       const uint32_t primask = __get_PRIMASK();
       __disable_irq();

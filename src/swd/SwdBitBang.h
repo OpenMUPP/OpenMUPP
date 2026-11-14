@@ -29,6 +29,9 @@
 // untimedPadNopsOf()).
 // static constexpr bool unrolledBits = true unrolls the fixed-length bit
 // loops of the untimed engine (see unrolledBits()).
+// static constexpr bool lockedEdges = true, with uint32_t lockIrq() and
+// void unlockIrq(uint32_t), locks the interrupts at each timed edge (see
+// lockedEdges()).
 //
 // SWCLK is high between bits. One bit (ADIv5, B4.2):
 //
@@ -284,6 +287,18 @@ constexpr bool unrolledBits() {
    }
 }
 
+// True when Pins::lockedEdges is true: the timed engine then uses
+// ClockPacer::waitLocked(), one read of the counter for each half period.
+// On the CH32V307, a read of SysTick->CNT costs more than the lock.
+template <typename Pins>
+constexpr bool lockedEdges() {
+   if constexpr(requires { Pins::lockedEdges; }) {
+      return Pins::lockedEdges;
+   } else {
+      return false;
+   }
+}
+
 // Count NOP instructions in one asm statement. Literal lines, not .rept:
 // the compiler counts the lines of an asm statement as its size, and that
 // size changes the code layout around it.
@@ -525,41 +540,47 @@ class BitBangPort final : public protocol::SwdPort {
    }
 
    // Waits for the end of the high (High) or low half period. The SWCLK
-   // edge must follow.
+   // edge must follow. Returns the interrupt state for swclk(): with
+   // lockedEdges<Pins>(), the interrupts stay locked until the edge.
    template <bool Timed, bool High>
-   [[gnu::always_inline]] void waitHalfPeriod(pacing::ClockPacer &pacer) {
-      if constexpr(Timed) {
+   [[gnu::always_inline]] uint32_t waitHalfPeriod(pacing::ClockPacer &pacer) {
+      if constexpr(Timed && lockedEdges<Pins>()) {
+         return pacer.waitLocked(pins_);
+      } else if constexpr(Timed) {
          pacer.wait(pins_);
       } else {
          nops<untimedPadNopsOf<Pins, High>()>();
       }
+      return 0;
    }
 
    // The SWCLK edge after waitHalfPeriod()
    template <bool Timed>
-   [[gnu::always_inline]] void swclk(pacing::ClockPacer &pacer, bool level) {
+   [[gnu::always_inline]] void swclk(pacing::ClockPacer &pacer, bool level, uint32_t irq) {
       pins_.swclk(level);
-      if constexpr(Timed) {
+      if constexpr(Timed && lockedEdges<Pins>()) {
+         pacer.edgeLocked(pins_, irq);
+      } else if constexpr(Timed) {
          pacer.edge(pins_);
       }
    }
 
    template <bool Timed>
    [[gnu::always_inline]] void writeBit(pacing::ClockPacer &pacer, bool level) {
-      waitHalfPeriod<Timed, true>(pacer);
-      swclk<Timed>(pacer, false);
+      uint32_t irq = waitHalfPeriod<Timed, true>(pacer);
+      swclk<Timed>(pacer, false, irq);
       pins_.swdioWrite(level);
-      waitHalfPeriod<Timed, false>(pacer);
-      swclk<Timed>(pacer, true);
+      irq = waitHalfPeriod<Timed, false>(pacer);
+      swclk<Timed>(pacer, true, irq);
    }
 
    template <bool Timed>
    [[gnu::always_inline]] bool readBit(pacing::ClockPacer &pacer) {
-      waitHalfPeriod<Timed, true>(pacer);
-      swclk<Timed>(pacer, false);
-      waitHalfPeriod<Timed, false>(pacer);
+      uint32_t irq = waitHalfPeriod<Timed, true>(pacer);
+      swclk<Timed>(pacer, false, irq);
+      irq = waitHalfPeriod<Timed, false>(pacer);
       const bool level = pins_.swdio();
-      swclk<Timed>(pacer, true);
+      swclk<Timed>(pacer, true, irq);
       return level;
    }
 

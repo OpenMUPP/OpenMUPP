@@ -89,9 +89,48 @@ class ClockPacer {
       }
    }
 
+   // wait() with the interrupts locked from the last read of the counter
+   // to edgeLocked(). No interrupt can then come between that read and the
+   // edge, so edgeLocked() uses it and does not read the counter again: one
+   // read for each half period at the code limit. Each pass unlocks the
+   // interrupts once, so an interrupt waits for one pass at most, not for
+   // the half period. The Pins type has `uint32_t lockIrq()` and
+   // `void unlockIrq(uint32_t)`. Returns the state for edgeLocked().
+   //
+   //   irq = pacer.waitLocked(pins);
+   //   pins.swclk(level);
+   //   pacer.edgeLocked(pins, irq);
+   template <typename Pins>
+   [[gnu::always_inline]] uint32_t waitLocked(Pins &pins) {
+      const uint32_t deadline = deadline_;
+      const uint32_t half = half_;
+      uint32_t irq = pins.lockIrq();
+      uint32_t now = pins.now();
+      while(now - deadline < half) {
+         pins.unlockIrq(irq);
+         irq = pins.lockIrq();
+         now = pins.now();
+      }
+      deadline_ = deadline + half;
+      read_ = now;
+      return irq;
+   }
+
+   // After the edge that follows waitLocked(). The late check of edge(),
+   // with the last read of the wait: a few cycles before the edge.
+   template <typename Pins>
+   [[gnu::always_inline]] void edgeLocked(Pins &pins, uint32_t irq) {
+      pins.unlockIrq(irq);
+      if(read_ - deadline_ > lateSlackCycles) {
+         deadline_ = read_;
+      }
+   }
+
    private:
    uint32_t deadline_{ 0 };
    uint32_t half_{ 0 };
+   // The last read of waitLocked()
+   uint32_t read_{ 0 };
 };
 
 } // namespace pacing
