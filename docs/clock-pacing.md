@@ -125,6 +125,18 @@ python3 tools/clock_rate.py digital.csv 1 1000
 The nominal period is two half periods, each rounded up to full core cycles.
 For example, 235 kHz gives 154 cycles for each half period: 4277.8 ns.
 
+`tools/swd_timing.py` gives more SWD values from the same export, in the runs of consecutive bits:
+
+- The high half period and the low half period of SWCLK: the median and the shortest.
+- The SWDIO setup time: the time from an SWDIO change while SWCLK is low to the next rising edge. This is the setup time of the host writes.
+- The gaps between the runs, in groups by length. The short gaps are between two transfers in one USB packet. The long gaps are between two packets.
+
+The arguments are the SWCLK column, the SWDIO column and the nominal period in ns:
+
+```sh
+python3 tools/swd_timing.py digital.csv 1 0 250
+```
+
 ### Results
 
 The rate is the mean over the runs. The percentage is against the nominal period, not against the request. "Shortest" is the shortest single period in the runs.
