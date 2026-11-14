@@ -34,6 +34,11 @@ void SwdPins::init() {
    // (GpioPin::configure() asserts it): swdioRelease() sets the pull-up input instead.
    gpioPin(pins.tmsOut).configure(GpioPin::Mode::Output, GpioPin::OutputType::PushPull, GpioPin::Pull::Up, GpioPin::Speed::VeryHigh);
 #endif
+#if defined(__riscv)
+   // The SWDIO direction words, so they are never 0 (all PC8 to PC15
+   // analog inputs). The engines call begin() again before each operation.
+   begin();
+#endif
 }
 
 void SwdPins::fini() {

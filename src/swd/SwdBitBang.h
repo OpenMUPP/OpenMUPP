@@ -12,7 +12,8 @@
 //
 //   void init();               SWCLK output high, SWDIO driven high
 //   void fini();               SWCLK and SWDIO inputs
-//   void begin();              before each operation: make now() count
+//   void begin();              before each operation: make now() count,
+//                              and get the state of the pins (direction)
 //   void swclk(bool);
 //   void swdioDrive(bool);     SWDIO output at the level
 //   void swdioRelease();       SWDIO input (with pull-up)

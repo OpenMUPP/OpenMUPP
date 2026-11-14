@@ -22,6 +22,21 @@ namespace board {
 
 class RvSwdPins : public SwdPins {
    public:
+#if defined(__riscv)
+   // The direction change of SwdPins before the stored words: the one-wire
+   // frame also changes the SWDIO field, and the stored words are not
+   // tested on an RVSWD target.
+   [[gnu::always_inline]] void begin() {
+      startCycleCounter();
+   }
+   [[gnu::always_inline]] void swdioDrive(bool level) {
+      swdioDriveReadModifyWrite(level);
+   }
+   [[gnu::always_inline]] void swdioRelease() {
+      swdioReleaseReadModifyWrite();
+   }
+#endif
+
    // SWCLK output low, SWDIO driven high, the one-wire timer and DMA set up
    void init();
    // SWCLK and SWDIO inputs, the one-wire timer reset
