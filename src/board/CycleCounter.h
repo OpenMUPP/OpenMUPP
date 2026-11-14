@@ -4,12 +4,15 @@
 
 // The core-clock cycle counter, the time base of the bit-bang engines
 // (jtag/JtagBitBang.h, swd/SwdBitBang.h). Target only. On the STM32 it is the
-// DWT counter. The QingKe V4F of the CH32V307 has no cycle CSR, so it is the
-// low word of the SysTick counter, which ch32v00x-system runs free at the
-// core clock (utils/Timekeeping.h).
+// DWT counter. The QingKe V4F of the CH32V307 has no counting mcycle CSR (it
+// reads 0 on hardware), so it is hw::CycleCounter of ch32v00x-system: the low
+// word of the SysTick counter, which runs free at the core clock.
 
 #include <cmsis_device.h>
 #include <cstdint>
+#if defined(__riscv)
+#include <peripherals/CycleCounter.h>
+#endif
 
 namespace board {
 
@@ -18,7 +21,7 @@ namespace board {
 // each bit-bang operation.
 [[gnu::always_inline]] inline void startCycleCounter() {
 #if defined(__riscv)
-   // SysTick_Config() started the counter, and nothing stops it.
+   hw::CycleCounter::start();
 #elif defined(DCB)
    // Armv8-M (STM32H5): the CMSIS core header has DCB, not CoreDebug.
    DCB->DEMCR |= DCB_DEMCR_TRCENA_Msk;
@@ -33,7 +36,7 @@ namespace board {
 // Core clock cycles, free-running
 [[gnu::always_inline]] inline uint32_t cycleCount() {
 #if defined(__riscv)
-   return SysTick->CNT;
+   return hw::CycleCounter::count();
 #else
    return DWT->CYCCNT;
 #endif
