@@ -26,6 +26,8 @@
 // static constexpr uint32_t untimedHighPadNops and untimedLowPadNops set
 // the NOP pads of the untimed engine (default untimedPadNops, see
 // untimedPadNopsOf()).
+// static constexpr bool unrolledBits = true unrolls the fixed-length bit
+// loops of the untimed engine (see unrolledBits()).
 //
 // SWCLK is high between bits. One bit (ADIv5, B4.2):
 //
@@ -42,12 +44,12 @@
 //
 // At delay 0 (1.85 MHz) and from maxClockHz, the engine runs untimed on a
 // slow core (see runsUntimed()): it does not read the cycle counter, and
-// each half period is the loop code and the NOP pads (untimedPadNopsOf()).
+// each half period is the bit code and the NOP pads (untimedPadNopsOf()).
 // Thus its rate depends on the code: 2.42 to 2.7 MHz on the Mini
 // (docs/clock-pacing.md, #118). The original firmware bursts at 2.25 to
 // 3 MHz. On a fast core, delay 0 is timed at 1.85 MHz. The CH32V307 also
 // runs delay 0 timed (Pins::timedAtDelayZero): its timed code makes
-// 1.85 MHz, and the untimed engine would give 8.4 MHz.
+// 1.85 MHz, and the untimed engine would give 9.6 MHz.
 //
 // A transfer:
 //
@@ -117,6 +119,7 @@
 
 #include <array>
 #include <cstdint>
+#include <utility>
 
 #include "ClockPacer.h"
 #include "IntDiv.h"
@@ -206,9 +209,9 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 // From this SWCLK, the engine runs untimed on a slow core, as at delay 0.
 // On the STM32, the value is above the untimed rate (2.42 to 2.7 MHz on
 // the Mini, #118), so a request from this value does not give a faster
-// clock. On the CH32V307 at 144 MHz, the untimed rate (8.4 MHz,
+// clock. On the CH32V307 at 144 MHz, the untimed rate (9.6 MHz,
 // docs/clock-pacing.md) is above this value: a request from 4.5 MHz gives
-// 8.4 MHz. The untimed rate changes with the code layout. Measure again
+// 9.6 MHz. The untimed rate changes with the code layout. Measure again
 // after a change of the engine.
 #if defined(__riscv)
 inline constexpr uint32_t maxClockHz = 4'500'000;
@@ -253,7 +256,7 @@ constexpr bool timedAtDelayZero() {
 // half period: Pins::untimedHighPadNops or Pins::untimedLowPadNops, else
 // untimedPadNops. The low-half pad gives the SWDIO setup time before the
 // rising edge. The target drives SWDIO after the rising edge, and the host
-// reads it after the low-half pad. The high-half pad, the loop code and
+// reads it after the low-half pad. The high-half pad, the bit code and
 // the low-half pad give the target time to drive SWDIO before the read.
 // With a low-half pad of 0, the read comes directly after the falling
 // edge.
@@ -265,6 +268,19 @@ constexpr uint32_t untimedPadNopsOf() {
       return Pins::untimedLowPadNops;
    } else {
       return untimedPadNops;
+   }
+}
+
+// True when Pins::unrolledBits is true: the untimed engine then unrolls the
+// request (8 bits), the ACK (3 bits) and the data (32 bits). This removes
+// the loop code from each bit, and the bit position is a constant. The
+// code is about 1.5 KB larger, so only a board with free flash sets it.
+template <typename Pins>
+constexpr bool unrolledBits() {
+   if constexpr(requires { Pins::unrolledBits; }) {
+      return Pins::unrolledBits;
+   } else {
+      return false;
    }
 }
 
@@ -469,10 +485,10 @@ class BitBangPort final : public protocol::SwdPort {
    uint8_t transferOnce(uint8_t request, uint32_t &data) {
       auto pacer = startPacer<Timed>();
       pins_.swdioDrive(true);
-      writeBits<Timed>(pacer, request, 8);
+      writeBits<Timed, 8>(pacer, request);
       pins_.swdioRelease();
       clocks<Timed>(pacer, turnaround_);
-      const auto ack = static_cast<uint8_t>(readBits<Timed>(pacer, 3));
+      const auto ack = static_cast<uint8_t>(readBits<Timed, 3>(pacer));
       uint8_t result = ack;
       const bool ackError = ack != ackOk && ack != ackWait && ack != ackFault;
       if(!rules_.dataPhase && (ack == ackWait || ack == ackFault)) {
@@ -480,7 +496,7 @@ class BitBangPort final : public protocol::SwdPort {
          clocks<Timed>(pacer, turnaround_);
       } else if((request & readRequest) != 0 || (ackError && rules_.releaseOnAckError)) {
          // A read, or the back-off after a protocol error: SWDIO released
-         const uint32_t value = readBits<Timed>(pacer, 32);
+         const uint32_t value = readBits<Timed, 32>(pacer);
          const bool parityBit = readBit<Timed>(pacer);
          clocks<Timed>(pacer, turnaround_);
          if(ack == ackOk) {
@@ -493,7 +509,7 @@ class BitBangPort final : public protocol::SwdPort {
       } else {
          clocks<Timed>(pacer, turnaround_);
          pins_.swdioDrive((data & 1u) != 0);
-         writeBits<Timed>(pacer, data, 32);
+         writeBits<Timed, 32>(pacer, data);
          writeBit<Timed>(pacer, parity(data));
       }
       if(ack == ackFault) {
@@ -562,6 +578,47 @@ class BitBangPort final : public protocol::SwdPort {
          value |= static_cast<uint32_t>(readBit<Timed>(pacer)) << i;
       }
       return value;
+   }
+
+   // A fixed count of bits: unrolled in the untimed engine when
+   // unrolledBits<Pins>(), else the loop.
+   template <bool Timed, uint32_t Count>
+   [[gnu::always_inline]] void writeBits(pacing::ClockPacer &pacer, uint32_t value) {
+      if constexpr(!Timed && unrolledBits<Pins>()) {
+         writeUnrolled(pacer, value, std::make_index_sequence<Count>{});
+      } else {
+         writeBits<Timed>(pacer, value, Count);
+      }
+   }
+
+   template <bool Timed, uint32_t Count>
+   [[gnu::always_inline]] uint32_t readBits(pacing::ClockPacer &pacer) {
+      if constexpr(!Timed && unrolledBits<Pins>()) {
+         return readUnrolled(pacer, std::make_index_sequence<Count>{});
+      } else {
+         return readBits<Timed>(pacer, Count);
+      }
+   }
+
+   template <std::size_t... I>
+   [[gnu::always_inline]] void writeUnrolled(pacing::ClockPacer &pacer, uint32_t value, std::index_sequence<I...>) {
+      (writeBit<false>(pacer, ((value >> I) & 1u) != 0), ...);
+   }
+
+   template <std::size_t... I>
+   [[gnu::always_inline]] uint32_t readUnrolled(pacing::ClockPacer &pacer, std::index_sequence<I...>) {
+      uint32_t value = 0;
+      (readUnrolledBit<I>(pacer, value), ...);
+      return value;
+   }
+
+   // The empty asm makes the value ready before the next bit: the code of
+   // each bit stays in its high half period. There it gives the target
+   // time to drive SWDIO, and no code is left for after the last bit.
+   template <std::size_t I>
+   [[gnu::always_inline]] void readUnrolledBit(pacing::ClockPacer &pacer, uint32_t &value) {
+      value |= static_cast<uint32_t>(readBit<false>(pacer)) << I;
+      asm volatile("" : "+r"(value));
    }
 
    // Clock cycles with SWDIO released, for a turnaround

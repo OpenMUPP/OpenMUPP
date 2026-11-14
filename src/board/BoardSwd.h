@@ -23,13 +23,14 @@ class SwdPins {
    // The timed code makes 1.85 MHz at 144 MHz (swd/SwdBitBang.h).
    static constexpr bool timedAtDelayZero = true;
    static_assert(swd::halfPeriodCycles(144'000'000, 0) >= swd::timedCodeCycles);
-   // No untimed NOP pads (swd/SwdBitBang.h): the untimed engine runs only
-   // for requests from maxClockHz, so its rate is not limited. Without a
-   // pad, the SWDIO setup time is 18 ns at minimum, and the target has
-   // about one high half period (70 ns at minimum) to drive SWDIO
-   // (docs/clock-pacing.md).
-   static constexpr uint32_t untimedHighPadNops = 0;
+   // The untimed engine runs only for requests from maxClockHz, so the NOP
+   // pads (swd/SwdBitBang.h) do not limit its rate. Without a low-half pad,
+   // the SWDIO setup time is 18 ns at minimum. The unrolled bits have less
+   // code in the high half, so a high-half pad of 2 keeps the target time to
+   // drive SWDIO at 48 ns at minimum (docs/clock-pacing.md).
+   static constexpr uint32_t untimedHighPadNops = 2;
    static constexpr uint32_t untimedLowPadNops = 0;
+   static constexpr bool unrolledBits = true;
 #endif
 
    void init();
