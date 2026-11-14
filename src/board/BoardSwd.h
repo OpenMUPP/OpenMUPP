@@ -24,14 +24,23 @@ class SwdPins {
    // The timed code makes 1.85 MHz at 144 MHz (swd/SwdBitBang.h).
    static constexpr bool timedAtDelayZero = true;
    static_assert(swd::halfPeriodCycles(144'000'000, 0) >= swd::timedCodeCycles);
-   // The untimed engine runs only for requests from maxClockHz, so the NOP
-   // pads (swd/SwdBitBang.h) do not limit its rate. Without a low-half pad,
+   // The NOP pads of the untimed engine without extra NOPs (pad 0, requests
+   // from 11.08 MHz). Pad 0 gives 9.6 MHz (median). Without a low-half pad,
    // the SWDIO setup time is 18 ns at minimum. The unrolled bits have less
    // code in the high half, so a high-half pad of 2 keeps the target time to
    // drive SWDIO at 48 ns at minimum (docs/clock-pacing.md).
    static constexpr uint32_t untimedHighPadNops = 2;
    static constexpr uint32_t untimedLowPadNops = 0;
    static constexpr bool unrolledBits = true;
+   // The requests with a half period below 36 cycles (above 2 MHz) run
+   // untimed with NOP pads (swd::untimedPadFor()). Near its code limit,
+   // the timed engine makes single periods up to 11 % short. The shortest
+   // untimed period without extra NOPs is 13 cycles (90 ns), and the jump
+   // into the NOP sled and back adds 10 cycles to a half period
+   // (docs/clock-pacing.md).
+   static constexpr uint32_t untimedBelowHalfCycles = 36;
+   static constexpr uint32_t untimedMinPeriodCycles = 13;
+   static constexpr uint32_t padSledCycles = 10;
 #endif
 
    void init();
@@ -93,6 +102,15 @@ class SwdPins {
    }
 
 #if defined(__riscv)
+   // The NOP sled of the untimed engine (BoardSwd.cpp): setPadSled() sets
+   // the entry for nopCount NOPs before the return, padSled() runs them.
+   void setPadSled(uint32_t nopCount);
+   [[gnu::always_inline]] void padSled() {
+      asm volatile("jalr %0" : : "r"(padSledEntry_) : "ra");
+   }
+#endif
+
+#if defined(__riscv)
    protected:
    // The direction change with a read-modify-write of hw::FastPin, without
    // the words of begin(): RvSwdPins uses it.
@@ -128,6 +146,8 @@ class SwdPins {
    // Set by begin()
    uint32_t swdioOutputWord_{ 0 };
    uint32_t swdioInputWord_{ 0 };
+   // Set by setPadSled()
+   uintptr_t padSledEntry_{ 0 };
 #endif
 };
 

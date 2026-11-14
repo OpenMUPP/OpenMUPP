@@ -48,4 +48,32 @@ void SwdPins::fini() {
    }
 }
 
+#if defined(__riscv)
+// The NOP sled of SwdPins::padSled(): sledNops compressed NOPs (one cycle
+// each), then the return. A jump to an entry before the return runs that
+// many NOPs. Compressed instructions on their own, so each NOP is 2 bytes.
+namespace {
+constexpr uint32_t sledNops = 32;
+} // namespace
+
+extern "C" const uint8_t swdPadSledEnd[];
+asm(".pushsection .text.swdPadSled,\"ax\",@progbits\n"
+    ".balign 4\n"
+    ".option push\n"
+    ".option rvc\n"
+    ".rept 32\n"
+    "c.nop\n"
+    ".endr\n"
+    ".globl swdPadSledEnd\n"
+    "swdPadSledEnd:\n"
+    "c.jr ra\n"
+    ".option pop\n"
+    ".popsection\n");
+
+void SwdPins::setPadSled(uint32_t nopCount) {
+   const uint32_t count = nopCount < sledNops ? nopCount : sledNops;
+   padSledEntry_ = reinterpret_cast<uintptr_t>(swdPadSledEnd) - 2 * count;
+}
+#endif
+
 } // namespace board

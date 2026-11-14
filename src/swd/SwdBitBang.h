@@ -218,13 +218,10 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 // The value is above the untimed rate, with a margin, so a request from
 // this value does not give a faster clock: 2.42 to 2.7 MHz on the Mini
 // (#118). The untimed rate changes with the code layout. Measure again
-// after a change of the engine. 9.6 MHz (median) on the CH32V307 at
-// 144 MHz.
-#if defined(__riscv)
-inline constexpr uint32_t maxClockHz = 11'000'000;
-#else
+// after a change of the engine. The CH32V307 runs the requests above 2 MHz
+// untimed with NOP pads (Pins::untimedMinPeriodCycles), so it does not
+// use this value.
 inline constexpr uint32_t maxClockHz = 3'000'000;
-#endif
 
 // The cycles of the code of a timed half period, rounded up: 23 to 28 on
 // the STM32F103 (1.3 to 1.56 MHz at 72 MHz, it changes with the code
@@ -431,7 +428,7 @@ class BitBangPort final : public protocol::SwdPort {
    // CMSIS-DAP: SWCLK in Hz, rounded down to the nearest available rate.
    // From maxClockHz, the engine runs untimed on a slow core (as at delay
    // 0). The code limits the timed rate: 1.3 to 1.56 MHz on the STM32F103
-   // (#117), 3.27 MHz on the CH32V307, 5.2 to 6.1 MHz on the STM32H5.
+   // (#117), 5.2 to 6.1 MHz on the STM32H5.
    //
    // With Pins::untimedMinPeriodCycles, a request with a half period
    // shorter than Pins::untimedBelowHalfCycles runs untimed, with
