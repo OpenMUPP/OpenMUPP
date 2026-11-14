@@ -19,6 +19,12 @@ namespace board {
 
 class SwdPins {
    public:
+#if defined(__riscv)
+   // The timed code makes 1.85 MHz at 144 MHz (swd/SwdBitBang.h).
+   static constexpr bool timedAtDelayZero = true;
+   static_assert(swd::halfPeriodCycles(144'000'000, 0) >= swd::timedCodeCycles);
+#endif
+
    void init();
    void fini();
 

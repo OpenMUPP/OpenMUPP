@@ -903,3 +903,38 @@ TEST_CASE("SWD bit-bang: sequences of DAP_SWJ_Sequence and DAP_SWD_Sequence") {
    CHECK(bench.pins.swclkLevel());
    CHECK(bench.pins.contentions == 0);
 }
+
+namespace {
+// The pins of the CH32V307 build: delay 0 runs timed.
+struct TimedAtDelayZeroPins : MockSwdPins {
+   using MockSwdPins::MockSwdPins;
+   static constexpr bool timedAtDelayZero = true;
+};
+} // namespace
+
+TEST_CASE("SWD bit-bang: Pins::timedAtDelayZero runs delay 0 timed on a slow core") {
+   CHECK_FALSE(swd::timedAtDelayZero<MockSwdPins>());
+   CHECK(swd::timedAtDelayZero<TimedAtDelayZeroPins>());
+   // Without the flag, delay 0 is untimed on a slow core
+   Bench bench(1, 0, 0);
+   CHECK_FALSE(bench.port.isTimed());
+   // With the flag, delay 0 is timed at 1.85 MHz
+   TimedAtDelayZeroPins pins(1);
+   pins.coreClockHz = 144'000'000;
+   BitBangPort<TimedAtDelayZeroPins> port(pins);
+   port.init();
+   port.configure(1, 0, 0);
+   CHECK(port.isTimed());
+   CHECK(port.halfCycles() == halfPeriodCycles(144'000'000, 0));
+   CHECK(144e6 / (2.0 * port.halfCycles()) <= 1'850'000);
+   uint32_t data = 0;
+   pins.readData = 0x5a5a;
+   CHECK(port.transfer(readApDrw, data) == pswd::ackOk);
+   CHECK(data == 0x5a5a);
+   // CMSIS-DAP from maxClockHz still runs untimed
+   port.setClockHz(swd::maxClockHz);
+   CHECK_FALSE(port.isTimed());
+   // Other delays stay timed
+   port.configure(1, 0, 1);
+   CHECK(port.isTimed());
+}

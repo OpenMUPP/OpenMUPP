@@ -800,6 +800,8 @@ Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 M
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 On the STM32H5 (250 MHz), `delay` 0 is timed at 1.85 MHz: the untimed engine there gives 13 MHz (`swd::runsUntimed()`, see [Clock pacing](clock-pacing.md#stm32h5)).
+On the CH32V307 (144 MHz), `delay` 0 is also timed at 1.85 MHz (`timedAtDelayZero` in `board::SwdPins`): the untimed engine there gives 5.1 MHz.
+A logic analyzer measured 1846.6 kHz. On the CH32V307, the untimed engine runs only for CMSIS-DAP requests from `swd::maxClockHz`.
 
 `OUT` drives the bits on SWDIO. `IN` releases SWDIO and reads the bits.
 SWCLK is high between bits.

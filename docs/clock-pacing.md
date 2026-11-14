@@ -88,9 +88,10 @@ The design does not use these options:
   On the STM32F103, the code of a timed SWD half period is about 23 to 28 cycles.
   Thus a request of 1.8 MHz gives 1.3 to 1.56 MHz.
   The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
-- The untimed SWD engine (`delay` 0, or `swd::maxClockHz` and more in CMSIS-DAP) does not use the pacer.
+- The untimed SWD engine (`delay` 0 on the Mini, or `swd::maxClockHz` and more in CMSIS-DAP) does not use the pacer.
   Its rate depends on the code: 2.42 to 2.7 MHz on the Mini, 5.1 MHz on the CH32V307 (see [PCLK2 at 144 MHz](#pclk2-at-144-mhz)).
-  At `delay` 0, this is faster than the 1.85 MHz of the table.
+  On the Mini, `delay` 0 is faster than the 1.85 MHz of the table.
+  The CH32V307 and the STM32H5 run `delay` 0 timed at 1.85 MHz (measured on the CH32V307: 1846.6 kHz, read of 32 KiB in 0.406 s; before, untimed: 4.87 MHz, 0.251 s).
   In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`, so a request does not give a faster clock.
   `swd::maxClockHz` is 3 MHz on the STM32 and 4.5 MHz on the CH32V307 (see [CH32V307](#ch32v307)).
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.

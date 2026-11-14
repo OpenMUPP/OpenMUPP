@@ -21,6 +21,9 @@
 //   uint32_t now();            free-running core cycle counter
 //   uint32_t coreHz();         core clock frequency
 //
+// Optional: static constexpr bool timedAtDelayZero = true runs delay 0
+// timed also on a slow core (see timedAtDelayZero()).
+//
 // SWCLK is high between bits. One bit (ADIv5, B4.2):
 //
 //   1. Wait for the end of the high half period. SWCLK low. The host
@@ -39,7 +42,9 @@
 // each half period is the loop code and untimedPadNops NOP instructions.
 // Thus its rate depends on the code: 2.42 to 2.7 MHz on the Mini
 // (docs/clock-pacing.md, #118). The original firmware bursts at 2.25 to
-// 3 MHz. On a fast core, delay 0 is timed at 1.85 MHz.
+// 3 MHz. On a fast core, delay 0 is timed at 1.85 MHz. The CH32V307 also
+// runs delay 0 timed (Pins::timedAtDelayZero): its timed code makes
+// 1.85 MHz, and the untimed engine would give 5.1 MHz.
 //
 // A transfer:
 //
@@ -220,10 +225,23 @@ constexpr bool runsUntimed(uint32_t coreHz) {
 }
 
 #if defined(__riscv)
-// The CH32V307 (144 MHz) keeps the untimed engine: it is faster than the
-// timed code limit (2.76 MHz).
+// The CH32V307 (144 MHz) keeps the untimed engine from maxClockHz: it is
+// faster than the timed code limit (3.27 MHz, docs/clock-pacing.md).
 static_assert(runsUntimed(144'000'000));
 #endif
+
+// True when Pins::timedAtDelayZero is true: Versaloon delay 0 then runs
+// timed at 1.85 MHz, the rate of the OpenOCD table. The untimed engine is
+// then only for CMSIS-DAP requests from maxClockHz. A compile-time value, so
+// the code of the other boards does not change.
+template <typename Pins>
+constexpr bool timedAtDelayZero() {
+   if constexpr(requires { Pins::timedAtDelayZero; }) {
+      return Pins::timedAtDelayZero;
+   } else {
+      return false;
+   }
+}
 
 // The SWD port of the SWD block on bit-banged pins.
 template <typename Pins>
@@ -248,7 +266,8 @@ class BitBangPort final : public protocol::SwdPort {
       rules_ = TransferRules{};
       turnaround_ = turnaround;
       retries_ = retries;
-      setHalfCycles(halfPeriodCycles(pins_.coreHz(), delay), delay != 0 || !runsUntimed(pins_.coreHz()));
+      setHalfCycles(halfPeriodCycles(pins_.coreHz(), delay),
+                    delay != 0 || timedAtDelayZero<Pins>() || !runsUntimed(pins_.coreHz()));
    }
 
    // CMSIS-DAP: the transfer rules. They stay until the next call.
