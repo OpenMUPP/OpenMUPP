@@ -34,7 +34,9 @@ The bridge uses the line coding that the host sets (SET_LINE_CODING).
 | 8 | none, odd or even | 1, 1.5 or 2 |
 | 7 | odd or even | 1, 1.5 or 2 |
 
-- The baud rate must be in the range of the baud rate generator. For USART1 at 72 MHz, this is 1099 baud to 4.5 Mbaud.
+- The baud rate must be in the range of the baud rate generator. For USART1 at 72 MHz (STM32F1), this is 1099 baud to 4.5 Mbaud.
+- On the CH32V307, USART1 runs at 144 MHz, and at 72 MHz during each Vref measurement (see [YD-CH32V307VCT6](boards.md#yd-ch32v307vct6-development-board)).
+  The baud rate must be valid at the two clocks. Thus the range is 2198 baud to 4.59 Mbaud. The bridge refuses lower baud rates, for example 1200 baud.
 - The real baud rate must be within 2 % of the requested baud rate. Above 2.88 Mbaud, only some baud rates are in this limit.
 - The bridge refuses all other line codings: 5, 6 or 16 data bits, 7 data bits without parity, and mark or space parity.
   The device then stalls the request, and the UART keeps its old line coding.

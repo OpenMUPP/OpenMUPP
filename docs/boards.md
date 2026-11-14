@@ -468,6 +468,7 @@ These parts are known to be incomplete:
 - PCLK2 is HCLK (144 MHz). Each Vref measurement sets PCLK2 to HCLK / 2 (ADC clock 12 MHz), and the ADC clock is off between the measurements.
   USART1 (UART bridge) is also on APB2, so the firmware also changes the baud rate divider of USART1. Thus the baud rate stays the same.
   At each change, one bit on the TX line is up to about 110 ns longer or shorter. The dongle measures Vref each 100 ms.
+  The UART bridge accepts only the baud rates that are valid at the two clocks: 2198 baud to 4.59 Mbaud (see [Line coding](uart-bridge.md#line-coding)).
   With 4300 Vref measurements each second, the UART loopback to a second probe passed at 115200, 1000000 and 1500000 baud.
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).

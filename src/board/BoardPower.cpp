@@ -33,7 +33,8 @@ constexpr unsigned conversions = 8;
 // PCLK2 is HCLK (144 MHz, initialize_hardware.cpp) for fast GPIO. ADCPRE divides by 8 at most, so the ADC
 // clock would be 18 MHz, above the 14 MHz limit (datasheet fADC). Thus PCLK2 is HCLK / 2 (ADC 12 MHz) only
 // while the ADC runs, and the ADC clock is off at other times. USART1 (UART bridge) is also on APB2: its
-// divider changes with PCLK2, so its baud rate stays the same (an odd divider rounds up). At each switch,
+// divider changes with PCLK2, so its baud rate stays the same (an odd divider rounds up; uart/FrameFormat.h
+// accepts only the baud rates that are also valid with this divider). At each switch,
 // one bit on the line is up to about 110 ns longer or shorter (measured, docs/boards.md).
 class AdcClockWindow {
    public:
