@@ -409,12 +409,13 @@ Findings:
 
 The untimed engine has a NOP pad at the end of each half period (`swd::untimedPadNopsOf()`).
 The STM32 boards use 6 NOPs in each half (`swd::untimedPadNops`).
-On the CH32V307, `board::SwdPins` sets both pads to 0:
+On the CH32V307, `board::SwdPins` sets the low-half pad to 0.
+The high-half pad was also 0 until the unrolled bits (see [CH32V307 unrolled bits](#ch32v307-unrolled-bits)):
 
 - The untimed engine runs only for CMSIS-DAP requests from `swd::maxClockHz`. Thus its rate is not limited.
 - The low-half pad gives the SWDIO setup time before the rising edge of SWCLK. Without it, the setup time is 18 ns at minimum.
 - The target drives SWDIO after the rising edge. Without a low-half pad, the host reads SWDIO directly after the falling edge.
-  Thus the target has about one high half period to drive SWDIO: 70 ns at minimum. With 6 NOPs in each half, it had more than 104 ns.
+  Thus the target had about one high half period to drive SWDIO: 70 ns at minimum with the loop code. With 6 NOPs in each half, it had more than 104 ns.
 
 Measured on 2026-11-14 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz), at a request of 4500 kHz.
 The high-half pad is 0 in all rows after the first.
@@ -440,8 +441,8 @@ Findings:
 On the CH32V307, `board::SwdPins` sets `unrolledBits` (`swd::unrolledBits()`).
 The untimed engine then unrolls the request (8 bits), the ACK (3 bits) and the data (32 bits).
 Each bit has no loop code, and its bit position is a constant.
-A read bit is 6 instructions: SWCLK low, the load from `INDR`, SWCLK high, and 3 instructions that add the bit to the value.
-These 3 instructions are in the high half period: an empty `asm` statement keeps them there.
+A read bit is SWCLK low, the load from `INDR`, SWCLK high, and 2 to 4 instructions that add the bit to the value.
+These instructions and the NOPs of the high-half pad are in the high half period: an empty `asm` statement keeps the instructions there.
 Without it, the compiler moved the code of all 32 bits to after the last bit, and the gap between two transfers increased from 3.3 µs to 4.7 µs.
 The image is 1.5 KB larger. The timed engine does not change.
 

@@ -44,7 +44,7 @@
 //
 // At delay 0 (1.85 MHz) and from maxClockHz, the engine runs untimed on a
 // slow core (see runsUntimed()): it does not read the cycle counter, and
-// each half period is the loop code and the NOP pads (untimedPadNopsOf()).
+// each half period is the bit code and the NOP pads (untimedPadNopsOf()).
 // Thus its rate depends on the code: 2.42 to 2.7 MHz on the Mini
 // (docs/clock-pacing.md, #118). The original firmware bursts at 2.25 to
 // 3 MHz. On a fast core, delay 0 is timed at 1.85 MHz. The CH32V307 also
@@ -256,7 +256,7 @@ constexpr bool timedAtDelayZero() {
 // half period: Pins::untimedHighPadNops or Pins::untimedLowPadNops, else
 // untimedPadNops. The low-half pad gives the SWDIO setup time before the
 // rising edge. The target drives SWDIO after the rising edge, and the host
-// reads it after the low-half pad. The high-half pad, the loop code and
+// reads it after the low-half pad. The high-half pad, the bit code and
 // the low-half pad give the target time to drive SWDIO before the read.
 // With a low-half pad of 0, the read comes directly after the falling
 // edge.
@@ -274,7 +274,7 @@ constexpr uint32_t untimedPadNopsOf() {
 // True when Pins::unrolledBits is true: the untimed engine then unrolls the
 // request (8 bits), the ACK (3 bits) and the data (32 bits). This removes
 // the loop code from each bit, and the bit position is a constant. The
-// code is about 1 KB larger, so only a board with free flash sets it.
+// code is about 1.5 KB larger, so only a board with free flash sets it.
 template <typename Pins>
 constexpr bool unrolledBits() {
    if constexpr(requires { Pins::unrolledBits; }) {

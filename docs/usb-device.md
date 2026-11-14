@@ -796,7 +796,7 @@ An interrupt makes a period longer, but not shorter.
 At `delay` 0, the firmware runs untimed, without the cycle counter.
 Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`) on the STM32 boards.
 The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
-The CH32V307 has other NOP pads (see [CH32V307 NOP pads](clock-pacing.md#ch32v307-nop-pads)).
+On the CH32V307, the low-half pad is 0 and the high-half pad is 2 (see [CH32V307 unrolled bits](clock-pacing.md#ch32v307-unrolled-bits)).
 Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the Mini, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md)).
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
