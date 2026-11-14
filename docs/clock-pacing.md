@@ -472,6 +472,32 @@ Findings:
 - The timed rates did not change: 3268 kHz at a request of 4000 kHz and 2941 kHz (median) at 2900 kHz.
 - The STM32 code did not change: the disassembly of the Mini image is the same.
 
+## CH32V307 SWDIO direction
+
+A transfer changes the SWDIO direction 3 times.
+Before, each change was a read-modify-write of `GPIOC->CFGHR` with the interrupts off (`hw::FastPin::setConfig()`).
+Now `board::SwdPins::begin()` reads `CFGHR` once at the start of each operation, and calculates the word for SWDIO output and the word for SWDIO input.
+Each direction change is then one store.
+
+This is safe because no code changes the other pins of `CFGHR` during an operation:
+
+- No interrupt handler configures a GPIO pin.
+- The serial service of the UART bridge (`protocol::Background`) does not configure GPIO pins.
+- The other users of PC8 to PC15 (the JTAG fast path on PC10, the one-wire RVSWD engine on PC11) run only between operations. The one-wire engine changes only the field of SWDIO.
+
+The RVSWD engine uses the same pins (`board::RvSwdPins`), and it calls `begin()` before each frame and each line reset.
+
+Measured on 2026-11-14 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz), at a request of 4500 kHz:
+
+| Value | Before | One store |
+|---|---|---|
+| Transfer on the wire (median) | 4.936 µs | 4.860 µs |
+| High half period of the turnaround (median) | 188 ns | 140 ns |
+| Read 32 KiB | 0.079 s | 0.078 s |
+| Write 32 KiB | 0.083 s | 0.082 s |
+
+All reads and writes were correct. The timed rates did not change. The STM32 code did not change.
+
 ## CH32V307 JTAG
 
 Measured on 2026-11-09 and 2026-11-10 with the setup of [CH32V307](#ch32v307), with these changes:
