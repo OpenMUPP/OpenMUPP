@@ -97,7 +97,7 @@ The design does not use these options:
   In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`.
   `swd::maxClockHz` is 3 MHz on the STM32 and 11 MHz on the CH32V307 (see [CH32V307 final rates](#ch32v307-final-rates)).
   The value is above the untimed rate. Thus the untimed engine is not faster than the request (median).
-  On the CH32V307, a request from 3 MHz to less than 11 MHz gives the timed code limit, 2.58 to 3.13 MHz (median, see [CH32V307 late slack](#ch32v307-late-slack)).
+  On the CH32V307, a request from about 3 MHz to less than 11 MHz gives the timed code limit, 2.58 to 3.13 MHz (median, see [CH32V307 late slack](#ch32v307-late-slack)).
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
@@ -556,7 +556,8 @@ Each traffic row is the same in 3 runs.
 | 2000 kHz | yes | 1951.5 kHz, 470 ns, 1.7 % | 1948.9 kHz, 472 ns, 0.09 % |
 | 2900 kHz | yes | 2877.2 kHz, 298 ns, 0.003 % | 2885.5 kHz, 332 ns, 0 % |
 
-The mean is the mean of the periods below 1.3 times the longer of the request and the median, so it includes the long periods of the interrupts.
+The mean is the mean of all periods below 1.3 times the longer of the nominal period and the median period, so it includes the long periods of the interrupts.
+This filter is not the run filter of `tools/clock_rate.py`.
 
 Rates with a slack of 20 cycles. Reads: two reads of 32 KiB of SRAM in each session.
 
