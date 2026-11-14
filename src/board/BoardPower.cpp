@@ -36,7 +36,7 @@ constexpr unsigned conversions = 8;
 // divider changes with PCLK2, so its baud rate stays the same (an odd divider rounds up). At each switch,
 // one bit on the line is up to about 110 ns longer or shorter (measured, docs/boards.md).
 class AdcClockWindow {
-public:
+   public:
    AdcClockWindow() {
       Interrupt::CriticalSection cs;
       brr_ = USART1->BRR;
@@ -59,7 +59,7 @@ public:
    AdcClockWindow(const AdcClockWindow &) = delete;
    AdcClockWindow &operator=(const AdcClockWindow &) = delete;
 
-private:
+   private:
    uint32_t brr_ = 0;
 };
 #else
