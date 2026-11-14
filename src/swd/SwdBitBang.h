@@ -47,7 +47,7 @@
 // (docs/clock-pacing.md, #118). The original firmware bursts at 2.25 to
 // 3 MHz. On a fast core, delay 0 is timed at 1.85 MHz. The CH32V307 also
 // runs delay 0 timed (Pins::timedAtDelayZero): its timed code makes
-// 1.85 MHz, and the untimed engine would give 5.1 MHz.
+// 1.85 MHz, and the untimed engine would give 8.4 MHz.
 //
 // A transfer:
 //
@@ -206,7 +206,7 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 // From this SWCLK, the engine runs untimed on a slow core, as at delay 0.
 // The value is above the untimed rate, so a request from this value does
 // not give a faster clock. The untimed rate changes with the code layout:
-// 2.42 to 2.7 MHz on the Mini (#118), 4.0 MHz on the CH32V307 at 144 MHz
+// 2.42 to 2.7 MHz on the Mini (#118), 8.4 MHz on the CH32V307 at 144 MHz
 // (docs/clock-pacing.md). Measure again after a change of the engine.
 #if defined(__riscv)
 inline constexpr uint32_t maxClockHz = 4'500'000;
@@ -341,7 +341,7 @@ class BitBangPort final : public protocol::SwdPort {
    // CMSIS-DAP: SWCLK in Hz, rounded down to the nearest available rate.
    // From maxClockHz, the engine runs untimed on a slow core (as at delay
    // 0). The code limits the timed rate: 1.3 to 1.56 MHz on the STM32F103
-   // (#117), 2.76 MHz on the CH32V307, 5.2 to 6.1 MHz on the STM32H5.
+   // (#117), 3.27 MHz on the CH32V307, 5.2 to 6.1 MHz on the STM32H5.
    void setClockHz(uint32_t hz) {
       if(hz >= maxClockHz && runsUntimed(pins_.coreHz())) {
          setHalfCycles(halfPeriodCycles(pins_.coreHz(), 0), false);

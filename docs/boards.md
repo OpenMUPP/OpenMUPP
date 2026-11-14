@@ -464,7 +464,7 @@ The WCH-Link image runs USB at full speed.
 These parts are known to be incomplete:
 
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`).
-  The SWD timing is measured: 3.27 MHz timed at most, 5.1 MHz untimed (see [PCLK2 at 144 MHz](clock-pacing.md#pclk2-at-144-mhz)).
+  The SWD timing is measured: 3.27 MHz timed at most, 8.4 MHz untimed (see [CH32V307 NOP pads](clock-pacing.md#ch32v307-nop-pads)).
 - PCLK2 is HCLK (144 MHz). Each Vref measurement sets PCLK2 to HCLK / 2 (ADC clock 12 MHz), and the ADC clock is off between the measurements.
   USART1 (UART bridge) is also on APB2, so the firmware also changes the baud rate divider of USART1. Thus the baud rate stays the same.
   At each change, one bit on the TX line is up to about 110 ns longer or shorter. The dongle measures Vref each 100 ms.
