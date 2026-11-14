@@ -66,11 +66,12 @@ class SwdTimingTest(unittest.TestCase):
         clock_edges, data_changes = swd_timing.edges(rows, 1, 0)
         self.assertEqual(swd_timing.setup_times(clock_edges, data_changes), [])
 
-    def test_change_with_rising_edge_gives_zero_setup(self):
-        # SWDIO and SWCLK change in the same row: the setup time is below one sample
+    def test_change_with_rising_edge_is_counted_not_setup(self):
+        # SWDIO and SWCLK change in the same row: a host write below one sample or a target change
         rows = csv_rows([(1e-6, 0, 1), (1.1e-6, 0, 0), (1.2e-6, 1, 1)])
         clock_edges, data_changes = swd_timing.edges(rows, 1, 0)
-        self.assertEqual(swd_timing.setup_times(clock_edges, data_changes), [0.0])
+        self.assertEqual(swd_timing.setup_times(clock_edges, data_changes), [])
+        self.assertEqual(swd_timing.same_row_rising(data_changes), 1)
 
     def test_change_with_falling_edge_gives_low_half_period(self):
         # The host changes SWDIO at the falling edge: the setup time is the low half period

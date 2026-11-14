@@ -13,11 +13,15 @@ The script prints:
 - The high and the low half periods of SWCLK, only in runs of consecutive
   bits (see clock_rate.py): the median and the shortest.
 - The SWDIO setup time: the time from an SWDIO change while SWCLK is low to
-  the next rising edge of SWCLK. A change in the same CSV row as a rising
-  edge gives 0 ns: the setup time is shorter than one sample. The host changes SWDIO after the falling
+  the next rising edge of SWCLK. The host changes SWDIO after the falling
   edge, and the target after the rising edge. Thus this time is the setup
   time of the host writes. A target that changes SWDIO late in the high half
   period can add values here.
+- The count of SWDIO changes in the same CSV row as a rising edge of SWCLK.
+  The CSV cannot tell a host write with a setup time below one sample from
+  a target change just after the edge, so these changes are not setup
+  times. At 500 MS/s the target changes (6 to 10 ns after the edge) are in
+  a later row, so a count above 0 there shows a setup time below 2 ns.
 - The gaps: the times between two rising edges that are longer than
   GAP_LIMIT times the nominal period, in groups by length. The short gaps are
   the gaps between two transfers in one USB packet, and the long gaps are
@@ -33,12 +37,18 @@ import sys
 from clock_rate import runs
 
 GAP_LIMIT = 3.0
+# The SWCLK state of an SWDIO change (see edges()).
+LOW, HIGH, RISING = "low", "high", "rising"
 # The upper limits of the gap groups, in seconds.
 GAP_GROUPS = (1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 1e-3, float("inf"))
 
 
 def edges(rows, clock, data):
-    """The SWCLK edges as (time, level) and the SWDIO changes as (time, SWCLK level)."""
+    """The SWCLK edges as (time, level) and the SWDIO changes as (time, SWCLK state).
+
+    The state is HIGH or LOW, or RISING for a change in the same row as a rising edge.
+    A change in the same row as a falling edge is LOW: the host writes after the falling edge.
+    """
     clock_edges = []
     data_changes = []
     last_clock = last_data = None
@@ -49,9 +59,11 @@ def edges(rows, clock, data):
         if last_clock is not None and level_clock != last_clock:
             clock_edges.append((time, level_clock == "1"))
         if last_data is not None and level_data != last_data:
-            # A change in the same row as an SWCLK edge counts as a change while SWCLK is low: at a rising
-            # edge, the setup time is then 0 (shorter than one sample), not lost.
-            data_changes.append((time, level_clock == "1" and level_clock == last_clock))
+            if level_clock == last_clock:
+                state = HIGH if level_clock == "1" else LOW
+            else:
+                state = RISING if level_clock == "1" else LOW
+            data_changes.append((time, state))
         last_clock, last_data = level_clock, level_data
     return clock_edges, data_changes
 
@@ -80,15 +92,20 @@ def setup_times(clock_edges, data_changes):
     rising = [t for t, high in clock_edges if high]
     result = []
     i = 0
-    for time, clock_high in data_changes:
-        if clock_high:
+    for time, state in data_changes:
+        if state != LOW:
             continue
-        while i < len(rising) and rising[i] < time:
+        while i < len(rising) and rising[i] <= time:
             i += 1
         if i == len(rising):
             break
         result.append(rising[i] - time)
     return result
+
+
+def same_row_rising(data_changes):
+    """The count of SWDIO changes in the same row as a rising edge of SWCLK."""
+    return sum(1 for _, state in data_changes if state == RISING)
 
 
 def gaps(clock_edges, nominal):
@@ -129,6 +146,7 @@ def main(argv):
     setup = setup_times(clock_edges, data_changes)
     if setup:
         print("SWDIO setup: median %.0f ns, shortest %.0f ns (%d)" % (ns(statistics.median(setup)), ns(min(setup)), len(setup)))
+    print("SWDIO changes in the same sample as a rising edge: %d" % same_row_rising(data_changes))
     for lower, upper, count, median in gap_groups(gaps(clock_edges, nominal)):
         print("gaps %.0f to %.0f us: %d, median %.2f us" % (lower * 1e6, upper * 1e6, count, median * 1e6))
 
