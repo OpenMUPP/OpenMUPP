@@ -48,8 +48,16 @@ namespace pacing {
 // where the JTAG code is longer than the half period, the next half
 // period was then as short as 60 ns. With 16 cycles, the same edges start
 // the deadlines again (docs/clock-pacing.md).
+//
+// On the CH32V307 at 144 MHz, the normal delay is 17 to 20 cycles: with 16,
+// the clock at 1 MHz was 8 % slow. With 32, USB and UART interrupts within
+// the slack made single SWD periods 14 % short at 2.9 MHz. With 20, they
+// were 4 % short at most. The timed code limit is then 2.6 to 3.1 MHz, not
+// 2.8 to 3.27 MHz (docs/clock-pacing.md).
 #if defined(STM32H5)
 inline constexpr uint32_t lateSlackCycles = 16;
+#elif defined(__riscv)
+inline constexpr uint32_t lateSlackCycles = 20;
 #else
 inline constexpr uint32_t lateSlackCycles = 32;
 #endif

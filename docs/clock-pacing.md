@@ -36,7 +36,7 @@ Thus the mean rate does not depend on the code, while the code of a half period 
 
 ### Late edges
 
-An edge more than `pacing::lateSlackCycles` cycles after its deadline is late: 32 cycles on the STM32F1, 16 cycles on the STM32H5 (see [STM32H5](#stm32h5)).
+An edge more than `pacing::lateSlackCycles` cycles after its deadline is late: 32 cycles on the STM32F1, 20 cycles on the CH32V307 (see [CH32V307 late slack](#ch32v307-late-slack)), 16 cycles on the STM32H5 (see [STM32H5](#stm32h5)).
 This occurs when the code took the whole half period (for example a call of the background service), or when an interrupt came between the wait and the edge.
 The next half period then starts at the edge.
 Thus a late edge makes its own half period longer, and the clock does not catch up with shorter half periods.
@@ -45,7 +45,7 @@ This is the reason why the mean rate is never faster than the request.
 The slack must be more than the normal time from a deadline to the counter read in `edge()`.
 On the STM32F103 at 72 MHz, this time is up to about 20 cycles: one pass of the wait loop, the pin write, and the counter read.
 An interrupt adds at least its entry and exit (24 cycles on the Cortex-M3), so the pacer sees each interrupt in this window.
-An edge within the slack makes the next half period shorter by up to 32 cycles.
+An edge within the slack makes the next half period shorter by up to the slack.
 
 The edges have the jitter of the wait loop: up to one pass of it.
 Thus single periods are shorter or longer than requested, but the mean is correct.
@@ -97,7 +97,7 @@ The design does not use these options:
   In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`.
   `swd::maxClockHz` is 3 MHz on the STM32 and 11 MHz on the CH32V307 (see [CH32V307 final rates](#ch32v307-final-rates)).
   The value is above the untimed rate. Thus the untimed engine is not faster than the request (median).
-  On the CH32V307, a request from 3.3 MHz to less than 11 MHz gives the timed code limit, 2.8 to 3.27 MHz (median).
+  On the CH32V307, a request from 3 MHz to less than 11 MHz gives the timed code limit, 2.58 to 3.13 MHz (median, see [CH32V307 late slack](#ch32v307-late-slack)).
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
@@ -526,11 +526,67 @@ Reads: two reads of 32 KiB of SRAM (`dump_image`) in each session. Writes: `load
 Findings:
 
 - All reads and writes were correct. No SWDIO change was in the same sample as a rising edge of SWCLK.
-- From 4000 to 10000 kHz, the code limits the timed engine to 2.8 to 3.27 MHz (median). Thus the gap between the timed limit and `swd::maxClockHz` is large: request 11000 kHz or more for the untimed engine.
+- From 4000 to 10000 kHz, the code limits the timed engine to 2.8 to 3.27 MHz (median). With the late slack of 20 cycles, it is 2.58 to 3.13 MHz (see [CH32V307 late slack](#ch32v307-late-slack)). Thus the gap between the timed limit and `swd::maxClockHz` is large: request 11000 kHz or more for the untimed engine.
 - The untimed engine: SWDIO setup time 18 ns at minimum, high half period before a read 48 ns at minimum.
 - Compared with the start (PCLK2 at 72 MHz, untimed 3.98 MHz), a read of 32 KiB at the fastest request takes 0.078 s instead of 0.139 s.
 - Not measured again: the JTAG bit-bang rate (`jtag::bitBangMaxKHz`, 1000 kHz). The JTAG engine does not use the SWD code, and [PCLK2 at 144 MHz](#pclk2-at-144-mhz) measured it without change.
   `tools/flash_benchmark.py` supports only STM32F1 targets, so the benchmark did not run.
+
+## CH32V307 late slack
+
+On the CH32V307, `pacing::lateSlackCycles` is 20 cycles, not 32 (see [Late edges](#late-edges)).
+The pacer is shared, so the value also applies to the JTAG bit-bang engine and the RVSWD engine on the CH32V307.
+
+The normal delay from a deadline to the counter read in `edge()` is 17 to 20 cycles.
+With a slack of 16 cycles, the deadline started again at almost each edge, and the clock was slow: 917.7 kHz at a request of 1000 kHz.
+With 32 cycles, an interrupt within the slack made the next half period short.
+With USB and UART traffic, single periods at 2900 kHz were 298 ns: 14 % shorter than the nominal 347 ns.
+
+Measured on 2026-11-14 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz).
+The traffic is a data stream into the CDC port of the probe during the capture (UART bridge at 2 Mbaud, about 200 KB/s), in addition to the reads.
+"Short" is the share of all periods that are more than 5 % shorter than the request.
+Each traffic row is the same in 3 runs.
+
+| Request | Traffic | Slack 32: mean, shortest, short | Slack 20: mean, shortest, short |
+|---|---|---|---|
+| 1000 kHz | no | 999.3 kHz, 964 ns, 0 % | 999.5 kHz, 956 ns, 0 % |
+| 2000 kHz | no | 1996.7 kHz, 470 ns, 2.15 % | 1994.7 kHz, 472 ns, 0.10 % |
+| 2900 kHz | no | 2877.3 kHz, 332 ns, 0 % | 2887.2 kHz, 332 ns, 0 % |
+| 1000 kHz | yes | 969.3 kHz, 950 ns, 0 % | 979.3 kHz, 964 ns, 0 % |
+| 2000 kHz | yes | 1951.5 kHz, 470 ns, 1.7 % | 1948.9 kHz, 472 ns, 0.09 % |
+| 2900 kHz | yes | 2877.2 kHz, 298 ns, 0.003 % | 2885.5 kHz, 332 ns, 0 % |
+
+The mean is the mean of the periods below 1.3 times the longer of the request and the median, so it includes the long periods of the interrupts.
+
+Rates with a slack of 20 cycles. Reads: two reads of 32 KiB of SRAM in each session.
+
+| Request | Engine | Median rate | Mean rate of the runs | Shortest period | Read 32 KiB |
+|---|---|---|---|---|---|
+| 250 kHz | timed | 249.6 kHz | 249.8 kHz (−0.08 %) | 3950 ns | 1.585 s |
+| 1000 kHz | timed | 1000.0 kHz | 999.5 kHz (−0.05 %) | 958 ns | 0.427 s |
+| 2000 kHz | timed | 2049.2 kHz | 1999.2 kHz (−0.04 %) | 472 ns | 0.237 s |
+| 2900 kHz | timed | 2941.2 kHz | 2881.9 kHz (+0.07 %) | 332 ns | 0.182 s |
+| 4000 kHz | timed | 2762.4 kHz | - | 298 ns | 0.180 s |
+| 4500 kHz | timed | 2577.3 kHz | - | 298 ns | 0.191 s |
+| 10000 kHz | timed | 3125.0 kHz | - | 312 ns | 0.168 s |
+| 11000 kHz | untimed | 9615.4 kHz | - | 90 ns | 0.079 s |
+| 20000 kHz | untimed | 9615.4 kHz | - | 90 ns | 0.079 s |
+
+Findings:
+
+- All reads were correct. Writes of 32 KiB of random data (`load_image`, `verify_image` and a read) at 1000, 2900 and 4000 kHz were correct.
+- Above the code limit (from about 3 MHz), the timed engine gives 2.58 to 3.13 MHz (median), not 2.8 to 3.27 MHz. At 4000 kHz, a read of 32 KiB takes 0.180 s instead of 0.173 s.
+  The late edges now start the deadlines again earlier, so the engine waits more often after a long half period.
+- The JTAG bit-bang TCK without a target: 999.9 kHz at 1000 kHz (shortest period 972 ns), 1094.0 kHz at 1124 kHz (nominal 1107.7 kHz), 99.7 kHz at 100 kHz. It is not faster than the request.
+- RVSWD is not measured: no RVSWD target is on the bench.
+
+Two other changes did not give a gain on the CH32V307. The firmware does not have them:
+
+- One counter read for each half period, with the interrupts off from the last read of the wait to the edge ([#30](https://github.com/OpenMUPP/OpenMUPP/pull/30)).
+  `csrrci` and `csrs` on `mstatus` cost more than the read of `SysTick->CNT`.
+  The code limit was 2.72 MHz, and the longer wait loop increased the jitter: at 1000 kHz the shortest period was 880 ns.
+- Unrolled timed loops for the request, the ACK and the data ([#31](https://github.com/OpenMUPP/OpenMUPP/pull/31)).
+  Each unrolled bit loads its constants again, and the code limit was 2.48 to 2.67 MHz.
 
 ## CH32V307 JTAG
 

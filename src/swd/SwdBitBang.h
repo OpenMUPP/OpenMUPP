@@ -235,7 +235,7 @@ constexpr bool runsUntimed(uint32_t coreHz) {
 
 #if defined(__riscv)
 // The CH32V307 (144 MHz) keeps the untimed engine from maxClockHz: it is
-// faster than the timed code limit (3.27 MHz, docs/clock-pacing.md).
+// faster than the timed code limit (2.6 to 3.1 MHz, docs/clock-pacing.md).
 static_assert(runsUntimed(144'000'000));
 #endif
 
@@ -362,7 +362,7 @@ class BitBangPort final : public protocol::SwdPort {
    // CMSIS-DAP: SWCLK in Hz, rounded down to the nearest available rate.
    // From maxClockHz, the engine runs untimed on a slow core (as at delay
    // 0). The code limits the timed rate: 1.3 to 1.56 MHz on the STM32F103
-   // (#117), 3.27 MHz on the CH32V307, 5.2 to 6.1 MHz on the STM32H5.
+   // (#117), 2.6 to 3.1 MHz on the CH32V307, 5.2 to 6.1 MHz on the STM32H5.
    void setClockHz(uint32_t hz) {
       if(hz >= maxClockHz && runsUntimed(pins_.coreHz())) {
          setHalfCycles(halfPeriodCycles(pins_.coreHz(), 0), false);
