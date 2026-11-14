@@ -130,6 +130,7 @@ For example, 235 kHz gives 154 cycles for each half period: 4277.8 ns.
 
 - The high half period and the low half period of SWCLK: the median and the shortest.
 - The SWDIO setup time: the time from an SWDIO change while SWCLK is low to the next rising edge. This is the setup time of the host writes.
+- The count of SWDIO changes in the same sample as a rising edge. These changes are not in the setup time, because the export cannot tell a host write from a target change. At 500 MS/s, the target changes come in a later sample. Thus a count above 0 at 500 MS/s shows a setup time below 2 ns.
 - The gaps between the runs, in groups by length. The short gaps are between two transfers in one USB packet. The long gaps are between two packets.
 
 The arguments are the SWCLK column, the SWDIO column and the nominal period in ns:
