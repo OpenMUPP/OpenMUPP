@@ -222,7 +222,7 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
 `stm32f1x unlock 0` erases the option bytes and removes all write protection.
 The bootloader README has the full rules ("Flash protection").
 
-The Versaloon bootloader (tag `v1-legacy` of `openmupp-bootloader`) does not set write protection or read protection.
+The Versaloon bootloader does not set write protection or read protection.
 Thus the debug probe can write the combined image over it without `stm32f1x unlock 0`.
 If the write fails, the option bytes of the board were changed: run `stm32f1x unlock 0` first.
 
