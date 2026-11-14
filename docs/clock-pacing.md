@@ -329,7 +329,8 @@ Thus the firmware does not use 15.6 MHz (`jtag::spiMinShift` is 4 on the STM32H5
 ## CH32V307
 
 This section gives the SWD measurements on the CH32V307 at 144 MHz.
-The CH32V307 has no DWT. The pacer uses the low word of the SysTick counter (`SysTick->CNT`), which runs at the core clock (`src/board/CycleCounter.h`).
+The CH32V307 has no DWT. The pacer uses the low word of the SysTick counter (`SysTick->CNT`), which runs at the core clock (`hw::CycleCounter` of ch32v00x-system, `src/board/CycleCounter.h`).
+The QingKe V4F core has no counting `mcycle` CSR: on the YD-CH32V307VCT6, a debugger read of `mcycle` and `minstret` gave 0, also after 100 ms of run time.
 [CH32V307 JTAG](#ch32v307-jtag) gives the JTAG measurements. RVSWD on the CH32V307 is not measured.
 
 ### Setup
