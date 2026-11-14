@@ -41,6 +41,8 @@ class SwdPins {
    static constexpr uint32_t untimedBelowHalfCycles = 36;
    static constexpr uint32_t untimedMinPeriodCycles = 13;
    static constexpr uint32_t padSledCycles = 10;
+   // The NOPs of the sled (BoardSwd.cpp)
+   static constexpr uint32_t padSledNops = 32;
 #endif
 
    void init();
@@ -150,6 +152,11 @@ class SwdPins {
    uintptr_t padSledEntry_{ 0 };
 #endif
 };
+
+#if defined(__riscv)
+// The largest pad needs pad - padSledCycles NOPs of the sled.
+static_assert(swd::untimedPadCount<SwdPins>() - 1 - SwdPins::padSledCycles <= SwdPins::padSledNops);
+#endif
 
 using BoardSwd = swd::BitBangPort<SwdPins>;
 

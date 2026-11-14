@@ -88,7 +88,7 @@ The design does not use these options:
   On the STM32F103, the code of a timed SWD half period is about 23 to 28 cycles.
   Thus a request of 1.8 MHz gives 1.3 to 1.56 MHz.
   The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
-- The untimed SWD engine (`delay` 0 on the Mini, or `swd::maxClockHz` and more in CMSIS-DAP) does not use the pacer.
+- The untimed SWD engine (`delay` 0 on the Mini, `swd::maxClockHz` and more in CMSIS-DAP on the STM32 boards, more than 2 MHz on the CH32V307) does not use the pacer.
   Its rate depends on the code and the NOP pads: 2.42 to 2.7 MHz on the Mini, 9.6 MHz on the CH32V307 (see [CH32V307 unrolled bits](#ch32v307-unrolled-bits)).
   On the STM32F103 boards, `delay` 0 is faster than the 1.85 MHz of the table.
   The CH32V307 and the STM32H5 run `delay` 0 timed at 1.85 MHz.
@@ -379,7 +379,8 @@ Findings:
 
 Until [CH32V307 final rates](#ch32v307-final-rates), `swd::maxClockHz` was 4.5 MHz.
 Thus the measurements at a request of 4500 kHz in this section and in the sections up to the final rates are for the untimed engine.
-Now a request of 4500 kHz gives the timed engine. Request 11000 kHz or more for the untimed engine.
+From the final rates to the padded untimed engine, a request of 4500 kHz gave the timed engine, and 11000 kHz or more gave the untimed engine.
+Now each request above 2 MHz gives the untimed engine with NOP pads (see [CH32V307 padded untimed engine](#ch32v307-padded-untimed-engine)).
 
 The results above are for PCLK2 at HCLK / 2 (72 MHz). The GPIO ports are on APB2.
 Since 2026-11-14, PCLK2 is HCLK (144 MHz), so each GPIO access stalls the core for fewer cycles.
@@ -416,7 +417,7 @@ The STM32 boards use 6 NOPs in each half (`swd::untimedPadNops`).
 On the CH32V307, `board::SwdPins` sets the low-half pad to 0.
 The high-half pad was also 0 until the unrolled bits (see [CH32V307 unrolled bits](#ch32v307-unrolled-bits)):
 
-- The untimed engine runs only for CMSIS-DAP requests from `swd::maxClockHz`. Thus its rate is not limited.
+- At the time of this measurement, the untimed engine ran only for CMSIS-DAP requests from `swd::maxClockHz`. Thus its rate was not limited. Now these NOP pads are the pads of pad 0 of the [padded untimed engine](#ch32v307-padded-untimed-engine), and the higher pads add NOPs to them.
 - The low-half pad gives the SWDIO setup time before the rising edge of SWCLK. Without it, the setup time is 18 ns at minimum.
 - The target drives SWDIO after the rising edge. Without a low-half pad, the host reads SWDIO directly after the falling edge.
   Thus the target had about one high half period to drive SWDIO: 70 ns at minimum with the loop code. With 6 NOPs in each half, it had more than 104 ns.

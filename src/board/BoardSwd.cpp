@@ -49,12 +49,11 @@ void SwdPins::fini() {
 }
 
 #if defined(__riscv)
-// The NOP sled of SwdPins::padSled(): sledNops compressed NOPs (one cycle
-// each), then the return. A jump to an entry before the return runs that
-// many NOPs. Compressed instructions on their own, so each NOP is 2 bytes.
-namespace {
-constexpr uint32_t sledNops = 32;
-} // namespace
+// The NOP sled of SwdPins::padSled(): padSledNops compressed NOPs (one
+// cycle each), then the return. A jump to an entry before the return runs
+// that many NOPs. Compressed instructions on their own, so each NOP is 2
+// bytes.
+static_assert(SwdPins::padSledNops == 32, "The .rept count below");
 
 extern "C" const uint8_t swdPadSledEnd[];
 asm(".pushsection .text.swdPadSled,\"ax\",@progbits\n"
@@ -70,9 +69,9 @@ asm(".pushsection .text.swdPadSled,\"ax\",@progbits\n"
     ".option pop\n"
     ".popsection\n");
 
+// nopCount is at most padSledNops (static_assert in BoardSwd.h).
 void SwdPins::setPadSled(uint32_t nopCount) {
-   const uint32_t count = nopCount < sledNops ? nopCount : sledNops;
-   padSledEntry_ = reinterpret_cast<uintptr_t>(swdPadSledEnd) - 2 * count;
+   padSledEntry_ = reinterpret_cast<uintptr_t>(swdPadSledEnd) - 2 * nopCount;
 }
 #endif
 

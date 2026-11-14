@@ -44,7 +44,8 @@
 // longer, never shorter.
 //
 // At delay 0 (1.85 MHz) and from maxClockHz, the engine runs untimed on a
-// slow core (see runsUntimed()): it does not read the cycle counter, and
+// slow core (see runsUntimed()), and on the CH32V307 also above 2 MHz with
+// extra NOPs (see below): it does not read the cycle counter, and
 // each half period is the bit code and the NOP pads (untimedPadNopsOf()).
 // Thus its rate depends on the code: 2.42 to 2.7 MHz on the Mini
 // (docs/clock-pacing.md, #118). The original firmware bursts at 2.25 to
@@ -239,8 +240,9 @@ constexpr bool runsUntimed(uint32_t coreHz) {
 
 // True when Pins::timedAtDelayZero is true: Versaloon delay 0 then runs
 // timed at 1.85 MHz, the rate of the OpenOCD table. The untimed engine is
-// then only for CMSIS-DAP requests from maxClockHz. A compile-time value, so
-// the code of the other boards does not change.
+// then only for CMSIS-DAP requests from maxClockHz, or above the timed
+// range with Pins::untimedMinPeriodCycles. A compile-time value, so the
+// code of the other boards does not change.
 template <typename Pins>
 constexpr bool timedAtDelayZero() {
    if constexpr(requires { Pins::timedAtDelayZero; }) {
@@ -583,9 +585,7 @@ class BitBangPort final : public protocol::SwdPort {
    [[gnu::always_inline]] auto withPad(Fn fn, std::index_sequence<P...>) {
       using Result = decltype(fn.template operator()<0>());
       using Entry = Result (*)(Fn &);
-      static constexpr std::array<Entry, sizeof...(P)> table{ [](Fn &f) -> Result {
-         return f.template operator()<P>();
-      }... };
+      static constexpr std::array<Entry, sizeof...(P)> table{ [](Fn &f) -> Result { return f.template operator()<P>(); }... };
       return table[pad_](fn);
    }
 
