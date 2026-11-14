@@ -13,7 +13,8 @@ The script prints:
 - The high and the low half periods of SWCLK, only in runs of consecutive
   bits (see clock_rate.py): the median and the shortest.
 - The SWDIO setup time: the time from an SWDIO change while SWCLK is low to
-  the next rising edge of SWCLK. The host changes SWDIO after the falling
+  the next rising edge of SWCLK. A change in the same CSV row as a rising
+  edge gives 0 ns: the setup time is shorter than one sample. The host changes SWDIO after the falling
   edge, and the target after the rising edge. Thus this time is the setup
   time of the host writes. A target that changes SWDIO late in the high half
   period can add values here.
@@ -29,7 +30,7 @@ import csv
 import statistics
 import sys
 
-from clock_rate import RUN_LIMIT, runs
+from clock_rate import runs
 
 GAP_LIMIT = 3.0
 # The upper limits of the gap groups, in seconds.
@@ -48,7 +49,9 @@ def edges(rows, clock, data):
         if last_clock is not None and level_clock != last_clock:
             clock_edges.append((time, level_clock == "1"))
         if last_data is not None and level_data != last_data:
-            data_changes.append((time, last_clock == "1" if level_clock == last_clock else level_clock == "1"))
+            # A change in the same row as an SWCLK edge counts as a change while SWCLK is low: at a rising
+            # edge, the setup time is then 0 (shorter than one sample), not lost.
+            data_changes.append((time, level_clock == "1" and level_clock == last_clock))
         last_clock, last_data = level_clock, level_data
     return clock_edges, data_changes
 
@@ -67,7 +70,7 @@ def half_periods(clock_edges, nominal):
             if a in in_run:
                 high.append(b - a)
         # A low half period counts if its bit (from the rising edge before it) is in a run.
-        elif b_high and previous_rising in in_run and b - previous_rising < RUN_LIMIT * nominal:
+        elif b_high and previous_rising in in_run:
             low.append(b - a)
     return high, low
 
@@ -80,7 +83,7 @@ def setup_times(clock_edges, data_changes):
     for time, clock_high in data_changes:
         if clock_high:
             continue
-        while i < len(rising) and rising[i] <= time:
+        while i < len(rising) and rising[i] < time:
             i += 1
         if i == len(rising):
             break
