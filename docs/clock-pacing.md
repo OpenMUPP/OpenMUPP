@@ -89,7 +89,7 @@ The design does not use these options:
   Thus a request of 1.8 MHz gives 1.3 to 1.56 MHz.
   The clock is never faster than the request. See [SWD pacer in registers](#swd-pacer-in-registers).
 - The untimed SWD engine (`delay` 0 on the Mini, or `swd::maxClockHz` and more in CMSIS-DAP) does not use the pacer.
-  Its rate depends on the code and the NOP pads: 2.42 to 2.7 MHz on the Mini, 8.4 MHz on the CH32V307 (see [CH32V307 NOP pads](#ch32v307-nop-pads)).
+  Its rate depends on the code and the NOP pads: 2.42 to 2.7 MHz on the Mini, 9.6 MHz on the CH32V307 (see [CH32V307 unrolled bits](#ch32v307-unrolled-bits)).
   On the STM32F103 boards, `delay` 0 is faster than the 1.85 MHz of the table.
   The CH32V307 and the STM32H5 run `delay` 0 timed at 1.85 MHz.
   On the CH32V307, a logic analyzer measured 1846.6 kHz, and a read of 32 KiB took 0.406 s.
@@ -97,7 +97,7 @@ The design does not use these options:
   In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`.
   `swd::maxClockHz` is 3 MHz on the STM32 and 4.5 MHz on the CH32V307 (see [CH32V307](#ch32v307)).
   On the STM32, a request thus does not give a faster clock.
-  On the CH32V307, the untimed rate is above `swd::maxClockHz`: a request from 4.5 MHz gives 8.4 MHz.
+  On the CH32V307, the untimed rate is above `swd::maxClockHz`: a request from 4.5 MHz gives 9.6 MHz.
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
@@ -432,7 +432,43 @@ Findings:
 - All reads were correct. With the pad at 0, writes of 32 KiB of random data to SRAM (`load_image`, then `verify_image` and a read) were also correct, at 4500 kHz and at 1000 kHz.
 - No SWDIO change was in the same sample as a rising edge of SWCLK.
 - The target was the STM32H523 at its reset clock, with short wires. A long cable or a slower target can need a lower request: the timed engine then gives the clock.
-  A request from 4.5 MHz (`swd::maxClockHz`) gives the untimed rate, 8.4 MHz. For the timed engine (3.27 MHz at most), request less than 4.5 MHz.
+  A request from 4.5 MHz (`swd::maxClockHz`) gives the untimed rate. For the timed engine (3.27 MHz at most), request less than 4.5 MHz.
+- The STM32 code did not change: the disassembly of the Mini image is the same.
+
+## CH32V307 unrolled bits
+
+On the CH32V307, `board::SwdPins` sets `unrolledBits` (`swd::unrolledBits()`).
+The untimed engine then unrolls the request (8 bits), the ACK (3 bits) and the data (32 bits).
+Each bit has no loop code, and its bit position is a constant.
+A read bit is 6 instructions: SWCLK low, the load from `INDR`, SWCLK high, and 3 instructions that add the bit to the value.
+These 3 instructions are in the high half period: an empty `asm` statement keeps them there.
+Without it, the compiler moved the code of all 32 bits to after the last bit, and the gap between two transfers increased from 3.3 µs to 4.7 µs.
+The image is 1.5 KB larger. The timed engine does not change.
+
+The unrolled bits have less code in the high half period.
+Without a low-half pad, the host reads SWDIO directly after the falling edge (see [CH32V307 NOP pads](#ch32v307-nop-pads)).
+Thus the high half period is the time that the target has to drive SWDIO.
+The STM32H523 datasheet gives an SWDIO output valid time of 14 ns at most.
+On the logic analyzer, SWDIO changed 8 to 10 ns after the rising edge.
+The firmware keeps the shortest high half period before a read at 40 ns or more, for other targets and for cable delay.
+A high-half pad of 2 NOPs does this.
+
+Measured on 2026-11-14 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz), at a request of 4500 kHz.
+The low-half pad is 0 in all rows.
+
+| Code | High-half pad | Median rate | High half before a read (shortest) | SWDIO setup (shortest) | Read 32 KiB | Write 32 KiB |
+|---|---|---|---|---|---|---|
+| Loop (before) | 0 | 8474.6 kHz | 70 ns | 18 ns | 0.087 s | 0.090 s |
+| Unrolled, no `asm` | 0 | 13157.9 kHz | 22 ns | 20 ns | 0.081 s | 0.081 s |
+| Unrolled, no `asm` | 3 | 10204.1 kHz | 42 ns | 18 ns | 0.089 s | - |
+| Unrolled | 0 | 11111.1 kHz | 28 ns | 20 ns | 0.074 s | - |
+| Unrolled | 2 | 9615.4 kHz | 48 ns | 18 ns | 0.079 s | 0.083 s |
+
+Findings:
+
+- All reads and writes were correct.
+- In the last row, the high half period before a read is 48 ns at minimum and 50 to 56 ns (median), in the ACK and in the data bits.
+- The timed rates did not change: 3268 kHz at a request of 4000 kHz and 2941 kHz (median) at 2900 kHz.
 - The STM32 code did not change: the disassembly of the Mini image is the same.
 
 ## CH32V307 JTAG

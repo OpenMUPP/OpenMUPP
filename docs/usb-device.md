@@ -796,12 +796,12 @@ An interrupt makes a period longer, but not shorter.
 At `delay` 0, the firmware runs untimed, without the cycle counter.
 Each half period is the loop code and 6 NOP instructions (`swd::untimedPadNops`) on the STM32 boards.
 The NOPs keep a minimum low half period: SWDIO has a setup time before the rising edge.
-The CH32V307 has no NOP pads (see [CH32V307 NOP pads](clock-pacing.md#ch32v307-nop-pads)).
+The CH32V307 has other NOP pads (see [CH32V307 NOP pads](clock-pacing.md#ch32v307-nop-pads)).
 Thus the SWCLK rate depends on the code. A logic analyzer measured 2.42 to 2.7 MHz on the Mini, faster than the 1.85 MHz of the table (see [Clock pacing](clock-pacing.md)).
 The original firmware bursts at 2.25 to 3 MHz.
 If a target or a long cable fails at `delay` 0, use `delay` 1 (OpenOCD `adapter speed` below 1850 kHz).
 On the STM32H5 (250 MHz), `delay` 0 is timed at 1.85 MHz: the untimed engine there gives 13 MHz (`swd::runsUntimed()`, see [Clock pacing](clock-pacing.md#stm32h5)).
-On the CH32V307 (144 MHz), `delay` 0 is also timed at 1.85 MHz (`timedAtDelayZero` in `board::SwdPins`): the untimed engine there gives 8.4 MHz.
+On the CH32V307 (144 MHz), `delay` 0 is also timed at 1.85 MHz (`timedAtDelayZero` in `board::SwdPins`): the untimed engine there gives 9.6 MHz.
 A logic analyzer measured 1846.6 kHz. On the CH32V307, the untimed engine runs only for CMSIS-DAP requests from `swd::maxClockHz`.
 
 `OUT` drives the bits on SWDIO. `IN` releases SWDIO and reads the bits.
