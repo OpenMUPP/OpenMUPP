@@ -1002,3 +1002,95 @@ TEST_CASE("SWD bit-bang: Pins::unrolledBits gives the same transfers") {
       CHECK(pins.desyncs == 0);
    }
 }
+
+namespace {
+// The padded untimed engine of the CH32V307, with a mock NOP sled
+struct PaddedPins : MockSwdPins {
+   using MockSwdPins::MockSwdPins;
+   static constexpr bool unrolledBits = true;
+   static constexpr uint32_t untimedBelowHalfCycles = 36;
+   static constexpr uint32_t untimedMinPeriodCycles = 13;
+   static constexpr uint32_t padSledCycles = 10;
+   void setPadSled(uint32_t nopCount) {
+      sledNops = nopCount;
+   }
+   void padSled() {
+      ++sledRuns;
+   }
+   uint32_t sledNops{ UINT32_MAX };
+   uint32_t sledRuns{ 0 };
+};
+} // namespace
+
+TEST_CASE("SWD bit-bang: the untimed pad makes the shortest period not shorter than the request") {
+   static_assert(swd::untimedPadCount<MockSwdPins>() == 1);
+   static_assert(swd::untimedPadInstances<MockSwdPins>() == 1);
+   // Half periods up to 35 cycles: periods up to 70 cycles, pads 0 to 29
+   static_assert(swd::untimedPadCount<PaddedPins>() == 30);
+   static_assert(swd::untimedPadInstances<PaddedPins>() == 10);
+   // From the first request with a half period below 36 cycles
+   for(uint32_t hz = 2'057'143; hz <= 20'000'000; hz += 997) {
+      CAPTURE(hz);
+      REQUIRE(swd::halfPeriodCyclesOfHz(144'000'000, hz) < 36);
+      const uint32_t pad = swd::untimedPadFor<PaddedPins>(144'000'000, hz);
+      const uint32_t period = 13 + 2 * pad;
+      // Not faster than hz, and the next smaller pad is faster
+      REQUIRE(144e6 / period <= hz);
+      if(pad != 0) {
+         REQUIRE(144e6 / (period - 2) > hz);
+      }
+   }
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 20'000'000) == 0);
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 9'600'000) == 1);
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 2'057'143) == 29);
+}
+
+TEST_CASE("SWD bit-bang: Pins::untimedMinPeriodCycles runs the fast requests untimed with pads") {
+   PaddedPins pins(1);
+   pins.coreClockHz = 144'000'000;
+   BitBangPort<PaddedPins> port(pins);
+   port.init();
+   port.configure(1, 0, 1);
+   // 2 MHz is a half period of 36 cycles: timed
+   for(const uint32_t hz : { 1'000'000u, 2'000'000u }) {
+      port.setClockHz(hz);
+      CHECK(port.isTimed());
+   }
+   struct Case {
+      uint32_t hz;
+      uint32_t pad;
+      bool sled;
+   };
+   for(const Case c : { Case{ 20'000'000, 0, false }, Case{ 9'000'000, 2, false }, Case{ 7'578'000, 4, false },
+                        Case{ 4'800'000, 9, false }, Case{ 4'500'000, 10, true }, Case{ 2'100'000, 28, true } }) {
+      CAPTURE(c.hz);
+      port.setClockHz(c.hz);
+      CHECK_FALSE(port.isTimed());
+      CHECK(port.untimedPad() == c.pad);
+      pins.sledRuns = 0;
+      const std::size_t edges = pins.risingEdges.size();
+      for(const uint32_t value : { 0x00000000u, 0x80000001u, 0x12345678u }) {
+         CAPTURE(value);
+         uint32_t data = value;
+         CHECK(port.transfer(writeAbort, data) == pswd::ackOk);
+         CHECK(pins.transfers.back().written == value);
+         pins.readData = ~value;
+         data = 0;
+         CHECK(port.transfer(readApDrw, data) == pswd::ackOk);
+         CHECK(data == ~value);
+      }
+      // A line reset: 56 bits high, 8 bits low
+      const std::vector<uint8_t> bits{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
+      port.sequenceOut(64, bits);
+      if(c.sled) {
+         CHECK(pins.sledNops == c.pad - 10);
+         // One sled run in each half period
+         CHECK(pins.sledRuns == 2 * (pins.risingEdges.size() - edges));
+      } else {
+         CHECK(pins.sledRuns == 0);
+      }
+      CHECK(pins.contentions == 0);
+      CHECK(pins.undrivenSamples == 0);
+      CHECK(pins.desyncs == 0);
+   }
+}
