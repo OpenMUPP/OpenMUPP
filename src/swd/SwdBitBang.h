@@ -204,10 +204,12 @@ constexpr uint32_t halfPeriodCycles(uint32_t coreHz, uint16_t delay) {
 }
 
 // From this SWCLK, the engine runs untimed on a slow core, as at delay 0.
-// The value is above the untimed rate, so a request from this value does
-// not give a faster clock. The untimed rate changes with the code layout:
-// 2.42 to 2.7 MHz on the Mini (#118), 8.4 MHz on the CH32V307 at 144 MHz
-// (docs/clock-pacing.md). Measure again after a change of the engine.
+// On the STM32, the value is above the untimed rate (2.42 to 2.7 MHz on
+// the Mini, #118), so a request from this value does not give a faster
+// clock. On the CH32V307 at 144 MHz, the untimed rate (8.4 MHz,
+// docs/clock-pacing.md) is above this value: a request from 4.5 MHz gives
+// 8.4 MHz. The untimed rate changes with the code layout. Measure again
+// after a change of the engine.
 #if defined(__riscv)
 inline constexpr uint32_t maxClockHz = 4'500'000;
 #else
@@ -250,8 +252,11 @@ constexpr bool timedAtDelayZero() {
 // The NOP count at the end of the high half period (High) or of the low
 // half period: Pins::untimedHighPadNops or Pins::untimedLowPadNops, else
 // untimedPadNops. The low-half pad gives the SWDIO setup time before the
-// rising edge. The high half has the loop code, and the target drives
-// SWDIO after the rising edge, so its pad only limits the rate.
+// rising edge. The target drives SWDIO after the rising edge, and the host
+// reads it after the low-half pad. The high-half pad, the loop code and
+// the low-half pad give the target time to drive SWDIO before the read.
+// With a low-half pad of 0, the read comes directly after the falling
+// edge.
 template <typename Pins, bool High>
 constexpr uint32_t untimedPadNopsOf() {
    if constexpr(High && requires { Pins::untimedHighPadNops; }) {

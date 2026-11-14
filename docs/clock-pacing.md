@@ -93,9 +93,11 @@ The design does not use these options:
   On the STM32F103 boards, `delay` 0 is faster than the 1.85 MHz of the table.
   The CH32V307 and the STM32H5 run `delay` 0 timed at 1.85 MHz.
   On the CH32V307, a logic analyzer measured 1846.6 kHz, and a read of 32 KiB took 0.406 s.
-  Before this change, the untimed engine gave 4.87 MHz and 0.251 s at `delay` 0.
-  In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`, so a request does not give a faster clock.
+  When `delay` 0 was untimed on the CH32V307, it gave 4.87 MHz, and a read of 32 KiB took 0.251 s.
+  In CMSIS-DAP, the engine runs untimed only from `swd::maxClockHz`.
   `swd::maxClockHz` is 3 MHz on the STM32 and 4.5 MHz on the CH32V307 (see [CH32V307](#ch32v307)).
+  On the STM32, a request thus does not give a faster clock.
+  On the CH32V307, the untimed rate is above `swd::maxClockHz`: a request from 4.5 MHz gives 8.4 MHz.
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
@@ -411,24 +413,26 @@ On the CH32V307, `board::SwdPins` sets both pads to 0:
 
 - The untimed engine runs only for CMSIS-DAP requests from `swd::maxClockHz`. Thus its rate is not limited.
 - The low-half pad gives the SWDIO setup time before the rising edge of SWCLK. Without it, the setup time is 18 ns at minimum.
-- The high half has the loop code. The target drives SWDIO after the rising edge, and the host reads it at the end of the low half.
+- The target drives SWDIO after the rising edge. Without a low-half pad, the host reads SWDIO directly after the falling edge.
+  Thus the target has about one high half period to drive SWDIO: 70 ns at minimum. With 6 NOPs in each half, it had more than 104 ns.
 
 Measured on 2026-11-14 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz), at a request of 4500 kHz.
-The high-half pad is 0 in all rows.
+The high-half pad is 0 in all rows after the first.
 
-| Low-half pad | Median rate | Shortest period | High half (median) | Low half (median) | SWDIO setup (shortest) | Read 32 KiB |
+| Low-half pad | Median rate | Shortest period | High half (median, shortest) | Low half (median) | SWDIO setup (shortest) | Read 32 KiB |
 |---|---|---|---|---|---|---|
-| 6 (before) | 5103.9 kHz | 194 ns (median) | 112 ns | 82 ns | 60 ns | 0.117 s |
-| 3 | 7142.9 kHz | 130 ns | 78 ns | 62 ns | 40 ns | 0.095 s |
-| 2 | 7575.8 kHz | 124 ns | 78 ns | 54 ns | 32 ns | 0.092 s |
-| 1 | 7936.5 kHz | 116 ns | 78 ns | 48 ns | 26 ns | 0.090 s |
-| 0 | 8474.6 kHz | 110 ns | 78 ns | 40 ns | 18 ns | 0.087 s |
+| 6, high-half pad 6 (before) | 5103.9 kHz | 194 ns (median) | 112 ns, 104 ns | 82 ns | 60 ns | 0.117 s |
+| 3 | 7142.9 kHz | 130 ns | 78 ns, 62 ns | 62 ns | 40 ns | 0.095 s |
+| 2 | 7575.8 kHz | 124 ns | 78 ns, 70 ns | 54 ns | 32 ns | 0.092 s |
+| 1 | 7936.5 kHz | 116 ns | 78 ns, 62 ns | 48 ns | 26 ns | 0.090 s |
+| 0 | 8474.6 kHz | 110 ns | 78 ns, 70 ns | 40 ns | 18 ns | 0.087 s |
 
 Findings:
 
 - All reads were correct. With the pad at 0, writes of 32 KiB of random data to SRAM (`load_image`, then `verify_image` and a read) were also correct, at 4500 kHz and at 1000 kHz.
 - No SWDIO change was in the same sample as a rising edge of SWCLK.
 - The target was the STM32H523 at its reset clock, with short wires. A long cable or a slower target can need a lower request: the timed engine then gives the clock.
+  A request from 4.5 MHz (`swd::maxClockHz`) gives the untimed rate, 8.4 MHz. For the timed engine (3.27 MHz at most), request less than 4.5 MHz.
 - The STM32 code did not change: the disassembly of the Mini image is the same.
 
 ## CH32V307 JTAG
