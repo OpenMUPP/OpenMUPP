@@ -1356,3 +1356,102 @@ TEST_CASE("runNext() runs one packet at a time") {
    a.dap.submit(V{ 0x7E, 0x01, 0x09, 0x03, 0x00 });
    CHECK_FALSE(a.dap.runNext());
 }
+
+namespace {
+
+// Two processors on the engines and the pins of one Bench, as the bulk
+// and the HID interface of one image (protocol/TargetPinOwner.h).
+struct SharedBench {
+   SharedBench()
+      : hid(b.swd, b.gpio, b.platform, b.info) {
+      b.dap.sharePins(owner, protocol::PinClient::CmsisDapBulk);
+      hid.sharePins(owner, protocol::PinClient::CmsisDapHid);
+   }
+
+   Bytes runHid(const Bytes &request) {
+      REQUIRE(hid.canSubmit());
+      send(hid, request);
+      REQUIRE(hid.hasResponse());
+      const auto response = hid.response();
+      Bytes result(response.begin(), response.end());
+      hid.popResponse();
+      return result;
+   }
+
+   Bench b;
+   protocol::TargetPinOwner owner;
+   Processor hid;
+};
+
+} // namespace
+
+TEST_CASE("Shared pins: the first processor that connects owns the pins") {
+   SharedBench s;
+   CHECK(s.owner.owner() == protocol::PinClient::None);
+   s.b.connect();
+   CHECK(s.owner.owner() == protocol::PinClient::CmsisDapBulk);
+   CHECK(s.b.pins.inits == 1);
+
+   // The other processor gets port 0 (failed) and touches no pin.
+   s.b.gpio.configured.clear();
+   CHECK(s.runHid({ 0x02, 0x01 }) == V{ 0x02, 0x00 });
+   CHECK_FALSE(s.hid.connected());
+   CHECK(s.b.pins.inits == 1);
+   // DAP_ResetTarget fails, DAP_SWJ_Pins only reads.
+   CHECK(s.runHid({ 0x0A }) == V{ 0x0A, 0xFF, 0x00 });
+   CHECK(s.runHid(cat({ { 0x10, 0x00, 0x81 }, word(0) })).size() == 2);
+   CHECK(s.b.gpio.configured.empty());
+   // Its DAP_Disconnect and its host going away leave the pins of the owner.
+   CHECK(s.runHid({ 0x03 }) == V{ 0x03, 0x00 });
+   s.hid.hostGone();
+   s.hid.release();
+   CHECK(s.b.gpio.configured.empty());
+   CHECK(s.b.pins.finis == 0);
+   CHECK(s.b.dap.connected());
+   CHECK(s.owner.owner() == protocol::PinClient::CmsisDapBulk);
+
+   // The owner disconnects: the other processor can connect now.
+   CHECK(s.b.run({ 0x03 }) == V{ 0x03, 0x00 });
+   CHECK(s.owner.owner() == protocol::PinClient::None);
+   CHECK(s.runHid({ 0x02, 0x01 }) == V{ 0x02, 0x01 });
+   CHECK(s.owner.owner() == protocol::PinClient::CmsisDapHid);
+   CHECK(s.b.run({ 0x02, 0x01 }) == V{ 0x02, 0x00 });
+   // The host of the owner goes away: the pins are free again.
+   s.hid.hostGone();
+   CHECK(s.owner.owner() == protocol::PinClient::None);
+   s.b.connect();
+}
+
+TEST_CASE("Shared pins: DAP_SWJ_Pins and DAP_ResetTarget take the pins") {
+   SharedBench s;
+   // A DAP_SWJ_Pins that only reads (TDO) does not take the pins.
+   s.runHid(cat({ { 0x10, 0x08, 0x08 }, word(0) }));
+   CHECK(s.owner.owner() == protocol::PinClient::None);
+   // Assert nRESET without a connection: the HID processor owns the pins.
+   s.runHid(cat({ { 0x10, 0x00, 0x80 }, word(0) }));
+   CHECK(s.owner.owner() == protocol::PinClient::CmsisDapHid);
+   CHECK_FALSE(s.b.gpio.pin(gpio::srst).level);
+   CHECK(s.b.run({ 0x02, 0x01 }) == V{ 0x02, 0x00 });
+   CHECK(s.b.run({ 0x0A }) == V{ 0x0A, 0xFF, 0x00 });
+   // DAP_Disconnect releases nRESET and the pins.
+   CHECK(s.runHid({ 0x03 }) == V{ 0x03, 0x00 });
+   CHECK(s.b.gpio.pin(gpio::srst).level);
+   CHECK(s.owner.owner() == protocol::PinClient::None);
+   CHECK(s.b.run({ 0x0A }) == V{ 0x0A, 0x00, 0x01 });
+   CHECK(s.owner.owner() == protocol::PinClient::CmsisDapBulk);
+}
+
+TEST_CASE("Shared pins: the settings of the other processor wait for its connection") {
+   SharedBench s;
+   s.b.run(cat({ { 0x11 }, word(100'000) }));
+   s.b.connect();
+   CHECK(s.b.port.halfCycles() == 360);
+   // The clock of the HID processor does not change the engine of the owner.
+   CHECK(s.runHid(cat({ { 0x11 }, word(1'000'000) })) == V{ 0x11, 0x00 });
+   CHECK(s.runHid({ 0x13, 0x02 }) == V{ 0x13, 0x00 });
+   CHECK(s.b.port.halfCycles() == 360);
+   // It applies at its connection.
+   CHECK(s.b.run({ 0x03 }) == V{ 0x03, 0x00 });
+   CHECK(s.runHid({ 0x02, 0x01 }) == V{ 0x02, 0x01 });
+   CHECK(s.b.port.halfCycles() == 36);
+}

@@ -89,6 +89,16 @@
 //   mV is the target voltage after the operation, 0 without a sense or
 //   when the measurement fails. Without a TargetPower, the command replies
 //   ID_DAP_Invalid. hostGone() keeps the supply on.
+// - With a pin owner (sharePins()), the processor shares the engines and
+//   the pins with another processor (protocol/TargetPinOwner.h). DAP_Connect,
+//   DAP_SWJ_Pins and DAP_ResetTarget take the pins. When the other
+//   processor owns them, DAP_Connect replies port 0, DAP_SWJ_Pins drives no
+//   pin and only reads them, and DAP_ResetTarget replies DAP_ERROR.
+//   DAP_Disconnect, release() and hostGone() give the pins back, and touch
+//   no pin while the other processor owns them. DAP_SWJ_Clock,
+//   DAP_TransferConfigure and DAP_SWD_Configure store their values and
+//   change the engines only while the processor owns the pins. DAP_Connect
+//   applies them.
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -127,6 +137,7 @@
 
 #include "protocol/GpioPins.h"
 #include "protocol/JtagPort.h"
+#include "protocol/TargetPinOwner.h"
 #include "protocol/TargetPower.h"
 #include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
@@ -352,6 +363,14 @@ class Processor final : private TransferAbort {
       return port_ != Port::None;
    }
 
+   // Shares the engines and the target pins with another processor:
+   // `client` is the interface of this processor. The owner must outlive
+   // the processor. Call it before the first packet.
+   void sharePins(protocol::TargetPinOwner &owner, protocol::PinClient client) {
+      pinOwner_ = &owner;
+      pinClient_ = client;
+   }
+
    // Number of transfers with an error on the wire. It wraps at 2^32: only
    // the difference between two values counts.
    [[nodiscard]] uint32_t errorCount() const {
@@ -402,6 +421,11 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
 
    [[nodiscard]] uint8_t pinsIn() const;
+   // Takes the target pins: false when the other processor owns them.
+   [[nodiscard]] bool claimPins();
+   // True when the processor may change the engines: it owns the pins, or
+   // it has no pin owner.
+   [[nodiscard]] bool ownsPins() const;
    void applySettings();
    void setJtagClock();
    // Selects the device of a transfer command: true when the port can do
@@ -421,6 +445,8 @@ class Processor final : private TransferAbort {
    boot::BootloaderEntry *bootloader_;
    Bridge *bridge_;
    protocol::TargetPower *power_;
+   protocol::TargetPinOwner *pinOwner_{ nullptr };
+   protocol::PinClient pinClient_{ protocol::PinClient::None };
 
    Port port_{ Port::None };
    // Also the idle cycles and the WAIT retries of JTAG
