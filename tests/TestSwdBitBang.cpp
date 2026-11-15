@@ -1037,17 +1037,19 @@ TEST_CASE("SWD bit-bang: the untimed pad gives the nearest period, at most 5 % f
    static_assert(swd::untimedPadCount<PaddedPins>() == 28);
    static_assert(swd::untimedPadInstances<PaddedPins>() == 8);
    // From the first request with a half period below 36 cycles, against
-   // a search of all pads
+   // a search of all pads. In cycles times hz, so that the edges are exact:
+   // the request period is 144'000'000.
    for(uint32_t hz = 2'057'143; hz <= 20'000'000; hz += 997) {
       CAPTURE(hz);
       REQUIRE(swd::halfPeriodCyclesOfHz(144'000'000, hz) < 36);
-      const double request = 144e6 / hz;
+      constexpr int64_t request = 144'000'000;
       uint32_t best = 0;
-      double bestError = 1e9;
+      int64_t bestError = INT64_MAX;
       for(uint32_t pad = 0; pad < swd::untimedPadCount<PaddedPins>(); ++pad) {
-         const double period = swd::untimedPeriodOfPad<PaddedPins>(pad);
-         const double error = period > request ? period - request : request - period;
-         if(period >= 0.95 * request && error <= bestError) {
+         const int64_t period = int64_t{ swd::untimedPeriodOfPad<PaddedPins>(pad) } * hz;
+         const int64_t error = period > request ? period - request : request - period;
+         // At most 5 % faster. A tie takes the slower pad.
+         if(period * 100 >= request * 95 && error <= bestError) {
             best = pad;
             bestError = error;
          }
@@ -1055,9 +1057,15 @@ TEST_CASE("SWD bit-bang: the untimed pad gives the nearest period, at most 5 % f
       const uint32_t pad = swd::untimedPadFor<PaddedPins>(144'000'000, hz);
       REQUIRE(pad == best);
       if(pad != 0) {
-         REQUIRE(swd::untimedPeriodOfPad<PaddedPins>(pad) >= 0.95 * request);
+         REQUIRE(int64_t{ swd::untimedPeriodOfPad<PaddedPins>(pad) } * hz * 100 >= request * 95);
       }
    }
+   // The exact edges. 18.95 cycles: pad 1 (18) is exactly 5 % faster, and
+   // nearer than pad 2 (20). 1 Hz less: pad 1 is more than 5 % faster.
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 7'600'000) == 1);
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 7'599'999) == 2);
+   // 25 cycles: a tie between pad 4 (24) and pad 5 (26) takes the slower pad
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 5'760'000) == 5);
    CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 20'000'000) == 0);
    // 13.58 cycles: pad 0 is 4.3 % faster
    CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 10'600'000) == 0);
