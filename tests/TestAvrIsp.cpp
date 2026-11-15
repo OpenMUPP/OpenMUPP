@@ -160,10 +160,17 @@ TEST_CASE("AVR ISP: a target out of sync gets one SCK pulse per failed attempt")
       Fixture f(kHz);
       // Two bits short of a frame: two pulses align the frames.
       f.target.syncOffset = 30;
-      REQUIRE(f.engine.enableProgramming(enableParams));
+      avr::EnableParams params = enableParams;
+      params.cmdexeDelayMs = 2;
+      REQUIRE(f.engine.enableProgramming(params));
       CHECK(f.target.enabled);
       // Three attempts of 32 bits and two pulses
-      CHECK(f.pins.risingTimes.size() == 3 * 32 + 2);
+      REQUIRE(f.pins.risingTimes.size() == 3 * 32 + 2);
+      // cmdexeDelayMs after each attempt, before the pulse
+      for(const std::size_t pulse : { 32u, 65u }) {
+         CAPTURE(pulse);
+         CHECK(f.pins.risingTimes[pulse] - f.pins.risingTimes[pulse - 1] >= 2 * cyclesPerMs);
+      }
       CHECK(readSignature(f.engine, 0)[3] == 0x1E);
    }
 }
@@ -178,7 +185,7 @@ TEST_CASE("AVR ISP: no sync after synchLoops attempts") {
    CHECK(f.pins.risingTimes.size() == 4 * 32 + 3);
 }
 
-TEST_CASE("AVR ISP: synchLoops 0 is one attempt, pollIndex 0 does not check") {
+TEST_CASE("AVR ISP: synchLoops 0 is one attempt, pollIndex 0 does not check, pollIndex 5 fails") {
    Fixture f(1000);
    f.target.syncOffset = 20;
    avr::EnableParams params = enableParams;
@@ -189,6 +196,12 @@ TEST_CASE("AVR ISP: synchLoops 0 is one attempt, pollIndex 0 does not check") {
    params.pollIndex = 0;
    CHECK(f.engine.enableProgramming(params));
    CHECK(f.pins.risingTimes.size() == 64);
+
+   // In sync, but a poll index above 4 (from the host) never matches.
+   f.target.syncOffset = 0;
+   params.pollIndex = 5;
+   CHECK_FALSE(f.engine.enableProgramming(params));
+   CHECK(f.pins.risingTimes.size() == 96);
 }
 
 TEST_CASE("AVR ISP: byteDelay waits between the bytes of the programming enable") {
