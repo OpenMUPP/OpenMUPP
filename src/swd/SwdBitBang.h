@@ -28,7 +28,7 @@
 // the NOP pads of the untimed engine (default untimedPadNops, see
 // untimedPadNopsOf()).
 // static constexpr bool unrolledBits = true unrolls the fixed-length bit
-// loops of the untimed engine (see unrolledBits()).
+// loops of the untimed engine without extra NOPs (see unrolledBits()).
 //
 // SWCLK is high between bits. One bit (ADIv5, B4.2):
 //
@@ -55,10 +55,13 @@
 //
 // With Pins::untimedMinPeriodCycles (the CH32V307), a CMSIS-DAP request
 // above the timed range runs untimed with extra NOPs in each half period
-// (untimedPadFor()). The pad makes the shortest period not shorter than
-// the request, and an interrupt only makes a period longer. Each small pad
+// (untimedPadFor()). The pad makes the shortest period the nearest to the
+// request, at most untimedFastPercent faster, and an interrupt only makes a
+// period longer. Each small pad
 // has its own instance of the engine. The larger pads use one instance
-// with the NOP sled of the pins (Pins::padSled()).
+// with the NOP sled of the pins (Pins::padSled()). Only pad 0 unrolls the
+// bits (unrolledBits()), so the padded engine has its own shortest period
+// (paddedMinPeriodCycles()).
 //
 // A transfer:
 //
@@ -271,10 +274,25 @@ constexpr uint32_t untimedPadNopsOf() {
    }
 }
 
-// True when Pins::unrolledBits is true: the untimed engine then unrolls the
-// request (8 bits), the ACK (3 bits) and the data (32 bits). This removes
-// the loop code from each bit, and the bit position is a constant. The
-// code is about 1.5 KB larger, so only a board with free flash sets it.
+// The high-half pad of the padded engine (pads from 1):
+// Pins::paddedHighPadNops, else untimedPadNopsOf(). The padded engine has
+// the bit loops, and their code is in the high half period (see
+// unrolledBits()), so it can need a smaller high-half pad than pad 0.
+template <typename Pins>
+constexpr uint32_t paddedHighPadNops() {
+   if constexpr(requires { Pins::paddedHighPadNops; }) {
+      return Pins::paddedHighPadNops;
+   } else {
+      return untimedPadNopsOf<Pins, true>();
+   }
+}
+
+// True when Pins::unrolledBits is true: the untimed engine without extra
+// NOPs (pad 0) then unrolls the request (8 bits), the ACK (3 bits) and the
+// data (32 bits). This removes the loop code from each bit, and the bit
+// position is a constant. The code is about 1.5 KB larger, so only a board
+// with free flash sets it. The padded engine (pads from 1) keeps the
+// loops: an unrolled instance for each pad is about 4 KB.
 template <typename Pins>
 constexpr bool unrolledBits() {
    if constexpr(requires { Pins::unrolledBits; }) {
@@ -294,8 +312,8 @@ inline constexpr uint32_t sledPace = UINT32_MAX - 1;
 // engine without extra NOPs, in core cycles, measured on the wire. With it,
 // a request with a half period below Pins::untimedBelowHalfCycles runs
 // untimed with extra NOPs, not timed. An interrupt only makes the untimed
-// engine slower, so the clock is never faster than the request. 0: no
-// padded engine.
+// engine slower, so the clock is at most untimedFastPercent faster than
+// the request. 0: no padded engine.
 template <typename Pins>
 constexpr uint32_t untimedMinPeriodCycles() {
    if constexpr(requires { Pins::untimedMinPeriodCycles; }) {
@@ -306,28 +324,74 @@ constexpr uint32_t untimedMinPeriodCycles() {
    }
 }
 
+// Pins::paddedMinPeriodCycles: the shortest period of the padded engine
+// (pads from 1) is paddedMinPeriodCycles + 2 * pad cycles, measured on the
+// wire. Else untimedMinPeriodCycles. It is different from
+// untimedMinPeriodCycles when pad 0 has other code (unrolledBits()) or
+// another high-half pad (paddedHighPadNops()).
+template <typename Pins>
+constexpr uint32_t paddedMinPeriodCycles() {
+   if constexpr(requires { Pins::paddedMinPeriodCycles; }) {
+      return Pins::paddedMinPeriodCycles;
+   } else {
+      return untimedMinPeriodCycles<Pins>();
+   }
+}
+
 // The count of pads: 0 to the pad of the longest period that runs untimed.
 // A half period below untimedBelowHalfCycles is a period of
 // 2 * untimedBelowHalfCycles - 2 cycles or less. 1: only pad 0, no padded
 // engine.
 template <typename Pins>
 constexpr uint32_t untimedPadCount() {
-   constexpr uint32_t minPeriod = untimedMinPeriodCycles<Pins>();
-   if constexpr(minPeriod == 0) {
+   if constexpr(untimedMinPeriodCycles<Pins>() == 0) {
       return 1;
    } else {
-      return intdiv::ceilDiv(2 * Pins::untimedBelowHalfCycles - 2 - minPeriod, 2u) + 1;
+      constexpr uint32_t longest = 2 * Pins::untimedBelowHalfCycles - 2;
+      static_assert(longest > paddedMinPeriodCycles<Pins>());
+      // untimedPadFor() needs a longer period for each higher pad
+      static_assert(paddedMinPeriodCycles<Pins>() + 2 > untimedMinPeriodCycles<Pins>());
+      return intdiv::ceilDiv(longest - paddedMinPeriodCycles<Pins>(), 2u) + 1;
    }
 }
 
-// The extra NOPs in each half period, so that the shortest period
-// (untimedMinPeriodCycles + 2 * pad) is not shorter than the period of hz.
+// A pad may make the shortest period up to this share faster than the
+// request, in percent: untimedPadFor() takes the nearest pad.
+inline constexpr uint32_t untimedFastPercent = 5;
+
+// The shortest period of a pad: untimedMinPeriodCycles at pad 0, else
+// paddedMinPeriodCycles + 2 * pad.
+template <typename Pins>
+constexpr uint32_t untimedPeriodOfPad(uint32_t pad) {
+   return pad == 0 ? untimedMinPeriodCycles<Pins>() : paddedMinPeriodCycles<Pins>() + 2 * pad;
+}
+
+// The extra NOPs in each half period: the pad whose shortest period is
+// nearest to the period of hz, and at most untimedFastPercent shorter.
 template <typename Pins>
 constexpr uint32_t untimedPadFor(uint32_t coreHz, uint32_t hz) {
-   constexpr uint32_t minPeriod = untimedMinPeriodCycles<Pins>();
-   const uint32_t period = intdiv::ceilDiv(coreHz, hz == 0 ? 1u : hz);
-   const uint32_t pad = period > minPeriod ? intdiv::ceilDiv(period - minPeriod, 2u) : 0;
-   return pad < untimedPadCount<Pins>() ? pad : untimedPadCount<Pins>() - 1;
+   constexpr uint32_t minPeriod = paddedMinPeriodCycles<Pins>();
+   hz = hz == 0 ? 1u : hz;
+   const uint32_t period = intdiv::ceilDiv(coreHz, hz);
+   // The smallest pad that is not faster than hz
+   uint32_t pad = 0;
+   if(period > untimedMinPeriodCycles<Pins>()) {
+      const uint32_t slower = period > minPeriod ? intdiv::ceilDiv(period - minPeriod, 2u) : 0;
+      pad = slower > 1 ? slower : 1;
+   }
+   if(pad >= untimedPadCount<Pins>()) {
+      return untimedPadCount<Pins>() - 1;
+   }
+   if(pad == 0) {
+      return 0;
+   }
+   // The next faster pad, when it is nearer and not too fast. In cycles
+   // times hz: the request period is coreHz.
+   const uint64_t slow = uint64_t{ untimedPeriodOfPad<Pins>(pad) } * hz - coreHz;
+   // pad - 1 is faster than hz, by the choice of pad
+   const uint64_t fast = coreHz - uint64_t{ untimedPeriodOfPad<Pins>(pad - 1) } * hz;
+   const bool inLimit = fast * 100 <= uint64_t{ coreHz } * untimedFastPercent;
+   return inLimit && fast < slow ? pad - 1 : pad;
 }
 
 // Pins::padSledCycles: the cycles of a jump into the NOP sled of the pins
@@ -434,8 +498,8 @@ class BitBangPort final : public protocol::SwdPort {
    //
    // With Pins::untimedMinPeriodCycles, a request with a half period
    // shorter than Pins::untimedBelowHalfCycles runs untimed, with
-   // untimedPadFor() extra NOPs: the shortest period is then not shorter
-   // than the request.
+   // untimedPadFor() extra NOPs: the shortest period is then the nearest
+   // to the request, at most untimedFastPercent shorter.
    void setClockHz(uint32_t hz) {
       if constexpr(untimedPadCount<Pins>() > 1) {
          const uint32_t coreHz = pins_.coreHz();
@@ -660,11 +724,13 @@ class BitBangPort final : public protocol::SwdPort {
       if constexpr(Pace == timedPace) {
          pacer.wait(pins_);
       } else {
+         // Pad 0 has its own high-half pad (paddedHighPadNops())
+         constexpr uint32_t base = High && Pace != 0 ? paddedHighPadNops<Pins>() : untimedPadNopsOf<Pins, High>();
          if constexpr(Pace == sledPace) {
-            nops<untimedPadNopsOf<Pins, High>()>();
+            nops<base>();
             pins_.padSled();
          } else {
-            nops<untimedPadNopsOf<Pins, High>() + Pace>();
+            nops<base + Pace>();
          }
       }
    }
@@ -714,11 +780,11 @@ class BitBangPort final : public protocol::SwdPort {
       return value;
    }
 
-   // A fixed count of bits: unrolled in the untimed engine when
+   // A fixed count of bits: unrolled at pad 0 of the untimed engine when
    // unrolledBits<Pins>(), else the loop.
    template <uint32_t Pace, uint32_t Count>
    [[gnu::always_inline]] void writeBits(pacing::ClockPacer &pacer, uint32_t value) {
-      if constexpr(Pace != timedPace && unrolledBits<Pins>()) {
+      if constexpr(Pace == 0 && unrolledBits<Pins>()) {
          writeUnrolled<Pace>(pacer, value, std::make_index_sequence<Count>{});
       } else {
          writeBits<Pace>(pacer, value, Count);
@@ -727,7 +793,7 @@ class BitBangPort final : public protocol::SwdPort {
 
    template <uint32_t Pace, uint32_t Count>
    [[gnu::always_inline]] uint32_t readBits(pacing::ClockPacer &pacer) {
-      if constexpr(Pace != timedPace && unrolledBits<Pins>()) {
+      if constexpr(Pace == 0 && unrolledBits<Pins>()) {
          return readUnrolled<Pace>(pacer, std::make_index_sequence<Count>{});
       } else {
          return readBits<Pace>(pacer, Count);

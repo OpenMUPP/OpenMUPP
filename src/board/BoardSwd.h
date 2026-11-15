@@ -36,11 +36,16 @@ class SwdPins {
    // untimed with NOP pads (swd::untimedPadFor()). Near its code limit,
    // the timed engine makes single periods up to 11 % short. The shortest
    // untimed period without extra NOPs is 13 cycles (90 ns), and the jump
-   // into the NOP sled and back adds 10 cycles to a half period
+   // into the NOP sled and back adds 8 cycles to a half period
    // (docs/clock-pacing.md).
    static constexpr uint32_t untimedBelowHalfCycles = 36;
    static constexpr uint32_t untimedMinPeriodCycles = 13;
-   static constexpr uint32_t padSledCycles = 10;
+   // The padded engine (pads from 1) has the bit loops: their code is in
+   // the high half, so it needs no high-half pad. Its shortest period is
+   // 16 + 2 * pad cycles (docs/clock-pacing.md).
+   static constexpr uint32_t paddedHighPadNops = 0;
+   static constexpr uint32_t paddedMinPeriodCycles = 16;
+   static constexpr uint32_t padSledCycles = 8;
    // The NOPs of the sled (BoardSwd.cpp)
    static constexpr uint32_t padSledNops = 32;
 #endif
