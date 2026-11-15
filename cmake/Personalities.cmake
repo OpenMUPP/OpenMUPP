@@ -76,6 +76,8 @@ endfunction()
 #   MUPP_WCH_LINK_WCH_USB_ID  the USB ID of WCH for the WCH-Link personality
 #   MUPP_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality.
 #                             Not defined: ON. Ignored without cmsis-dap.
+#   MUPP_CMSIS_DAP_HID        the CMSIS-DAP v1 (HID) interface of the
+#                             CMSIS-DAP personality. Needs cmsis-dap.
 #   MUPP_DEBUG_CDC            the debug log on the CDC port
 # Sets these variables in the caller:
 #   MUPP_PERSONALITY_SET         the personalities, in canonical order
@@ -86,6 +88,7 @@ endfunction()
 #                                the source regexes of the other personalities
 #   MUPP_IMAGE_TAG               the tag after the board in the file names
 #   MUPP_RV_BRIDGE               ON when the image has the RISC-V bridge
+#   MUPP_HID                     ON when the image has the CMSIS-DAP v1 (HID) interface
 function(mupp_resolve_personalities)
     set(_set "${MUPP_PERSONALITIES}")
     set(_default "${MUPP_DEFAULT_PERSONALITY}")
@@ -149,6 +152,14 @@ function(mupp_resolve_personalities)
     elseif (NOT _bridge)
         set(_bridge_off_tag "-no-rv-bridge")
     endif ()
+    if (MUPP_CMSIS_DAP_HID AND NOT "cmsis-dap" IN_LIST _personalities)
+        message(FATAL_ERROR "MUPP_CMSIS_DAP_HID needs cmsis-dap in MUPP_PERSONALITIES.")
+    endif ()
+    if (MUPP_CMSIS_DAP_HID)
+        set(_hid ON)
+    else ()
+        set(_hid OFF)
+    endif ()
     # The log goes to the CDC port. In a multi image the log is silent while
     # the WCH-Link personality is active.
     if (MUPP_DEBUG_CDC AND _personalities STREQUAL "wch-link")
@@ -170,6 +181,9 @@ function(mupp_resolve_personalities)
     endif ()
     if (MUPP_WCH_LINK_WCH_USB_ID)
         list(APPEND _defines MUPP_WCH_LINK_WCH_USB_ID)
+    endif ()
+    if (_hid)
+        list(APPEND _defines MUPP_CMSIS_DAP_HID)
     endif ()
     if (_bridge)
         list(APPEND _defines MUPP_CMSIS_DAP_RV_BRIDGE)
@@ -199,6 +213,10 @@ function(mupp_resolve_personalities)
     endif ()
     # The bridge is the default: only an image without it has a tag
     string(APPEND _tag "${_bridge_off_tag}")
+    # The HID interface is not the default yet: an image with it has a tag
+    if (_hid)
+        string(APPEND _tag "-hid")
+    endif ()
 
     set(MUPP_PERSONALITY_SET ${_personalities} PARENT_SCOPE)
     set(MUPP_PERSONALITY_COUNT ${_count} PARENT_SCOPE)
@@ -208,4 +226,5 @@ function(mupp_resolve_personalities)
     set(MUPP_PERSONALITY_DROPPED_SOURCES ${_dropped} PARENT_SCOPE)
     set(MUPP_IMAGE_TAG "${_tag}" PARENT_SCOPE)
     set(MUPP_RV_BRIDGE ${_bridge} PARENT_SCOPE)
+    set(MUPP_HID ${_hid} PARENT_SCOPE)
 endfunction()

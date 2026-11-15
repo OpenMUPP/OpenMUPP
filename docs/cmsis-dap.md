@@ -148,6 +148,20 @@ Set it while no packet is in flight. `CmsisDapFunction` sets it at `SET_CONFIGUR
 Call `canSubmit()` before `submit()`.
 Each packet without a response takes one of the 4 slots.
 
+## CMSIS-DAP v1 (HID)
+
+The build option `MUPP_CMSIS_DAP_HID` (default `OFF`) adds a CMSIS-DAP v1 interface to the CMSIS-DAP personality, next to the v2 interface.
+The AVR tools (avrdude, Bloom) need it, because they use CMSIS-DAP v1 with the Microchip EDBG commands.
+The STM32F1 boards do not have it: their USB packet memory is full.
+
+- **Interface**: interface 3, HID class, interrupt OUT `0x05` and interrupt IN `0x85` (see [usb-device.md](usb-device.md#cmsis-dap-personality)).
+- **Packet size**: one command or response is one report of 64 bytes, also at high speed. `DAP_Info` on this interface reports the packet size 64. The host pads a command with zeros, and the probe pads each response with zeros.
+- **Processor**: the interface has its own `cmsisdap::Processor`, on the same SWD and JTAG engines as the v2 interface. It has the commands of the v2 interface except the vendor commands (`ID_DAP_Vendor0` to `ID_DAP_Vendor2`) and the `DAP_UART_*` commands: they reply `ID_DAP_Invalid`.
+- **Target pins**: the first interface that drives the target pins owns them (`protocol/TargetPinOwner.h`). `DAP_Connect`, `DAP_SWJ_Pins` with an output and `DAP_ResetTarget` take the pins. While the other interface owns them, `DAP_Connect` replies port 0, `DAP_SWJ_Pins` only reads the pins, and `DAP_ResetTarget` replies `DAP_ERROR`. `DAP_Disconnect`, a bus reset or a suspend of the owner frees them. The clock and transfer settings of an interface reach the engines only while it owns the pins, and `DAP_Connect` applies them.
+- **Scheduling**: `UsbStack::poll()` runs one command of each interface per round, so one interface does not block the other.
+- **Transfer abort**: `DAP_TransferAbort` during a running command works on the v2 interface only. On the HID interface it stops the commands that wait, not the command that runs.
+- **Tools**: OpenOCD selects the v2 interface first. Use `cmsis-dap backend hid` for the v1 interface. pyOCD also selects v2 first.
+
 ## Commands
 
 | ID | Command | Note |

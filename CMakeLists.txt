@@ -118,6 +118,12 @@ option(MUPP_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-li
 # cmsis-dap ignores the option.
 option(MUPP_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality" ON)
 
+# The CMSIS-DAP v1 (HID) interface of the CMSIS-DAP personality
+# (docs/cmsis-dap.md, "CMSIS-DAP v1 (HID)"), next to the v2 interface. The
+# AVR support needs it. Not on the STM32F1 boards: their USB packet memory
+# has no room for two more endpoints.
+option(MUPP_CMSIS_DAP_HID "Add the CMSIS-DAP v1 (HID) interface to the cmsis-dap personality" OFF)
+
 # A CH32 board builds the stub image of the CH32V307 port and stops here
 # (cmake/Ch32StubImage.cmake), until the port is complete. OFF builds the
 # normal firmware image for the CH32 board.
@@ -179,6 +185,9 @@ if (CMAKE_CROSSCOMPILING)
     # MUPP_PERSONALITY_SET, the MUPP_WITH_<P> defines (personality/Personality.h), the sources to drop
     # and MUPP_IMAGE_TAG.
     mupp_resolve_personalities()
+    if (MUPP_HID AND STM32_FAMILY STREQUAL "STM32F1")
+        message(FATAL_ERROR "MUPP_CMSIS_DAP_HID: the USB packet memory of the STM32F1 has no room for the HID interface. Set -DMUPP_CMSIS_DAP_HID=OFF.")
+    endif ()
 
     # Selects board::current (src/board/Board.h), e.g. MUPP_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
@@ -320,7 +329,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building openmupp version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${MUPP_APP_IMAGES}" ", personalities: " "${MUPP_PERSONALITY_SET}" ", default: " ${MUPP_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${MUPP_DEBUG_CDC} ", SWD on: " ${MUPP_DEBUG_SWD} ", RISC-V bridge: " ${MUPP_RV_BRIDGE} ", strict size: " ${MUPP_STRICT_SIZE} ", LTO: " ${MUPP_LTO} ")")
+    MESSAGE(STATUS "Building openmupp version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${MUPP_APP_IMAGES}" ", personalities: " "${MUPP_PERSONALITY_SET}" ", default: " ${MUPP_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${MUPP_DEBUG_CDC} ", SWD on: " ${MUPP_DEBUG_SWD} ", RISC-V bridge: " ${MUPP_RV_BRIDGE} ", CMSIS-DAP HID: " ${MUPP_HID} ", strict size: " ${MUPP_STRICT_SIZE} ", LTO: " ${MUPP_LTO} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program

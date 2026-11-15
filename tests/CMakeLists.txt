@@ -41,6 +41,7 @@ add_executable(mupp-tests
         TestUsbEnumeration.cpp
         TestCmsisDapDescriptors.cpp
         TestCmsisDapEnumeration.cpp
+        TestCmsisDapHid.cpp
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
@@ -97,6 +98,7 @@ add_executable(mupp-tests
         # USB device stack of libArT (no ETL needed), for the enumeration test
         ../dependencies/libArT/src/usb/Device.cpp
         ../dependencies/libArT/src/usb/VendorBulkFunction.cpp
+        ../dependencies/libArT/src/usb/HidFunction.cpp
         # CDC-ACM function of libArT, for the UART bridge test
         ../dependencies/libArT/src/usb/CdcAcmFunction.cpp
 )
@@ -143,6 +145,13 @@ mupp_personality_test(rv-bridge-multi "tag=\\[-dap\\+vsl\\] defines=.*,MUPP_CMSI
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap)
 mupp_personality_test(no-rv-bridge-multi "tag=\\[-dap\\+vsl-no-rv-bridge\\] defines=.*MUPP_DEFAULT_PERSONALITY=1\n"
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap -DMUPP_CMSIS_DAP_RV_BRIDGE=OFF)
+# The CMSIS-DAP v1 (HID) interface: a define and a tag, and only with cmsis-dap
+mupp_personality_test(hid "tag=\\[-cmsis-dap-hid\\] defines=MUPP_WITH_CMSIS_DAP,MUPP_CMSIS_DAP_HID,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_HID=ON)
+mupp_personality_test(hid-multi "tag=\\[-dap\\+vsl\\+wch-hid\\] defines=.*,MUPP_CMSIS_DAP_HID,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+        -DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link -DMUPP_CMSIS_DAP_HID=ON)
+mupp_personality_test(hid-without-cmsis-dap "MUPP_CMSIS_DAP_HID needs cmsis-dap"
+        -DMUPP_PERSONALITIES=versaloon -DMUPP_CMSIS_DAP_HID=ON)
 # Ignored without cmsis-dap
 mupp_personality_test(rv-bridge-wch-link "tag=\\[-wch-link\\] defines=MUPP_WITH_WCH_LINK\n"
         -DMUPP_PERSONALITIES=wch-link -DMUPP_CMSIS_DAP_RV_BRIDGE=ON)

@@ -44,7 +44,9 @@ static_assert(dap::outEndpoint == versaloonOutEndpoint);
 #if defined(__riscv)
 // The USBHS packet pool at high speed: the double-buffered DAP OUT endpoint,
 // the DAP IN endpoint and the CDC-ACM endpoints.
-static_assert(3 * dap::highSpeedPacketSize + cdcNotificationPacketSize + 2 * dap::highSpeedPacketSize <= hw::UsbDevice::PacketMemorySize);
+static_assert(3 * dap::highSpeedPacketSize + cdcNotificationPacketSize + 2 * dap::highSpeedPacketSize +
+              (dap::hasHid ? 2 * dap::hidReportSize : 0) <=
+              hw::UsbDevice::PacketMemorySize);
 #endif
 #endif
 #if defined(MUPP_WITH_VERSALOON)
@@ -170,6 +172,11 @@ uint8_t endpointCountOf([[maybe_unused]] Personality personality) {
       return wch::endpointCount;
    }
 #endif
+#if defined(MUPP_WITH_CMSIS_DAP)
+   if(personality == Personality::CmsisDap) {
+      return dap::endpointCountOfImage;
+   }
+#endif
    return endpointCount;
 }
 
@@ -230,6 +237,9 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
 #endif
 #if defined(MUPP_WITH_CMSIS_DAP)
    , dap_(*functions.dap)
+#if defined(MUPP_CMSIS_DAP_HID)
+   , dapHid_(*functions.dapHid)
+#endif
 #endif
 #if defined(MUPP_WITH_WCH_LINK)
    , wch_(*functions.wch)
@@ -258,6 +268,9 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
       // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
       events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
       static_cast<void>(device_.addFunction(dap_));
+#if defined(MUPP_CMSIS_DAP_HID)
+      static_cast<void>(device_.addFunction(dapHid_));
+#endif
       break;
 #endif
 #if defined(MUPP_WITH_WCH_LINK)
@@ -328,7 +341,8 @@ void UsbStack::poll() {
       // run (LEDs, key gesture, debug log). This is as before E6, where
       // the commands ran inside the event delivery. The serial service
       // still runs during the commands (protocol/Background.h).
-      while(dap_.poll()) {
+      // With the HID interface, one command of each interface per round.
+      while(pollDap()) {
          controller_.poll();
       }
    }
@@ -352,6 +366,19 @@ void UsbStack::poll() {
    }
 #endif
 }
+
+#if defined(MUPP_WITH_CMSIS_DAP)
+bool UsbStack::pollDap() {
+#if defined(MUPP_CMSIS_DAP_HID)
+   // Both, so one interface does not starve the other
+   const bool bulk = dap_.poll();
+   const bool hid = dapHid_.poll();
+   return bulk || hid;
+#else
+   return dap_.poll();
+#endif
+}
+#endif
 
 void UsbStack::disconnect() {
 #if defined(__riscv)

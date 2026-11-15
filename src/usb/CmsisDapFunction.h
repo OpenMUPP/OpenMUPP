@@ -2,8 +2,12 @@
 
 #pragma once
 
-// The CMSIS-DAP v2 interface (interface 0, bulk OUT 0x03, bulk IN 0x82).
-// Hardware-independent: the host unit tests run it on a fake controller.
+// The CMSIS-DAP interfaces: usb::CmsisDapFunction is the CMSIS-DAP v2
+// interface (interface 0, bulk OUT 0x03, bulk IN 0x82), and
+// usb::CmsisDapHidFunction the CMSIS-DAP v1 interface (HID, interrupt OUT
+// 0x05, interrupt IN 0x85, MUPP_CMSIS_DAP_HID). Both are DapFunction on
+// another libArT base, with the same data path.
+// Hardware-independent: the host unit tests run them on a fake controller.
 //
 // Each OUT packet is one command and goes to the processor
 // (cmsisdap::Processor::submit()). poll() runs one command in the main
@@ -13,13 +17,18 @@
 // the host reads one packet per response. An empty OUT packet (a ZLP) is
 // ignored.
 //
+// On HID, each packet is one report of 64 bytes at both speeds. The host
+// pads a command with zeros, and the function pads each response with
+// zeros to the report size.
+//
 // The processor holds up to Processor::packetCount packets that have no
 // response sent yet. When no slot is free, the OUT endpoint NAKs until a
 // response is sent. DAP_Info reports the same packet count to the host.
 //
-// The packet size is the wMaxPacketSize of the bulk endpoints at the bus
-// speed: 64 bytes at full speed, 512 bytes at high speed. The function
-// gives it to the processor at SET_CONFIGURATION, and DAP_Info reports it.
+// The packet size is the wMaxPacketSize of the endpoints at the bus
+// speed: on bulk 64 bytes at full speed and 512 bytes at high speed, on
+// HID 64 bytes. The function gives it to the processor at
+// SET_CONFIGURATION, and DAP_Info reports it.
 //
 // When the host closes the interface (bus reset or deconfigure), the
 // function calls Processor::hostGone(): it disconnects the target, releases
@@ -31,7 +40,10 @@
 // A DAP_QueueCommands packet in the last free slot runs the queue in the
 // processor, so queued packets alone never hold the OUT endpoint.
 
+#include <array>
 #include <cstdint>
+#include <type_traits>
+#include <usb/HidFunction.h>
 #include <usb/VendorBulkFunction.h>
 
 #include "protocol/cmsisdap/DapProcessor.h"
@@ -39,13 +51,30 @@
 
 namespace usb {
 
-class CmsisDapFunction final : public art::usb::VendorBulkFunction {
+template <typename Base>
+class DapFunction final : public Base {
    public:
+   static constexpr bool isHid = std::is_base_of_v<art::usb::HidFunction, Base>;
+
    static_assert(dap::packetSize == cmsisdap::Processor::fullSpeedPacketSize, "The USB packet carries one DAP packet");
    static_assert(dap::highSpeedPacketSize >= cmsisdap::Processor::maxPacketSize, "A DAP packet fits a USB packet");
+   static_assert(dap::hidReportSize == cmsisdap::Processor::fullSpeedPacketSize, "A HID report carries one DAP packet");
 
    // The processor must outlive the function.
-   explicit CmsisDapFunction(cmsisdap::Processor &processor);
+   explicit DapFunction(cmsisdap::Processor &processor)
+      requires(!isHid)
+      : Base(dap::dapInterface,
+             art::usb::VendorBulkEndpoints{ .out = dap::outEndpoint, .in = dap::inEndpoint, .maxPacketSize = dap::packetSize })
+      , processor_(processor) {
+   }
+
+   explicit DapFunction(cmsisdap::Processor &processor)
+      requires(isHid)
+      : Base(dap::hidInterface,
+             art::usb::VendorBulkEndpoints{ .out = dap::hidOutEndpoint, .in = dap::hidInEndpoint, .maxPacketSize = dap::hidReportSize },
+             desc::asSpan(dap::hidReportDescriptor))
+      , processor_(processor) {
+   }
 
    // Runs the next received command and sends its response. Returns false
    // when no command ran. Call it in the main loop after the USB events,
@@ -68,14 +97,26 @@ class CmsisDapFunction final : public art::usb::VendorBulkFunction {
    void resumed() override;
 
    private:
+   struct NoReport {};
+
    // Starts the IN transfer of the oldest response, if the IN endpoint is
    // free. A response that cannot be sent (not configured) is dropped.
    void sendResponse();
+   // Starts the IN transfer of one response. False when it did not start.
+   bool sendPacket(art::span<const uint8_t> response);
 
    cmsisdap::Processor &processor_;
    // Between suspended() and resumed(): poll() runs no command.
    bool suspended_{ false };
    uint32_t commandCount_{ 0 };
+   // HID: the response on its way, padded to the report size
+   [[no_unique_address]] std::conditional_t<isHid, std::array<uint8_t, dap::hidReportSize>, NoReport> report_{};
 };
+
+using CmsisDapFunction = DapFunction<art::usb::VendorBulkFunction>;
+using CmsisDapHidFunction = DapFunction<art::usb::HidFunction>;
+
+extern template class DapFunction<art::usb::VendorBulkFunction>;
+extern template class DapFunction<art::usb::HidFunction>;
 
 } // namespace usb
