@@ -41,10 +41,11 @@ class SwdPins {
    static constexpr uint32_t untimedBelowHalfCycles = 36;
    static constexpr uint32_t untimedMinPeriodCycles = 13;
    // The padded engine (pads from 1) has the bit loops: their code is in
-   // the high half, so it needs no high-half pad. Its shortest period is
-   // 16 + 2 * pad cycles (docs/clock-pacing.md).
+   // the high half, so it needs no high-half pad. Pad 1 has no extra NOPs
+   // (swd::extraNopsOfPad()). The shortest period is 14 + 2 * pad cycles:
+   // 16 cycles (9 MHz) at pad 1 (docs/clock-pacing.md).
    static constexpr uint32_t paddedHighPadNops = 0;
-   static constexpr uint32_t paddedMinPeriodCycles = 16;
+   static constexpr uint32_t paddedMinPeriodCycles = 14;
    static constexpr uint32_t padSledCycles = 8;
    // The NOPs of the sled (BoardSwd.cpp)
    static constexpr uint32_t padSledNops = 32;
@@ -159,8 +160,8 @@ class SwdPins {
 };
 
 #if defined(__riscv)
-// The largest pad needs pad - padSledCycles NOPs of the sled.
-static_assert(swd::untimedPadCount<SwdPins>() - 1 - SwdPins::padSledCycles <= SwdPins::padSledNops);
+// The largest pad needs its extra NOPs - padSledCycles NOPs of the sled.
+static_assert(swd::extraNopsOfPad<SwdPins>(swd::untimedPadCount<SwdPins>() - 1) - SwdPins::padSledCycles <= SwdPins::padSledNops);
 #endif
 
 using BoardSwd = swd::BitBangPort<SwdPins>;
