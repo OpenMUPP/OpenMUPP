@@ -193,9 +193,11 @@ if (CMAKE_CROSSCOMPILING)
     set(_mupp_dropped_files ${MUPP_PERSONALITY_DROPPED_SOURCES})
     # The settings page: the stored personality of a multi image and the
     # stored mode of the RISC-V bridge. Only in a multi image and in an image
-    # with the bridge. It is at the end of the application area: one 1 KB
-    # flash page on the STM32F103, one 8 KB flash sector on the STM32H5, one
-    # 256-byte fast erase page on the CH32V30x.
+    # with the bridge. On STM32 it is at the end of the application area: one
+    # 1 KB flash page on the STM32F103, one 8 KB flash sector on the STM32H5.
+    # MUPP_SETTINGS_PAGE_SIZE is the flash that the page takes from the
+    # images. On the CH32V30x the page is one 256-byte fast erase page at the
+    # end of the non-zero-wait flash, outside the area of the images: 0.
     if (MUPP_PERSONALITY_COUNT GREATER 1 OR MUPP_RV_BRIDGE)
         set(_mupp_settings ON)
     else ()
@@ -206,7 +208,11 @@ if (CMAKE_CROSSCOMPILING)
     elseif (_mupp_settings AND STM32_FAMILY STREQUAL "STM32H5")
         set(MUPP_SETTINGS_PAGE_SIZE 8192)
     elseif (_mupp_settings AND CH32_FAMILY STREQUAL "CH32V30X")
-        set(MUPP_SETTINGS_PAGE_SIZE 256)
+        if (NOT DEFINED MUPP_FLASH_TOTAL_${BOARD})
+            message(FATAL_ERROR "Board ${BOARD}: set MUPP_FLASH_TOTAL_${BOARD} in cmake/Boards.cmake")
+        endif ()
+        set(MUPP_SETTINGS_PAGE_SIZE 0)
+        math(EXPR _mupp_settings_start "0x08000000 + ${MUPP_FLASH_TOTAL_${BOARD}} - 256" OUTPUT_FORMAT HEXADECIMAL)
     elseif (_mupp_settings)
         message(FATAL_ERROR "Board ${BOARD}: a multi image or the RISC-V bridge (MUPP_PERSONALITIES=${MUPP_PERSONALITY_SET}) needs a settings page, which the ${STM32_FAMILY} does not have.")
     else ()
@@ -269,15 +275,15 @@ if (CMAKE_CROSSCOMPILING)
     # __flash_offset and __flash_length, and on STM32 the memory script
     # (mupp_add_app_image): the app-32k image uses the script of a larger part.
     if (MUPP_MCU_VENDOR STREQUAL "CH32")
-        # The scripts of ch32v00x-system (no flash offset yet). They do not
-        # reserve the settings page: the FLASH region is the full flash, and
-        # only the size check (cmake/ImageSize.cmake) keeps an image out of
-        # the page. Move the page into the memory script when it gets the
-        # __flash_reserved_end parameter of system-stm32.
-        math(EXPR _mupp_settings_start "0x08000000 + ${MUPP_FLASH_SIZE} - ${MUPP_SETTINGS_PAGE_SIZE}" OUTPUT_FORMAT HEXADECIMAL)
+        # The scripts of ch32v00x-system (no flash offset yet). The settings
+        # page is behind their FLASH region (the zero-wait area), so the link
+        # only gets its address.
+        if (DEFINED _mupp_settings_start)
+            set(_mupp_settings_symbol -Wl,--defsym=__flash_reserved_start=${_mupp_settings_start})
+        endif ()
         set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/ch32v00x-system/ldscripts)
         set(MUPP_LIBS_LD "")
-        set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} -Wl,--defsym=__flash_reserved_start=${_mupp_settings_start} -T${MUPP_LDSCRIPT} -Tsections.ld -Tnoheap.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
+        set(LINKER_OPTIONS -Wl,-gc-sections -Wl,--no-warn-rwx-segments -L${MUPP_LDSCRIPT_DIR} ${_mupp_settings_symbol} -T${MUPP_LDSCRIPT} -Tsections.ld -Tnoheap.ld -nostartfiles --specs=nano.specs --specs=nosys.specs ${COMMON_OPTIONS})
     else ()
         set(MUPP_LDSCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/system-stm32/ldscripts)
         set(MUPP_LIBS_LD "${MUPP_LDSCRIPT_DIR}/libs.ld")

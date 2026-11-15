@@ -11,7 +11,10 @@
 // sector of bank 2 (system-stm32 mem-H523xC.ld). Each log slot
 // is one 128-bit flash word (personality/FlashWordSlot.h).
 // CH32V30x: the page is the 256-byte fast erase page at __flash_reserved_start,
-// the last page of the 256 KB code flash (CMakeLists.txt). An erased
+// the last page of the 480 KB flash (CMakeLists.txt). It is in the
+// non-zero-wait area, behind the zero-wait area of the image, so a change of
+// the memory split in the option bytes does not move the image over it. The
+// erase code must be in the zero-wait area (RM 32.2.1): the image is. An erased
 // half-word reads 0xE339, not 0xFFFF: the driver maps it (RM 32.5.7).
 // The linker script keeps the page out of the FLASH region of the image.
 // stm32flash erases only the pages of the image, so a firmware update

@@ -437,7 +437,7 @@ The CMake option `MUPP_CMSIS_DAP_RV_BRIDGE` (default `ON`) adds the bridge to th
 Each image with `cmsis-dap` has the bridge, also a multi image, for example `versaloon,cmsis-dap,wch-link`.
 In a multi image, only the active personality sets up the pins and the timer of the wire engine. A personality switch resets the MCU.
 An image without `cmsis-dap` ignores the option.
-An image with the bridge has the settings page, also an image with one personality: 1 KB less flash on the STM32F103, 8 KB less on the STM32H5, 256 bytes less on the CH32V307 (see [Stored mode](#stored-mode)).
+An image with the bridge has the settings page, also an image with one personality: 1 KB less flash on the STM32F103, 8 KB less on the STM32H5. On the CH32V307 the page is outside the flash of the image (see [Stored mode](#stored-mode)).
 The STM32H5 boards also build the bridge. The bridge is not tested on them.
 The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `openmupp-mini-cmsis-dap-no-rv-bridge-app-8k-Release-<version>.bin`.
 The `cmsis-dap` and `dual` presets build the bridge:
