@@ -233,7 +233,8 @@ if (CMAKE_CROSSCOMPILING)
     # engine of WCH-Link on the timers and DMA1. STM32H5 only: the entry into
     # the ROM bootloader, the JTAG fast path on SPI v2 and GPDMA, and the
     # one-wire engine on TIM3 and GPDMA. CH32V30X only: the JTAG fast path
-    # on SPI2, SPI3, DMA1 and DMA2, and the one-wire engine on TIM10 and DMA2.
+    # on SPI2, SPI3, DMA1 and DMA2, the one-wire engine on TIM10 and DMA2,
+    # and the AVR ISP engine on SPI2.
     if (NOT STM32_FAMILY STREQUAL "STM32F1")
         list(APPEND _mupp_dropped_files "src/boot/Bootloader\\.cpp" "src/board/BoardJtagFast\\.cpp" "src/board/BoardRvSwd\\.cpp")
     endif ()
@@ -241,7 +242,8 @@ if (CMAKE_CROSSCOMPILING)
         list(APPEND _mupp_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp" "src/board/BoardRvSwdH5\\.cpp")
     endif ()
     if (NOT CH32_FAMILY STREQUAL "CH32V30X")
-        list(APPEND _mupp_dropped_files "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp")
+        list(APPEND _mupp_dropped_files "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp"
+                "src/board/BoardIspV30x\\.cpp")
     endif ()
     foreach (_file ${_mupp_dropped_files})
         list(FILTER MUPP_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
@@ -341,13 +343,14 @@ if (CMAKE_CROSSCOMPILING)
     set(MUPP_SHARED_SOURCES ${MUPP_FIRMWARE_SOURCES})
     list(FILTER MUPP_SHARED_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
     add_library(openmupp-objects OBJECT ${MUPP_SHARED_SOURCES})
-    # The JTAG, SWD and RISC-V debug wire engines are instantiated in these
-    # files (see board/BoardJtag.h, board/BoardSwd.h and board/BoardRvSwd.h).
+    # The JTAG, SWD, RISC-V debug wire and AVR ISP engines are instantiated
+    # in these files (see board/BoardJtag.h, board/BoardSwd.h,
+    # board/BoardRvSwd.h and board/BoardIsp.h).
     # They use -O2 instead of -Os. It comes after the -Os of
     # COMMON_OPTIONS, so it wins.
     set_source_files_properties(src/board/BoardJtag.cpp src/board/BoardJtagFast.cpp src/board/BoardJtagFastH5.cpp
             src/board/BoardJtagFastV30x.cpp src/board/BoardSwd.cpp src/board/BoardRvSwd.cpp src/board/BoardRvSwdH5.cpp
-            src/board/BoardRvSwdV30x.cpp PROPERTIES COMPILE_OPTIONS -O2)
+            src/board/BoardRvSwdV30x.cpp src/board/BoardIspV30x.cpp PROPERTIES COMPILE_OPTIONS -O2)
     # Apply unified build configuration
     target_link_libraries(openmupp-objects PUBLIC art-build-config art::core ${MUPP_VENDOR_LIBS})
     target_include_directories(openmupp-objects PUBLIC ${PROJECT_INCLUDE_DIRS})
