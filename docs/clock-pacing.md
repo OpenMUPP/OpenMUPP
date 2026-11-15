@@ -96,7 +96,7 @@ The design does not use these options:
   When `delay` 0 was untimed on the CH32V307, it gave 4.87 MHz, and a read of 32 KiB took 0.251 s.
   In CMSIS-DAP on the STM32 boards, the engine runs untimed only from `swd::maxClockHz` (3 MHz).
   The value is above the untimed rate. Thus the untimed engine is not faster than the request (median).
-  On the CH32V307, a CMSIS-DAP request above 2 MHz runs untimed with NOP pads: 2.08 to 9.6 MHz (median), at most 5 % faster than the request (see [CH32V307 padded untimed engine](#ch32v307-padded-untimed-engine)).
+  On the CH32V307, a CMSIS-DAP request above 2 MHz runs untimed with NOP pads: about 2.0 to 9.6 MHz (median), near the request and at most 5 % faster (see [CH32V307 padded untimed engine](#ch32v307-padded-untimed-engine)).
   Only a slow core uses the untimed engine (`swd::runsUntimed()`): on the STM32H5, it gave 13 MHz, so the H5 is timed at all clocks.
 - At 1 MHz, the JTAG engine makes one longer half period at each byte (the code of the next byte is longer than 36 cycles).
   The median period is correct, the mean rate is 92 % of the request.
