@@ -28,7 +28,8 @@
 // code of an older, larger image): a store erases it first. Limit: in such
 // a page, the word before the first erased slot can be a record by chance
 // (12 of 65536 values). The image then starts with those settings until
-// the next store.
+// the next store. When a write to a slot that reads as erased fails, the
+// store erases the page and writes slot 0.
 
 #include <array>
 #include <cstddef>
@@ -135,7 +136,16 @@ class PersonalityStore {
          }
          next = 0;
       }
-      return page_.program(next, recordOf(settings)) && loadSettings() == settings;
+      if(page_.program(next, recordOf(settings)) && loadSettings() == settings) {
+         return true;
+      }
+      // A slot that reads as erased but does not take the write: on the
+      // CH32V30x, a cut write can read as erased. Without this, each later
+      // store fails at that slot until a mass erase.
+      if(next == 0 || !page_.erase()) {
+         return false;
+      }
+      return page_.program(0, recordOf(settings)) && loadSettings() == settings;
    }
 
    // Stores the personality with the stored bridge mode, auto when the

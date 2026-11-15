@@ -28,6 +28,10 @@ The `app-32k` image uses the script of a part with 128 KB flash or more, `mem-F1
 CMake gives each image the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
 The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
 For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
+The CH32 boards use the memory linker scripts of ch32v00x-system. They do not have these parameters.
+The FLASH region of the link is the zero-wait area.
+The settings page is the last page of the full flash (`MUPP_FLASH_TOTAL_<board>` in `cmake/Boards.cmake`), behind that region.
+CMake gives its address with `-Wl,--defsym=__flash_reserved_start=<address>`.
 
 For the STM32F1 boards (`MUPP_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `openmupp-bootloader` for the same board.
 The target is `openmupp-bootloader`.
@@ -222,6 +226,8 @@ The jobs:
   The job reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`.
 - `build-ydch32v307-cmsis-dap`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap` preset, plus the size check.
   This build finds CH32 build errors in the shared code. This job keeps no artifacts.
+- `build-ydch32v307-multi`: a `parallel:matrix` job for the multi images of the YD-CH32V307VCT6 board with the `ydch32v307-dual` and `ydch32v307-all` presets, plus the size check.
+  The limit is the full zero-wait area, because the settings page is in the non-zero-wait area. These jobs keep no artifacts.
 - `build-ydch32v307-wch-link`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-wch-link` preset, plus the size check.
   It is the CH32 image that links the one-wire engine. This job keeps no artifacts.
 

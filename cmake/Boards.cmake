@@ -38,6 +38,11 @@ set(MUPP_BOARD_stlinkv21   STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
 set(MUPP_BOARD_stlinkv2miniclone STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
 set(MUPP_BOARD_weacth523   STM32H5 STM32H523xx 8000000  mem-H523xC.ld 262144)
 set(MUPP_BOARD_ydch32v307  CH32V30X CH32V30x_D8C 8000000 mem-ch32v307.ld 262144)
+# The full flash of the CH32 boards. The flash column above is the
+# zero-wait area that the image links into (the default memory split of the
+# option bytes, 256 KB code + 64 KB RAM). The settings page is the last page
+# of the full flash, in the non-zero-wait area (CMakeLists.txt).
+set(MUPP_FLASH_TOTAL_ydch32v307 491520)
 # Boards that openmupp-bootloader supports (cmake/Bootloader.cmake)
 set(MUPP_BOOTLOADER_BOARDS mini otheruse stlinkv21 stlinkv2miniclone)
 # Boards that also ship with the 32 KB Versaloon bootloader: the newer
