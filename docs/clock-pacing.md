@@ -417,7 +417,7 @@ The STM32 boards use 6 NOPs in each half (`swd::untimedPadNops`).
 On the CH32V307, `board::SwdPins` sets the low-half pad to 0.
 The high-half pad was also 0 until the unrolled bits (see [CH32V307 unrolled bits](#ch32v307-unrolled-bits)):
 
-- At the time of this measurement, the untimed engine ran only for CMSIS-DAP requests from `swd::maxClockHz`. Thus its rate was not limited. Now these NOP pads are the pads of pad 0 of the [padded untimed engine](#ch32v307-padded-untimed-engine), and the higher pads add NOPs to them.
+- At the time of this measurement, the untimed engine ran only for CMSIS-DAP requests from `swd::maxClockHz`. Thus its rate was not limited. Now these NOP pads are the pads of pad 0 of the [padded untimed engine](#ch32v307-padded-untimed-engine), and the higher pads add NOPs to them. The higher pads have no high-half pad (`paddedHighPadNops`), because their bit loops put code in the high half.
 - The low-half pad gives the SWDIO setup time before the rising edge of SWCLK. Without it, the setup time is 18 ns at minimum.
 - The target drives SWDIO after the rising edge. Without a low-half pad, the host reads SWDIO directly after the falling edge.
   Thus the target had about one high half period to drive SWDIO: 70 ns at minimum with the loop code. With 6 NOPs in each half, it had more than 104 ns.
@@ -443,7 +443,8 @@ Findings:
 ## CH32V307 unrolled bits
 
 On the CH32V307, `board::SwdPins` sets `unrolledBits` (`swd::unrolledBits()`).
-The untimed engine then unrolls the request (8 bits), the ACK (3 bits) and the data (32 bits).
+The untimed engine without extra NOPs (pad 0) then unrolls the request (8 bits), the ACK (3 bits) and the data (32 bits).
+The padded engine keeps the loops (see [CH32V307 padded untimed engine](#ch32v307-padded-untimed-engine)).
 Each bit has no loop code, and its bit position is a constant.
 A read bit is SWCLK low, the load from `INDR`, SWCLK high, and 2 to 4 instructions that add the bit to the value.
 These instructions and the NOPs of the high-half pad are in the high half period: an empty `asm` statement keeps the instructions there.
@@ -543,52 +544,64 @@ The untimed engine does not read the cycle counter, and it does not catch up aft
 Thus an interrupt only makes a period longer.
 The rate comes from the instructions of each half period, and each NOP is one core cycle.
 
-- The shortest untimed period without extra NOPs is 13 cycles at 144 MHz (90 ns, `untimedMinPeriodCycles` in `board::SwdPins`).
-- `swd::untimedPadFor()` gives the pad: the smallest count of NOPs in each half period, so that 13 + 2 × pad cycles is not shorter than the period of the request.
-- Pads 0 to 9 have their own instance of the unrolled engine code.
-- Pads from 10 use one instance with a NOP sled (`SwdPins::padSled()`): a jump into a row of NOPs before a return.
-  The jump and the return add 10 cycles to a half period (`padSledCycles`), so this instance runs pad − 10 NOPs of the sled.
+- Pad 0 is the untimed engine without extra NOPs, with the [unrolled bits](#ch32v307-unrolled-bits).
+  Its shortest period is 13 cycles at 144 MHz (90 ns, `untimedMinPeriodCycles` in `board::SwdPins`).
+- The padded engine (pads from 1) keeps the bit loops, so each instance is small: 0.8 to 1.1 KB.
+  An unrolled instance was 2.6 to 5.2 KB, and it grew by 330 bytes for each pad.
+  The loop code is in the high half period, so the padded engine has no high-half pad (`paddedHighPadNops`).
+  Its shortest period is 16 + 2 × pad cycles (`paddedMinPeriodCycles`). Pad 1 is 18 cycles (8 MHz).
+- `swd::untimedPadFor()` gives the pad: pad 0 when 13 cycles is not shorter than the period of the request.
+  Else the smallest pad from 1, so that 16 + 2 × pad cycles is not shorter than the period of the request.
+- Pads 1 to 7 have their own instance of the engine code.
+- Pads from 8 use one instance with a NOP sled (`SwdPins::padSled()`): a jump into a row of NOPs before a return.
+  The jump and the return add 8 cycles to a half period (`padSledCycles`), so this instance runs pad − 8 NOPs of the sled.
+  The measured period of the sled is 1 cycle longer than the model: the jump costs 8.5 cycles in each half period (mean).
 - A request with a half period of 36 cycles or more (2 MHz or less) stays timed (`untimedBelowHalfCycles`).
   Near its code limit, the timed engine makes single periods up to 11 % short: at 2618 kHz, the shortest period was 340 ns, and the request is 382 ns.
-- The image is 88 KB, 45 KB more than before: 10 instances of the transfer and of the sequences.
+- The image is 55 KB, 12 KB more than before the padded engine. With an unrolled instance for each pad, it was 88 KB.
 - `swd::maxClockHz` is now 3 MHz on all boards. The CH32V307 does not use it.
 
-The values 13 and 10 come from the wire.
+The values 13, 16 and 8 come from the wire.
 Measure again after a change of the engine code, the compiler or the core clock.
 The model must give the shortest period of each row of the table below.
 
 Measured on 2026-11-15 with the setup of [PCLK2 at 144 MHz](#pclk2-at-144-mhz).
 Reads: two reads of 32 KiB of SRAM in each session.
-"Model" is the shortest period of the pad: (13 + 2 × pad) cycles.
+"Model" is the shortest period of the pad: 13 cycles at pad 0, else (16 + 2 × pad) cycles.
 The analyzer has a resolution of 2 ns.
 
 | Request | Engine | Model | Shortest period | Median rate | Mean rate | Read 32 KiB |
 |---|---|---|---|---|---|---|
-| 250 kHz | timed | - | 3874 ns | 249.5 kHz | 249.9 kHz | 1.584 s |
-| 1000 kHz | timed | - | 970 ns | 1014.2 kHz | 999.0 kHz | 0.426 s |
-| 2000 kHz | timed | - | 450 ns | 2000.0 kHz | 1998.6 kHz | 0.234 s |
-| 2100 kHz | pad 28 (sled 18) | 479.2 ns | 478 ns | 2024.3 kHz | 2010.5 kHz | 0.232 s |
-| 2500 kHz | pad 23 (sled 13) | 409.7 ns | 408 ns | 2358.5 kHz | 2336.9 kHz | 0.205 s |
-| 3000 kHz | pad 18 (sled 8) | 340.3 ns | 340 ns | 2824.9 kHz | 2789.6 kHz | 0.178 s |
-| 4000 kHz | pad 12 (sled 2) | 256.9 ns | 256 ns | 3676.5 kHz | 3661.4 kHz | 0.146 s |
-| 4500 kHz | pad 10 (sled 0) | 229.2 ns | 228 ns | 4098.4 kHz | 4076.2 kHz | 0.135 s |
-| 5000 kHz | pad 8 | 201.4 ns | 200 ns | 4672.9 kHz | 4705.2 kHz | 0.124 s |
-| 6000 kHz | pad 6 | 173.6 ns | 172 ns | 5376.3 kHz | 5412.6 kHz | 0.113 s |
-| 8000 kHz | pad 3 | 131.9 ns | 130 ns | 6849.3 kHz | 6996.5 kHz | 0.097 s |
-| 10000 kHz | pad 1 | 104.2 ns | 104 ns | 8474.6 kHz | 8684.1 kHz | 0.086 s |
-| 12000 kHz | pad 0 | 90.3 ns | 90 ns | 9615.4 kHz | 9874.8 kHz | 0.081 s |
-| 20000 kHz | pad 0 | 90.3 ns | 90 ns | 9615.4 kHz | 9874.8 kHz | 0.082 s |
+| 250 kHz | timed | - | 3882 ns | 249.6 kHz | 249.9 kHz | 1.584 s |
+| 1000 kHz | timed | - | 964 ns | 1000.0 kHz | 999.3 kHz | 0.426 s |
+| 2000 kHz | timed | - | 470 ns | 2049.2 kHz | 1996.7 kHz | 0.235 s |
+| 2100 kHz | pad 27 (sled 19) | 486.1 ns | 492 ns | 2024.3 kHz | 2007.8 kHz | 0.233 s |
+| 2500 kHz | pad 21 (sled 13) | 402.8 ns | 408 ns | 2439.0 kHz | 2411.2 kHz | 0.201 s |
+| 3000 kHz | pad 16 (sled 8) | 333.3 ns | 338 ns | 2941.2 kHz | 2896.1 kHz | 0.174 s |
+| 4000 kHz | pad 10 (sled 2) | 250.0 ns | 256 ns | 3876.0 kHz | 3817.9 kHz | 0.143 s |
+| 4500 kHz | pad 8 (sled 0) | 222.2 ns | 228 ns | 4347.8 kHz | 4270.9 kHz | 0.131 s |
+| 5000 kHz | pad 7 | 208.3 ns | 206 ns | 4807.7 kHz | 4767.0 kHz | 0.125 s |
+| 6000 kHz | pad 4 | 166.7 ns | 166 ns | 6024.1 kHz | 5948.5 kHz | 0.108 s |
+| 8000 kHz | pad 1 | 125.0 ns | 124 ns | 7936.5 kHz | 7908.5 kHz | 0.092 s |
+| 10000 kHz | pad 1 | 125.0 ns | 124 ns | 7936.5 kHz | 7908.4 kHz | 0.093 s |
+| 12000 kHz | pad 0 | 90.3 ns | 90 ns | 9615.4 kHz | 9874.9 kHz | 0.082 s |
+| 20000 kHz | pad 0 | 90.3 ns | 90 ns | 9615.4 kHz | 9874.9 kHz | 0.081 s |
 
 The mean rate is the mean of all periods below 1.3 times the longer of the request period and the median period.
 
 Findings:
 
-- All reads were correct. Writes of 32 KiB of random data (`load_image`, `verify_image` and a read) at 1000, 2100, 3000, 4000, 6000, 8000, 9000, 12000 and 20000 kHz were correct.
-- In each padded row, the shortest period is not shorter than the request period. The median is 1 to 2 cycles longer than the shortest period, because the bits have different code.
-- At 4000 kHz, a read of 32 KiB takes 0.146 s. The timed engine took 0.173 s (3.27 MHz, median).
-- SWDIO setup time before the rising edge of SWCLK, shortest: 130 ns at 3000 kHz, 60 ns at 6000 kHz, 18 ns at pad 0 (the same as before). No SWDIO change was in the same sample as a rising edge.
-- With USB traffic (a data stream into the CDC port, UART bridge at 2 Mbaud) at 2100, 3000, 4000, 6000, 9000 and 12000 kHz, the shortest periods did not change, and no period was more than 5 % shorter than the request. The reads took about twice as long ([#33](https://github.com/OpenMUPP/OpenMUPP/issues/33)).
-- At 2000 kHz, the timed engine gives single periods of 450 ns (10 % short): 10 of 776805 periods. These are the jitter of the wait loop (see [Late edges](#late-edges)).
+- All reads were correct. Writes of 32 KiB of random data (`load_image`, `verify_image` and a read) at 3000, 6000, 10000 and 12000 kHz were correct.
+- In each padded row, the shortest period is not shorter than the request period. In the padded engine, all bits have the same loop code, so the median is the shortest period or 1 cycle more.
+  Thus the median rate is 0.5 to 5 % below the request. With the unrolled padded instances, it was 4 to 15 % below the request.
+- In the pads 1 to 7, the shortest period agrees with the model to the resolution of the analyzer. In the sled pads, it is 1 cycle longer than the model.
+- The requests from 8 MHz to 11.07 MHz give pad 1 (7.94 MHz). Pad 0 (13 cycles) would be faster than the request.
+- SWDIO setup time before the rising edge of SWCLK, shortest: 130 ns at 3000 kHz, 46 ns at 6000 kHz, 26 ns at pad 1, 18 ns at pad 0 (the same as before). No SWDIO change was in the same sample as a rising edge.
+- The time for the target to drive SWDIO (the high half period): 70 ns at minimum at pad 1, 48 ns at pad 0.
+- With USB traffic (a data stream into the CDC port, UART bridge at 2 Mbaud) at 3000, 6000 and 10000 kHz, the shortest periods did not change, and no period was more than 5 % shorter than the request. The reads took about twice as long ([#33](https://github.com/OpenMUPP/OpenMUPP/issues/33)).
+- Near its code limit, the timed engine makes short periods, and their count depends on the code layout (see [Late edges](#late-edges)).
+  At 2000 kHz, 2.2 % of the periods were more than 5 % short (470 ns at minimum), and the mean rate was 1996.7 kHz.
+  With the image of the unrolled padded instances, 44 of 776805 periods were short at 2000 kHz, and 0.95 % at 1900 kHz.
 - The STM32 code of the engine did not change: the disassembly of the SWD functions of the `mini-dual` and `weacth523-cmsis-dap` images is the same.
 
 Two changes of the timed engine did not give a gain on the CH32V307. The firmware does not have them:

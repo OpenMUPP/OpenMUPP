@@ -1010,7 +1010,9 @@ struct PaddedPins : MockSwdPins {
    static constexpr bool unrolledBits = true;
    static constexpr uint32_t untimedBelowHalfCycles = 36;
    static constexpr uint32_t untimedMinPeriodCycles = 13;
-   static constexpr uint32_t padSledCycles = 10;
+   static constexpr uint32_t paddedHighPadNops = 0;
+   static constexpr uint32_t paddedMinPeriodCycles = 16;
+   static constexpr uint32_t padSledCycles = 8;
    void setPadSled(uint32_t nopCount) {
       sledNops = nopCount;
    }
@@ -1025,24 +1027,32 @@ struct PaddedPins : MockSwdPins {
 TEST_CASE("SWD bit-bang: the untimed pad makes the shortest period not shorter than the request") {
    static_assert(swd::untimedPadCount<MockSwdPins>() == 1);
    static_assert(swd::untimedPadInstances<MockSwdPins>() == 1);
-   // Half periods up to 35 cycles: periods up to 70 cycles, pads 0 to 29
-   static_assert(swd::untimedPadCount<PaddedPins>() == 30);
-   static_assert(swd::untimedPadInstances<PaddedPins>() == 10);
+   static_assert(swd::paddedMinPeriodCycles<MockSwdPins>() == 0);
+   static_assert(swd::paddedHighPadNops<MockSwdPins>() == swd::untimedPadNops);
+   static_assert(swd::paddedHighPadNops<PaddedPins>() == 0);
+   // Half periods up to 35 cycles: periods up to 70 cycles, pads 0 to 27
+   static_assert(swd::untimedPadCount<PaddedPins>() == 28);
+   static_assert(swd::untimedPadInstances<PaddedPins>() == 8);
    // From the first request with a half period below 36 cycles
    for(uint32_t hz = 2'057'143; hz <= 20'000'000; hz += 997) {
       CAPTURE(hz);
       REQUIRE(swd::halfPeriodCyclesOfHz(144'000'000, hz) < 36);
       const uint32_t pad = swd::untimedPadFor<PaddedPins>(144'000'000, hz);
-      const uint32_t period = 13 + 2 * pad;
+      // Pad 0: 13 cycles. The padded engine: 16 + 2 * pad cycles.
+      const uint32_t period = pad == 0 ? 13 : 16 + 2 * pad;
       // Not faster than hz, and the next smaller pad is faster
       REQUIRE(144e6 / period <= hz);
       if(pad != 0) {
-         REQUIRE(144e6 / (period - 2) > hz);
+         REQUIRE(144e6 / (pad == 1 ? 13 : period - 2) > hz);
       }
    }
    CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 20'000'000) == 0);
-   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 9'600'000) == 1);
-   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 2'057'143) == 29);
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 11'076'924) == 0);
+   // 14 cycles: longer than pad 0, and pad 1 (18 cycles) is the next
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 10'285'715) == 1);
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 8'000'000) == 1);
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 7'999'999) == 2);
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 2'057'143) == 27);
 }
 
 TEST_CASE("SWD bit-bang: Pins::untimedMinPeriodCycles runs the fast requests untimed with pads") {
@@ -1061,8 +1071,8 @@ TEST_CASE("SWD bit-bang: Pins::untimedMinPeriodCycles runs the fast requests unt
       uint32_t pad;
       bool sled;
    };
-   for(const Case c : { Case{ 20'000'000, 0, false }, Case{ 9'000'000, 2, false }, Case{ 7'578'000, 4, false },
-                        Case{ 4'800'000, 9, false }, Case{ 4'500'000, 10, true }, Case{ 2'100'000, 28, true } }) {
+   for(const Case c : { Case{ 20'000'000, 0, false }, Case{ 9'000'000, 1, false }, Case{ 7'578'000, 2, false },
+                        Case{ 4'800'000, 7, false }, Case{ 4'500'000, 8, true }, Case{ 2'100'000, 27, true } }) {
       CAPTURE(c.hz);
       port.setClockHz(c.hz);
       CHECK_FALSE(port.isTimed());
@@ -1083,7 +1093,7 @@ TEST_CASE("SWD bit-bang: Pins::untimedMinPeriodCycles runs the fast requests unt
       const std::vector<uint8_t> bits{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
       port.sequenceOut(64, bits);
       if(c.sled) {
-         CHECK(pins.sledNops == c.pad - 10);
+         CHECK(pins.sledNops == c.pad - 8);
          // One sled run in each half period
          CHECK(pins.sledRuns == 2 * (pins.risingEdges.size() - edges));
       } else {
