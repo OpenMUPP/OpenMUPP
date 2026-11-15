@@ -28,7 +28,7 @@
 // the NOP pads of the untimed engine (default untimedPadNops, see
 // untimedPadNopsOf()).
 // static constexpr bool unrolledBits = true unrolls the fixed-length bit
-// loops of the untimed engine without extra NOPs (see unrolledBits()).
+// loops of pad 0 of the untimed engine (see unrolledBits()).
 //
 // SWCLK is high between bits. One bit (ADIv5, B4.2):
 //
@@ -287,8 +287,8 @@ constexpr uint32_t paddedHighPadNops() {
    }
 }
 
-// True when Pins::unrolledBits is true: the untimed engine without extra
-// NOPs (pad 0) then unrolls the request (8 bits), the ACK (3 bits) and the
+// True when Pins::unrolledBits is true: pad 0 of the untimed engine then
+// unrolls the request (8 bits), the ACK (3 bits) and the
 // data (32 bits). This removes the loop code from each bit, and the bit
 // position is a constant. The code is about 1.5 KB larger, so only a board
 // with free flash sets it. The padded engine (pads from 1) keeps the
@@ -302,9 +302,17 @@ constexpr bool unrolledBits() {
    }
 }
 
+// The extra NOPs of a pad in each half period. With unrolledBits(), pad 1
+// is the looped engine without extra NOPs, so pad p has p - 1. Else pad p
+// has p.
+template <typename Pins>
+constexpr uint32_t extraNopsOfPad(uint32_t pad) {
+   return unrolledBits<Pins>() && pad != 0 ? pad - 1 : pad;
+}
+
 // The pace of an operation: timedPace for the timed engine, sledPace for
 // the untimed engine with the NOP sled of the pins (Pins::padSled()), else
-// the extra NOPs of the untimed engine in each half period.
+// the pad of the untimed engine (extra NOPs: extraNopsOfPad()).
 inline constexpr uint32_t timedPace = UINT32_MAX;
 inline constexpr uint32_t sledPace = UINT32_MAX - 1;
 
@@ -366,8 +374,8 @@ constexpr uint32_t untimedPeriodOfPad(uint32_t pad) {
    return pad == 0 ? untimedMinPeriodCycles<Pins>() : paddedMinPeriodCycles<Pins>() + 2 * pad;
 }
 
-// The extra NOPs in each half period: the pad whose shortest period is
-// nearest to the period of hz, and at most untimedFastPercent shorter.
+// The pad (extra NOPs: extraNopsOfPad()) whose shortest period is nearest
+// to the period of hz, and at most untimedFastPercent shorter.
 template <typename Pins>
 constexpr uint32_t untimedPadFor(uint32_t coreHz, uint32_t hz) {
    constexpr uint32_t minPeriod = paddedMinPeriodCycles<Pins>();
@@ -395,9 +403,10 @@ constexpr uint32_t untimedPadFor(uint32_t coreHz, uint32_t hz) {
 }
 
 // Pins::padSledCycles: the cycles of a jump into the NOP sled of the pins
-// with 0 NOPs (Pins::setPadSled(), Pins::padSled()). A pad from this value
-// runs in one instance with the sled; the smaller pads have one instance
-// each. 0: no sled, one instance for each pad.
+// with 0 NOPs (Pins::setPadSled(), Pins::padSled()). A pad with this count
+// of extra NOPs or more (extraNopsOfPad()) runs in one instance with the
+// sled; the smaller pads have one instance each. 0: no sled, one instance
+// for each pad.
 template <typename Pins>
 constexpr uint32_t padSledCycles() {
    if constexpr(requires { Pins::padSledCycles; }) {
@@ -411,7 +420,9 @@ constexpr uint32_t padSledCycles() {
 template <typename Pins>
 constexpr uint32_t untimedPadInstances() {
    constexpr uint32_t sled = padSledCycles<Pins>();
-   return sled != 0 && sled < untimedPadCount<Pins>() ? sled : untimedPadCount<Pins>();
+   // The first pad with sled extra NOPs
+   constexpr uint32_t first = unrolledBits<Pins>() ? sled + 1 : sled;
+   return sled != 0 && first < untimedPadCount<Pins>() ? first : untimedPadCount<Pins>();
 }
 
 // Count NOP instructions in asm statements of up to 6 lines. Literal lines,
@@ -559,15 +570,16 @@ class BitBangPort final : public protocol::SwdPort {
       return timed_;
    }
 
-   // The extra NOPs of the untimed engine in each half period (see
-   // setClockHz())
+   // The pad of the untimed engine (see setClockHz()). Its extra NOPs in
+   // each half period: extraNopsOfPad().
    [[nodiscard]] uint32_t untimedPad() const {
       return pad_;
    }
 
    private:
    // Pace timedPace: wait for each half period. Else untimed: no wait, no
-   // read of the cycle counter, and Pace more NOPs in each half period.
+   // read of the cycle counter, and extraNopsOfPad(Pace) more NOPs in each
+   // half period.
    template <uint32_t Pace>
    void sequenceOut(uint16_t bitCount, art::span<const uint8_t> data) {
       if(bitCount == 0) {
@@ -638,7 +650,7 @@ class BitBangPort final : public protocol::SwdPort {
       }
       if constexpr(untimedPadInstances<Pins>() < untimedPadCount<Pins>()) {
          if(pad_ >= untimedPadInstances<Pins>()) {
-            pins_.setPadSled(pad_ - padSledCycles<Pins>());
+            pins_.setPadSled(extraNopsOfPad<Pins>(pad_) - padSledCycles<Pins>());
             return fn.template operator()<sledPace>();
          }
       }
@@ -730,7 +742,7 @@ class BitBangPort final : public protocol::SwdPort {
             nops<base>();
             pins_.padSled();
          } else {
-            nops<base + Pace>();
+            nops<base + extraNopsOfPad<Pins>(Pace)>();
          }
       }
    }
@@ -838,7 +850,7 @@ class BitBangPort final : public protocol::SwdPort {
    RetryStop *stop_{ nullptr };
    uint32_t halfCycles_{ 0 };
    bool timed_{ true };
-   // The extra NOPs of the untimed engine in each half period
+   // The pad of the untimed engine (untimedPadFor())
    uint32_t pad_{ 0 };
 };
 
