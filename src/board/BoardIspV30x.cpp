@@ -20,6 +20,11 @@ using hw::Spi;
 using Sck = FastPinOf<current.debug.tck>;
 using Mosi = FastPinOf<current.debug.tdi>;
 
+// IspSpi switches these pins to SPI2, which has fixed pins.
+static_assert(current.debug.tck == Pin{ Port::B, 13 } && current.debug.tdo == Pin{ Port::B, 14 } &&
+              current.debug.tdi == Pin{ Port::B, 15 },
+              "the AVR ISP SPI path needs SCK, MISO and MOSI on PB13, PB14 and PB15 (SPI2)");
+
 constexpr Signal resetSignal{ current.debug.srst, current.debug.srstActive };
 // Active low: open-drain, the pull-up of the target releases the line.
 // Active high: push-pull into the transistor.
@@ -50,8 +55,8 @@ void configureOutput(Pin pin, bool level) {
 
 void IspPins::init() {
    const DebugPins &pins = current.debug;
-   // RESET first: SCK must be low when RESET goes low, and the target
-   // must not run while SCK and MOSI change.
+   // RESET first: the target must not run while SCK and MOSI change. The
+   // positive pulse of enableProgramming() comes with SCK low.
    reset(true);
    configureOutput(pins.tck, false);
    configureOutput(pins.tdi, false);
