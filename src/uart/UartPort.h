@@ -47,6 +47,11 @@ class UartPort {
 
    private:
    void handleInterrupt();
+#if defined(__riscv)
+   // The direct interrupt entry of the CH32V307 (see UartPort.cpp)
+   static void interruptEntry();
+   static UartPort *instance_;
+#endif
 
    hw::Usart usart_;
    Buffers &buffers_;

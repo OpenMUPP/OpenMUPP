@@ -109,6 +109,18 @@ constexpr hw::Usart::StopBits toUsart(StopBits stopBits) {
 
 } // namespace
 
+#if defined(__riscv)
+UartPort *UartPort::instance_ = nullptr;
+
+// The generic entry of Interrupt::connectMemberHandler calls the handler
+// through a pointer, so it saves all caller-saved integer and FPU registers
+// (about 90 instructions, issue #33). This entry inlines the handler
+// (flatten), so it saves only the registers that the handler uses.
+[[gnu::interrupt, gnu::flatten]] void UartPort::interruptEntry() {
+   instance_->handleInterrupt();
+}
+#endif
+
 UartPort::UartPort(Buffers &buffers)
    : usart_(reinterpret_cast<USART_TypeDef *>(peripheral.base))
    , buffers_(buffers) {
@@ -132,7 +144,12 @@ void UartPort::start() {
    board::gpioPin(uartPins.rx).configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::Up);
 #endif
 
+#if defined(__riscv)
+   instance_ = this;
+   Interrupt::connectHandler(peripheral.irq, &UartPort::interruptEntry);
+#else
    Interrupt::connectMemberHandler<UartPort, &UartPort::handleInterrupt>(peripheral.irq, *this);
+#endif
    NVIC_SetPriority(peripheral.irq, hardware::uartIrqPriority);
    NVIC_ClearPendingIRQ(peripheral.irq);
    NVIC_EnableIRQ(peripheral.irq);
