@@ -349,6 +349,8 @@ constexpr uint32_t untimedPadCount() {
    } else {
       constexpr uint32_t longest = 2 * Pins::untimedBelowHalfCycles - 2;
       static_assert(longest > paddedMinPeriodCycles<Pins>());
+      // untimedPadFor() needs a longer period for each higher pad
+      static_assert(paddedMinPeriodCycles<Pins>() + 2 > untimedMinPeriodCycles<Pins>());
       return intdiv::ceilDiv(longest - paddedMinPeriodCycles<Pins>(), 2u) + 1;
    }
 }
@@ -386,11 +388,8 @@ constexpr uint32_t untimedPadFor(uint32_t coreHz, uint32_t hz) {
    // The next faster pad, when it is nearer and not too fast. In cycles
    // times hz: the request period is coreHz.
    const uint64_t slow = uint64_t{ untimedPeriodOfPad<Pins>(pad) } * hz - coreHz;
-   const uint64_t fasterCycles = uint64_t{ untimedPeriodOfPad<Pins>(pad - 1) } * hz;
-   if(fasterCycles >= coreHz) {
-      return pad - 1;
-   }
-   const uint64_t fast = coreHz - fasterCycles;
+   // pad - 1 is faster than hz, by the choice of pad
+   const uint64_t fast = coreHz - uint64_t{ untimedPeriodOfPad<Pins>(pad - 1) } * hz;
    const bool inLimit = fast * 100 <= uint64_t{ coreHz } * untimedFastPercent;
    return inLimit && fast < slow ? pad - 1 : pad;
 }
