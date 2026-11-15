@@ -32,13 +32,14 @@ class FakeFlashPage final : public personality::FlashPage {
          return false;
       }
       content.fill(PersonalityStore::erasedSlot);
+      refusedSlot = slotCount;
       return true;
    }
 
    bool program(std::size_t index, uint16_t value) override {
       ++programs;
       REQUIRE(index < content.size());
-      if(failProgram || content[index] != PersonalityStore::erasedSlot) {
+      if(failProgram || index == refusedSlot || content[index] != PersonalityStore::erasedSlot) {
          return false;
       }
       content[index] = value;
@@ -50,6 +51,8 @@ class FakeFlashPage final : public personality::FlashPage {
    int programs = 0;
    bool failErase = false;
    bool failProgram = false;
+   // A slot that reads as erased but does not take a write, until the next erase
+   std::size_t refusedSlot = slotCount;
 };
 
 constexpr uint16_t record(Personality personality) {
@@ -310,6 +313,27 @@ TEST_CASE("A flash error fails the store") {
       CHECK(page.programs == 0);
       CHECK(store.load() == Personality::Versaloon);
    }
+}
+
+TEST_CASE("A slot that reads as erased but does not take the write is passed by an erase") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+   page.content[0] = record(Personality::Versaloon);
+   page.refusedSlot = 1;
+
+   CHECK(store.store(Personality::CmsisDap));
+   CHECK(page.erases == 1);
+   CHECK(page.content[0] == record(Personality::CmsisDap));
+   CHECK(store.load() == Personality::CmsisDap);
+}
+
+TEST_CASE("A failed write to slot 0 is not retried") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+   page.refusedSlot = 0;
+
+   CHECK_FALSE(store.store(Personality::CmsisDap));
+   CHECK(page.erases == 0);
 }
 
 TEST_CASE("The bridge mode is stored with the personality") {
