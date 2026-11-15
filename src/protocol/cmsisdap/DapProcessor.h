@@ -98,7 +98,9 @@
 //   no pin while the other processor owns them. DAP_SWJ_Clock,
 //   DAP_TransferConfigure and DAP_SWD_Configure store their values and
 //   change the engines only while the processor owns the pins. DAP_Connect
-//   applies them.
+//   applies them. ID_DAP_Vendor1 replies DAP_ERROR, and hostGone() keeps
+//   the bridge mode, while the other processor owns the pins: the bridge
+//   is its JTAG port too.
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -426,6 +428,8 @@ class Processor final : private TransferAbort {
    // True when the processor may change the engines: it owns the pins, or
    // it has no pin owner.
    [[nodiscard]] bool ownsPins() const;
+   // True when the other processor owns the pins.
+   [[nodiscard]] bool otherOwnsPins() const;
    void applySettings();
    void setJtagClock();
    // Selects the device of a transfer command: true when the port can do

@@ -7,7 +7,9 @@
 // bulk interface and the HID interface (CMSIS-DAP v1, and later the AVR
 // commands). The first interface that drives the pins owns them. The other
 // gets "busy" until the owner releases them: DAP_Disconnect, or the host
-// of the owner goes away.
+// of the owner goes away. A host tool that stops without DAP_Disconnect
+// (killed, crashed) keeps the pins until a bus reset or a replug: closing
+// a libusb handle does not reach the device.
 //
 // The owner is an interface, not a protocol: avrdude sends DAP_Connect and
 // the AVR commands on the same HID interface in one session.

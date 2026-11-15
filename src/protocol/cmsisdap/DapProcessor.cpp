@@ -220,6 +220,10 @@ bool Processor::ownsPins() const {
    return pinOwner_ == nullptr || pinOwner_->owner() == pinClient_;
 }
 
+bool Processor::otherOwnsPins() const {
+   return !ownsPins() && pinOwner_->owner() != protocol::PinClient::None;
+}
+
 void Processor::applySettings() {
    swd_.apply(settings_);
    jtag_.apply(settings_);
@@ -253,7 +257,9 @@ void Processor::hostGone() {
    responses_ = 0;
    responseFirst_ = 0;
    disconnect();
-   if(bridge_ != nullptr) {
+   // The bridge is the JTAG port of the other processor too: not while it
+   // owns the pins.
+   if(bridge_ != nullptr && !otherOwnsPins()) {
       bridge_->setMode(bridge_->storedMode());
    }
    if(uart_ != nullptr) {
@@ -487,7 +493,9 @@ bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
    out.u8(command::vendor1);
    const auto code = static_cast<uint8_t>(value & ~bridgeStoreFlag);
    // The stored mode is stored already: no store flag with it
-   if(code > bridgeStoredMode || value == (bridgeStoredMode | bridgeStoreFlag)) {
+   // The bridge is the JTAG port of the other processor too: not while it
+   // owns the pins.
+   if(code > bridgeStoredMode || value == (bridgeStoredMode | bridgeStoreFlag) || otherOwnsPins()) {
       out.u8(statusError);
       return true;
    }
