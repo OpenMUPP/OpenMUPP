@@ -27,7 +27,8 @@
 // The Spi type is default-constructible and has these members:
 //
 //   uint32_t clockHz();        SPI input clock: SCK = clockHz() >> shift
-//   void init();               clocks and configuration; the pins stay GPIO
+//   void init();               clocks and configuration with the shift of
+//                              the last setShift(); the pins stay GPIO
 //   void fini();               SPI off
 //   void setShift(uint8_t);    shift spiMinShift-spiMaxShift
 //   bool transfer(Pins &pins, const uint8_t *out, uint8_t *in,
@@ -133,9 +134,6 @@ class IspEngine {
    void connect() {
       pins_.init();
       spi_.init();
-      if(shift_ != 0) {
-         spi_.setShift(shift_);
-      }
    }
 
    // Releases RESET and the pins: the target runs.
