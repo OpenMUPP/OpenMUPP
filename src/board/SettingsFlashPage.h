@@ -28,7 +28,7 @@
 // HCLK is halved for each erase and write (Flash.cpp of ch32v00x-system), so
 // the UART bridge baud rate is wrong for up to 16 ms. The page is used at the start, before the reset of a
 // personality switch, and for a stored bridge mode (ID_DAP_Vendor1 with
-// bit 7). The log erases the page once in 512 stores.
+// bit 7). The log erases the page once in 512 stores (128 on the CH32V30x).
 
 #include <cstddef>
 #include <cstdint>

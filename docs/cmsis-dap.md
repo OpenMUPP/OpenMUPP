@@ -588,8 +588,9 @@ python3 tools/mupp_probe.py bridge auto --store
 - A page without a mode gives auto. This is true for a page of an older multi image: its records are the records of the auto mode.
 - On the STM32F103, a write stalls the CPU for about 50 µs. Each 512 stores, the store also erases the page, and the CPU stalls up to 40 ms. The interrupts wait, so the host sees a late response, and the UART bridge can lose received bytes. Do not store the mode during a target session.
 - On the STM32H5, the page is in bank 2, so code in bank 1 does not stall during the write.
+- On the CH32V307, the firmware sets HCLK to half for each write and each erase (one erase in 128 stores, up to 16 ms). For that time, the baud rate of the UART bridge is wrong and the SysTick runs at half rate. Do not store the mode during a target session.
 - A firmware update keeps the page, as for the stored personality (see [Stored personality](firmware-update.md#stored-personality)). A mass erase erases it.
-- Limit (STM32F103): the first flash of an image with one personality finds old data in the page, for example code of an older, larger image. A word of that data can be a record by chance (12 of 65536 values). The image then starts with that mode until the next store. On the STM32H5, a record also needs the other 112 bits of its flash word set, so this does not occur in practice.
+- Limit (STM32F103): the first flash of an image with one personality finds old data in the page, for example code of an older, larger image. A word of that data can be a record by chance (12 of 65536 values). The image then starts with that mode until the next store. On the STM32H5, a record also needs the other 112 bits of its flash word set, so this does not occur in practice. The limit is also true on the CH32V307. There, a write that a power loss cut can also read as a record.
 - The page keeps the personality of another image. Thus a store of the mode in an image with one personality keeps the stored personality of a multi image.
 
 ### Auto mode
