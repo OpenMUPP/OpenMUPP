@@ -73,6 +73,7 @@ add_executable(mupp-tests
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
         TestDapTargetPower.cpp
+        TestAvrIsp.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp

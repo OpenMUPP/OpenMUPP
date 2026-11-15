@@ -7,6 +7,7 @@ The engines are:
 - SWD: `src/swd/SwdBitBang.h`
 - JTAG bit-bang: `src/jtag/JtagBitBang.h` (the JTAG fast path uses SPI and DMA, see [JTAG fast path](usb-device.md#jtag-fast-path))
 - RVSWD, the two-wire interface of the WCH-Link personality: `src/rvswd/RvSwdEngine.h`
+- AVR ISP below the slowest SPI rate (281 kHz on the CH32V307): `src/avr/IspEngine.h`. Above 281 kHz, the engine uses SPI2.
 
 The one-wire (SDI) engine uses a hardware timer and DMA (see [wch-link.md](wch-link.md)). This document does not apply to it.
 
