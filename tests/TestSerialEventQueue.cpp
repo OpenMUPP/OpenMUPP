@@ -101,7 +101,7 @@ TEST_CASE("SerialEventQueue: the serial-only mode on an empty queue") {
 
 TEST_CASE("SerialEventQueue: the serial-only mode also gives the events of the command endpoints") {
    Queue queue;
-   queue.setCommandEndpoints(0x03, 0x82);
+   queue.addCommandEndpoints(0x03, 0x82);
    CHECK(queue.isServiceEvent(event(EventType::Out, 0x03)));
    CHECK(queue.isServiceEvent(event(EventType::InComplete, 0x82)));
    CHECK(queue.isServiceEvent(event(EventType::Out, usb::cdcDataOutEndpoint)));
@@ -122,6 +122,22 @@ TEST_CASE("SerialEventQueue: the serial-only mode also gives the events of the c
    CHECK(service[2].endpoint == usb::cdcDataOutEndpoint);
    // The SETUP and the packet after it wait.
    CHECK(queue.size() == 2);
+}
+
+TEST_CASE("SerialEventQueue: two pairs of command endpoints, as with the CMSIS-DAP HID interface") {
+   Queue queue;
+   queue.addCommandEndpoints(0x03, 0x82);
+   queue.addCommandEndpoints(0x05, 0x85);
+   // A HID report at the front does not hold the serial port events.
+   REQUIRE(queue.try_push(event(EventType::Out, 0x05)));
+   REQUIRE(queue.try_push(event(EventType::Out, usb::cdcDataOutEndpoint)));
+   REQUIRE(queue.try_push(event(EventType::InComplete, 0x85)));
+   REQUIRE(queue.try_push(event(EventType::Out, 0x03)));
+   queue.setSerialOnly(true);
+   CHECK(popAll(queue).size() == 4);
+   // The same number on the other direction is not a command endpoint.
+   CHECK_FALSE(queue.isServiceEvent(event(EventType::InComplete, 0x83)));
+   CHECK_FALSE(queue.isServiceEvent(event(EventType::Out, 0x02)));
 }
 
 TEST_CASE("SerialEventQueue: without command endpoints, the serial-only mode stops at a protocol event") {

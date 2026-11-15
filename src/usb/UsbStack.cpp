@@ -266,7 +266,10 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
 #if defined(MUPP_WITH_CMSIS_DAP)
    case Personality::CmsisDap:
       // DAP_TransferAbort during a command (usb/SerialEventQueue.h)
-      events_.setCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
+      events_.addCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
+#if defined(MUPP_CMSIS_DAP_HID)
+      events_.addCommandEndpoints(dap::hidOutEndpoint, dap::hidInEndpoint);
+#endif
       static_cast<void>(device_.addFunction(dap_));
 #if defined(MUPP_CMSIS_DAP_HID)
       static_cast<void>(device_.addFunction(dapHid_));

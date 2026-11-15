@@ -77,15 +77,18 @@ The CMSIS-DAP personality is the default.
 The host tools find a CMSIS-DAP v2 interface by the vendor class and the text `CMSIS-DAP` in the interface string.
 Interface 0 is vendor-specific (`0xFF`) with bulk OUT `0x03` and bulk IN `0x82`, 64 bytes each.
 The interfaces 1 and 2 are the CDC-ACM serial port, as in the Versaloon personality.
-With `MUPP_CMSIS_DAP_HID`, interface 3 is the CMSIS-DAP v1 interface: HID class `0x03`, interrupt IN `0x85` and interrupt OUT `0x05`, 64 bytes each, `bInterval` 1 (1 ms at full speed, 125 µs at high speed), at both speeds.
-The v1 tools find it by the text `CMSIS-DAP` in the product string.
-It is after the other interfaces, so their numbers do not change.
-Windows and Linux bind their HID driver with no driver installation.
-Not on the STM32F1 boards: their packet memory has no room for it (see [cmsis-dap.md](cmsis-dap.md#cmsis-dap-v1-hid)).
 The endpoint numbers and sizes are the same as in the Versaloon personality.
 Thus the packet memory use does not change from the Versaloon personality.
 The endpoints and EP0 use 464 bytes, with a 64-byte buffer descriptor table.
 The firmware uses a 40-byte table and a double-buffered OUT endpoint `0x03`: 504 bytes.
+These numbers are without the HID interface.
+
+With `MUPP_CMSIS_DAP_HID`, interface 3 is the CMSIS-DAP v1 interface: HID class `0x03`, interrupt IN `0x85` and interrupt OUT `0x05`, 64 bytes each, `bInterval` 1 (1 ms at full speed, 125 µs at high speed), at both speeds.
+The v1 tools find it by the text `CMSIS-DAP` in the product string.
+It is after the other interfaces, so their numbers do not change.
+Windows and Linux bind their HID driver with no driver installation.
+It needs 6 endpoints and two more 64-byte buffers: 640 bytes in the STM32F1 count, more than its 512 bytes. Thus the STM32F1 boards do not have it (see [cmsis-dap.md](cmsis-dap.md#cmsis-dap-v1-hid)).
+The STM32H5 (2 KB packet memory) and the CH32V307 (4 KB USBHS packet pool, 2704 bytes used at high speed with HID) have room.
 
 `usb::CmsisDapFunction` sends each OUT packet to the [CMSIS-DAP command processor](cmsis-dap.md).
 It sends each response as one IN packet.

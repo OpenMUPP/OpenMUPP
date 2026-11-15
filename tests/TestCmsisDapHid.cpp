@@ -216,3 +216,23 @@ TEST_CASE("HID: the first interface that connects owns the target pins") {
    bench.enumerate();
    CHECK(bench.owner.owner() == protocol::PinClient::None);
 }
+
+TEST_CASE("HID: DAP_TransferAbort stops a running DAP_TransferBlock") {
+   HidBench bench;
+   bench.enumerate();
+   CHECK(bench.hidCommand({ 0x02, 0x01 }) == report({ 0x02, 0x01 }));
+   bool sent = false;
+   bench.swd.onTransfer = [&bench, &sent] {
+      if(bench.swd.transfers == 2) {
+         // A padded report, as the host sends it
+         Bytes abort = report({ 0x07 });
+         sent = bench.controller().sendOut(hidOut, art::span<const uint8_t>(abort.data(), abort.size()));
+      }
+   };
+   // DAP_TransferBlock: 6 reads of DP CTRL/STAT
+   CHECK(bench.hidCommand({ 0x06, 0x00, 0x06, 0x00, 0x06 }) == report({ 0x06, 0x02, 0x00, 0x01, 0, 0, 0, 0, 0, 0, 0, 0 }));
+   CHECK(sent);
+   CHECK(bench.swd.transfers == 2);
+   // The abort has no response.
+   CHECK_FALSE(bench.controller().takeIn(hidIn).has_value());
+}

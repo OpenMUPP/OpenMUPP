@@ -295,11 +295,18 @@ cmsisdap::Processor dapProcessor{ dapSwd,
 #if defined(MUPP_CMSIS_DAP_HID)
 // The CMSIS-DAP v1 (HID) interface: its own processor on the same engines
 // and pins. The first interface that drives the pins owns them
-// (protocol/TargetPinOwner.h). The vendor commands (personality, bootloader,
-// bridge mode, target power) and the UART commands are on the v2 interface
-// only.
+// (protocol/TargetPinOwner.h). It has the RISC-V bridge, so that
+// DAP_SWJ_Pins re-attaches the wire and ID_DAP_Vendor1 sets the mode. The
+// other vendor commands (personality, bootloader, target power) and the
+// UART commands are on the v2 interface only.
 protocol::TargetPinOwner dapPinOwner;
-cmsisdap::Processor dapHidProcessor{ dapSwd, boardGpio, dapPlatform, dapInfo, dapJtag };
+#if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
+cmsisdap::Bridge *const dapHidBridge = &dapRvBridge;
+#else
+cmsisdap::Bridge *const dapHidBridge = nullptr;
+#endif
+cmsisdap::Processor dapHidProcessor{ dapSwd,  boardGpio, dapPlatform, dapInfo,     dapJtag,
+                                     nullptr, nullptr,   nullptr,     dapHidBridge };
 #endif
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
