@@ -373,14 +373,14 @@ TEST_CASE("AVR ISP scope: page mode value polling reads the first byte that is n
    f.target.busyPolls = 3;
    f.loadAddress(0);
    Bytes data(256, 0xFF);
-   data[1] = 0x11;
+   data[5] = 0x11;
    CHECK(f.programFlash(0xA1, data, 10, 0xFF) == Bytes{ cmd::programFlash, status::ok });
-   CHECK(f.target.flash[1] == 0x11);
-   // Value polling reads the high byte of word 0: three busy reads, then
-   // the value.
+   CHECK(f.target.flash[5] == 0x11);
+   // Value polling reads the high byte of word 2, not the page start: three
+   // busy reads, then the value.
    CHECK(f.countFrames(0x28) == 4);
    CHECK(f.countFrames(0x20) == 0);
-   CHECK(f.target.frames.back() == std::array<uint8_t, 4>{ { 0x28, 0x00, 0x00, 0x00 } });
+   CHECK(f.target.frames.back() == std::array<uint8_t, 4>{ { 0x28, 0x00, 0x02, 0x00 } });
 
    // Only poll values in the page: the delay
    f.target.frames.clear();
@@ -425,6 +425,11 @@ TEST_CASE("AVR ISP scope: NumBytes from the host is checked against the limit an
    const Bytes data = pattern(avr::isp::maxDataBytes + 1, 0);
    // Above the limit, with the data
    CHECK(f.programFlash(flashPageMode | 0x80, data) == Bytes{ cmd::programFlash, status::failed });
+   // NumBytes one above the data
+   CHECK(f.run(Fixture::program(cmd::programFlash, flashPageMode | 0x80, 10, { 0x40, 0x4C, 0x20, 0, 0 }, pattern(5, 0), 6)) ==
+         Bytes{ cmd::programFlash, status::failed });
+   CHECK(f.run(Fixture::program(cmd::programEeprom, eepromPageMode | 0x80, 10, { 0xC1, 0xC2, 0xA0, 0, 0 }, pattern(5, 0), 6)) ==
+         Bytes{ cmd::programEeprom, status::failed });
    // NumBytes 10 with 5 data bytes
    CHECK(f.run(Fixture::program(cmd::programFlash, flashPageMode | 0x80, 10, { 0x40, 0x4C, 0x20, 0, 0 }, pattern(5, 0), 10)) ==
          Bytes{ cmd::programFlash, status::failed });
@@ -467,4 +472,76 @@ TEST_CASE("AVR ISP scope: an SPI fault gives STATUS_PHY_ERROR") {
    CHECK(f.readFlash(4) == Bytes{ cmd::readFlash, status::phyError });
    CHECK(f.programFlash(flashPageMode | 0x80, pattern(4, 0)) == Bytes{ cmd::programFlash, status::phyError });
    CHECK(f.run({ cmd::chipErase, 10, 0, 0xAC, 0x80, 0x00, 0x00 }) == Bytes{ cmd::chipErase, status::phyError });
+}
+
+TEST_CASE("AVR ISP scope: a new session loads the extended address again") {
+   Fixture f;
+   f.enter();
+   f.loadAddress(0x8000'0000u | 0x1FF80u);
+   CHECK(f.programFlash(flashPageMode | 0x80, pattern(256, 9)) == Bytes{ cmd::programFlash, status::ok });
+   CHECK(f.run({ cmd::leaveProgmode, 0, 0 }) == Bytes{ cmd::leaveProgmode, status::ok });
+
+   // The reset of the new session sets the extended address of the target
+   // to 0.
+   REQUIRE(f.run(enterRequest) == Bytes{ cmd::enterProgmode, status::ok });
+   CHECK(f.run({ cmd::chipErase, 10, 0, 0xAC, 0x80, 0x00, 0x00 }) == Bytes{ cmd::chipErase, status::ok });
+   f.target.frames.clear();
+   const Bytes data = pattern(256, 33);
+   f.loadAddress(0x8000'0000u | 0x1FF80u);
+   CHECK(f.programFlash(flashPageMode | 0x80, data) == Bytes{ cmd::programFlash, status::ok });
+   CHECK(f.countFrames(0x4D) == 1);
+   CHECK(std::equal(data.begin(), data.end(), f.target.flash.begin() + 0x3FF00));
+   CHECK(std::all_of(f.target.flash.begin() + 0x1FF00, f.target.flash.begin() + 0x20000,
+                     [](uint8_t value) { return value == 0xFF; }));
+
+   // Without LOAD_ADDRESS after ENTER_PROGMODE: the address goes on, and
+   // the extended address goes to the target again.
+   f.loadAddress(0x8000'0000u | 0x1FF80u);
+   CHECK(f.readFlash(2) == readReply(cmd::readFlash, { data[0], data[1] }));
+   CHECK(f.run({ cmd::leaveProgmode, 0, 0 }) == Bytes{ cmd::leaveProgmode, status::ok });
+   REQUIRE(f.run(enterRequest) == Bytes{ cmd::enterProgmode, status::ok });
+   f.target.frames.clear();
+   CHECK(f.readFlash(2) == readReply(cmd::readFlash, { data[2], data[3] }));
+   REQUIRE_FALSE(f.target.frames.empty());
+   CHECK(f.target.frames[0] == std::array<uint8_t, 4>{ { 0x4D, 0x00, 0x01, 0x00 } });
+}
+
+TEST_CASE("AVR ISP scope: LOAD_ADDRESS loads the extended address again after a raw 0x4D") {
+   Fixture f;
+   f.enter();
+   f.target.flash[0x3FF00] = 0x5A;
+   f.target.flash[0x3FF01] = 0xA5;
+   f.loadAddress(0x8000'0000u | 0x1FF80u);
+   CHECK(f.readFlash(2) == readReply(cmd::readFlash, { 0x5A, 0xA5 }));
+   // The host sets the extended address of the target to 0 behind the
+   // handler.
+   CHECK(f.run({ cmd::programFuse, 0x4D, 0x00, 0x00, 0x00 }) == Bytes{ cmd::programFuse, status::ok });
+   CHECK(f.target.extended == 0);
+   f.target.frames.clear();
+   f.loadAddress(0x8000'0000u | 0x1FF80u);
+   CHECK(f.readFlash(2) == readReply(cmd::readFlash, { 0x5A, 0xA5 }));
+   REQUIRE_FALSE(f.target.frames.empty());
+   CHECK(f.target.frames[0] == std::array<uint8_t, 4>{ { 0x4D, 0x00, 0x01, 0x00 } });
+}
+
+TEST_CASE("AVR ISP scope: the poll timeout is longer than a real erase and page write") {
+   Fixture f;
+   f.enter();
+   // 200 polls of 100 us: about 20 ms busy
+   f.target.busyPolls = 200;
+   CHECK(f.run({ cmd::chipErase, 10, 1, 0xAC, 0x80, 0x00, 0x00 }) == Bytes{ cmd::chipErase, status::ok });
+   f.loadAddress(0);
+   CHECK(f.programFlash(flashPageMode | 0x80, pattern(256, 1)) == Bytes{ cmd::programFlash, status::ok });
+   CHECK(f.programFlash(0xA1, pattern(256, 2), 10, 0xFF) == Bytes{ cmd::programFlash, status::ok });
+   CHECK(f.countFrames(0xF0) == 2 * 201);
+}
+
+TEST_CASE("AVR ISP scope: a read above maxDataBytes fails with a larger response buffer") {
+   Fixture f;
+   f.enter();
+   std::array<uint8_t, 300> large{};
+   const Bytes request{ cmd::readFlash, 0x01, 0x01, 0x20 };
+   REQUIRE(f.scope.process(request, large) == 2);
+   CHECK(large[1] == status::failed);
+   CHECK(f.target.frames.empty());
 }

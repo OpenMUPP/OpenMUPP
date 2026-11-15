@@ -48,6 +48,8 @@ class MockIspTarget {
          out_ = 0;
          pendingOut_ = -1;
          enabled = false;
+         // The extended address register of the AVR starts at 0.
+         extended = 0;
          ++resets;
       }
    }
