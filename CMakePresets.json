@@ -131,6 +131,15 @@
       }
     },
     {
+      "name": "personalities-all",
+      "description": "Image with all personalities, CMSIS-DAP as default personality",
+      "hidden": true,
+      "cacheVariables": {
+        "MUPP_PERSONALITIES": "cmsis-dap,wch-link,versaloon",
+        "MUPP_DEFAULT_PERSONALITY": "cmsis-dap"
+      }
+    },
+    {
       "name": "personalities-wch-link",
       "description": "WCH-Link personality",
       "hidden": true,
@@ -380,10 +389,38 @@
     },
     {
       "name": "ydch32v307-cmsis-dap",
-      "displayName": "YD-CH32V307VCT6, CMSIS-DAP without the RISC-V bridge (firmware image)",
+      "displayName": "YD-CH32V307VCT6, CMSIS-DAP (firmware image)",
       "inherits": [
         "board-ydch32v307",
-        "personalities-cmsis-dap-no-rv-bridge"
+        "personalities-cmsis-dap"
+      ],
+      "cacheVariables": {
+        "MUPP_CH32_STUB_IMAGE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
+    {
+      "name": "ydch32v307-dual",
+      "displayName": "YD-CH32V307VCT6, dual image, CMSIS-DAP and WCH-Link (firmware image)",
+      "inherits": [
+        "board-ydch32v307",
+        "personalities-dual"
+      ],
+      "cacheVariables": {
+        "MUPP_CH32_STUB_IMAGE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
+    {
+      "name": "ydch32v307-all",
+      "displayName": "YD-CH32V307VCT6, all personalities (firmware image)",
+      "inherits": [
+        "board-ydch32v307",
+        "personalities-all"
       ],
       "cacheVariables": {
         "MUPP_CH32_STUB_IMAGE": {
@@ -524,6 +561,14 @@
     {
       "name": "ydch32v307-cmsis-dap",
       "configurePreset": "ydch32v307-cmsis-dap"
+    },
+    {
+      "name": "ydch32v307-dual",
+      "configurePreset": "ydch32v307-dual"
+    },
+    {
+      "name": "ydch32v307-all",
+      "configurePreset": "ydch32v307-all"
     },
     {
       "name": "ydch32v307-wch-link",

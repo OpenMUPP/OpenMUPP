@@ -225,6 +225,8 @@ The jobs:
   The job reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`.
 - `build-ydch32v307-cmsis-dap`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap` preset, plus the size check.
   This build finds CH32 build errors in the shared code. This job keeps no artifacts.
+- `build-ydch32v307-multi`: a `parallel:matrix` job for the multi images of the YD-CH32V307VCT6 board with the `ydch32v307-dual` and `ydch32v307-all` presets, plus the size check.
+  The limit is 256 bytes smaller, because the last flash page holds the stored personality and the bridge mode. These jobs keep no artifacts.
 - `build-ydch32v307-wch-link`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-wch-link` preset, plus the size check.
   It is the CH32 image that links the one-wire engine. This job keeps no artifacts.
 

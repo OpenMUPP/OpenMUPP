@@ -121,7 +121,9 @@ The default is `/usr`.
 | `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
 | `weacth523` | WeAct STM32H523 core board | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
 | `ydch32v307` | YD-CH32V307VCT6 development board | none: the stub image of the CH32V307 port (board start-up and state LED) | Release |
-| `ydch32v307-cmsis-dap` | YD-CH32V307VCT6 development board | `cmsis-dap`, with `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` and `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image, not the stub (tag `-cmsis-dap-no-rv-bridge`) | Release |
+| `ydch32v307-cmsis-dap` | YD-CH32V307VCT6 development board | `cmsis-dap`, with `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image, not the stub | Release |
+| `ydch32v307-dual` | YD-CH32V307VCT6 development board | `cmsis-dap,wch-link` (tag `-dap+wch`), with `MUPP_CH32_STUB_IMAGE=OFF` | Release |
+| `ydch32v307-all` | YD-CH32V307VCT6 development board | `cmsis-dap,wch-link,versaloon` (tag `-dap+vsl+wch`), with `MUPP_CH32_STUB_IMAGE=OFF` | Release |
 | `ydch32v307-wch-link` | YD-CH32V307VCT6 development board | `wch-link`, with `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image with the one-wire engine | Release |
 | `host-tests` | Host | - | Debug |
 
@@ -132,6 +134,7 @@ The `personalities-*` presets set `MUPP_PERSONALITIES` and `MUPP_DEFAULT_PERSONA
 They are for the common sets of personalities.
 For another set, add `-DMUPP_PERSONALITIES=<list>` to a preset.
 The `-dual` presets build `cmsis-dap,wch-link`.
+The `-all` preset builds all personalities, with `cmsis-dap` as the default personality.
 The `-cmsis-dap-wch-link` presets do not exist: use the `-dual` presets.
 For a dual image with `versaloon,cmsis-dap`, add `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.

@@ -454,7 +454,7 @@ The image does not have USB and the probe engines yet.
 
 The option `MUPP_CH32_STUB_IMAGE=OFF` builds the firmware instead of the stub.
 The firmware image can have all personalities and the RISC-V bridge.
-The preset `ydch32v307-cmsis-dap` sets this option.
+The presets `ydch32v307-cmsis-dap`, `ydch32v307-dual` and `ydch32v307-all` set this option.
 A multi image or an image with the RISC-V bridge keeps the last 256-byte flash page of the 256 KB code flash (`0x0803FF00`) for the stored personality and the bridge mode (see [Multi image](usb-device.md#multi-image)).
 An erased half-word of the CH32V307 flash reads `0xE339`, not `0xFFFF`. The driver maps it to an erased slot.
 For each erase and write of the page, the firmware sets HCLK to 72 MHz, because the flash clock must not be more than 60 MHz (RM section 32.1).
