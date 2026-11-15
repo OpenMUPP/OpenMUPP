@@ -165,6 +165,17 @@ constexpr std::array<SwjPin, 6> swjPinTable{ {
 // The SWD pins of DAP_SWJ_Pins: SWCLK/TCK and SWDIO/TMS
 constexpr uint8_t swjSwdPins = 0x03;
 
+// The bits of DAP_SWJ_Pins that drive a pin of the board
+constexpr uint8_t selectedOutputs(uint16_t available) {
+   uint8_t bits = 0;
+   for(const SwjPin &pin : swjPinTable) {
+      if(pin.output && (available & pin.gpio) != 0) {
+         bits = static_cast<uint8_t>(bits | pin.bit);
+      }
+   }
+   return bits;
+}
+
 // DAP_HostStatus
 constexpr uint8_t hostStatusConnected = 0;
 constexpr uint8_t hostStatusRunning = 1;
@@ -201,6 +212,18 @@ Processor::Processor(DapSwd &swd,
    swd_.setAbort(*this);
 }
 
+bool Processor::claimPins() {
+   return pinOwner_ == nullptr || pinOwner_->acquire(pinClient_);
+}
+
+bool Processor::ownsPins() const {
+   return pinOwner_ == nullptr || pinOwner_->owner() == pinClient_;
+}
+
+bool Processor::otherOwnsPins() const {
+   return !ownsPins() && pinOwner_->owner() != protocol::PinClient::None;
+}
+
 void Processor::applySettings() {
    swd_.apply(settings_);
    jtag_.apply(settings_);
@@ -234,7 +257,9 @@ void Processor::hostGone() {
    responses_ = 0;
    responseFirst_ = 0;
    disconnect();
-   if(bridge_ != nullptr) {
+   // The bridge is the JTAG port of the other processor too: not while it
+   // owns the pins.
+   if(bridge_ != nullptr && !otherOwnsPins()) {
       bridge_->setMode(bridge_->storedMode());
    }
    if(uart_ != nullptr) {
@@ -468,7 +493,9 @@ bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
    out.u8(command::vendor1);
    const auto code = static_cast<uint8_t>(value & ~bridgeStoreFlag);
    // The stored mode is stored already: no store flag with it
-   if(code > bridgeStoredMode || value == (bridgeStoredMode | bridgeStoreFlag)) {
+   // The bridge is the JTAG port of the other processor too: not while it
+   // owns the pins.
+   if(code > bridgeStoredMode || value == (bridgeStoredMode | bridgeStoreFlag) || otherOwnsPins()) {
       out.u8(statusError);
       return true;
    }
@@ -676,7 +703,7 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
    }
    out.u8(command::connect);
    const bool jtag = port == portJtag && jtag_.available();
-   if(port != portDefault && port != portSwd && !jtag) {
+   if((port != portDefault && port != portSwd && !jtag) || !claimPins()) {
       out.u8(0);
       return true;
    }
@@ -687,6 +714,7 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
    }
    // Another user of the engine may have changed it.
    applySettings();
+   swd_.setAbort(*this);
    if(jtag) {
       setJtagClock();
       jtag_.port().init();
@@ -707,6 +735,11 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
 }
 
 void Processor::disconnect() {
+   if(!ownsPins()) {
+      // The other processor owns the pins. This one has no port: DAP_Connect
+      // needs the pins.
+      return;
+   }
    if(port_ == Port::Swd) {
       swd_.fini();
       port_ = Port::None;
@@ -733,6 +766,9 @@ void Processor::disconnect() {
    if((available & protocol::gpio::tdi) != 0) {
       gpio_.configure(protocol::gpio::tdi, protocol::PinMode::Input, false);
    }
+   if(pinOwner_ != nullptr) {
+      pinOwner_->release(pinClient_);
+   }
 }
 
 bool Processor::transferConfigure(PacketReader &in, PacketWriter &out) {
@@ -742,7 +778,9 @@ bool Processor::transferConfigure(PacketReader &in, PacketWriter &out) {
    if(!in.ok()) {
       return false;
    }
-   applySettings();
+   if(ownsPins()) {
+      applySettings();
+   }
    out.u8(command::transferConfigure);
    out.u8(statusOk);
    return true;
@@ -755,7 +793,9 @@ bool Processor::swdConfigure(PacketReader &in, PacketWriter &out) {
    }
    settings_.turnaround = static_cast<uint8_t>((configuration & 0x03u) + 1);
    settings_.dataPhase = (configuration & 0x04u) != 0;
-   applySettings();
+   if(ownsPins()) {
+      applySettings();
+   }
    out.u8(command::swdConfigure);
    out.u8(statusOk);
    return true;
@@ -772,9 +812,11 @@ bool Processor::swjClock(PacketReader &in, PacketWriter &out) {
       return true;
    }
    clockHz_ = hz;
-   swd_.setClockHz(hz);
-   if(port_ == Port::Jtag) {
-      setJtagClock();
+   if(ownsPins()) {
+      swd_.setClockHz(hz);
+      if(port_ == Port::Jtag) {
+         setJtagClock();
+      }
    }
    out.u8(statusOk);
    return true;
@@ -954,6 +996,11 @@ void Processor::resetTarget(PacketWriter &out) {
       out.u8(0);
       return;
    }
+   if(!claimPins()) {
+      out.u8(statusError);
+      out.u8(0);
+      return;
+   }
    gpio_.configure(protocol::gpio::srst, protocol::PinMode::OpenDrain, false);
    platform_.delayUs(resetPulseUs);
    gpio_.configure(protocol::gpio::srst, protocol::PinMode::OpenDrain, true);
@@ -983,11 +1030,15 @@ bool Processor::swjPins(PacketReader &in, PacketWriter &out) {
    if(!in.ok()) {
       return false;
    }
-   // TCK and TMS pulses can change the TAP state and the IR.
-   jtag_.invalidate();
+   // Without the pins, the command only reads them.
+   const bool drive = (select & selectedOutputs(gpio_.available())) == 0 || claimPins();
+   if(drive) {
+      // TCK and TMS pulses can change the TAP state and the IR.
+      jtag_.invalidate();
+   }
    uint8_t selected = 0;
    for(const SwjPin &pin : swjPinTable) {
-      if(pin.output && (select & pin.bit) != 0 && (gpio_.available() & pin.gpio) != 0) {
+      if(drive && pin.output && (select & pin.bit) != 0 && (gpio_.available() & pin.gpio) != 0) {
          gpio_.configure(pin.gpio, pin.mode, (output & pin.bit) != 0);
          selected = static_cast<uint8_t>(selected | pin.bit);
       }
