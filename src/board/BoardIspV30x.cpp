@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "board/BoardIsp.h"
+#include "protocol/avr/IspScope.h"
 
 #include <peripherals/Rcc.h>
 #include <peripherals/Spi.h>
@@ -9,6 +10,8 @@
 // (board/BoardIsp.h). CH32FV2x_V3xRM chapter 20 (SPI).
 
 template class avr::IspEngine<board::IspPins, board::IspSpi>;
+// The AVR ISP scope of the EDBG protocol on this engine
+template class avr::IspScope<board::BoardIsp>;
 
 namespace board {
 
