@@ -1022,6 +1022,12 @@ struct PaddedPins : MockSwdPins {
    uint32_t sledNops{ UINT32_MAX };
    uint32_t sledRuns{ 0 };
 };
+
+// The same, without unrolled bits: pad p has p extra NOPs
+struct PaddedLoopPins : PaddedPins {
+   using PaddedPins::PaddedPins;
+   static constexpr bool unrolledBits = false;
+};
 } // namespace
 
 TEST_CASE("SWD bit-bang: the untimed pad gives the nearest period, at most 5 % faster") {
@@ -1067,6 +1073,10 @@ TEST_CASE("SWD bit-bang: the untimed pad gives the nearest period, at most 5 % f
          REQUIRE(int64_t{ swd::untimedPeriodOfPad<PaddedPins>(pad) } * hz * 100 >= request * 95);
       }
    }
+   // 16.84 cycles: pad 1 (16) is exactly 5 % faster. 1 Hz less: more than
+   // 5 % faster, so pad 2 (18), although pad 1 is nearer.
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 8'550'000) == 1);
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 8'549'999) == 2);
    // The exact edges. 18.95 cycles: pad 2 (18) is exactly 5 % faster, and
    // nearer than pad 3 (20). 1 Hz less: pad 2 is more than 5 % faster.
    CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 7'600'000) == 2);
@@ -1138,4 +1148,30 @@ TEST_CASE("SWD bit-bang: Pins::untimedMinPeriodCycles runs the fast requests unt
       CHECK(pins.undrivenSamples == 0);
       CHECK(pins.desyncs == 0);
    }
+}
+
+TEST_CASE("SWD bit-bang: without unrolled bits, the sled starts at padSledCycles") {
+   // Pad p has p extra NOPs, so pad 8 is the first sled pad with 0 NOPs
+   static_assert(swd::extraNopsOfPad<PaddedLoopPins>(0) == 0);
+   static_assert(swd::extraNopsOfPad<PaddedLoopPins>(1) == 1);
+   static_assert(swd::untimedPadInstances<PaddedLoopPins>() == 8);
+   PaddedLoopPins pins(1);
+   pins.coreClockHz = 144'000'000;
+   BitBangPort<PaddedLoopPins> port(pins);
+   port.init();
+   port.configure(1, 0, 1);
+   // 30 cycles: pad 8 (14 + 2 * 8)
+   port.setClockHz(4'800'000);
+   REQUIRE(port.untimedPad() == 8);
+   uint32_t data = 0x12345678;
+   CHECK(port.transfer(writeAbort, data) == pswd::ackOk);
+   CHECK(pins.transfers.back().written == 0x12345678u);
+   CHECK(pins.sledNops == 0);
+   CHECK(pins.sledRuns > 0);
+   // Pad 7 has its own instance
+   const uint32_t runs = pins.sledRuns;
+   port.setClockHz(5'142'857);
+   REQUIRE(port.untimedPad() == 7);
+   CHECK(port.transfer(writeAbort, data) == pswd::ackOk);
+   CHECK(pins.sledRuns == runs);
 }
