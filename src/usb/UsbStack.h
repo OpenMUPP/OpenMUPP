@@ -15,7 +15,9 @@
 //               MUPP_WITH_VERSALOON (usb/UsbDescriptors.h,
 //               usb/VersaloonFunction.h)
 //   cmsis-dap   the CMSIS-DAP v2 interface, MUPP_WITH_CMSIS_DAP
-//               (usb/CmsisDapDescriptors.h, usb/CmsisDapFunction.h)
+//               (usb/CmsisDapDescriptors.h, usb/CmsisDapFunction.h).
+//               With MUPP_CMSIS_DAP_HID also the CMSIS-DAP v1 (HID)
+//               interface, on its own processor.
 //   wch-link    the WCH-Link interface, MUPP_WITH_WCH_LINK
 //               (usb/WchLinkDescriptors.h, usb/WchLinkFunction.h)
 //
@@ -106,6 +108,10 @@ class UsbStack {
       const VersaloonDeps *versaloon;
       // Runs the CMSIS-DAP commands (see usb/CmsisDapFunction.h)
       cmsisdap::Processor *dap;
+      // Runs the CMSIS-DAP commands of the HID interface, nullptr without
+      // MUPP_CMSIS_DAP_HID. It shares the target pins with `dap`
+      // (Processor::sharePins()).
+      cmsisdap::Processor *dapHid;
       // Runs the WCH-Link requests (see usb/WchLinkFunction.h)
       wchlink::Processor *wch;
       // Takes SWITCH_PERSONALITY of the Versaloon protocol and the switch
@@ -166,7 +172,11 @@ class UsbStack {
 #endif
 #if defined(MUPP_WITH_CMSIS_DAP)
       case personality::Personality::CmsisDap:
+#if defined(MUPP_CMSIS_DAP_HID)
+         return dap_.commandCount() + dapHid_.commandCount();
+#else
          return dap_.commandCount();
+#endif
 #endif
 #if defined(MUPP_WITH_WCH_LINK)
       case personality::Personality::WchLink:
@@ -216,6 +226,10 @@ class UsbStack {
 #endif
 
    static void setPullUp(void *context, bool enable);
+#if defined(MUPP_WITH_CMSIS_DAP)
+   // Runs one command of each CMSIS-DAP interface. True when one ran.
+   bool pollDap();
+#endif
 
 #if defined(MUPP_USB_SERIAL_PORT)
    // MUPP_DEBUG_CDC: the CDC port carries the log, so received data is
@@ -237,6 +251,9 @@ class UsbStack {
 #endif
 #if defined(MUPP_WITH_CMSIS_DAP)
    CmsisDapFunction dap_;
+#if defined(MUPP_CMSIS_DAP_HID)
+   CmsisDapHidFunction dapHid_;
+#endif
 #endif
 #if defined(MUPP_WITH_WCH_LINK)
    WchLinkFunction wch_;

@@ -2,15 +2,12 @@
 
 #include "usb/CmsisDapFunction.h"
 
+#include <algorithm>
+
 namespace usb {
 
-CmsisDapFunction::CmsisDapFunction(cmsisdap::Processor &processor)
-   : VendorBulkFunction(dap::dapInterface,
-                        art::usb::VendorBulkEndpoints{ .out = dap::outEndpoint, .in = dap::inEndpoint, .maxPacketSize = dap::packetSize })
-   , processor_(processor) {
-}
-
-bool CmsisDapFunction::poll() {
+template <typename Base>
+bool DapFunction<Base>::poll() {
    // A packet that came before the suspend runs after the resume: the
    // target stays released during the suspend.
    if(suspended_ || !processor_.runNext()) {
@@ -19,12 +16,13 @@ bool CmsisDapFunction::poll() {
    // Send the response at once, before the next packet runs.
    sendResponse();
    if(processor_.canSubmit()) {
-      resumeOut();
+      this->resumeOut();
    }
    return true;
 }
 
-bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {
+template <typename Base>
+bool DapFunction<Base>::dataReceived(art::span<const uint8_t> packet) {
    // The OUT endpoint is held while no slot is free, so a packet that
    // arrives here always fits. poll() runs it.
    if(!packet.empty()) {
@@ -34,25 +32,29 @@ bool CmsisDapFunction::dataReceived(art::span<const uint8_t> packet) {
    return processor_.canSubmit();
 }
 
-void CmsisDapFunction::transferSent() {
+template <typename Base>
+void DapFunction<Base>::transferSent() {
    processor_.popResponse();
    sendResponse();
    if(processor_.canSubmit()) {
-      resumeOut();
+      this->resumeOut();
    }
 }
 
-void CmsisDapFunction::dataPathOpened() {
+template <typename Base>
+void DapFunction<Base>::dataPathOpened() {
    // No packet is in flight: dataPathClosed() emptied the processor.
-   processor_.setPacketSize(packetSize());
+   processor_.setPacketSize(this->packetSize());
 }
 
-void CmsisDapFunction::dataPathClosed() {
+template <typename Base>
+void DapFunction<Base>::dataPathClosed() {
    suspended_ = false;
    processor_.hostGone();
 }
 
-void CmsisDapFunction::suspended() {
+template <typename Base>
+void DapFunction<Base>::suspended() {
    // The USB function keeps its IN transfer and OUT hold over a suspend, so
    // the processor keeps its queue and responses. Only the target is
    // released.
@@ -60,19 +62,37 @@ void CmsisDapFunction::suspended() {
    processor_.release();
 }
 
-void CmsisDapFunction::resumed() {
+template <typename Base>
+void DapFunction<Base>::resumed() {
    suspended_ = false;
 }
 
-void CmsisDapFunction::sendResponse() {
-   while(!isInTransferBusy() && processor_.hasResponse()) {
+template <typename Base>
+void DapFunction<Base>::sendResponse() {
+   while(!this->isInTransferBusy() && processor_.hasResponse()) {
       const auto response = processor_.response();
-      if(!response.empty() && sendInTransfer(response, ZeroLengthPacket::Never)) {
+      if(!response.empty() && sendPacket(response)) {
          return;
       }
       // Not configured, or nothing to send: drop it.
       processor_.popResponse();
    }
 }
+
+template <typename Base>
+bool DapFunction<Base>::sendPacket(art::span<const uint8_t> response) {
+   if constexpr(isHid) {
+      // The processor packet size is the report size, so the response fits.
+      const std::size_t count = std::min(response.size(), report_.size());
+      std::copy_n(response.begin(), count, report_.begin());
+      std::fill(report_.begin() + static_cast<std::ptrdiff_t>(count), report_.end(), uint8_t{ 0 });
+      return this->sendReport(art::span<const uint8_t>(report_.data(), report_.size()));
+   } else {
+      return this->sendInTransfer(response, Base::ZeroLengthPacket::Never);
+   }
+}
+
+template class DapFunction<art::usb::VendorBulkFunction>;
+template class DapFunction<art::usb::HidFunction>;
 
 } // namespace usb

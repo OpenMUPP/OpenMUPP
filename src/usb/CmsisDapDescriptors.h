@@ -10,6 +10,12 @@
 //                   The interface string contains "CMSIS-DAP": the host
 //                   tools find a CMSIS-DAP v2 interface by that string.
 //   Interfaces 1-2  CDC-ACM with IAD, as in the Versaloon personality
+//   Interface 3     MUPP_CMSIS_DAP_HID only: the CMSIS-DAP v1 interface,
+//                   HID class 0x03, interrupt OUT 0x05, interrupt IN 0x85,
+//                   64-byte reports at both speeds, bInterval 1 (1 ms at
+//                   full speed, 125 us at high speed). The v1 tools find it
+//                   by "CMSIS-DAP" in the product string. It is after the
+//                   other interfaces, so their numbers stay.
 //
 // Windows 8.1 and later bind WinUSB to interface 0 with no driver
 // installation: bcdUSB 2.01 makes Windows read the BOS, the BOS has the
@@ -36,6 +42,7 @@
 
 #include <cstdint>
 #include <usb/DescriptorBuilder.h>
+#include <usb/HidFunction.h>
 #include <usb/MsOs20.h>
 
 namespace usb::dap {
@@ -54,6 +61,25 @@ inline constexpr uint16_t highSpeedPacketSize = 512;
 // of 125 us, 16 ms as at full speed.
 inline constexpr uint8_t cdcNotificationHighSpeedInterval = 8;
 
+// The CMSIS-DAP v1 interface (MUPP_CMSIS_DAP_HID)
+#if defined(MUPP_CMSIS_DAP_HID)
+inline constexpr bool hasHid = true;
+#else
+inline constexpr bool hasHid = false;
+#endif
+inline constexpr uint8_t hidInterface = 3;
+inline constexpr uint8_t hidOutEndpoint = 0x05;
+inline constexpr uint8_t hidInEndpoint = 0x85;
+// One CMSIS-DAP v1 command or response is one report, also at high speed:
+// avrdude and Bloom take 64-byte reports.
+inline constexpr uint16_t hidReportSize = 64;
+inline constexpr uint8_t hidInterval = 1;
+inline constexpr auto hidReportDescriptor = desc::vendorReportDescriptor<hidReportSize>();
+// The highest endpoint number plus 1, with and without the HID interface
+inline constexpr uint8_t hidEndpointCount = (hidInEndpoint & 0x0F) + 1;
+static_assert((hidOutEndpoint & 0x0F) == (hidInEndpoint & 0x0F) && (hidInEndpoint & 0x0F) == endpointCount);
+inline constexpr uint8_t endpointCountOfImage = hasHid ? hidEndpointCount : endpointCount;
+
 // String descriptor indexes. Index 0 is the LANGID table.
 enum StringIndex : uint8_t {
    stringLanguages = 0,
@@ -70,9 +96,12 @@ inline constexpr unsigned packetMemorySize = 512;
 // The buffer descriptor table, EP0 (64 bytes each way), the double-buffered
 // OUT endpoint of the DAP interface, the IN endpoint, and the CDC-ACM
 // endpoints.
-inline constexpr unsigned packetMemoryUsed =
-endpointCount * 8 + 2 * 64 + 2 * packetSize + packetSize + cdcNotificationPacketSize + 2 * cdcDataPacketSize;
-static_assert(packetMemoryUsed <= packetMemorySize);
+// With the HID interface also its two report endpoints. CMake refuses the
+// HID interface on the STM32F1 (cmake/Personalities.cmake).
+inline constexpr unsigned packetMemoryUsed = endpointCountOfImage * 8 + 2 * 64 + 2 * packetSize + packetSize +
+                                             cdcNotificationPacketSize + 2 * cdcDataPacketSize +
+                                             (hasHid ? 2 * hidReportSize : 0);
+static_assert(hasHid || packetMemoryUsed <= packetMemorySize);
 
 // USB 2.01: a USB 2.0 device with a BOS descriptor
 inline constexpr uint16_t bcdUsb = 0x0201;
@@ -102,22 +131,37 @@ inline constexpr desc::DeviceFields deviceFields{
 };
 inline constexpr auto deviceDescriptor = desc::device(deviceFields);
 
-// The configuration at a bulk packet size and a notification bInterval.
+// The CMSIS-DAP v1 interface: the same at both speeds
+inline constexpr auto hidInterfaceDescriptor =
+desc::interfaceDescriptor(desc::InterfaceFields{ hidInterface, 0, art::usb::hid::kInterfaceClass, 0, 0, 0 },
+                          desc::hidDescriptor(static_cast<uint16_t>(hidReportDescriptor.size())),
+                          desc::endpoint(hidInEndpoint, art::usb::EndpointType::Interrupt, hidReportSize, hidInterval),
+                          desc::endpoint(hidOutEndpoint, art::usb::EndpointType::Interrupt, hidReportSize, hidInterval));
+
+// The configuration at a bulk packet size and a notification bInterval,
+// with the HID interface when withHid is true.
+template <bool withHid = hasHid>
 constexpr auto makeConfiguration(uint16_t bulkPacketSize, uint8_t notificationInterval) {
-   return desc::configuration(
-   desc::ConfigurationFields{ .maxPowerMilliamps = maxPowerMilliamps },
-   desc::interfaceDescriptor(desc::InterfaceFields{ dapInterface, 0, desc::classcode::kVendorSpecific, 0, 0, stringInterface },
-                             desc::endpoint(outEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
-                             desc::endpoint(inEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)),
-   desc::interfaceAssociation(cdcControlInterface, 2, desc::classcode::kCdc, desc::cdc::kSubclassAcm, 0, stringSerialPort),
-   desc::interfaceDescriptor(desc::InterfaceFields{ cdcControlInterface, 0, desc::classcode::kCdc, desc::cdc::kSubclassAcm, 0, stringSerialPort },
-                             desc::cdcHeader(), desc::cdcCallManagement(0, cdcDataInterface), desc::cdcAcm(),
-                             desc::cdcUnion(cdcControlInterface, cdcDataInterface),
-                             desc::endpoint(cdcNotificationEndpoint, art::usb::EndpointType::Interrupt,
-                                            cdcNotificationPacketSize, notificationInterval)),
-   desc::interfaceDescriptor(desc::InterfaceFields{ cdcDataInterface, 0, desc::classcode::kCdcData, 0, 0, 0 },
-                             desc::endpoint(cdcDataOutEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
-                             desc::endpoint(cdcDataInEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)));
+   const auto interfaces =
+   desc::concat(desc::interfaceDescriptor(desc::InterfaceFields{ dapInterface, 0, desc::classcode::kVendorSpecific, 0, 0, stringInterface },
+                                          desc::endpoint(outEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
+                                          desc::endpoint(inEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)),
+                desc::interfaceAssociation(cdcControlInterface, 2, desc::classcode::kCdc, desc::cdc::kSubclassAcm, 0, stringSerialPort),
+                desc::interfaceDescriptor(desc::InterfaceFields{ cdcControlInterface, 0, desc::classcode::kCdc,
+                                                                 desc::cdc::kSubclassAcm, 0, stringSerialPort },
+                                          desc::cdcHeader(), desc::cdcCallManagement(0, cdcDataInterface),
+                                          desc::cdcAcm(), desc::cdcUnion(cdcControlInterface, cdcDataInterface),
+                                          desc::endpoint(cdcNotificationEndpoint, art::usb::EndpointType::Interrupt,
+                                                         cdcNotificationPacketSize, notificationInterval)),
+                desc::interfaceDescriptor(desc::InterfaceFields{ cdcDataInterface, 0, desc::classcode::kCdcData, 0, 0, 0 },
+                                          desc::endpoint(cdcDataOutEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
+                                          desc::endpoint(cdcDataInEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)));
+   const desc::ConfigurationFields fields{ .maxPowerMilliamps = maxPowerMilliamps };
+   if constexpr(withHid) {
+      return desc::configuration(fields, interfaces, hidInterfaceDescriptor);
+   } else {
+      return desc::configuration(fields, interfaces);
+   }
 }
 
 static_assert(packetSize == cdcDataPacketSize, "the DAP and CDC bulk endpoints have the same size");

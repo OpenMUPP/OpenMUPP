@@ -263,20 +263,22 @@ class BridgeModeFlash final : public cmsisdap::BridgeModeStore {
 BridgeModeFlash dapRvModeStore;
 cmsisdap::RvBridge dapRvBridge{ boardJtag, dapSwd, dapRvTap, dapRvModeStore, BridgeModeFlash::load() };
 #endif
+const cmsisdap::DeviceInfo dapInfo{
+   .vendor = dapVendor,
+   .product = dapProduct,
+   .serialNumber = dapSerialNumber.data(),
+   .firmwareVersion = versionString,
+};
+#if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
+protocol::JtagPort *const dapJtag = &dapRvBridge;
+#else
+protocol::JtagPort *const dapJtag = &boardJtag;
+#endif
 cmsisdap::Processor dapProcessor{ dapSwd,
                                   boardGpio,
                                   dapPlatform,
-                                  cmsisdap::DeviceInfo{
-                                  .vendor = dapVendor,
-                                  .product = dapProduct,
-                                  .serialNumber = dapSerialNumber.data(),
-                                  .firmwareVersion = versionString,
-                                  },
-#if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
-                                  &dapRvBridge,
-#else
-                                  &boardJtag,
-#endif
+                                  dapInfo,
+                                  dapJtag,
 #if defined(MUPP_MULTI_PERSONALITY)
                                   &personalitySwitch,
 #else
@@ -290,6 +292,22 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   nullptr,
 #endif
                                   &targetPower };
+#if defined(MUPP_CMSIS_DAP_HID)
+// The CMSIS-DAP v1 (HID) interface: its own processor on the same engines
+// and pins. The first interface that drives the pins owns them
+// (protocol/TargetPinOwner.h). It has the RISC-V bridge, so that
+// DAP_SWJ_Pins re-attaches the wire and ID_DAP_Vendor1 sets the mode. The
+// other vendor commands (personality, bootloader, target power) and the
+// UART commands are on the v2 interface only.
+protocol::TargetPinOwner dapPinOwner;
+#if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
+cmsisdap::Bridge *const dapHidBridge = &dapRvBridge;
+#else
+cmsisdap::Bridge *const dapHidBridge = nullptr;
+#endif
+cmsisdap::Processor dapHidProcessor{ dapSwd,  boardGpio, dapPlatform, dapInfo,     dapJtag,
+                                     nullptr, nullptr,   nullptr,     dapHidBridge };
+#endif
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
 // string (usb/UsbDescriptors.h: SerialNumber), so the host tools see one
@@ -307,6 +325,10 @@ void setDapSerialNumber() {
 // The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
 void startDap() {
    setDapSerialNumber();
+#if defined(MUPP_CMSIS_DAP_HID)
+   dapProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapBulk);
+   dapHidProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapHid);
+#endif
 }
 
 #endif
@@ -352,6 +374,11 @@ usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
                                            .dap = &dapProcessor,
 #else
                                            .dap = nullptr,
+#endif
+#if defined(MUPP_CMSIS_DAP_HID)
+                                           .dapHid = &dapHidProcessor,
+#else
+                                           .dapHid = nullptr,
 #endif
 #if defined(MUPP_WITH_WCH_LINK)
                                            .wch = &wchProcessor,
@@ -461,7 +488,11 @@ uint32_t probeErrorCount() {
 #endif
 #if defined(MUPP_WITH_CMSIS_DAP)
    if(isActive(Personality::CmsisDap)) {
+#if defined(MUPP_CMSIS_DAP_HID)
+      return dapProcessor.errorCount() + dapHidProcessor.errorCount();
+#else
       return dapProcessor.errorCount();
+#endif
    }
 #endif
    return 0;
