@@ -55,8 +55,9 @@
 //
 // With Pins::untimedMinPeriodCycles (the CH32V307), a CMSIS-DAP request
 // above the timed range runs untimed with extra NOPs in each half period
-// (untimedPadFor()). The pad makes the shortest period not shorter than
-// the request, and an interrupt only makes a period longer. Each small pad
+// (untimedPadFor()). The pad makes the shortest period the nearest to the
+// request, at most untimedFastPercent faster, and an interrupt only makes a
+// period longer. Each small pad
 // has its own instance of the engine. The larger pads use one instance
 // with the NOP sled of the pins (Pins::padSled()). Only pad 0 unrolls the
 // bits (unrolledBits()), so the padded engine has its own shortest period
@@ -311,8 +312,8 @@ inline constexpr uint32_t sledPace = UINT32_MAX - 1;
 // engine without extra NOPs, in core cycles, measured on the wire. With it,
 // a request with a half period below Pins::untimedBelowHalfCycles runs
 // untimed with extra NOPs, not timed. An interrupt only makes the untimed
-// engine slower, so the clock is never faster than the request. 0: no
-// padded engine.
+// engine slower, so the clock is at most untimedFastPercent faster than
+// the request. 0: no padded engine.
 template <typename Pins>
 constexpr uint32_t untimedMinPeriodCycles() {
    if constexpr(requires { Pins::untimedMinPeriodCycles; }) {
@@ -352,19 +353,46 @@ constexpr uint32_t untimedPadCount() {
    }
 }
 
-// The extra NOPs in each half period, so that the shortest period is not
-// shorter than the period of hz: untimedMinPeriodCycles at pad 0, else
+// A pad may make the shortest period up to this share faster than the
+// request, in percent: untimedPadFor() takes the nearest pad.
+inline constexpr uint32_t untimedFastPercent = 5;
+
+// The shortest period of a pad: untimedMinPeriodCycles at pad 0, else
 // paddedMinPeriodCycles + 2 * pad.
+template <typename Pins>
+constexpr uint32_t untimedPeriodOfPad(uint32_t pad) {
+   return pad == 0 ? untimedMinPeriodCycles<Pins>() : paddedMinPeriodCycles<Pins>() + 2 * pad;
+}
+
+// The extra NOPs in each half period: the pad whose shortest period is
+// nearest to the period of hz, and at most untimedFastPercent shorter.
 template <typename Pins>
 constexpr uint32_t untimedPadFor(uint32_t coreHz, uint32_t hz) {
    constexpr uint32_t minPeriod = paddedMinPeriodCycles<Pins>();
-   const uint32_t period = intdiv::ceilDiv(coreHz, hz == 0 ? 1u : hz);
-   if(period <= untimedMinPeriodCycles<Pins>()) {
+   hz = hz == 0 ? 1u : hz;
+   const uint32_t period = intdiv::ceilDiv(coreHz, hz);
+   // The smallest pad that is not faster than hz
+   uint32_t pad = 0;
+   if(period > untimedMinPeriodCycles<Pins>()) {
+      const uint32_t slower = period > minPeriod ? intdiv::ceilDiv(period - minPeriod, 2u) : 0;
+      pad = slower > 1 ? slower : 1;
+   }
+   if(pad >= untimedPadCount<Pins>()) {
+      return untimedPadCount<Pins>() - 1;
+   }
+   if(pad == 0) {
       return 0;
    }
-   const uint32_t pad = period > minPeriod ? intdiv::ceilDiv(period - minPeriod, 2u) : 0;
-   const uint32_t padded = pad > 1 ? pad : 1;
-   return padded < untimedPadCount<Pins>() ? padded : untimedPadCount<Pins>() - 1;
+   // The next faster pad, when it is nearer and not too fast. In cycles
+   // times hz: the request period is coreHz.
+   const uint64_t slow = uint64_t{ untimedPeriodOfPad<Pins>(pad) } * hz - coreHz;
+   const uint64_t fasterCycles = uint64_t{ untimedPeriodOfPad<Pins>(pad - 1) } * hz;
+   if(fasterCycles >= coreHz) {
+      return pad - 1;
+   }
+   const uint64_t fast = coreHz - fasterCycles;
+   const bool inLimit = fast * 100 <= uint64_t{ coreHz } * untimedFastPercent;
+   return inLimit && fast < slow ? pad - 1 : pad;
 }
 
 // Pins::padSledCycles: the cycles of a jump into the NOP sled of the pins
@@ -471,8 +499,8 @@ class BitBangPort final : public protocol::SwdPort {
    //
    // With Pins::untimedMinPeriodCycles, a request with a half period
    // shorter than Pins::untimedBelowHalfCycles runs untimed, with
-   // untimedPadFor() extra NOPs: the shortest period is then not shorter
-   // than the request.
+   // untimedPadFor() extra NOPs: the shortest period is then the nearest
+   // to the request, at most untimedFastPercent shorter.
    void setClockHz(uint32_t hz) {
       if constexpr(untimedPadCount<Pins>() > 1) {
          const uint32_t coreHz = pins_.coreHz();

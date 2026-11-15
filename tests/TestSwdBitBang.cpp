@@ -1024,35 +1024,53 @@ struct PaddedPins : MockSwdPins {
 };
 } // namespace
 
-TEST_CASE("SWD bit-bang: the untimed pad makes the shortest period not shorter than the request") {
+TEST_CASE("SWD bit-bang: the untimed pad gives the nearest period, at most 5 % faster") {
    static_assert(swd::untimedPadCount<MockSwdPins>() == 1);
    static_assert(swd::untimedPadInstances<MockSwdPins>() == 1);
    static_assert(swd::paddedMinPeriodCycles<MockSwdPins>() == 0);
    static_assert(swd::paddedHighPadNops<MockSwdPins>() == swd::untimedPadNops);
    static_assert(swd::paddedHighPadNops<PaddedPins>() == 0);
+   // Pad 0: 13 cycles. The padded engine: 16 + 2 * pad cycles.
+   static_assert(swd::untimedPeriodOfPad<PaddedPins>(0) == 13);
+   static_assert(swd::untimedPeriodOfPad<PaddedPins>(1) == 18);
    // Half periods up to 35 cycles: periods up to 70 cycles, pads 0 to 27
    static_assert(swd::untimedPadCount<PaddedPins>() == 28);
    static_assert(swd::untimedPadInstances<PaddedPins>() == 8);
-   // From the first request with a half period below 36 cycles
+   // From the first request with a half period below 36 cycles, against
+   // a search of all pads
    for(uint32_t hz = 2'057'143; hz <= 20'000'000; hz += 997) {
       CAPTURE(hz);
       REQUIRE(swd::halfPeriodCyclesOfHz(144'000'000, hz) < 36);
+      const double request = 144e6 / hz;
+      uint32_t best = 0;
+      double bestError = 1e9;
+      for(uint32_t pad = 0; pad < swd::untimedPadCount<PaddedPins>(); ++pad) {
+         const double period = swd::untimedPeriodOfPad<PaddedPins>(pad);
+         const double error = period > request ? period - request : request - period;
+         if(period >= 0.95 * request && error <= bestError) {
+            best = pad;
+            bestError = error;
+         }
+      }
       const uint32_t pad = swd::untimedPadFor<PaddedPins>(144'000'000, hz);
-      // Pad 0: 13 cycles. The padded engine: 16 + 2 * pad cycles.
-      const uint32_t period = pad == 0 ? 13 : 16 + 2 * pad;
-      // Not faster than hz, and the next smaller pad is faster
-      REQUIRE(144e6 / period <= hz);
+      REQUIRE(pad == best);
       if(pad != 0) {
-         REQUIRE(144e6 / (pad == 1 ? 13 : period - 2) > hz);
+         REQUIRE(swd::untimedPeriodOfPad<PaddedPins>(pad) >= 0.95 * request);
       }
    }
    CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 20'000'000) == 0);
-   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 11'076'924) == 0);
-   // 14 cycles: longer than pad 0, and pad 1 (18 cycles) is the next
+   // 13.58 cycles: pad 0 is 4.3 % faster
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 10'600'000) == 0);
+   // 14 cycles: pad 0 is 7 % faster, so pad 1 (18 cycles)
    CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 10'285'715) == 1);
    CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 8'000'000) == 1);
-   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 7'999'999) == 2);
+   // 18.7 cycles: pad 1 is 3.7 % faster and nearer than pad 2
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 7'700'000) == 1);
+   // 19.2 cycles: pad 1 is 6.3 % faster, so pad 2 (20 cycles)
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 7'500'000) == 2);
    CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 2'057'143) == 27);
+   // Slower than the last pad
+   CHECK(swd::untimedPadFor<PaddedPins>(144'000'000, 1'000'000) == 27);
 }
 
 TEST_CASE("SWD bit-bang: Pins::untimedMinPeriodCycles runs the fast requests untimed with pads") {
@@ -1072,7 +1090,7 @@ TEST_CASE("SWD bit-bang: Pins::untimedMinPeriodCycles runs the fast requests unt
       bool sled;
    };
    for(const Case c : { Case{ 20'000'000, 0, false }, Case{ 9'000'000, 1, false }, Case{ 7'578'000, 2, false },
-                        Case{ 4'800'000, 7, false }, Case{ 4'500'000, 8, true }, Case{ 2'100'000, 27, true } }) {
+                        Case{ 4'800'000, 7, false }, Case{ 4'500'000, 8, true }, Case{ 2'100'000, 26, true } }) {
       CAPTURE(c.hz);
       port.setClockHz(c.hz);
       CHECK_FALSE(port.isTimed());
