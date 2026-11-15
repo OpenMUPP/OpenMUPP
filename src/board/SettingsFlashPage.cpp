@@ -274,6 +274,80 @@ extern "C" void NMI_Handler() {
    }
 }
 
+#elif defined(CH32V30x_D8C) // RM chapter 32
+
+#include <array>
+#include <peripherals/Flash.h>
+
+// The start of the page: -Wl,--defsym in CMakeLists.txt, an address in the 0x08000000 alias of the flash
+extern "C" const uint16_t __flash_reserved_start[];
+
+namespace board {
+
+namespace {
+
+constexpr std::size_t slotCount = SettingsFlashPage::sizeBytes / sizeof(uint16_t);
+
+// An erased half-word reads 0xE339 (RM 32.5.7)
+constexpr uint16_t erasedHalfWord = 0xE339;
+// Not erased and not the record of a personality (all records have 8 bits set)
+constexpr uint16_t corruptSlot = 0x0000;
+
+// The log slot of a half-word. 0xFFFF is no record and must not read as
+// erased: the store would write it again. Limit: the cells do not store the
+// bits as they read, so a write that a power loss cut can read as any value,
+// also 0xE339 (erased) or a record (12 of 65536 values).
+constexpr uint16_t slotOf(uint16_t halfWord) {
+   if(halfWord == erasedHalfWord) {
+      return personality::PersonalityStore::erasedSlot;
+   }
+   return halfWord == personality::PersonalityStore::erasedSlot ? corruptSlot : halfWord;
+}
+
+static_assert(slotOf(erasedHalfWord) == personality::PersonalityStore::erasedSlot);
+static_assert(slotOf(0xFFFF) == corruptSlot);
+static_assert(slotOf(personality::PersonalityStore::recordOfCode(1, 0)) == personality::PersonalityStore::recordOfCode(1, 0));
+static_assert(SettingsFlashPage::sizeBytes == 256, "one fast erase page (Flash::erase_page)");
+
+// The slots of the page. slots() reads the page into it.
+std::array<uint16_t, slotCount> view{};
+
+void *slotAddress(std::size_t index) {
+   return const_cast<uint16_t *>(&__flash_reserved_start[index]);
+}
+
+} // namespace
+
+art::span<const uint16_t> SettingsFlashPage::slots() const {
+   for(std::size_t index = 0; index < slotCount; ++index) {
+      view[index] = slotOf(__flash_reserved_start[index]);
+   }
+   return { view.data(), view.size() };
+}
+
+bool SettingsFlashPage::erase() {
+   {
+      const Flash::writable_section unlocked;
+      Flash::erase_page(slotAddress(0));
+   }
+   for(const uint16_t slot : slots()) {
+      if(slot != personality::PersonalityStore::erasedSlot) {
+         return false;
+      }
+   }
+   return true;
+}
+
+bool SettingsFlashPage::program(std::size_t index, uint16_t value) {
+   if(index >= slotCount || value == erasedHalfWord) {
+      return false;
+   }
+   const Flash::writable_section unlocked;
+   return Flash::program_halfword(slotAddress(index), value);
+}
+
+} // namespace board
+
 #else
 #error "SettingsFlashPage: no settings page for this STM32 family"
 #endif

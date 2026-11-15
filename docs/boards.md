@@ -453,9 +453,12 @@ If the crystal or the PLL does not start, the clock stays on HSI and the LED fla
 The image does not have USB and the probe engines yet.
 
 The option `MUPP_CH32_STUB_IMAGE=OFF` builds the firmware instead of the stub.
-Use it with `-DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_RV_BRIDGE=OFF`:
-the flash settings page of the CH32V307 does not exist yet, so only one personality without the RISC-V bridge builds.
-The preset `ydch32v307-cmsis-dap` sets these options.
+The firmware image can have all personalities and the RISC-V bridge.
+The preset `ydch32v307-cmsis-dap` sets this option.
+A multi image or an image with the RISC-V bridge keeps the last 256-byte flash page of the 256 KB code flash (`0x0803FF00`) for the stored personality and the bridge mode (see [Multi image](usb-device.md#multi-image)).
+An erased half-word of the CH32V307 flash reads `0xE339`, not `0xFFFF`. The driver maps it to an erased slot.
+For each erase and write of the page, the firmware sets HCLK to 72 MHz, because the flash clock must not be more than 60 MHz (RM section 32.1).
+Then the baud rate of the UART bridge is wrong for up to 16 ms.
 The preset `ydch32v307-wch-link` builds an image with only the WCH-Link personality. It has the one-wire engine (see [One-wire timer](wch-link.md#one-wire-timer)).
 This image builds and links (37 KB).
 On the YD board, USB, JTAG connect and SWD connect work.
@@ -475,7 +478,8 @@ These parts are known to be incomplete:
   JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. 1125 kHz is not tested with the wire. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 - The one-wire engine (TIM10 and DMA2) passes with wlink and minichlink on a CH32V003 (see [CH32V003 on the YD-CH32V307VCT6](wch-link.md#ch32v003-on-the-yd-ch32v307vct6-one-wire)).
   The two-wire engine is not tested on this board.
-- There is no bootloader entry and no flash settings.
+- There is no bootloader entry: `FW_UPDATE` and the bootloader code of the switch commands are not available, and openmupp-bootloader does not support the board.
+- The settings page (multi image, stored bridge mode) builds, but it is not tested on the board.
 
 The board definition is `src/board/boards/YdCh32V307.h`.
 The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.

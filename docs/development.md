@@ -28,6 +28,9 @@ The `app-32k` image uses the script of a part with 128 KB flash or more, `mem-F1
 CMake gives each image the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
 The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
 For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
+The CH32 boards use the memory linker scripts of ch32v00x-system. They do not have these parameters.
+CMake gives the start of the settings page with `-Wl,--defsym=__flash_reserved_start=<address>`.
+The FLASH region of the link is the full flash, so only the size check (`cmake/ImageSize.cmake`) keeps an image out of the settings page.
 
 For the STM32F1 boards (`MUPP_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `openmupp-bootloader` for the same board.
 The target is `openmupp-bootloader`.
