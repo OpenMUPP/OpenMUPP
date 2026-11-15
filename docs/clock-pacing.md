@@ -443,7 +443,7 @@ Findings:
 ## CH32V307 unrolled bits
 
 On the CH32V307, `board::SwdPins` sets `unrolledBits` (`swd::unrolledBits()`).
-The untimed engine without extra NOPs (pad 0) then unrolls the request (8 bits), the ACK (3 bits) and the data (32 bits).
+Pad 0 of the untimed engine then unrolls the request (8 bits), the ACK (3 bits) and the data (32 bits).
 The padded engine keeps the loops (see [CH32V307 padded untimed engine](#ch32v307-padded-untimed-engine)).
 Each bit has no loop code, and its bit position is a constant.
 A read bit is SWCLK low, the load from `INDR`, SWCLK high, and 2 to 4 instructions that add the bit to the value.
@@ -544,7 +544,7 @@ The untimed engine does not read the cycle counter, and it does not catch up aft
 Thus an interrupt only makes a period longer.
 The rate comes from the instructions of each half period, and each NOP is one core cycle.
 
-- Pad 0 is the untimed engine without extra NOPs, with the [unrolled bits](#ch32v307-unrolled-bits).
+- Pad 0 is the untimed engine with the [unrolled bits](#ch32v307-unrolled-bits), without extra NOPs.
   Its shortest period is 13 cycles at 144 MHz (90 ns, `untimedMinPeriodCycles` in `board::SwdPins`).
 - The padded engine (pads from 1) keeps the bit loops, so each instance is small: 0.8 to 1.1 KB.
   An unrolled instance was 2.6 to 5.2 KB, and it grew by 330 bytes for each pad.
@@ -603,8 +603,8 @@ Findings:
 
 - All reads were correct. Writes of 32 KiB of random data (`load_image`, `verify_image` and a read) at 3000, 4800, 5000, 6000, 7000, 9000, 10000, 10600 and 12000 kHz were correct.
 - In each padded row, the shortest period is not more than 5 % shorter than the request period. From pad 2, all bits have the same loop code, so the median is the shortest period or 1 cycle more.
-  Thus the median rate is in 3 % of the request, from 2 MHz to 8 MHz.
-- At pad 1, the shortest period is 16 cycles, but most periods are 17 cycles (118 ns). Thus the median rate is 8.47 MHz, not 9 MHz. Without extra NOPs, the bits do not all have the same time: the high half period is 62 to 78 ns. With the unrolled padded instances, which never had a period shorter than the request, it was 4 to 15 % below the request.
+  Thus the median rate is in 3 % of the request, from 2 MHz to 8 MHz. With the unrolled padded instances, which never had a period shorter than the request, it was 4 to 15 % below the request.
+- At pad 1, the shortest period is 16 cycles, but most periods are 17 cycles (118 ns). Thus the median rate is 8.47 MHz, not 9 MHz. Without extra NOPs, the bits do not all have the same time: the high half period is 62 to 78 ns.
 - In the pads 1 to 8, the shortest period agrees with the model to the resolution of the analyzer. In the sled pads, it is 1 cycle longer than the model.
 - The requests from 8.55 MHz to 10.5 MHz give pad 1 (8.47 MHz median). Pad 0 (13 cycles, 11.08 MHz) is more than 5 % faster than these requests.
   From 10.55 MHz, the requests give pad 0 (9.6 MHz median). Without pad 1, the requests from 7.7 MHz to 10.5 MHz gave pad 2 (7.94 MHz).

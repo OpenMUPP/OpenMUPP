@@ -28,7 +28,7 @@
 // the NOP pads of the untimed engine (default untimedPadNops, see
 // untimedPadNopsOf()).
 // static constexpr bool unrolledBits = true unrolls the fixed-length bit
-// loops of the untimed engine without extra NOPs (see unrolledBits()).
+// loops of pad 0 of the untimed engine (see unrolledBits()).
 //
 // SWCLK is high between bits. One bit (ADIv5, B4.2):
 //
@@ -287,8 +287,8 @@ constexpr uint32_t paddedHighPadNops() {
    }
 }
 
-// True when Pins::unrolledBits is true: the untimed engine without extra
-// NOPs (pad 0) then unrolls the request (8 bits), the ACK (3 bits) and the
+// True when Pins::unrolledBits is true: pad 0 of the untimed engine then
+// unrolls the request (8 bits), the ACK (3 bits) and the
 // data (32 bits). This removes the loop code from each bit, and the bit
 // position is a constant. The code is about 1.5 KB larger, so only a board
 // with free flash sets it. The padded engine (pads from 1) keeps the
@@ -374,8 +374,8 @@ constexpr uint32_t untimedPeriodOfPad(uint32_t pad) {
    return pad == 0 ? untimedMinPeriodCycles<Pins>() : paddedMinPeriodCycles<Pins>() + 2 * pad;
 }
 
-// The extra NOPs in each half period: the pad whose shortest period is
-// nearest to the period of hz, and at most untimedFastPercent shorter.
+// The pad (extra NOPs: extraNopsOfPad()) whose shortest period is nearest
+// to the period of hz, and at most untimedFastPercent shorter.
 template <typename Pins>
 constexpr uint32_t untimedPadFor(uint32_t coreHz, uint32_t hz) {
    constexpr uint32_t minPeriod = paddedMinPeriodCycles<Pins>();
