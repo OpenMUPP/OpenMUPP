@@ -126,21 +126,13 @@ TEST_CASE("baudRateDivider rejects a rate with an error above maxBaudErrorPercen
    CHECK(uart::baudRateDivider(1099, apb2Clock) == 65514U);
 }
 
-TEST_CASE("baudRateDivider<true> checks the divider of the CH32V307 Vref measurement") {
-   constexpr uint32_t ch32Apb2Clock = 144'000'000;
-   // Valid at 144 MHz and with (divider + 1) / 2 at 72 MHz
-   CHECK(uart::baudRateDivider<true>(115'200, ch32Apb2Clock) == 1250U);
-   CHECK(uart::baudRateDivider<true>(3'000'000, ch32Apb2Clock) == 48U);
-   CHECK(uart::baudRateDivider<true>(2'198, ch32Apb2Clock) == 65514U);
-   // Divider above 0xFFFF at 144 MHz, although 72 MHz alone accepts it
-   CHECK_FALSE(uart::baudRateDivider<true>(1'200, ch32Apb2Clock));
-   CHECK(uart::baudRateDivider<true>(1'200, apb2Clock) == 60000U);
-   // 6 M baud: divider 24 at 144 MHz, but 12 at 72 MHz is below 16
-   CHECK(uart::baudRateDivider<false>(6'000'000, ch32Apb2Clock) == 24U);
-   CHECK_FALSE(uart::baudRateDivider<true>(6'000'000, ch32Apb2Clock));
-   // 3.2 M baud: divider 45 (0 % at 144 MHz), but 23 at 72 MHz gives 3.13 M baud (2.2 %)
-   CHECK(uart::baudRateDivider<false>(3'200'000, ch32Apb2Clock) == 45U);
-   CHECK_FALSE(uart::baudRateDivider<true>(3'200'000, ch32Apb2Clock));
-   // The default follows the build: the host build has no CH32V307
-   CHECK(uart::baudRateDivider(6'000'000, ch32Apb2Clock) == 24U);
+TEST_CASE("baudRateDivider gives the range of UART7 of the CH32V307 (APB1, 144 MHz)") {
+   constexpr uint32_t ch32Apb1Clock = 144'000'000;
+   CHECK(uart::baudRateDivider(115'200, ch32Apb1Clock) == 1250U);
+   CHECK(uart::baudRateDivider(2'198, ch32Apb1Clock) == 65514U);
+   // Divider above 0xFFFF
+   CHECK_FALSE(uart::baudRateDivider(2'197, ch32Apb1Clock));
+   CHECK(uart::baudRateDivider(3'200'000, ch32Apb1Clock) == 45U);
+   CHECK(uart::baudRateDivider(6'000'000, ch32Apb1Clock) == 24U);
+   CHECK(uart::baudRateDivider(9'000'000, ch32Apb1Clock) == 16U);
 }
