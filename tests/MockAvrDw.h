@@ -27,14 +27,18 @@
 // - EEPE writes the EEPROM only directly after EEMPE.
 // - After a stop, the PC register is the stop address + 1.
 //
-// The running program: go starts it at the PC register. With the
-// breakpoint context (0x61), it stops at the breakpoint after runBits bit
-// times, with a break and 0x55. Without, it runs until a probe break and
-// stops at runStopPc.
+// The running program: go starts it at the PC register. The program runs
+// straight up from there: it stops at the first BREAK instruction (0x9598)
+// in flash at or after the PC, or at the breakpoint of the breakpoint
+// context (0x61), the first of the two, after runBits bit times, with a
+// break and 0x55. Without them, it runs until a probe break and stops at
+// runStopPc. A step on a BREAK instruction stops at the same address (the
+// probe must write the original instruction first).
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "MockDebugWireTarget.h"
@@ -124,6 +128,8 @@ class MockAvrDw {
    int steps{ 0 };
    int gos{ 0 };
    int disables{ 0 };
+   // Steps that executed a BREAK instruction
+   int breakSteps{ 0 };
    // The PC and breakpoint of the last go, and if it had the breakpoint
    uint16_t goPc{ 0 };
    uint16_t goBreak{ 0 };
@@ -221,6 +227,20 @@ class MockAvrDw {
       }
       sink_ = Sink::None;
       line_.send(0x55, end + 2u * line_.bitCycles);
+   }
+
+   [[nodiscard]] bool isBreak(uint32_t word) const {
+      return 2u * word + 1u < flash.size() && flash[2u * word] == 0x98 && flash[2u * word + 1u] == 0x95;
+   }
+
+   // The first BREAK at or after word, or none
+   [[nodiscard]] std::optional<uint16_t> nextBreak(uint16_t word) const {
+      for(uint32_t at = word; 2u * at < flash.size(); ++at) {
+         if(isBreak(at)) {
+            return static_cast<uint16_t>(at);
+         }
+      }
+      return std::nullopt;
    }
 
    [[nodiscard]] bool contextIs(uint8_t value) const {
@@ -446,8 +466,9 @@ class MockAvrDw {
          goSreg = io(0x3F);
          pc = dwPc;
          running = true;
-         if(goWithBreak) {
-            stopAt(dwBp, at_ + runBits * line_.bitCycles, true);
+         if(const auto stop = nextBreak(dwPc); stop || goWithBreak) {
+            const uint16_t where = stop && (!goWithBreak || *stop < dwBp || dwBp < dwPc) ? *stop : dwBp;
+            stopAt(where, at_ + runBits * line_.bitCycles, true);
          }
          return;
       case 0x31:
@@ -457,6 +478,11 @@ class MockAvrDw {
          ++steps;
          goRegs = regs;
          goSreg = io(0x3F);
+         if(isBreak(dwPc)) {
+            ++breakSteps;
+            stopAt(dwPc, at_, true);
+            return;
+         }
          stopAt(static_cast<uint16_t>(dwPc + 1u), at_, true);
          return;
       case 0x07:
