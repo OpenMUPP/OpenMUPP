@@ -75,6 +75,7 @@ add_executable(mupp-tests
         TestDapTargetPower.cpp
         TestAvrIsp.cpp
         TestAvrIspScope.cpp
+        TestDebugWire.cpp
         TestEdbg.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp
