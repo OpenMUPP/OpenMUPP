@@ -63,6 +63,7 @@ Read it with `-C +etc/avrdude-openmupp.conf`. Use avrdude version 7.1 or later.
 Run the commands in the top directory of the repository, or give the full path of the file.
 The entry is not part of avrdude.
 The examples are for a target clock of 8 MHz or more. For a slower target, change the `-B` value (see [Low-clock targets](#low-clock-targets)).
+A new ATmega328P runs at 1 MHz. For a new chip, use `-B 125kHz` until you change the fuses.
 
 ```sh
 # Read the signature of an ATmega328P
