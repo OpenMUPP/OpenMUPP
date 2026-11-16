@@ -487,6 +487,9 @@ These parts are known to be incomplete:
   DMA moves the UART data (see [DMA on the CH32V307](uart-bridge.md#dma-on-the-ch32v307)).
   A loopback test (wire from PC2 to PC3) passes all formats from 9600 baud to 2 Mbaud, and the formats 8N, 8E, 7E and 7O at 3, 4 and 6 Mbaud.
   The `DAP_UART_*` loopback test passes all formats up to 2 Mbaud. 1.5 stop bits are not tested.
+  The receive errors are tested with a second UART on PC3 at 115200 baud and 1 Mbaud, with the bridge at 8E1.
+  Data with odd parity sets the parity error bit of `DAP_UART_Status`, and data at half the baud rate sets the framing error bit.
+  When the line is idle, the bits stay clear.
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
   JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. 1125 kHz is not tested with the wire. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
