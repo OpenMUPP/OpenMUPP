@@ -1,7 +1,7 @@
 # UART bridge
 
 The serial port (interfaces 1 and 2) is a USB-to-UART bridge.
-It uses the UART of the board definition: USART1 on PA9 (TX) and PA10 (RX) on the Mini.
+It uses the UART of the board definition: USART1 on PA9 (TX) and PA10 (RX) on the Mini, UART7 on PC2 (TX) and PC3 (RX) on the YD-CH32V307VCT6.
 The UART has no flow control lines.
 
 - `src/uart/UartBridge.h` moves the data between the serial port and two ring buffers of 1 KB each.
@@ -35,9 +35,9 @@ The bridge uses the line coding that the host sets (SET_LINE_CODING).
 | 7 | odd or even | 1, 1.5 or 2 |
 
 - The baud rate must be in the range of the baud rate generator. For USART1 at 72 MHz (STM32F1), this is 1099 baud to 4.5 Mbaud.
-- On the CH32V307, USART1 runs at 144 MHz, and at 72 MHz during each Vref measurement (see [YD-CH32V307VCT6](boards.md#yd-ch32v307vct6-development-board)).
-  The baud rate must be valid at the two clocks. Thus the range is 2198 baud to 4.59 Mbaud. The bridge refuses lower baud rates, for example 1200 baud.
-- The real baud rate must be within 2 % of the requested baud rate. Above 2.88 Mbaud, only some baud rates are in this limit.
+- On the CH32V307, UART7 runs at 144 MHz (APB1). The range is 2198 baud to 9 Mbaud. The bridge refuses lower baud rates, for example 1200 baud.
+  A Vref measurement changes only the APB2 clock, so the UART7 baud rate does not change (see [YD-CH32V307VCT6](boards.md#yd-ch32v307vct6-development-board)).
+- The real baud rate must be within 2 % of the requested baud rate. Above 2.88 Mbaud at 72 MHz, and above 5.76 Mbaud at 144 MHz, only some baud rates are in this limit.
 - The bridge refuses all other line codings: 5, 6 or 16 data bits, 7 data bits without parity, and mark or space parity.
   The device then stalls the request, and the UART keeps its old line coding.
 - Until the host sets a line coding, the UART uses 115200 baud, 8 data bits, no parity and 1 stop bit (8N1).

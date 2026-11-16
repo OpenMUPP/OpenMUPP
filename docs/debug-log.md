@@ -7,7 +7,7 @@ The USB descriptors are the same in both builds.
 
 With the option, these rules apply:
 
-- The serial port carries only the log. The UART bridge is not built, and USART1 stays unused.
+- The serial port carries only the log. The UART bridge is not built, and the UART of the board stays unused.
   The device ignores the data that the host sends to the port.
 - Code logs with the libArT macros, for example `LOG_INFO(debug::appLog, "text %u", value)` (`src/debug/DebugLog.h`).
 - A log line has the uptime in seconds, the topic and the level, for example `1.234 [usb][INFO] configured`.

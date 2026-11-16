@@ -40,7 +40,9 @@ inline constexpr Definition ydCh32V307{
    .srstSense = Pin{ Port::B, 11 },
    },
    .jtagFastPath = JtagFastPath{ .tckLink{ Port::C, 10 } },
-   .uart = Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } },
+   // UART7 (APB1): its clock does not change during a Vref measurement. Not PA6 and PA7 (UART7 remap): they
+   // are also DO and DI of the SPI flash U4.
+   .uart = Uart{ .usart = 7, .tx{ Port::C, 2 }, .rx{ Port::C, 3 } },
    // Optional: wire the target supply (3.3 V maximum) to PB0
    .vref = VrefSense{ .pin{ Port::B, 0 }, .divider = 1 },
    .powerSwitch = std::nullopt,

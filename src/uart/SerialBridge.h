@@ -3,7 +3,8 @@
 #pragma once
 
 // The UART bridge of the firmware: the CDC-ACM serial port to the UART of
-// the board (USART1 on PA9/PA10 on the Mini). Target only.
+// the board (USART1 on PA9/PA10 on the Mini, UART7 on PC2/PC3 on the YD
+// board). Target only.
 // uart/UartBridge.h has the data path, the flow control and the line
 // coding rules. In an image with the CMSIS-DAP personality, the DAP_UART_*
 // commands can take the UART from the bridge (uart/DapUartChannel.h).

@@ -29,7 +29,8 @@ using board::Port;
 
 // USART1 to USART3 of the STM32F103 with their default pins (RM0008
 // 9.3.8, no remap). The STM32H5 has the same pins for USART1 and USART2,
-// on AF7 (DS14539 table 16).
+// on AF7 (DS14539 table 16). UART7 of the CH32V307 with its default pins
+// (AFIO_PCFR2.USART7_RM = 00, the reset value; CH32FV2x_V3xRM table 10-30).
 struct Peripheral {
    uintptr_t base;
    IRQn_Type irq;
@@ -39,6 +40,10 @@ struct Peripheral {
 
 constexpr Peripheral peripheralOf(uint8_t usart) {
    switch(usart) {
+#if defined(__riscv)
+   case 7:
+      return { UART7_BASE, UART7_IRQn, { Port::C, 2 }, { Port::C, 3 } };
+#endif
    case 2:
       return { USART2_BASE, USART2_IRQn, { Port::A, 2 }, { Port::A, 3 } };
    case 3:
@@ -51,7 +56,8 @@ constexpr Peripheral peripheralOf(uint8_t usart) {
 static_assert(board::current.uart.has_value(), "the UART bridge needs the UART of the board definition");
 constexpr board::Uart uartPins = *board::current.uart;
 #if defined(__riscv)
-static_assert(uartPins.usart == 1, "the CH32V307 bridge supports USART1 (PA9, PA10)");
+// UART7 is on APB1. USART1 is on APB2, and PCLK2 changes during each Vref measurement (board/BoardPower.cpp).
+static_assert(uartPins.usart == 7, "the CH32V307 bridge supports UART7 (PC2, PC3)");
 #elif defined(STM32F1)
 static_assert(uartPins.usart >= 1 && uartPins.usart <= 3, "the STM32F103 has USART1 to USART3");
 #else
@@ -62,7 +68,7 @@ static_assert(uartPins.tx == peripheral.tx && uartPins.rx == peripheral.rx, "the
 
 void enableClock() {
 #if defined(__riscv)
-   RCC->APB2PCENR |= RCC_USART1EN | RCC_AFIOEN;
+   RCC->APB1PCENR |= RCC_UART7EN;
 #else
    if constexpr(uartPins.usart == 1) {
       Rcc::enableUSART1Clock();

@@ -32,19 +32,13 @@ constexpr unsigned conversions = 8;
 #if defined(CH32V30x_D8C)
 // PCLK2 is HCLK (144 MHz, initialize_hardware.cpp) for fast GPIO. ADCPRE divides by 8 at most, so the ADC
 // clock would be 18 MHz, above the 14 MHz limit (datasheet fADC). Thus PCLK2 is HCLK / 2 (ADC 12 MHz) only
-// while the ADC runs, and the ADC clock is off at other times. USART1 (UART bridge) is also on APB2: its
-// divider changes with PCLK2, so its baud rate stays the same (an odd divider rounds up; uart/FrameFormat.h
-// accepts only the baud rates that are also valid with this divider). At each switch,
-// one bit on the line is up to about 110 ns longer or shorter (measured, docs/boards.md).
+// while the ADC runs, and the ADC clock is off at other times. The UART bridge (UART7) is on APB1, so its
+// baud rate does not change.
 class AdcClockWindow {
    public:
    AdcClockWindow() {
       Interrupt::CriticalSection cs;
-      brr_ = USART1->BRR;
       RCC->CFGR0 = (RCC->CFGR0 & ~RCC_CFGR0_PPRE2_MASK) | (4ul << 11);
-      if(brr_ != 0) {
-         USART1->BRR = (brr_ + 1) / 2;
-      }
       Adc::enableClock();
    }
 
@@ -52,16 +46,10 @@ class AdcClockWindow {
       Interrupt::CriticalSection cs;
       Adc::disableClock();
       RCC->CFGR0 &= ~RCC_CFGR0_PPRE2_MASK;
-      if(brr_ != 0) {
-         USART1->BRR = brr_;
-      }
    }
 
    AdcClockWindow(const AdcClockWindow &) = delete;
    AdcClockWindow &operator=(const AdcClockWindow &) = delete;
-
-   private:
-   uint32_t brr_ = 0;
 };
 #else
 // The ADC clock is within its limit at the bus clock of the board.
