@@ -289,12 +289,12 @@ constexpr bool isLap(std::size_t tail, std::size_t head, std::size_t size) {
 }
 
 static_assert(!isLap(250, 128, 256)); // 134 bytes: TC and HT, no lap
-static_assert(isLap(250, 38, 256)); // 300 bytes
-static_assert(isLap(250, 250, 256)); // 256 bytes
-static_assert(isLap(250, 122, 256)); // 384 bytes
-static_assert(!isLap(10, 0, 256)); // 246 bytes: HT and TC, no lap
-static_assert(isLap(10, 255, 256)); // 501 bytes
-static_assert(!isLap(10, 2, 256)); // 504 bytes: not seen
+static_assert(isLap(250, 38, 256));   // 300 bytes
+static_assert(isLap(250, 250, 256));  // 256 bytes
+static_assert(isLap(250, 122, 256));  // 384 bytes
+static_assert(!isLap(10, 0, 256));    // 246 bytes: HT and TC, no lap
+static_assert(isLap(10, 255, 256));   // 501 bytes
+static_assert(!isLap(10, 2, 256));    // 504 bytes: not seen
 
 } // namespace
 
