@@ -28,7 +28,7 @@ class DebugWirePins {
    public:
    void init();
    void fini();
-   void rxEnable(uint32_t baud);
+   [[nodiscard]] bool rxEnable(uint32_t baud);
    void rxDisable();
    int32_t rxRead();
 

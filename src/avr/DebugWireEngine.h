@@ -36,8 +36,10 @@
 //   uint32_t coreHz();         core clock frequency
 //   uint32_t lockIrq();        interrupts off, returns the old state
 //   void unlockIrq(uint32_t);  restores the state of lockIrq()
-//   void rxEnable(uint32_t baud);
-//                              the receiver on at baud, with an empty buffer
+//   bool rxEnable(uint32_t baud);
+//                              the receiver on at baud, with an empty
+//                              buffer. False when the receiver cannot use
+//                              this baud rate: the receiver stays off.
 //   void rxDisable();
 //   int32_t rxRead();          one received byte, or -1 for none. Bit 8
 //                              (dwFramingError) is set when the stop bit
@@ -71,13 +73,20 @@ enum class DwStatus : uint8_t {
    Break,
    // receive(): a byte other than 0x00 with a framing error
    FramingError,
+   // sync(): the measured baud rate is outside the range of the receiver
+   // (Pins::rxEnable()). The target clock is too low or too high for the
+   // board.
+   BaudRange,
 };
 
 // Bit 8 of Pins::rxRead(): the stop bit was low.
 inline constexpr int32_t dwFramingError = 0x100;
 
-// The baud rate range of sync(). 500 baud is a 64 kHz target clock, 1 Mbaud
-// is above the 156 kbaud of a 20 MHz target.
+// The baud rate range of the measurement in sync(). 500 baud is a 64 kHz
+// target clock, 1 Mbaud is above the 156 kbaud of a 20 MHz target. The
+// receiver of the board can have a smaller range: then sync() gives
+// BaudRange (the YD board: 1099 baud or more, a target clock of 141 kHz or
+// more, see docs/boards.md).
 inline constexpr uint32_t dwMinBaud = 500;
 inline constexpr uint32_t dwMaxBaud = 1'000'000;
 
@@ -116,7 +125,8 @@ class DebugWireEngine {
 
    // Sends a break, measures the 0x55 of the target and switches the
    // receiver on at its baud rate. NoSync: no target, or a wrong pattern.
-   // Then the engine is not synced.
+   // BaudRange: the receiver cannot use the baud rate of the target. After
+   // an error, the engine is not synced.
    [[nodiscard]] DwStatus sync() {
       begin();
       const uint32_t breakCycles = synced() ? dwBreakBits * bitCycles_ : usCycles(dwFirstBreakUs);
@@ -133,7 +143,10 @@ class DebugWireEngine {
       baud_ = static_cast<uint32_t>((uint64_t{ pins_.coreHz() } * 8u + total / 2u) / total);
       // The end of the stop bit
       waitCycles(2u * bitCycles_);
-      pins_.rxEnable(baud_);
+      if(!pins_.rxEnable(baud_)) {
+         bitCycles_ = 0;
+         return DwStatus::BaudRange;
+      }
       return DwStatus::Ok;
    }
 

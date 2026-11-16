@@ -48,21 +48,29 @@ void DebugWirePins::fini() {
    gpioPin(*current.debug.srstSense).configure(GpioPin::Mode::Input);
 }
 
-void DebugWirePins::rxEnable(uint32_t baud) {
+bool DebugWirePins::rxEnable(uint32_t baud) {
    Rcc::enableUSART3Clock();
    const Usart port = usart();
    port.disable();
+   // BRR is the bus clock / baud (16 times oversampling). The register has
+   // 16 bits, and the USART needs 16 or more. At a 72 MHz bus clock: 1099
+   // baud to 4.5 Mbaud. Usart::setBaudRate() does not check the range.
+   const uint32_t divider = baud == 0 ? 0 : Usart::calculateBRR(baud, port.getClockFrequency());
+   if(divider < 16 || divider > 0xFFFF) {
+      return false;
+   }
    // 8N1, receiver only
    port.usart.CTLR1 = 0;
    port.usart.CTLR2 = 0;
    port.usart.CTLR3 = 0;
-   port.setBaudRate(baud);
+   port.setBRR(divider);
    port.enableRx();
    port.enable();
    // An empty buffer: reading STATR and then DATAR clears RXNE and the
    // error flags.
    static_cast<void>(port.getStatusFlags());
    static_cast<void>(port.getData());
+   return true;
 }
 
 void DebugWirePins::rxDisable() {

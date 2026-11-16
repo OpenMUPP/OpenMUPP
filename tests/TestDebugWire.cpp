@@ -60,6 +60,32 @@ TEST_CASE("debugWIRE: sync measures the bit time of the target and switches the 
    }
 }
 
+TEST_CASE("debugWIRE: a target below the range of the receiver gives BaudRange") {
+   // The USART of the YD board: BRR is 16 bits, with a 72 MHz bus clock
+   // the lowest rate is 72 MHz / 65535.
+   constexpr uint32_t ydMinBaud = 72'000'000u / 0xFFFFu + 1u;
+   SUBCASE("128 kHz target: 1000 baud") {
+      Fixture f{ 128'000 };
+      f.pins.rxMinBaud = ydMinBaud;
+      CHECK(f.engine.sync() == DwStatus::BaudRange);
+      CHECK_FALSE(f.engine.synced());
+      uint8_t value = 0;
+      CHECK(f.engine.send(&value, 1) == DwStatus::NotSynced);
+      CHECK(f.pins.rxRead() < 0);
+      CHECK_FALSE(f.pins.locked);
+   }
+   SUBCASE("1 MHz target: 7812 baud") {
+      Fixture f{ 1'000'000 };
+      f.pins.rxMinBaud = ydMinBaud;
+      CHECK(f.engine.sync() == DwStatus::Ok);
+   }
+   SUBCASE("a receiver with a maximum") {
+      Fixture f{ 20'000'000 };
+      f.pins.rxMaxBaud = 100'000;
+      CHECK(f.engine.sync() == DwStatus::BaudRange);
+   }
+}
+
 TEST_CASE("debugWIRE: the first break is long enough for the slowest target, later breaks are 40 bits") {
    Fixture f{ 8'000'000 };
    REQUIRE(f.engine.sync() == DwStatus::Ok);

@@ -304,12 +304,18 @@ class MockDwPins {
       }
    }
 
-   void rxEnable(uint32_t baud) {
+   // False outside [rxMinBaud, rxMaxBaud], as the BRR range of a USART
+   bool rxEnable(uint32_t baud) {
+      if(baud < rxMinBaud || baud > rxMaxBaud) {
+         rxOn_ = false;
+         return false;
+      }
       rxBaud = baud;
       rxBitCycles_ = (clockHz + baud / 2u) / baud;
       rxFrom_ = time_;
       rxWake_ = 0;
       rxOn_ = true;
+      return true;
    }
    void rxDisable() {
       rxOn_ = false;
@@ -363,6 +369,9 @@ class MockDwPins {
    int locks{ 0 };
    uint64_t maxLockedCycles{ 0 };
    uint32_t rxBaud{ 0 };
+   // The baud rate range of the receiver. Default: no limit.
+   uint32_t rxMinBaud{ 0 };
+   uint32_t rxMaxBaud{ UINT32_MAX };
    std::vector<int32_t> rxBytes;
    int inits{ 0 };
    int finis{ 0 };

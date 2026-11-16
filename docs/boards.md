@@ -513,6 +513,9 @@ Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more)
 
 The board definition also has PB11 (USART3 RX) as the read-back pin of SRST, for debugWIRE.
 The firmware does not use debugWIRE yet.
+The USART3 receiver gives the lowest debugWIRE baud rate: 1099 baud at the 72 MHz APB1 clock (the BRR register has 16 bits).
+debugWIRE runs at the target clock divided by 128. Thus the target clock must be 141 kHz or more.
+A target on the 128 kHz oscillator cannot use debugWIRE on this board. ISP programming works at 128 kHz.
 
 Use a wire as the link. With a resistor as the link, JTAG-DP transfers on the fast path fail (see [TCK link](clock-pacing.md#tck-link) and [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)):
 
