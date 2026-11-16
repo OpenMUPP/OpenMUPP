@@ -232,6 +232,13 @@ TEST_CASE("debugWIRE: the break and 0x55 of a target that stops") {
       CHECK(f.engine.receive(&value, 1) == DwStatus::Ok);
       CHECK(value == 0x55);
    }
+   SUBCASE("receive sees the break, waitBreak reads the 0x55") {
+      f.target.sendBreak(f.pins.time() + 10u);
+      uint8_t value = 0;
+      CHECK(f.engine.receive(&value, 1) == DwStatus::Break);
+      CHECK(f.engine.waitBreak(10'000) == DwStatus::Ok);
+      CHECK(f.pins.rxRead() < 0);
+   }
    SUBCASE("another byte is not a break") {
       f.target.send(0x42, f.pins.time() + 10u);
       CHECK(f.engine.waitBreak(10'000) == DwStatus::NoSync);

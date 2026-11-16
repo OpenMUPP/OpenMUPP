@@ -173,7 +173,7 @@ class DebugWireEngine {
 
    // Receives bytes. timeoutUs is the limit for each byte, 0 for
    // dwByteTimeoutBits bit times. Break: the target sent a break; the 0x55
-   // after it is still in the receiver (waitBreak() reads it).
+   // after it is still in the receiver. waitBreak() or receive() reads it.
    [[nodiscard]] DwStatus receive(uint8_t *data, uint32_t bytes, uint32_t timeoutUs = 0) {
       if(!synced()) {
          return DwStatus::NotSynced;
@@ -194,8 +194,10 @@ class DebugWireEngine {
    }
 
    // Waits up to timeoutUs for the break and the 0x55 of a target that
-   // stops. 0 checks one time: for a poll while the target runs. Timeout:
-   // no byte. NoSync: another byte than the break, or no 0x55 after it.
+   // stops. 0 checks one time: for a poll while the target runs. A first
+   // byte of 0x55 is also Ok: the sync after a break that receive() read.
+   // Timeout: no byte. NoSync: another byte than the break or 0x55, or no
+   // 0x55 after the break.
    [[nodiscard]] DwStatus waitBreak(uint32_t timeoutUs) {
       if(!synced()) {
          return DwStatus::NotSynced;
@@ -210,6 +212,9 @@ class DebugWireEngine {
       }
       if(value < 0) {
          return DwStatus::Timeout;
+      }
+      if(value == 0x55) {
+         return DwStatus::Ok;
       }
       if((value & 0xFF) != 0) {
          return DwStatus::NoSync;
