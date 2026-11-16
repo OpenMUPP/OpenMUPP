@@ -78,6 +78,8 @@ endfunction()
 #                             Not defined: ON. Ignored without cmsis-dap.
 #   MUPP_CMSIS_DAP_HID        the CMSIS-DAP v1 (HID) interface of the
 #                             CMSIS-DAP personality. Needs cmsis-dap.
+#   MUPP_CMSIS_DAP_AVR        the AVR commands (EDBG) on the HID interface.
+#                             Needs MUPP_CMSIS_DAP_HID.
 #   MUPP_DEBUG_CDC            the debug log on the CDC port
 # Sets these variables in the caller:
 #   MUPP_PERSONALITY_SET         the personalities, in canonical order
@@ -89,6 +91,7 @@ endfunction()
 #   MUPP_IMAGE_TAG               the tag after the board in the file names
 #   MUPP_RV_BRIDGE               ON when the image has the RISC-V bridge
 #   MUPP_HID                     ON when the image has the CMSIS-DAP v1 (HID) interface
+#   MUPP_AVR                     ON when the image has the AVR commands
 function(mupp_resolve_personalities)
     set(_set "${MUPP_PERSONALITIES}")
     set(_default "${MUPP_DEFAULT_PERSONALITY}")
@@ -160,6 +163,14 @@ function(mupp_resolve_personalities)
     else ()
         set(_hid OFF)
     endif ()
+    if (MUPP_CMSIS_DAP_AVR AND NOT _hid)
+        message(FATAL_ERROR "MUPP_CMSIS_DAP_AVR needs MUPP_CMSIS_DAP_HID=ON: the AVR commands use the HID interface.")
+    endif ()
+    if (MUPP_CMSIS_DAP_AVR)
+        set(_avr ON)
+    else ()
+        set(_avr OFF)
+    endif ()
     # The log goes to the CDC port. In a multi image the log is silent while
     # the WCH-Link personality is active.
     if (MUPP_DEBUG_CDC AND _personalities STREQUAL "wch-link")
@@ -184,6 +195,11 @@ function(mupp_resolve_personalities)
     endif ()
     if (_hid)
         list(APPEND _defines MUPP_CMSIS_DAP_HID)
+    endif ()
+    if (_avr)
+        list(APPEND _defines MUPP_CMSIS_DAP_AVR)
+    else ()
+        list(APPEND _dropped "src/protocol/avr/.*\\.cpp")
     endif ()
     if (_bridge)
         list(APPEND _defines MUPP_CMSIS_DAP_RV_BRIDGE)
@@ -217,6 +233,9 @@ function(mupp_resolve_personalities)
     if (_hid)
         string(APPEND _tag "-hid")
     endif ()
+    if (_avr)
+        string(APPEND _tag "-avr")
+    endif ()
 
     set(MUPP_PERSONALITY_SET ${_personalities} PARENT_SCOPE)
     set(MUPP_PERSONALITY_COUNT ${_count} PARENT_SCOPE)
@@ -227,4 +246,5 @@ function(mupp_resolve_personalities)
     set(MUPP_IMAGE_TAG "${_tag}" PARENT_SCOPE)
     set(MUPP_RV_BRIDGE ${_bridge} PARENT_SCOPE)
     set(MUPP_HID ${_hid} PARENT_SCOPE)
+    set(MUPP_AVR ${_avr} PARENT_SCOPE)
 endfunction()

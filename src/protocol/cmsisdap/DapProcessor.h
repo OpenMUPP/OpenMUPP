@@ -88,7 +88,17 @@
 //   or 0xFF: op 0 or 1 on a board without a power switch, or another op.
 //   mV is the target voltage after the operation, 0 without a sense or
 //   when the measurement fails. Without a TargetPower, the command replies
-//   ID_DAP_Invalid. hostGone() keeps the supply on.
+//   ID_DAP_Invalid. hostGone() keeps the supply on. With a pin owner, op 1
+//   replies status 1 while the other processor owns the pins: only the
+//   owner, or any processor while nobody owns the pins, switches the
+//   supply on. Op 0 always works.
+// - With vendor commands (setVendorCommands()), 0x80-0x82 go to that
+//   object instead (the EDBG commands AVR_CMD, AVR_RSP, AVR_EVT on the HID
+//   interface). They take the rest of the packet, so in a
+//   DAP_ExecuteCommands they reply ID_DAP_Invalid. When the processor
+//   gives the pins back (DAP_Disconnect, release(), hostGone()) while it
+//   owns them, it calls VendorCommands::releasePins() first. hostGone()
+//   then calls VendorCommands::hostGone().
 // - With a pin owner (sharePins()), the processor shares the engines and
 //   the pins with another processor (protocol/TargetPinOwner.h). DAP_Connect,
 //   DAP_SWJ_Pins and DAP_ResetTarget take the pins. When the other
@@ -274,6 +284,22 @@ class Bridge {
    ~Bridge() = default;
 };
 
+// The vendor commands 0x80-0x82 of one processor (setVendorCommands())
+class VendorCommands {
+   public:
+   // Runs the command id with the bytes after the ID (the rest of the
+   // packet). Writes the response, with the ID, and returns its length:
+   // at most response.size(), 0 for ID_DAP_Invalid.
+   virtual std::size_t command(uint8_t id, art::span<const uint8_t> fields, art::span<uint8_t> response) = 0;
+   // The processor gives the target pins back: stop driving them.
+   virtual void releasePins() = 0;
+   // The host went away: drop the state of the old host.
+   virtual void hostGone() = 0;
+
+   protected:
+   ~VendorCommands() = default;
+};
+
 class PacketReader;
 class PacketWriter;
 
@@ -373,6 +399,12 @@ class Processor final : private TransferAbort {
       pinClient_ = client;
    }
 
+   // Sends the commands 0x80-0x82 to `vendor`, which must outlive the
+   // processor. Call it before the first packet.
+   void setVendorCommands(VendorCommands &vendor) {
+      vendor_ = &vendor;
+   }
+
    // Number of transfers with an error on the wire. It wraps at 2^32: only
    // the difference between two values counts.
    [[nodiscard]] uint32_t errorCount() const {
@@ -416,6 +448,7 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool jtagConfigure(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool jtagIdcode(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool executeCommands(uint8_t id, PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool vendorCommand(uint8_t id, PacketReader &in, PacketWriter &out, bool nested);
    [[nodiscard]] bool switchPersonality(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool switchBridge(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool targetPower(PacketReader &in, PacketWriter &out);
@@ -449,6 +482,7 @@ class Processor final : private TransferAbort {
    boot::BootloaderEntry *bootloader_;
    Bridge *bridge_;
    protocol::TargetPower *power_;
+   VendorCommands *vendor_{ nullptr };
    protocol::TargetPinOwner *pinOwner_{ nullptr };
    protocol::PinClient pinClient_{ protocol::PinClient::None };
 

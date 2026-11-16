@@ -161,6 +161,69 @@ The STM32F1 boards do not have it: their USB packet memory is full.
 - **Scheduling**: `UsbStack::poll()` runs one command of each interface per round, so one interface does not block the other.
 - **Transfer abort**: `DAP_TransferAbort` stops a running command on both interfaces. During a command, the serial-only event delivery also gives the packets of both CMSIS-DAP interfaces (`usb/SerialEventQueue.h`), so a report of one interface does not hold the serial port during a command of the other.
 - **Tools**: OpenOCD selects the v2 interface first. Use `cmsis-dap backend hid` for the v1 interface. pyOCD also selects v2 first.
+- **AVR commands**: with `MUPP_CMSIS_DAP_AVR`, the vendor commands `0x80`-`0x82` of this interface are the AVR commands of the EDBG tools, not `ID_DAP_Vendor0`-`2`. Thus `ID_DAP_Vendor1` (the bridge mode) is then only on the v2 interface. See [AVR commands](#avr-commands).
+
+## AVR commands
+
+The build option `MUPP_CMSIS_DAP_AVR` (default `OFF`) adds the AVR commands of the Microchip EDBG tools to the CMSIS-DAP v1 (HID) interface.
+avrdude (`jtagice3_isp`) and Bloom use these commands.
+The option needs `MUPP_CMSIS_DAP_HID`.
+Only the CH32V307 boards have it, because the AVR ISP engine has no code for the other chips.
+The protocol is in "EDBG-based Tools Protocols" (Microchip DS50002630A), chapters 3.2.1 and 5.
+The code is `src/protocol/avr/EdbgTransport.h`.
+
+### Transport
+
+The host sends a command frame in fragments with `AVR_CMD`, and reads the response frame in fragments with `AVR_RSP`.
+Each fragment has the field `m << 4 | n`: fragment `m` of `n`, with `n` 15 or less.
+
+| ID | Command | Request | Response |
+|---|---|---|---|
+| `0x80` | `AVR_CMD` | `[0x80][fragment][size u16][data]` | `[0x80][code]`: `0x00` more fragments to come, `0x01` the frame is complete and ran, `0xFF` the fragment is rejected. |
+| `0x81` | `AVR_RSP` | `[0x81]` | `[0x81][fragment][size u16][data]`, 60 bytes of data in each fragment. Fragment `0x00` and size 0: no response. |
+| `0x82` | `AVR_EVT` | `[0x82]` | `[0x82][size u16]`. The size is always 0: the probe has no events. |
+
+The sizes are big-endian.
+The probe runs a command when its last fragment comes, so the response is ready for the next `AVR_RSP`.
+A long ISP command holds the HID interface, as a long DAP command does.
+
+All fields come from the host, and the probe checks them:
+
+- A fragment 1 starts a new frame. It drops a frame that is not complete, and a response that the host did not read.
+- The probe rejects these fragments with code `0xFF` and drops the frame: `m` or `n` is 0, `m` is more than `n`, `m` is not the next fragment, `n` is not the `n` of fragment 1, the size is more than the report has, or the frame is longer than 512 bytes. The next `AVR_RSP` then gives no response.
+- The command frame is `[0x0E][version 0][sequence u16][handler][payload]`. The response frame is `[0x0E][sequence u16][handler][payload]`, with the sequence of the command. The sequence is little-endian. A frame shorter than 5 bytes, or with another start byte or version, gets no response.
+- In a `DAP_ExecuteCommands`, the AVR commands reply `ID_DAP_Invalid`, because each one takes the rest of the report.
+
+### Scopes
+
+The handler selects the scope.
+The responses of the scopes, except AVR ISP, are OK `[0x80][0]`, LIST `[0x81][0][data]`, DATA `[0x84][1][data][0]` and FAILED `[0xA0][0][code]`.
+SET and GET are `[command][0][context][address][bytes][data]`: a range of parameters in one context.
+
+| Handler | Scope | Commands |
+|---|---|---|
+| `0x00` | Discovery | `QUERY`: the handlers (context `0x00`), the tool name (`0x80`) and the serial number (`0x81`). |
+| `0x01` | Housekeeping | Sign-on (`0x10`) and sign-off (`0x11`): OK. `GET` of context 0: the hardware version, the firmware major and minor version, and the build number (addresses 0-4). `GET` of context 1, address 0: the target voltage in mV, little-endian (Vref, PB0 on the CH32V307 boards). `SET` fails: the parameters are read-only. The firmware upgrade command (`0x50`) fails with code `0x10` (not supported), and the probe continues. |
+| `0x11` | AVR ISP | The STK500v2 commands of the ISP engine (`src/protocol/avr/IspScope.h`). |
+| `0x12` | AVR8 generic | Only the parameters that avrdude sets before ISP programming: context 0, addresses 0-1 (variant, function), and context 1, address 0 (physical interface). The probe stores them and does not use them. Deactivate physical (`0x11`): OK. The other commands fail with code `0x90` (not supported). debugWIRE adds them later. |
+| `0x20` | EDBG control | `SET` and `GET` of the target power (context 0, address `0x10`, 1 byte): 0 off, 1 on. See [Target power](#target-power). The other parameters fail with code `0x01`. |
+
+Another handler fails with code `0x10`.
+A host that goes away (bus reset or deconfigure) loses its frame, its response and the AVR8 parameters.
+
+### Target pins
+
+The HID interface owns the target pins for the AVR commands, as for its DAP commands (see [CMSIS-DAP v1 (HID)](#cmsis-dap-v1-hid)).
+
+- `ENTER_PROGMODE` takes the pins. While the v2 interface owns them, it replies `STATUS_CMD_FAILED` and changes no pin.
+- `LEAVE_PROGMODE`, and an `ENTER_PROGMODE` that fails, give the pins back. When `DAP_Connect` of the HID interface took the pins first (avrdude does this), `DAP_Disconnect` gives them back.
+- `DAP_Disconnect` on the HID interface, a USB suspend and a bus reset end the programming mode: RESET is released, and the target runs.
+
+### avrdude
+
+avrdude finds the probe by its USB ID and needs `CMSIS-DAP` in the product string.
+A programmer entry with `type = "jtagice3_isp"` and the USB ID of the probe works without a change in avrdude.
+avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 parameters, the ISP commands, the sign-off and `DAP_Disconnect`.
 
 ## Commands
 
@@ -262,7 +325,7 @@ The response is `[0x82][status u8][mV u16]`:
 | Status | Meaning |
 |---|---|
 | `0x00` | Done. |
-| `0x01` | Refused: a protection keeps the supply off (see below). |
+| `0x01` | Refused: a protection keeps the supply off (see below), or the HID interface owns the target pins. |
 | `0xFF` | Not supported: op `0` or `1` on a board without a power switch, or an op that is not `0`, `1` or `2`. |
 
 `mV` is the target voltage after the operation, little-endian.
@@ -275,6 +338,14 @@ It is 0 when the board has no Vref sense or the measurement fails.
 - The voltage is not above 1.8 V 10 ms after the switch-on. The rail then has a short circuit or an overload, and the firmware switches the supply off again.
 
 A board without a Vref sense switches on without these checks.
+
+With the HID interface, one rule covers both interfaces.
+Only the interface that owns the target pins switches the supply on, or any interface while no interface owns them.
+The switch-off always works, also for the other interface: this is for safety, and for the recovery after a host that stopped.
+`82 01` on the v2 interface gives status `0x01` while the HID interface owns the pins.
+With `MUPP_CMSIS_DAP_AVR`, the EDBG control scope switches the supply on the HID interface (see [Scopes](#scopes)).
+Its switch-on fails with code `0x16` when the v2 interface owns the pins or a protection refuses.
+On a board without a power switch, its `SET` and `GET` fail with code `0x01`.
 While the supply is on, the main loop switches it off when the voltage stays low, as in the Versaloon personality.
 
 The supply is off at power-up.
@@ -1116,6 +1187,11 @@ They also run the `DAP_UART_*` commands and `DAP_Info` through the processor.
 
 `tests/TestDapTargetPower.cpp` runs `ID_DAP_Vendor2` through the processor, on the fake power switch and voltage sense of `tests/FakePower.h`.
 The tests cover off, on and read, each protection, a board without a switch or a sense, an unknown op, the host that goes away, and a response that does not fit.
+
+`tests/TestEdbg.cpp` runs the AVR commands through the HID function, on the ISP engine with the mock AVR of `tests/MockIspTarget.h`.
+The tests run the avrdude session, a flash page in 5 command fragments and a read in 5 response fragments.
+They check each rejected fragment, the bad frame headers, the response that the host did not read, and each scope.
+They also check the target pins between the two interfaces, the end of the programming mode when the host goes away, and the target power rule.
 
 ## Hardware test
 

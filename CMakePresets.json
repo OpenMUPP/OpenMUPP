@@ -176,6 +176,32 @@
       }
     },
     {
+      "name": "options-hid",
+      "description": "The CMSIS-DAP v1 (HID) interface",
+      "hidden": true,
+      "cacheVariables": {
+        "MUPP_CMSIS_DAP_HID": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
+      "name": "options-avr",
+      "description": "The CMSIS-DAP v1 (HID) interface with the AVR commands",
+      "hidden": true,
+      "cacheVariables": {
+        "MUPP_CMSIS_DAP_HID": {
+          "type": "BOOL",
+          "value": "ON"
+        },
+        "MUPP_CMSIS_DAP_AVR": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
       "name": "debug",
       "description": "Debug build: debug log on the serial port, SWD on",
       "hidden": true,
@@ -381,6 +407,14 @@
       ]
     },
     {
+      "name": "weacth523-dual-hid",
+      "displayName": "WeAct STM32H523 core board, dual image with the CMSIS-DAP v1 (HID) interface",
+      "inherits": [
+        "weacth523-dual",
+        "options-hid"
+      ]
+    },
+    {
       "name": "ydch32v307",
       "displayName": "YD-CH32V307VCT6 (stub image)",
       "inherits": [
@@ -442,6 +476,22 @@
           "value": "OFF"
         }
       }
+    },
+    {
+      "name": "ydch32v307-cmsis-dap-avr",
+      "displayName": "YD-CH32V307VCT6, CMSIS-DAP, with the AVR commands (firmware image)",
+      "inherits": [
+        "ydch32v307-cmsis-dap",
+        "options-avr"
+      ]
+    },
+    {
+      "name": "ydch32v307-all-avr",
+      "displayName": "YD-CH32V307VCT6, all personalities, with the AVR commands (firmware image)",
+      "inherits": [
+        "ydch32v307-all",
+        "options-avr"
+      ]
     },
     {
       "name": "host-tests",
@@ -555,6 +605,10 @@
       "configurePreset": "weacth523-debug"
     },
     {
+      "name": "weacth523-dual-hid",
+      "configurePreset": "weacth523-dual-hid"
+    },
+    {
       "name": "ydch32v307",
       "configurePreset": "ydch32v307"
     },
@@ -573,6 +627,14 @@
     {
       "name": "ydch32v307-wch-link",
       "configurePreset": "ydch32v307-wch-link"
+    },
+    {
+      "name": "ydch32v307-cmsis-dap-avr",
+      "configurePreset": "ydch32v307-cmsis-dap-avr"
+    },
+    {
+      "name": "ydch32v307-all-avr",
+      "configurePreset": "ydch32v307-all-avr"
     },
     {
       "name": "host-tests",

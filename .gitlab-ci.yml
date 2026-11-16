@@ -181,6 +181,19 @@ build-weacth523:
         PROTOCOL_TAG: -cmsis-dap
         BUILD_TYPE: Debug
 
+# WeAct STM32H523 core board: the dual image with the CMSIS-DAP v1 (HID)
+# interface (MUPP_CMSIS_DAP_HID). Build and size check only, no artifacts.
+build-weacth523-hid:
+  extends: .build-board-template
+  cache:
+    <<: *fetchcontent-cache
+    key: fetchcontent-firmware-h5
+    policy: pull
+  variables:
+    BOARD: weacth523
+    VARIANT: -dual-hid
+  artifacts: null
+
 # MUPP_PERSONALITIES=cmsis-dap without the RISC-V bridge
 # (MUPP_CMSIS_DAP_RV_BRIDGE=OFF): the only build of the image without the
 # bridge. Build and size check only, no artifacts.
@@ -231,4 +244,15 @@ build-ydch32v307-wch-link:
   variables:
     BOARD: ydch32v307
     VARIANT: -wch-link
+  artifacts: null
+
+# YD-CH32V307VCT6: the AVR commands on the HID interface
+# (MUPP_CMSIS_DAP_AVR), with one and with all personalities. Build and size
+# check only, no artifacts.
+build-ydch32v307-avr:
+  extends: .build-board-template
+  parallel:
+    matrix:
+      - BOARD: ydch32v307
+        VARIANT: [-cmsis-dap-avr, -all-avr]
   artifacts: null

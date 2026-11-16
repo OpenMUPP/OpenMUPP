@@ -124,6 +124,15 @@ class PacketWriter {
       return data_.size() - size_;
    }
 
+   // The free space, for a writer outside; advance() then takes the bytes.
+   [[nodiscard]] art::span<uint8_t> free() const {
+      return data_.subspan(size_);
+   }
+
+   void advance(std::size_t count) {
+      size_ = std::min(size_ + count, data_.size());
+   }
+
    [[nodiscard]] bool ok() const {
       return ok_;
    }
@@ -257,6 +266,9 @@ void Processor::hostGone() {
    responses_ = 0;
    responseFirst_ = 0;
    disconnect();
+   if(vendor_ != nullptr) {
+      vendor_->hostGone();
+   }
    // The bridge is the JTAG port of the other processor too: not while it
    // owns the pins.
    if(bridge_ != nullptr && !otherOwnsPins()) {
@@ -358,6 +370,9 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
    const uint8_t id = in.u8();
    if(!in.ok()) {
       return false;
+   }
+   if(vendor_ != nullptr && id >= command::vendor0 && id <= command::vendor2) {
+      return vendorCommand(id, in, out, nested);
    }
    switch(id) {
    case command::info:
@@ -461,6 +476,17 @@ bool Processor::executeCommands(uint8_t id, PacketReader &in, PacketWriter &out)
    return true;
 }
 
+bool Processor::vendorCommand(uint8_t id, PacketReader &in, PacketWriter &out, bool nested) {
+   const auto fields = in.bytes(in.remaining());
+   const std::size_t length = nested ? 0 : vendor_->command(id, fields, out.free());
+   if(length == 0) {
+      out.u8(command::invalid);
+   } else {
+      out.advance(length);
+   }
+   return true;
+}
+
 bool Processor::switchPersonality(PacketReader &in, PacketWriter &out) {
    const uint8_t code = in.u8();
    if(!in.ok()) {
@@ -521,7 +547,10 @@ bool Processor::targetPower(PacketReader &in, PacketWriter &out) {
    constexpr uint8_t opRead = 2;
    constexpr uint8_t statusRefused = 1;
    uint8_t status = statusOk;
-   if(op == opOn) {
+   if(op == opOn && otherOwnsPins()) {
+      // Only the owner of the pins, or anyone while nobody owns them
+      status = statusRefused;
+   } else if(op == opOn) {
       switch(power_->switchOn()) {
       case protocol::TargetPower::Result::Ok:
          break;
@@ -739,6 +768,9 @@ void Processor::disconnect() {
       // The other processor owns the pins. This one has no port: DAP_Connect
       // needs the pins.
       return;
+   }
+   if(vendor_ != nullptr) {
+      vendor_->releasePins();
    }
    if(port_ == Port::Swd) {
       swd_.fini();
