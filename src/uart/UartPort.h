@@ -4,7 +4,8 @@
 
 // The UART of the board (board::current.uart) for the UART bridge, on the
 // system-stm32 USART driver. Target only. The board must use the default
-// pins of its USART (no AFIO remap).
+// pins of its USART. Only UART7 of the CH32V307 can also use its remap
+// pins (PA6, PA7).
 //
 // The USART interrupt moves the bytes between the data register and the
 // rings of UartBuffers: each received byte into rx, and the bytes of tx to

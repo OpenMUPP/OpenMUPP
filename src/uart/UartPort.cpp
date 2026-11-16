@@ -8,6 +8,7 @@
 #if !defined(__riscv)
 #include <peripherals/Rcc.h>
 #else
+#include <Afio.h>
 // The CH32V30x status register (STATR) has the bits of the STM32F1 SR at the same positions, with other names
 #define USART_SR_RXNE USART_STATR_RXNE
 #define USART_SR_ORE USART_STATR_ORE
@@ -55,20 +56,29 @@ constexpr Peripheral peripheralOf(uint8_t usart) {
 
 static_assert(board::current.uart.has_value(), "the UART bridge needs the UART of the board definition");
 constexpr board::Uart uartPins = *board::current.uart;
+constexpr Peripheral peripheral = peripheralOf(uartPins.usart);
 #if defined(__riscv)
 // UART7 is on APB1. USART1 is on APB2, and PCLK2 changes during each Vref measurement (board/BoardPower.cpp).
-static_assert(uartPins.usart == 7, "the CH32V307 bridge supports UART7 (PC2, PC3)");
-#elif defined(STM32F1)
+static_assert(uartPins.usart == 7, "the CH32V307 bridge supports UART7");
+// The UART7 remap (USART7_RM = 01, RM table 10-30): TX on PA6, RX on PA7
+constexpr bool uart7Remap = uartPins.tx == Pin{ Port::A, 6 } && uartPins.rx == Pin{ Port::A, 7 };
+static_assert(uart7Remap || (uartPins.tx == peripheral.tx && uartPins.rx == peripheral.rx),
+              "UART7 needs PC2 and PC3 (default map) or PA6 and PA7 (remap)");
+#else
+#if defined(STM32F1)
 static_assert(uartPins.usart >= 1 && uartPins.usart <= 3, "the STM32F103 has USART1 to USART3");
 #else
 static_assert(uartPins.usart >= 1 && uartPins.usart <= 2, "the STM32H5 bridge supports USART1 and USART2");
 #endif
-constexpr Peripheral peripheral = peripheralOf(uartPins.usart);
 static_assert(uartPins.tx == peripheral.tx && uartPins.rx == peripheral.rx, "the UART pins are not the default pins of the USART");
+#endif
 
 void enableClock() {
 #if defined(__riscv)
    RCC->APB1PCENR |= RCC_UART7EN;
+   if constexpr(uart7Remap) {
+      hw::Afio::remapUsart7(hw::Afio::Usart7Remap::Remap1);
+   }
 #else
    if constexpr(uartPins.usart == 1) {
       Rcc::enableUSART1Clock();
