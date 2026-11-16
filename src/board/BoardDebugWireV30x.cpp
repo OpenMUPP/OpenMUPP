@@ -9,6 +9,7 @@
 // (board/BoardDebugWire.h). CH32FV2x_V3xRM chapter 21 (USART).
 
 template class avr::DebugWireEngine<board::DebugWirePins>;
+template class avr::DebugWireTarget<board::BoardDebugWire>;
 
 namespace board {
 
