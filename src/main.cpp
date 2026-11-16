@@ -42,6 +42,7 @@
 #include "protocol/cmsisdap/RvDtmTap.h"
 #endif
 #if defined(MUPP_CMSIS_DAP_AVR)
+#include "board/BoardDebugWire.h"
 #include "board/BoardIsp.h"
 #include "protocol/avr/EdbgTransport.h"
 #endif
@@ -315,10 +316,16 @@ cmsisdap::Processor dapHidProcessor{ dapSwd,  boardGpio, dapPlatform, dapInfo,  
 #endif
 #if defined(MUPP_CMSIS_DAP_AVR)
 // The AVR commands of avrdude and Bloom on the HID interface
-// (protocol/avr/EdbgTransport.h), with the ISP engine on the target pins.
+// (protocol/avr/EdbgTransport.h), with the ISP engine and the debugWIRE
+// engine on the target pins. The host sends the device parameters at the
+// start of each debugWIRE session.
 board::IspPins ispPins;
 board::BoardIsp ispEngine{ ispPins, &serialService };
 avr::IspScope<board::BoardIsp> ispScope{ ispEngine };
+board::DebugWirePins debugWirePins;
+board::BoardDebugWire debugWireEngine{ debugWirePins, &serialService };
+board::BoardDebugWireTarget debugWireTarget{ debugWireEngine, avr::DwDevice{} };
+avr::Avr8Scope<board::BoardDebugWireTarget> avr8Scope{ debugWireTarget };
 const avr::ToolInfo edbgTool{
    .name = dapProduct,
    .serialNumber = dapSerialNumber.data(),
@@ -327,7 +334,7 @@ const avr::ToolInfo edbgTool{
    .firmwareMinor = VERSION_MINOR,
    .firmwareBuild = VERSION_BUILD,
 };
-avr::EdbgTransport edbgTransport{ edbgTool, ispScope, dapHidProcessor, &targetPower, &dapPinOwner };
+avr::EdbgTransport edbgTransport{ edbgTool, ispScope, avr8Scope, dapHidProcessor, &targetPower, &dapPinOwner };
 #endif
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number

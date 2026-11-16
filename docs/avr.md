@@ -1,9 +1,10 @@
 # AVR programming
 
-The CMSIS-DAP personality can program AVR chips through the ISP (SPI) interface.
+The CMSIS-DAP personality can program AVR chips through the ISP (SPI) interface and through debugWIRE (dW).
 ISP programming passed a hardware test with avrdude 8.3 on the YD-CH32V307VCT6 board (see [Hardware test](#hardware-test)).
 Tools that use the Microchip EDBG protocol, for example avrdude, find the probe over USB.
-The probe does not have debugWIRE or other AVR interfaces yet.
+avrdude can also program a chip over debugWIRE. debugWIRE has no hardware test yet.
+The probe does not have the other AVR interfaces (JTAG, UPDI, PDI, TPI).
 
 ## Build
 
@@ -66,7 +67,7 @@ The file `etc/avrdude-openmupp.conf` has a programmer entry with the name `openm
 Read it with `-C +etc/avrdude-openmupp.conf`. Use avrdude version 7.1 or later.
 Run the commands in the top directory of the repository, or give the full path of the file.
 The entry is not part of avrdude.
-The examples are for a target clock of 8 MHz or more. For a slower target, change the `-B` value (see [Low-clock targets](#low-clock-targets)).
+The examples are for ISP and a target clock of 8 MHz or more. For a slower target, change the `-B` value (see [Low-clock targets](#low-clock-targets)).
 A new ATmega328P runs at 1 MHz. For a new chip, use `-B 125kHz` until you change the fuses.
 
 ```sh
@@ -82,6 +83,45 @@ avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -B 2MHz -U lfu
 # Write the EEPROM
 avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -B 2MHz -U eeprom:w:data.hex:i
 ```
+
+## debugWIRE
+
+debugWIRE uses only the RESET pin of the target. It is available on the small megaAVR (for example ATmega328P) and the tinyAVR.
+The DWEN fuse enables it. When DWEN is programmed, ISP does not work.
+
+### Wiring
+
+On the YD-CH32V307VCT6 board, connect PB12 (drive) and PB11 (read-back) to the RESET pin of the target.
+The target needs its pull-up on RESET (10 kOhm or more). Remove a capacitor on RESET.
+Connect the target GND to the probe GND. Only 3.3 V targets.
+The target clock must be 282 kHz or more (see [boards.md](boards.md)).
+
+### Enable debugWIRE
+
+1. Program the DWEN fuse over ISP. For an ATmega328P, DWEN is bit 6 of the high fuse (0 = programmed).
+   Example for the default high fuse 0xD9: `avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -B 125kHz -U hfuse:w:0x99:m`.
+2. Switch the target power off and on.
+
+### avrdude over debugWIRE
+
+The entry `openmupp_dw` of `etc/avrdude-openmupp.conf` has the type `jtagice3_dw`, as `xplainedmini_dw` of avrdude.
+debugWIRE has no chip erase. Use `-D`: the probe erases each flash page before it writes it.
+avrdude cannot read or write the fuses and lock bits over debugWIRE.
+
+```sh
+# Read the signature
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp_dw -p m328p -P usb
+
+# Write and verify the flash
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp_dw -p m328p -P usb -D -U flash:w:firmware.hex:i
+```
+
+At the end of the session, the probe resets the target, and the program starts.
+
+### Back to ISP
+
+The probe command "disable debugWIRE" (Bloom sends it) turns dW off until the next power cycle.
+Then program the DWEN fuse back to 1 over ISP, without a power cycle in between.
 
 ## Low-clock targets
 

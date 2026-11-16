@@ -181,7 +181,7 @@ Each fragment has the field `m << 4 | n`: fragment `m` of `n`, with `n` 15 or le
 |---|---|---|---|
 | `0x80` | `AVR_CMD` | `[0x80][fragment][size u16][data]` | `[0x80][code]`: `0x00` more fragments to come, `0x01` the frame is complete and ran, `0xFF` the fragment is rejected. |
 | `0x81` | `AVR_RSP` | `[0x81]` | `[0x81][fragment][size u16][data]`, 60 bytes of data in each fragment. Fragment `0x00` and size 0: no response. |
-| `0x82` | `AVR_EVT` | `[0x82]` | `[0x82][size u16]`. The size is always 0: the probe has no events. |
+| `0x82` | `AVR_EVT` | `[0x82]` | `[0x82][size u16][event frame]`. Size 0: no event. The AVR8 scope gives break events (see [AVR8 generic scope](#avr8-generic-scope)). |
 
 The sizes are big-endian.
 The probe runs a command when its last fragment comes, so the response is ready for the next `AVR_RSP`.
@@ -205,26 +205,95 @@ SET and GET are `[command][0][context][address][bytes][data]`: a range of parame
 | `0x00` | Discovery | `QUERY`: the handlers (context `0x00`), the tool name (`0x80`) and the serial number (`0x81`). |
 | `0x01` | Housekeeping | Sign-on (`0x10`) and sign-off (`0x11`): OK. `GET` of context 0: the hardware version, the firmware major and minor version, and the build number (addresses 0-4). `GET` of context 1, address 0: the target voltage in mV, little-endian (Vref, PB0 on the CH32V307 boards). `SET` fails: the parameters are read-only. The firmware upgrade command (`0x50`) fails with code `0x10` (not supported), and the probe continues. |
 | `0x11` | AVR ISP | The STK500v2 commands of the ISP engine (`src/protocol/avr/IspScope.h`). |
-| `0x12` | AVR8 generic | Only the parameters that avrdude sets before ISP programming: context 0, addresses 0-1 (variant, function), and context 1, address 0 (physical interface). The probe stores them and does not use them. Deactivate physical (`0x11`): OK. The other commands fail with code `0x90` (not supported). debugWIRE adds them later. |
+| `0x12` | AVR8 generic | debugWIRE programming and debug (`src/protocol/avr/Avr8Scope.h`). See [AVR8 generic scope](#avr8-generic-scope). avrdude also sets its parameters before ISP programming. |
 | `0x20` | EDBG control | `SET` and `GET` of the target power (context 0, address `0x10`, 1 byte): 0 off, 1 on. See [Target power](#target-power). The other parameters fail with code `0x01`. |
 
 Another handler fails with code `0x10`.
-A host that goes away (bus reset or deconfigure) loses its frame, its response and the AVR8 parameters.
+A host that goes away (bus reset or deconfigure) loses its frame, its response, the AVR8 parameters and the breakpoints.
+
+### AVR8 generic scope
+
+The AVR8 scope runs the debugWIRE (dW) target operations of `src/avr/DebugWireTarget.h`.
+The host sends the device parameters, so the probe has no part database.
+Values are little-endian. Flash, SRAM and EEPROM addresses are byte addresses. The PC, `RUN_TO` and the break event use word addresses.
+
+| Context | Parameters |
+|---|---|
+| 0 | Address 0: variant (1 = debugWIRE). Address 1: function. |
+| 1 | Address 0: physical interface (5 = debugWIRE). |
+| 2 | The device context, as `struct mega_device_desc` of avrdude: flash page size (`0x00`), flash size (`0x02`), boot start (`0x0A`), EEPROM size (`0x10`), DWDR (`0x18`), EEARH (`0x19`), EEARL (`0x1A`), EECR (`0x1B`), EEDR (`0x1C`), SPMCSR (`0x1D`). |
+| 3 | Address 0: 1 lets the timers of the target run while it is stopped. |
+
+avrdude and Bloom send DWDR and the EEPROM registers as I/O addresses (`0x00`-`0x3F`), and SPMCSR as a data space address (I/O address + `0x20`).
+The probe converts SPMCSR to its I/O address.
+The probe uses the boot start only to know if the device has a boot section.
+The boot start is not a reliable flag: Bloom sends 0 without a boot section, but avrdude sends a value for all parts.
+Thus the probe takes a boot section only when the boot start is not 0 and the flash is larger than 4 KB.
+No debugWIRE part with 4 KB flash (for example the ATmega48) has a boot section.
+On a tinyAVR with more than 4 KB flash, the RWW enable after a page write is CTPB (clear the page buffer) and has no effect.
+For SPM, the probe sets the PC to the start of the last flash page.
+This address is in the boot section for all BOOTSZ fuse values.
+The boot address of avrdude is the start of the last 4 pages, and that address is not in the smallest boot section of an ATmega168.
+
+| Command | Function |
+|---|---|
+| `0x10` Activate physical | Needs variant 1, physical 5 and a valid device context, else code `0x33`. The probe connects and stops the target with a break. |
+| `0x11` Deactivate physical | A stopped target loses its software breakpoints, gets a reset and runs. Then the probe releases the line. Without an active physical: OK. |
+| `0x12` Get ID | DATA `[ID low][ID high][0x1E][0]`, for example `0F 95 1E 00` on an ATmega328P. |
+| `0x13` Attach, `0x14` Detach | Attach with break: the target stays stopped, and a break event comes. Detach: the probe removes the software breakpoints from flash, and the target runs. |
+| `0x15`, `0x16` Programming mode | OK. The memory commands work without a programming mode. |
+| `0x17` Disable debugWIRE | dW is off until the next power cycle. ISP then works. |
+| `0x21` Read memory, `0x22` masked read | `[type][address u32][length u32]`, for the masked read also a bit mask (bit 0: do not read, the byte is 0). |
+| `0x23` Write memory | `[type][address u32][length u32][async][data]` |
+| `0x30` Reset, `0x31` Stop, `0x34` Step | The target stops, and a break event comes. |
+| `0x32` Run, `0x33` Run to | Run to uses the hardware breakpoint for one run. |
+| `0x35`, `0x36` PC read and write | PC response `[0x83][0][pc u32]` |
+| `0x40`, `0x41` Hardware breakpoint | Number 1 only: dW has one hardware breakpoint. Other numbers: code `0x81`. |
+| `0x43`, `0x44`, `0x45` Software breakpoints | Up to 32. |
+
+Erase (`0x20`), CRC (`0x24`) and page erase (`0x50`) fail with code `0x90`.
+Without an active physical, the other commands fail with code `0x31`. Unknown commands fail with code `0x91`.
+
+The memory types:
+
+- SRAM (`0x20`): the data space with the registers, I/O and SRAM. DWDR reads as 0, and a write does not change it.
+- SPM (`0xA0`) and flash page (`0xB0`): a write must have whole pages at a page address, else code `0x37`. The probe erases and writes each page.
+- EEPROM (`0x22`) and EEPROM page (`0xB1`): one byte at a time.
+- Signature (`0xB4`): 3 bytes, `0x1E` and the dW ID.
+
+A read gives up to 505 bytes.
+An address outside the device gives code `0x38`. A command that is too short gives code `0x35`.
+
+Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to or step.
+Detach removes all software breakpoints from flash.
+After a clear, the probe writes the original word back at the same time.
+A flash read gives the flash with the `BREAK` instructions, as the EDBG tools do.
+A flash write keeps the breakpoints of its page, with the new original words.
+To run or step from a software breakpoint, the probe writes the original word, steps, and writes `BREAK` again.
+Thus each run from a software breakpoint costs two page writes. The flash of an AVR has about 10 000 write cycles.
+
+The break event is the frame `[0x0E][0][sequence u16][0x12][0x40][pc u32][cause][0x01][0x00]`.
+The cause is 1 at a breakpoint, else 0.
+While the target runs, each `AVR_EVT` checks the dW line one time.
+
+A bus reset, a USB suspend and `DAP_Disconnect` on the HID interface end the dW session.
+The probe stops the target, removes the software breakpoints from flash, lets the program run and releases the line.
 
 ### Target pins
 
 The HID interface owns the target pins for the AVR commands, as for its DAP commands (see [CMSIS-DAP v1 (HID)](#cmsis-dap-v1-hid)).
 
-- `ENTER_PROGMODE` takes the pins. While the v2 interface owns them, it replies `STATUS_CMD_FAILED` and changes no pin.
-- `LEAVE_PROGMODE`, and an `ENTER_PROGMODE` that fails, give the pins back. When `DAP_Connect` of the HID interface took the pins first (avrdude does this), `DAP_Disconnect` gives them back.
+- `ENTER_PROGMODE` and activate physical take the pins. While the v2 interface owns them, they fail and change no pin.
+- ISP and debugWIRE use the same pins. `ENTER_PROGMODE` fails during a dW session, and activate physical fails with code `0x33` in the ISP programming mode.
+- `LEAVE_PROGMODE`, deactivate physical, disable debugWIRE, and a start command that fails, give the pins back. When `DAP_Connect` of the HID interface took the pins first (avrdude does this), `DAP_Disconnect` gives them back.
 - `DAP_Disconnect` on the HID interface, a USB suspend and a bus reset end the programming mode: RESET is released, and the target runs.
 
 ### avrdude
 
 avrdude finds the probe by its USB ID and needs `CMSIS-DAP` in the product string.
-A programmer entry with `type = "jtagice3_isp"` and the USB ID of the probe works without a change in avrdude.
-The file `etc/avrdude-openmupp.conf` has this entry. See [avr.md](avr.md) for the wiring and the commands.
-avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 parameters, the ISP commands, the sign-off and `DAP_Disconnect`.
+Programmer entries with `type = "jtagice3_isp"` (ISP) or `type = "jtagice3_dw"` (debugWIRE, as `xplainedmini_dw`) and the USB ID of the probe work without a change in avrdude.
+The file `etc/avrdude-openmupp.conf` has these entries. See [avr.md](avr.md) for the wiring and the commands.
+avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 parameters, the ISP or AVR8 commands, the sign-off and `DAP_Disconnect`.
 
 ## Commands
 
@@ -1193,6 +1262,10 @@ The tests cover off, on and read, each protection, a board without a switch or a
 The tests run the avrdude session, a flash page in 5 command fragments and a read in 5 response fragments.
 They check each rejected fragment, the bad frame headers, the response that the host did not read, and each scope.
 They also check the target pins between the two interfaces, the end of the programming mode when the host goes away, and the target power rule.
+
+`tests/TestEdbgDebugWire.cpp` runs the AVR8 scope through the HID function, on the dW engine with the mock ATmega328P of `tests/MockAvrDw.h`.
+The tests run the avrdude session (signature, flash, EEPROM) and a Bloom debug session (registers, SRAM, PC, run, stop, step, reset, hardware and software breakpoints, break events).
+They also check the device context, the pins between ISP and debugWIRE, a missing target, and a host that goes away.
 
 ## Hardware test
 

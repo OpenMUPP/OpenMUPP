@@ -78,6 +78,7 @@ add_executable(mupp-tests
         TestDebugWire.cpp
         TestDebugWireTarget.cpp
         TestEdbg.cpp
+        TestEdbgDebugWire.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp

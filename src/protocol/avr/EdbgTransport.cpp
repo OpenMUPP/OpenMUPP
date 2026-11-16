@@ -24,7 +24,6 @@ constexpr uint8_t cmdSet = 0x01;
 constexpr uint8_t cmdGet = 0x02;
 constexpr uint8_t cmdStartSession = 0x10;
 constexpr uint8_t cmdEndSession = 0x11;
-constexpr uint8_t cmdAvr8DeactivatePhysical = 0x11;
 
 // Discovery QUERY contexts
 constexpr uint8_t queryHandlers = 0x00;
@@ -34,14 +33,11 @@ constexpr uint8_t querySerialNumber = 0x81;
 // SET/GET contexts and parameters
 constexpr uint8_t hkContextConfig = 0x00;
 constexpr uint8_t hkContextAnalog = 0x01;
-constexpr uint8_t avr8ContextConfig = 0x00;
-constexpr uint8_t avr8ContextPhysical = 0x01;
 constexpr uint8_t edbgContextControl = 0x00;
 constexpr uint8_t edbgTargetPower = 0x10;
 
 // Failure codes
 constexpr uint8_t notSupported = 0x10;
-constexpr uint8_t avr8NotSupported = 0x90;
 constexpr uint8_t edbgNotSupported = 0x01;
 constexpr uint8_t edbgIllegalAction = 0x16;
 
@@ -167,11 +163,13 @@ class EdbgTransport::Writer {
 
 EdbgTransport::EdbgTransport(const ToolInfo &info,
                              IspHandler &isp,
+                             Avr8Handler &avr8,
                              const cmsisdap::Processor &dap,
                              protocol::TargetPower *power,
                              protocol::TargetPinOwner *owner)
    : info_(info)
    , isp_(isp)
+   , avr8_(avr8)
    , dap_(dap)
    , power_(power)
    , owner_(owner) {
@@ -184,13 +182,7 @@ std::size_t EdbgTransport::command(uint8_t id, art::span<const uint8_t> fields, 
    case edbg::avrRsp:
       return avrResponse(response);
    case edbg::avrEvt:
-      if(response.size() < 3) {
-         return 0;
-      }
-      response[0] = id;
-      response[1] = 0;
-      response[2] = 0;
-      return 3;
+      return avrEvent(response);
    default:
       return 0;
    }
@@ -259,6 +251,24 @@ std::size_t EdbgTransport::avrResponse(art::span<uint8_t> response) {
       responseLength_ = 0;
    }
    return fragmentHeaderBytes + size;
+}
+
+std::size_t EdbgTransport::avrEvent(art::span<uint8_t> response) {
+   constexpr std::size_t eventHeaderBytes = 3;
+   if(response.size() < eventHeaderBytes) {
+      return 0;
+   }
+   const std::size_t size = avr8_.event(response.subspan(eventHeaderBytes));
+   response[0] = edbg::avrEvt;
+   response[1] = static_cast<uint8_t>(size >> 8);
+   response[2] = static_cast<uint8_t>(size);
+   return eventHeaderBytes + size;
+}
+
+void EdbgTransport::releaseIdlePins() {
+   if(owner_ != nullptr && !isp_.programming() && !avr8_.active() && !dap_.connected()) {
+      owner_->release(protocol::PinClient::CmsisDapHid);
+   }
 }
 
 void EdbgTransport::dropFrame() {
@@ -363,8 +373,8 @@ void EdbgTransport::housekeeping(art::span<const uint8_t> payload, Writer &out) 
 void EdbgTransport::avrIsp(art::span<const uint8_t> payload, Writer &out) {
    constexpr protocol::PinClient client = protocol::PinClient::CmsisDapHid;
    const uint8_t id = payload.empty() ? 0 : payload[0];
-   if(id == isp::command::enterProgmode && owner_ != nullptr && !owner_->acquire(client)) {
-      // The v2 interface owns the pins.
+   if(id == isp::command::enterProgmode && (avr8_.active() || (owner_ != nullptr && !owner_->acquire(client)))) {
+      // The v2 interface owns the pins, or debugWIRE uses them.
       out.u8(id);
       out.u8(isp::status::failed);
       return;
@@ -377,36 +387,22 @@ void EdbgTransport::avrIsp(art::span<const uint8_t> payload, Writer &out) {
    }
    // The end of the programming mode gives the pins back. While the HID
    // processor is connected, its DAP_Disconnect does.
-   const bool session = id == isp::command::enterProgmode || id == isp::command::leaveProgmode;
-   if(session && !isp_.programming() && owner_ != nullptr && !dap_.connected()) {
-      owner_->release(client);
+   if(id == isp::command::enterProgmode || id == isp::command::leaveProgmode) {
+      releaseIdlePins();
    }
 }
 
 void EdbgTransport::avr8(art::span<const uint8_t> payload, Writer &out) {
-   if(payload.empty()) {
-      out.failed(avr8NotSupported);
+   const uint8_t id = payload.empty() ? 0 : payload[0];
+   const bool activate = id == avr8::command::activatePhysical && !avr8_.active();
+   if(activate && (isp_.programming() || (owner_ != nullptr && !owner_->acquire(protocol::PinClient::CmsisDapHid)))) {
+      // The v2 interface owns the pins, or the ISP programming mode uses them.
+      out.failed(avr8::failure::invalidConfig);
       return;
    }
-   if(payload[0] == cmdAvr8DeactivatePhysical) {
-      // No physical is active.
-      out.ok();
-      return;
-   }
-   const auto access = payload[0] == cmdSet || payload[0] == cmdGet ? parameterAccess(payload) : std::nullopt;
-   art::span<uint8_t> values;
-   if(access && access->context == avr8ContextConfig) {
-      values = parameterRange(avr8Config_, *access);
-   } else if(access && access->context == avr8ContextPhysical) {
-      values = parameterRange(avr8Physical_, *access);
-   }
-   if(values.empty()) {
-      out.failed(avr8NotSupported);
-   } else if(payload[0] == cmdSet) {
-      std::copy(access->data.begin(), access->data.end(), values.begin());
-      out.ok();
-   } else {
-      out.data(values);
+   out.advance(avr8_.process(payload, out.free()));
+   if(activate || id == avr8::command::deactivatePhysical || id == avr8::command::disableDebugWire) {
+      releaseIdlePins();
    }
 }
 
@@ -443,15 +439,15 @@ void EdbgTransport::edbgControl(art::span<const uint8_t> payload, Writer &out) {
 
 void EdbgTransport::releasePins() {
    isp_.release();
+   avr8_.release();
 }
 
 void EdbgTransport::hostGone() {
    isp_.release();
+   avr8_.forget();
    dropFrame();
    responseLength_ = 0;
    responseSent_ = 0;
-   avr8Config_ = {};
-   avr8Physical_ = {};
 }
 
 } // namespace avr

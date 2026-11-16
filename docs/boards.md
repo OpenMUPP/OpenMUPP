@@ -516,7 +516,7 @@ Connect TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
 Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more).
 
 The board definition also has PB11 (USART3 RX) as the read-back pin of SRST, for debugWIRE.
-The firmware does not use debugWIRE yet.
+The AVR commands use it for debugWIRE (see [avr.md](avr.md#debugwire)).
 The USART3 receiver gives the lowest debugWIRE baud rate: 2198 baud at the 144 MHz APB1 clock (the BRR register has 16 bits).
 debugWIRE runs at the target clock divided by 128. Thus the target clock must be 282 kHz or more.
 A target on the 128 kHz oscillator cannot use debugWIRE on this board. ISP programming works at 128 kHz.

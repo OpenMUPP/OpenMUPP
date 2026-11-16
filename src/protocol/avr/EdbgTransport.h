@@ -20,8 +20,9 @@
 // AVR_RSP [0x81] -> [0x81][fragment m<<4|n][size u16 MSB first][data]
 //   gives the next fragment of the response, packet size - 4 bytes each.
 //   Fragment 0x00 and size 0: no response.
-// AVR_EVT [0x82] -> [0x82][size u16 MSB first]: size 0, the tool has no
-//   events.
+// AVR_EVT [0x82] -> [0x82][size u16 MSB first][event frame]: the next
+//   break event of the AVR8 scope (protocol/avr/Avr8Scope.h). Size 0: no
+//   event.
 //
 // A command frame is [0x0E][version 0][sequence u16][handler][payload], the
 // response frame [0x0E][sequence u16][handler][payload]. The sequence is
@@ -45,12 +46,8 @@
 //                      the parameters are read-only. FW_UPGRADE (0x50) and
 //                      the others: FAILED 0x10 (not supported).
 //   0x11 AVR ISP       the STK500v2 commands (avr/IspScope.h).
-//   0x12 AVR8 generic  only what avrdude sends before ISP programming: SET
-//                      and GET of context 0 addresses 0-1 (variant,
-//                      function) and of context 1 address 0 (physical
-//                      interface). The values are stored, not used.
-//                      DEACTIVATE_PHYSICAL (0x11): OK. The others: FAILED
-//                      0x90 (not supported).
+//   0x12 AVR8 generic  debugWIRE (protocol/avr/Avr8Scope.h). avrdude
+//                      sets its parameters before ISP programming too.
 //   0x20 EDBG control  SET and GET of context 0 address 0x10, TARGET_POWER
 //                      (1 byte): 0 off, 1 on. FAILED 0x01 (not supported)
 //                      on a board without a power switch, and for the other
@@ -60,16 +57,19 @@
 //   others             FAILED 0x10.
 //
 // The target pins (protocol/TargetPinOwner.h): the HID interface owns
-// them. ENTER_PROGMODE takes them: STATUS_CMD_FAILED while the v2 interface
-// owns them. After an ISP command that ends the programming mode, the
-// transport gives them back, unless the HID processor is connected
-// (DAP_Connect): then its DAP_Disconnect gives them back. The target supply
+// them. ENTER_PROGMODE and ACTIVATE_PHYSICAL take them: STATUS_CMD_FAILED
+// or FAILED 0x33 while the v2 interface owns them, or while the other AVR
+// interface (ISP or debugWIRE) is active. After a command that ends the
+// programming mode or the debugWIRE session, the transport gives them back,
+// unless the HID processor is connected (DAP_Connect): then its
+// DAP_Disconnect gives them back. The target supply
 // switches on only for the owner, or while nobody owns the pins; the
 // switch-off always works.
 //
 // releasePins() (the HID processor gives the pins back: DAP_Disconnect, USB
-// suspend, bus reset) ends the programming mode. hostGone() also drops the
-// frame and the response of the old host, and the AVR8 parameters.
+// suspend, bus reset) ends the programming mode and the debugWIRE session.
+// hostGone() also drops the frame and the response of the old host, and the
+// AVR8 parameters and breakpoints.
 
 #include <array>
 #include <cstddef>
@@ -79,6 +79,7 @@
 
 #include "protocol/TargetPinOwner.h"
 #include "protocol/TargetPower.h"
+#include "protocol/avr/Avr8Scope.h"
 #include "protocol/avr/IspScope.h"
 #include "protocol/cmsisdap/DapProcessor.h"
 
@@ -131,12 +132,18 @@ struct ToolInfo {
 class EdbgTransport final : public cmsisdap::VendorCommands {
    public:
    // The longest command frame and response frame: an ISP read or program
-   // of isp::maxDataBytes with the frame header, and room to spare.
+   // of isp::maxDataBytes, or an AVR8 read or write of 256 bytes, with the
+   // frame header, and room to spare.
    static constexpr std::size_t maxFrameBytes = 512;
 
    // dap: the HID processor, which owns the pins with the transport. power
    // and owner: nullptr for none. All must outlive the transport.
-   EdbgTransport(const ToolInfo &info, IspHandler &isp, const cmsisdap::Processor &dap, protocol::TargetPower *power, protocol::TargetPinOwner *owner);
+   EdbgTransport(const ToolInfo &info,
+                 IspHandler &isp,
+                 Avr8Handler &avr8,
+                 const cmsisdap::Processor &dap,
+                 protocol::TargetPower *power,
+                 protocol::TargetPinOwner *owner);
 
    std::size_t command(uint8_t id, art::span<const uint8_t> fields, art::span<uint8_t> response) override;
    void releasePins() override;
@@ -147,6 +154,7 @@ class EdbgTransport final : public cmsisdap::VendorCommands {
 
    std::size_t avrCommand(art::span<const uint8_t> fields, art::span<uint8_t> response);
    std::size_t avrResponse(art::span<uint8_t> response);
+   std::size_t avrEvent(art::span<uint8_t> response);
    // Runs the complete command frame and stores its response frame.
    void runFrame();
    void discovery(art::span<const uint8_t> payload, Writer &out);
@@ -156,9 +164,12 @@ class EdbgTransport final : public cmsisdap::VendorCommands {
    void edbgControl(art::span<const uint8_t> payload, Writer &out);
    // Drops the frame that is not complete.
    void dropFrame();
+   // Gives the pins back when no AVR interface and no DAP_Connect uses them.
+   void releaseIdlePins();
 
    const ToolInfo &info_;
    IspHandler &isp_;
+   Avr8Handler &avr8_;
    const cmsisdap::Processor &dap_;
    protocol::TargetPower *power_;
    protocol::TargetPinOwner *owner_;
@@ -173,10 +184,6 @@ class EdbgTransport final : public cmsisdap::VendorCommands {
    std::size_t responseLength_{ 0 };
    // The fragments of the response that the host has read
    uint8_t responseSent_{ 0 };
-
-   // AVR8 generic: variant and function (context 0), physical (context 1)
-   std::array<uint8_t, 2> avr8Config_{};
-   std::array<uint8_t, 1> avr8Physical_{};
 };
 
 } // namespace avr
