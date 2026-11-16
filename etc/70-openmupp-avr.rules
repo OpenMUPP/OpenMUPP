@@ -1,0 +1,7 @@
+# udev rules for the AVR commands of OpenMUPP (docs/avr.md).
+# They give a normal user access to the HID interface of the probe, which avrdude uses.
+# Copy this file to /etc/udev/rules.d/, run "udevadm control --reload", and plug in the probe again.
+# The CMSIS-DAP rules (70-openmupp-cmsis-dap.rules) cover the USB device node. These rules cover hidraw.
+
+# The test ID of pid.codes. Many devices share it, so the rules also check the product string.
+KERNEL=="hidraw*", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP CMSIS-DAP", MODE="0660", TAG+="uaccess"

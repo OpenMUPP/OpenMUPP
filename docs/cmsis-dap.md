@@ -223,6 +223,7 @@ The HID interface owns the target pins for the AVR commands, as for its DAP comm
 
 avrdude finds the probe by its USB ID and needs `CMSIS-DAP` in the product string.
 A programmer entry with `type = "jtagice3_isp"` and the USB ID of the probe works without a change in avrdude.
+The file `etc/avrdude-openmupp.conf` has this entry. See [avr.md](avr.md) for the wiring and the commands.
 avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 parameters, the ISP commands, the sign-off and `DAP_Disconnect`.
 
 ## Commands
