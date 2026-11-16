@@ -237,6 +237,12 @@ class IspEngine {
       }
    }
 
+   // The SCK frequency of the last setSpeed() (kHz): the request. The SPI
+   // can give a lower rate (spiShiftFor()).
+   [[nodiscard]] uint32_t speedKHz() const {
+      return kHz_;
+   }
+
    // The SPI divider shift, 0 for bit-bang
    [[nodiscard]] uint8_t spiShift() const {
       return shift_;

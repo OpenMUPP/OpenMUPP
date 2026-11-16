@@ -74,6 +74,7 @@ TEST_CASE("AVR ISP: setSpeed selects the SPI or bit-bang, 0 is refused") {
    // Before setSpeed: bit-bang at 100 kHz
    CHECK(engine.spiShift() == 0);
    CHECK(engine.halfCycles() == 360);
+   CHECK(engine.speedKHz() == 100);
 
    CHECK(engine.setSpeed(2000));
    CHECK(engine.spiShift() == 6);
@@ -87,6 +88,7 @@ TEST_CASE("AVR ISP: setSpeed selects the SPI or bit-bang, 0 is refused") {
    CHECK_FALSE(engine.setSpeed(0));
    CHECK(engine.spiShift() == 0);
    CHECK(engine.halfCycles() == 1125);
+   CHECK(engine.speedKHz() == 32);
 }
 
 TEST_CASE("AVR ISP: connect drives the pins with RESET asserted, disconnect releases them") {
