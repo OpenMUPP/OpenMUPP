@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <utility>
@@ -135,6 +136,11 @@ class MockDwTarget {
    // Off: the target does not answer (no target, or dW not enabled).
    bool present{ true };
    std::map<uint8_t, Reply> replies;
+   // A model of the target behind the line (MockAvrDw.h): gets each byte
+   // with the end time of its stop bit, and each probe break with the time
+   // of its end, in place of replies and the 0x55 of a break.
+   std::function<void(uint8_t, uint64_t)> onByte;
+   std::function<void(uint64_t)> onBreak;
    // The bytes of the probe that the target decoded
    std::vector<uint8_t> received;
    // The breaks of the probe: their start time and length
@@ -210,7 +216,9 @@ class MockDwTarget {
       searchFrom_ = rise;
       if(value == 0 && rise - start >= uint64_t{ breakBits } * bitCycles) {
          breaks.emplace_back(start, rise - start);
-         if(present) {
+         if(present && onBreak) {
+            onBreak(rise);
+         } else if(present) {
             send(0x55, rise + syncDelayBits * bitCycles);
          }
       } else {
@@ -220,6 +228,10 @@ class MockDwTarget {
    }
 
    void answer(uint8_t value, uint64_t stopEnd) {
+      if(present && onByte) {
+         onByte(value, stopEnd);
+         return;
+      }
       const auto it = replies.find(value);
       if(!present || it == replies.end()) {
          return;
