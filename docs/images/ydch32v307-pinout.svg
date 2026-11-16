@@ -8,9 +8,9 @@
 <text x="1145.0" y="741.0" font-size="14" font-weight="bold" fill="#3e2723" text-anchor="middle">Ethernet (not used)</text>
 <rect x="1222" y="775" width="90" height="56" rx="8" fill="#cfd8dc" stroke="#78909c" stroke-width="2"/>
 <text x="1212" y="808" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="end">USB1 (not used)</text>
-<rect x="504" y="575" width="140" height="140" fill="#212121" stroke="#9e9e9e" stroke-width="1.5"/>
-<text x="574.0" y="641.0" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">CH32V307</text>
-<text x="574.0" y="658.0" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">VCT6</text>
+<rect x="504" y="558" width="140" height="88" fill="#212121" stroke="#9e9e9e" stroke-width="1.5"/>
+<text x="574.0" y="598.0" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">CH32V307</text>
+<text x="574.0" y="615.0" font-size="13" font-weight="bold" fill="#e0e0e0" text-anchor="middle">VCT6</text>
 <rect x="262" y="635" width="94" height="80" rx="4" fill="#b0bec5" stroke="#78909c" stroke-width="1.5"/>
 <text x="310" y="670" font-size="12" font-weight="bold" fill="#263238" text-anchor="middle">microSD</text>
 <text x="310" y="687" font-size="11" font-weight="bold" fill="#263238" text-anchor="middle">keep empty</text>
@@ -23,12 +23,12 @@
 <rect x="308" y="803" width="44" height="34" rx="5" fill="#cfd8dc" stroke="#607d8b" stroke-width="1.5"/>
 <circle cx="330" cy="820" r="10" fill="#37474f"/>
 <text x="360" y="825" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="start">RST</text>
-<rect x="416" y="764" width="18" height="12" rx="2" fill="#e53935" stroke="#ffffff"/>
-<text x="442" y="775" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">LED1 red: USB (PA15)</text>
-<rect x="416" y="789" width="18" height="12" rx="2" fill="#43a047" stroke="#ffffff"/>
-<text x="442" y="800" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">LED2 green: state (PB4)</text>
-<rect x="416" y="814" width="18" height="12" rx="2" fill="#e53935" stroke="#ffffff"/>
-<text x="442" y="825" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">PWR</text>
+<rect x="666" y="764" width="18" height="12" rx="2" fill="#e53935" stroke="#ffffff"/>
+<text x="692" y="775" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">LED1 red: USB (PA15)</text>
+<rect x="666" y="789" width="18" height="12" rx="2" fill="#43a047" stroke="#ffffff"/>
+<text x="692" y="800" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">LED2 green: state (PB4)</text>
+<rect x="666" y="814" width="18" height="12" rx="2" fill="#e53935" stroke="#ffffff"/>
+<text x="692" y="825" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="start">PWR</text>
 <text x="40" y="528" font-size="13" font-weight="bold" fill="#455a64">P4: SWD of the</text>
 <text x="40" y="544" font-size="13" font-weight="bold" fill="#455a64">board MCU</text>
 <rect x="196" y="558" width="24" height="24" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
@@ -206,10 +206,18 @@
 <text x="582.0" y="365.0" transform="rotate(-90 582.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD1</text>
 <rect x="565.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
 <text x="582.0" y="519.0" transform="rotate(-90 582.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PD2</text>
-<rect x="565.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
-<text x="582.0" y="881.0" transform="rotate(-90 582.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC3</text>
-<rect x="565.0" y="1006.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
-<text x="582.0" y="1035.0" transform="rotate(-90 582.0 1035.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PC2</text>
+<rect x="565.0" y="852.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="582.0" y="881.0" transform="rotate(-90 582.0 881.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PC3</text>
+<rect x="565.0" y="1006.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="582.0" y="1035.0" transform="rotate(-90 582.0 1035.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PC2</text>
+<rect x="565.0" y="776.5" width="34" height="71.5" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="582.0" y="812.2" transform="rotate(-90 582.0 812.2)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">UART RX</text>
+<rect x="565.0" y="654.6" width="34" height="117.9" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="582.0" y="713.6" transform="rotate(-90 582.0 713.6)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">from target TX</text>
+<rect x="565.0" y="1068.0" width="34" height="71.5" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="582.0" y="1103.8" transform="rotate(-90 582.0 1103.8)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">UART TX</text>
+<rect x="565.0" y="1143.5" width="34" height="103.6" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
+<text x="582.0" y="1195.3" transform="rotate(-90 582.0 1195.3)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">to target RX</text>
 <circle cx="626" cy="472" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
 <circle cx="626" cy="472" r="5" fill="#2b2b2b"/>
 <circle cx="626" cy="428" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
@@ -296,12 +304,8 @@
 <circle cx="802" cy="972" r="5" fill="#2b2b2b"/>
 <circle cx="802" cy="928" r="11" fill="#d4af37" stroke="#8d6e1f" stroke-width="1.5"/>
 <circle cx="802" cy="928" r="5" fill="#2b2b2b"/>
-<rect x="785.0" y="336.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
-<text x="802.0" y="365.0" transform="rotate(-90 802.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA10</text>
-<rect x="785.0" y="260.5" width="34" height="71.5" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
-<text x="802.0" y="296.2" transform="rotate(-90 802.0 296.2)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">UART RX</text>
-<rect x="785.0" y="138.6" width="34" height="117.9" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
-<text x="802.0" y="197.5" transform="rotate(-90 802.0 197.5)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">from target TX</text>
+<rect x="785.0" y="336.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="802.0" y="365.0" transform="rotate(-90 802.0 365.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA10</text>
 <rect x="785.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
 <text x="802.0" y="519.0" transform="rotate(-90 802.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA11</text>
 <rect x="785.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
@@ -320,12 +324,8 @@
 <text x="846.0" y="365.0" transform="rotate(-90 846.0 365.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA8</text>
 <rect x="829.0" y="283.8" width="34" height="48.2" rx="6" fill="#5e92f3" stroke="#5e92f3" stroke-width="1.2"/>
 <text x="846.0" y="307.9" transform="rotate(-90 846.0 307.9)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">RTCK</text>
-<rect x="829.0" y="490.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
-<text x="846.0" y="519.0" transform="rotate(-90 846.0 519.0)" font-size="13" font-weight="bold" fill="#212121" text-anchor="middle" dominant-baseline="central">PA9</text>
-<rect x="829.0" y="552.0" width="34" height="71.5" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
-<text x="846.0" y="587.8" transform="rotate(-90 846.0 587.8)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">UART TX</text>
-<rect x="829.0" y="627.5" width="34" height="103.6" rx="6" fill="#7b1fa2" stroke="#7b1fa2" stroke-width="1.2"/>
-<text x="846.0" y="679.3" transform="rotate(-90 846.0 679.3)" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">to target RX</text>
+<rect x="829.0" y="490.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+<text x="846.0" y="519.0" transform="rotate(-90 846.0 519.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PA9</text>
 <rect x="829.0" y="852.0" width="34" height="58.0" rx="6" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
 <text x="846.0" y="881.0" transform="rotate(-90 846.0 881.0)" font-size="13" font-weight="normal" fill="#90a4ae" text-anchor="middle" dominant-baseline="central">PB1</text>
 <rect x="829.0" y="1006.0" width="34" height="58.0" rx="6" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>

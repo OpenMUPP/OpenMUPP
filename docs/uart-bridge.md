@@ -1,7 +1,7 @@
 # UART bridge
 
 The serial port (interfaces 1 and 2) is a USB-to-UART bridge.
-It uses the UART of the board definition: USART1 on PA9 (TX) and PA10 (RX) on the Mini.
+It uses the UART of the board definition: USART1 on PA9 (TX) and PA10 (RX) on the Mini, UART7 on PC2 (TX) and PC3 (RX) on the YD-CH32V307VCT6.
 The UART has no flow control lines.
 
 - `src/uart/UartBridge.h` moves the data between the serial port and two ring buffers of 1 KB each.

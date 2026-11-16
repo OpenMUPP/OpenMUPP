@@ -207,7 +207,7 @@ TEST_CASE("YD-CH32V307VCT6 has the pin map of plan D10") {
    CHECK(yd.debug.srstSense == Pin{ Port::B, 11 });
    CHECK(yd.debug.trst == Pin{ Port::B, 9 });
    CHECK(yd.debug.rtck == Pin{ Port::A, 8 });
-   CHECK(yd.uart == board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } });
+   CHECK(yd.uart == board::Uart{ .usart = 7, .tx{ Port::C, 2 }, .rx{ Port::C, 3 } });
    CHECK(yd.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 1 });
    CHECK(yd.leds.state == Signal{ { Port::B, 4 }, Active::High });
    CHECK(yd.leds.usb == Signal{ { Port::A, 15 }, Active::High });

@@ -501,11 +501,15 @@ Pin 1 of the two headers is at the end with P4 and the USB2 connector. The nets 
 | SRST | PB12 | P3-46 |
 | TRST | PB9 | P3-5 |
 | RTCK | PA8 | P3-30 |
-| UART TX / RX (USART1) | PA9 / PA10 | P3-29 / P3-28 |
+| UART TX / RX (UART7) | PC2 / PC3 | P2-17 / P2-18 |
 | Vref sense (3.3 V maximum) | PB0 | P2-29 |
 | State LED (`LED2`, green, active high) | PB4 | on the board |
 | USB LED (`LED1`, red, active high) | PA15 | on the board |
 | Key (`USR`, active low) | PB3 | on the board |
+
+The UART bridge uses UART7 on its default pins PC2 and PC3 (AFIO `USART7_RM` = 00).
+UART7 is on APB1, so a Vref measurement does not change its baud rate.
+The remap pins of UART7 (PA6, PA7) are not used: on this board, they are also DO and DI of the SPI flash U4.
 
 The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
 Connect TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.

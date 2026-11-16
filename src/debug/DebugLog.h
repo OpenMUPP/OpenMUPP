@@ -15,7 +15,7 @@
 //
 // Contract for the UART bridge (B5): with MUPP_DEBUG_CDC the CDC port
 // belongs to the log. Build and start the bridge only when
-// debug::cdcLog is false. USART1 then stays unused, and the device ignores
+// debug::cdcLog is false. The UART of the board then stays unused, and the device ignores
 // the data that the host sends to the CDC port.
 //
 // Call pollLog() only when UsbStack::hasSerialPort() is true: the
