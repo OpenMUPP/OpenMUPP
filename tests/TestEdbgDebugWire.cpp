@@ -473,3 +473,23 @@ TEST_CASE("EDBG debugWIRE: the host goes away") {
    CHECK(b.owner.owner() == PinClient::None);
    CHECK(b.bulkCommand({ 0x02, 0x01 }) == Bytes{ 0x02, 0x01 });
 }
+
+TEST_CASE("EDBG debugWIRE: avrdude gives a boot address also to the parts without a boot section") {
+   Bench b;
+   SUBCASE("ATmega48: 4 KB, no boot section, no RWW") {
+      b.avrdudeOpen(megaDeviceDesc(64, 4096));
+      REQUIRE(b.signOn() == ok);
+      CHECK(b.dwTarget.device().bootStartWords == 0);
+   }
+   SUBCASE("8 KB: the last page is the SPM address") {
+      b.avrdudeOpen(megaDeviceDesc(64, 8192));
+      REQUIRE(b.signOn() == ok);
+      CHECK(b.dwTarget.device().bootStartWords == 0x0FE0);
+   }
+   SUBCASE("Bloom without a boot section") {
+      b.bloomInit();
+      CHECK(b.avr8(avr8Set(2, 0x0A, { 0x00, 0x00, 0x00, 0x00 })) == ok);
+      REQUIRE(b.signOn() == ok);
+      CHECK(b.dwTarget.device().bootStartWords == 0);
+   }
+}

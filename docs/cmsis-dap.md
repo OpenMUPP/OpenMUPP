@@ -226,7 +226,11 @@ Values are little-endian. Flash, SRAM and EEPROM addresses are byte addresses. T
 
 avrdude and Bloom send DWDR and the EEPROM registers as I/O addresses (`0x00`-`0x3F`), and SPMCSR as a data space address (I/O address + `0x20`).
 The probe converts SPMCSR to its I/O address.
-The probe uses the boot start only to know if the device has a boot section (not 0).
+The probe uses the boot start only to know if the device has a boot section.
+The boot start is not a reliable flag: Bloom sends 0 without a boot section, but avrdude sends a value for all parts.
+Thus the probe takes a boot section only when the boot start is not 0 and the flash is larger than 4 KB.
+No debugWIRE part with 4 KB flash (for example the ATmega48) has a boot section.
+On a tinyAVR with more than 4 KB flash, the RWW enable after a page write is CTPB (clear the page buffer) and has no effect.
 For SPM, the probe sets the PC to the start of the last flash page.
 This address is in the boot section for all BOOTSZ fuse values.
 The boot address of avrdude is the start of the last 4 pages, and that address is not in the smallest boot section of an ATmega168.

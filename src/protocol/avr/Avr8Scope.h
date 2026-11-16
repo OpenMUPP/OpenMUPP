@@ -62,7 +62,12 @@
 //   0x1A EEARL, 0x1B EECR, 0x1C EEDR, 0x1D SPMCSR. avrdude and Bloom send
 //   DWDR and the EEPROM registers as I/O addresses, and SPMCSR as a data
 //   space address (I/O + 0x20). The scope converts SPMCSR to I/O. The boot
-//   start tells only if the device has a boot section (not 0). The scope
+//   start is not a reliable boot section flag: Bloom sends 0 without a
+//   boot section, but avrdude sends a value for all parts (also tinyAVR
+//   and the ATmega48). The scope takes a boot section when the boot start
+//   is not 0 and the flash is larger than 4 KB (no dW part with 4 KB flash
+//   has a boot section). On a tinyAVR above 4 KB, the RWW enable (SPMCSR
+//   0x11) is CTPB and has no effect after a page write. For SPM, the scope
 //   uses the start of the last flash page: it is in the boot section for
 //   all BOOTSZ fuses (avrdude sends the start of the last 4 pages, which
 //   is not in the smallest boot section of an ATmega168).
@@ -445,7 +450,10 @@ class Avr8Scope final : public Avr8Handler {
       }
       return DwDevice{ .flashPageBytes = page,
                        .flashBytes = flash,
-                       .bootStartWords = u32(d, 0x0A) != 0 ? static_cast<uint16_t>((flash - page) / 2u) : uint16_t{ 0 },
+                       // avrdude sends a boot start for all parts. The 4 KB parts
+                       // (ATmega48) have no boot section.
+                       .bootStartWords =
+                       u32(d, 0x0A) != 0 && flash > 0x1000u ? static_cast<uint16_t>((flash - page) / 2u) : uint16_t{ 0 },
                        .eepromBytes = u16(d, 0x10),
                        .dwdr = d[0x18],
                        .spmcsr = static_cast<uint8_t>(spmcr - avrIoData),
