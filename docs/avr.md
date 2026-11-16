@@ -38,6 +38,8 @@ Connect the target GND to the probe GND.
 
 The [pinout image](boards.md#yd-ch32v307vct6-development-board) shows the ISP pins.
 
+![Wiring of the 6-pin ICSP header of the target to the YD-CH32V307VCT6 board](images/ydch32v307-avr-isp.svg)
+
 | ISP signal | Probe pin | Header pin | 6-pin ICSP header of the target |
 |---|---|---|---|
 | SCK | PB13 | P3-45 | 3 |
