@@ -176,6 +176,17 @@
       }
     },
     {
+      "name": "options-hid",
+      "description": "The CMSIS-DAP v1 (HID) interface",
+      "hidden": true,
+      "cacheVariables": {
+        "MUPP_CMSIS_DAP_HID": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
       "name": "options-avr",
       "description": "The CMSIS-DAP v1 (HID) interface with the AVR commands",
       "hidden": true,
@@ -396,6 +407,14 @@
       ]
     },
     {
+      "name": "weacth523-dual-hid",
+      "displayName": "WeAct STM32H523 core board, dual image with the CMSIS-DAP v1 (HID) interface",
+      "inherits": [
+        "weacth523-dual",
+        "options-hid"
+      ]
+    },
+    {
       "name": "ydch32v307",
       "displayName": "YD-CH32V307VCT6 (stub image)",
       "inherits": [
@@ -584,6 +603,10 @@
     {
       "name": "weacth523-debug",
       "configurePreset": "weacth523-debug"
+    },
+    {
+      "name": "weacth523-dual-hid",
+      "configurePreset": "weacth523-dual-hid"
     },
     {
       "name": "ydch32v307",

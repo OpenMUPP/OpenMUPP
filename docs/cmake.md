@@ -122,6 +122,7 @@ The default is `/usr`.
 | `weacth523-cmsis-dap` | WeAct STM32H523 core board | `cmsis-dap` | Release |
 | `weacth523-dual` | WeAct STM32H523 core board | `cmsis-dap,wch-link` (tag `-dap+wch`) | Release |
 | `weacth523-debug` | WeAct STM32H523 core board | `cmsis-dap` | Debug |
+| `weacth523-dual-hid` | WeAct STM32H523 core board | `cmsis-dap,wch-link` with `MUPP_CMSIS_DAP_HID` (tag `-dap+wch-hid`). CI builds it, with no artifacts. | Release |
 | `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
 | `weacth523` | WeAct STM32H523 core board | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
 | `ydch32v307` | YD-CH32V307VCT6 development board | none: the stub image of the CH32V307 port (board start-up and state LED) | Release |

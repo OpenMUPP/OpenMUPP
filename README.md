@@ -133,7 +133,7 @@ Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
 With `-DMUPP_STRICT_SIZE=ON`, the build stops with an error instead (see [Images that do not fit](docs/cmake.md#images-that-do-not-fit)).
 `mini-debug` is the Debug build of the Mini, with the CMSIS-DAP personality and without the RISC-V bridge. With the bridge, the Debug image does not fit behind a bootloader.
-The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link` and `weacth523-debug` build the WeAct STM32H523 core board.
+The presets `weacth523`, `weacth523-cmsis-dap`, `weacth523-dual`, `weacth523-wch-link`, `weacth523-debug` and `weacth523-dual-hid` build the WeAct STM32H523 core board. `weacth523-dual-hid` adds the CMSIS-DAP v1 (HID) interface.
 The preset `ydch32v307` builds the stub image of the YD-CH32V307VCT6 board with the RISC-V GCC.
 The presets `ydch32v307-cmsis-dap`, `ydch32v307-dual` and `ydch32v307-all` build the firmware image instead (`-DMUPP_CH32_STUB_IMAGE=OFF`, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board)).
 `ydch32v307-all` has all personalities.

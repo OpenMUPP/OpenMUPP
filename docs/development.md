@@ -221,6 +221,7 @@ The jobs:
   This job keeps no artifacts.
 - `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
   The limit of a multi image or an image with the RISC-V bridge is 8 KB smaller, because the last flash sector holds the stored personality and the bridge mode.
+- `build-weacth523-hid`: build of the dual image of the WeAct STM32H523 core board with the CMSIS-DAP v1 (HID) interface (`weacth523-dual-hid` preset), plus the size check. This job keeps no artifacts.
 - `build-ydch32v307`: build of the stub image of the YD-CH32V307VCT6 board with the `ydch32v307` preset and the RISC-V GCC, plus the size check.
   The CH32V307 port is in progress, so this job keeps no artifacts.
   The job reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`.
