@@ -473,7 +473,8 @@ These parts are known to be incomplete:
   The dongle measures Vref each 100 ms.
   The UART bridge uses UART7 on APB1 (144 MHz), so the change of PCLK2 has no effect on its baud rate.
   The UART bridge accepts 2198 baud to 9 Mbaud (see [Line coding](uart-bridge.md#line-coding)).
-  The UART bridge on UART7 is not tested on the board.
+  A loopback test (wire from PC2 to PC3) passes all formats from 9600 baud to 1 Mbaud, also during Vref measurements. 1.5 stop bits are not tested.
+  At 2 Mbaud, some runs lose bytes ([issue #20](https://github.com/OpenMUPP/OpenMUPP/issues/20)).
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
   JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. 1125 kHz is not tested with the wire. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
