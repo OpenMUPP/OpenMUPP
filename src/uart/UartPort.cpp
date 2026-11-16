@@ -275,6 +275,29 @@ void UartPort::pollRx() {
    serviceRx();
 }
 
+namespace {
+
+// A lap of a circular DMA buffer of size bytes: the DMA passed the half and
+// the end since the copy that ended at tail (both flags valid), and it is now
+// at head. Without a lap the DMA moved at least up to the last flag position
+// on the way. Less means that it wrote size bytes or more. A lap of more
+// than size + the distance to the last flag gives no count.
+constexpr bool isLap(std::size_t tail, std::size_t head, std::size_t size) {
+   const std::size_t moved = (head + size - tail) % size;
+   const std::size_t lastFlag = tail < size / 2 ? size : size + size / 2;
+   return moved < lastFlag - tail;
+}
+
+static_assert(!isLap(250, 128, 256)); // 134 bytes: TC and HT, no lap
+static_assert(isLap(250, 38, 256)); // 300 bytes
+static_assert(isLap(250, 250, 256)); // 256 bytes
+static_assert(isLap(250, 122, 256)); // 384 bytes
+static_assert(!isLap(10, 0, 256)); // 246 bytes: HT and TC, no lap
+static_assert(isLap(10, 255, 256)); // 501 bytes
+static_assert(!isLap(10, 2, 256)); // 504 bytes: not seen
+
+} // namespace
+
 void UartPort::serviceRx() {
    const Dma::Channel dma = rxDma();
    // The DMA passed the half (HT) and the end (TC) of rxDma_ since the last
@@ -291,10 +314,9 @@ void UartPort::serviceRx() {
    // The DMA wrote the bytes up to head before the CNTR read.
    std::atomic_signal_fence(std::memory_order_acquire);
    // A lap: the DMA wrote rxDmaSize bytes or more since the last pass, so it
-   // wrote over bytes that are not copied. It passed both flag positions,
-   // and head is at or after the tail again. Count one overrun and drop the
+   // wrote over bytes that are not copied. Count one overrun and drop the
    // buffer: its oldest bytes are overwritten.
-   if(passedBoth && head >= tail) {
+   if(passedBoth && isLap(tail, head, rxDmaSize)) {
       buffers_.overrun();
       rxTail_ = head;
       return;
