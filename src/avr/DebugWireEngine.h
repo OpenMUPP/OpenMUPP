@@ -77,6 +77,12 @@ enum class DwStatus : uint8_t {
    // (Pins::rxEnable()). The target clock is too low or too high for the
    // board.
    BaudRange,
+   // DebugWireTarget (avr/DebugWireTarget.h): the operation needs a
+   // stopped target, but the target runs (or is not attached).
+   TargetRunning,
+   // DebugWireTarget: an address or a length outside the device, or an
+   // address that the operation cannot access (DWDR)
+   InvalidArgument,
 };
 
 // Bit 8 of Pins::rxRead(): the stop bit was low.
