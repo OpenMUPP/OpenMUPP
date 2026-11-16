@@ -66,7 +66,9 @@ class UartPort {
 #if defined(__riscv)
    // Size of the circular RX DMA buffer. The half-transfer interrupt comes
    // each 128 bytes: 640 us at 2 Mbaud. The interrupt can come that late
-   // before the DMA overwrites bytes that are not copied.
+   // before the DMA overwrites bytes that are not copied. A later interrupt
+   // (for example the interrupt lock of a debugWIRE byte, 1.28 ms at 7812
+   // baud) loses data: serviceRx() counts one overrun for the lap.
    static constexpr std::size_t rxDmaSize = 256;
 
    void serviceRx();

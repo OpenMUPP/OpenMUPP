@@ -277,16 +277,33 @@ void UartPort::pollRx() {
 
 void UartPort::serviceRx() {
    const Dma::Channel dma = rxDma();
+   // The DMA passed the half (HT) and the end (TC) of rxDma_ since the last
+   // pass. A flag can be from a pass that ended exactly at its position: the
+   // DMA set it between the clear and the CNTR read. Such a flag is ignored,
+   // so a lap that starts at a flag position is not counted.
+   const std::size_t tail = rxTail_;
+   const bool passedBoth = (dma.isHalfTransferInterruptFlagSet() && tail != rxDmaSize / 2) &&
+                           (dma.isTransferCompleteInterruptFlagSet() && tail != 0);
    dma.clearGlobalInterruptFlag();
    const uint32_t status = usart_.returnStatusFlag();
    // CNTR counts down from rxDmaSize and reloads after 0 (circular).
    const std::size_t head = (rxDmaSize - dma.getDataCount()) % rxDmaSize;
    // The DMA wrote the bytes up to head before the CNTR read.
    std::atomic_signal_fence(std::memory_order_acquire);
+   // A lap: the DMA wrote rxDmaSize bytes or more since the last pass, so it
+   // wrote over bytes that are not copied. It passed both flag positions,
+   // and head is at or after the tail again. Count one overrun and drop the
+   // buffer: its oldest bytes are overwritten.
+   if(passedBoth && head >= tail) {
+      buffers_.overrun();
+      rxTail_ = head;
+      return;
+   }
    // An error flag clears only when a data register read follows a status
    // read, and the DMA does the read with the next byte. Thus a flag stays
    // set between two checks when no byte came: count it again only when
    // the DMA has moved. Two errors between two checks give one count.
+   // The status read of isTxIdle() can also clear a flag before this check.
    if((status & (USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE)) != 0 && head != errorHead_) {
       errorHead_ = head;
       if((status & USART_SR_ORE) != 0) {
@@ -296,12 +313,12 @@ void UartPort::serviceRx() {
          buffers_.receiveError((status & USART_SR_PE) != 0);
       }
    }
-   std::size_t tail = rxTail_;
-   while(tail != head) {
-      buffers_.received(rxDma_[tail] & dataMask_);
-      tail = (tail + 1) % rxDmaSize;
+   std::size_t next = tail;
+   while(next != head) {
+      buffers_.received(rxDma_[next] & dataMask_);
+      next = (next + 1) % rxDmaSize;
    }
-   rxTail_ = tail;
+   rxTail_ = next;
 }
 
 void UartPort::serviceTx() {

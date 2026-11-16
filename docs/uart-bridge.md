@@ -77,12 +77,15 @@ The interrupt for each sent byte also made the SWD clock slower ([issue #33](htt
   It runs at the half and at the end of the buffer, thus each 128 bytes.
   The main loop also does the copy in each pass, and before each flush of the RX ring (`UartPort::pollRx()`). Thus a short message does not wait for 128 bytes, and a flush also discards the bytes in the DMA buffer.
   At 2 Mbaud, 128 bytes take 640 µs. The interrupt must run within this time, else the DMA writes over bytes that are not copied.
+  The copy then counts one overrun (`rxOverruns()`) and drops the buffer. For example, the debugWIRE engine locks the interrupts for each byte: 1.28 ms at 7812 baud (an AVR at 1 MHz).
+  When the last copy ended exactly at the half or the end of the buffer, the copy does not see the lap, and counts no overrun.
 - TX: DMA2 channel 8 sends a block of the TX ring buffer, 256 bytes at most.
   At the end of the block, the interrupt releases the block and starts the next block.
 - 7 data bits: the DMA copies the parity bit in bit 7. The copy clears bit 7.
 - Receive errors: the DMA reads the data register, so the interrupt reads only the status register.
   It counts one error when it finds an error flag and the DMA has received bytes since the last count.
   Thus two errors between two checks give one count. The counters show that errors occurred, not their exact number.
+  The status read of `UartPort::isTxIdle()` can also clear an error flag before the check. The bridge reads it only while a new line coding waits.
 
 The JTAG fast path uses DMA2 channel 2, and the one-wire engine uses DMA2 channels 10 and 11.
 USART1 is not a good choice for the bridge: its DMA channels (DMA1 channels 4 and 5) are also the SPI2 channels of the JTAG fast path.
