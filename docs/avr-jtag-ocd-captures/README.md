@@ -13,7 +13,7 @@ This directory holds the evidence for [avr-jtag-ocd.md](../avr-jtag-ocd.md).
 | Host tools | MPLAB X 6.35 with the PICkit 5 tool pack 3.0.1195, avrdude 8.3 |
 | JTAG clock | About 450 kHz (avrdude), 200 kHz (MPLAB X) |
 | Logic analyzer | Saleae Logic Pro 8, threshold 3.3 V, 50 MS/s (MPLAB X sessions) and 100 MS/s (avrdude) |
-| Channels | 0: TDO, 1: TCK, 2: RESET, 3: TDI, 4: TMS. The probe connected on the PICkit 5 side of the cable. |
+| Channels | 0: TDO, 1: TCK, 2: RESET, 3: TDI, 4: TMS. The logic analyzer connected on the PICkit 5 side of the cable. |
 
 Test program: a loop that increments `counter8`, calls `step_me()` and toggles the LED on PB7.
 `step_me()` writes `buffer[]` and adds to `counter16` (data address `0x210`).
@@ -41,7 +41,7 @@ The `-calls.txt` files list only the script names and parameters.
 
 ## Decoded JTAG format
 
-`jtagdec.py` follows the TAP state machine on each rising edge of TCK. It prints one line for each scan:
+`jtagdec.py` follows the state machine of the JTAG test access port (TAP) on each rising edge of TCK. It prints one line for each scan:
 
 ```
      37.494516  IR[ 4] in=0x8 out=0x1
@@ -66,4 +66,4 @@ The difference is constant in one session:
 | `m2560-mplab-swbp` | USB time − 1.1625 s |
 
 We found the offset from the FORCE_BREAK scans (IR `0x8`): there is one for each `Halt_JTAG` call.
-A script starts 1 to 3 ms before its USB time in the logic analyzer data. Thus use the scan content to find the exact border between two scripts.
+A script starts 1 to 5 ms before its USB time in the logic analyzer data. Thus use the scan content to find the exact border between two scripts.
