@@ -58,17 +58,15 @@ class IspPins {
 
 class IspSpi {
    public:
-   [[nodiscard]] uint32_t clockHz() const {
-      return clockHz_;
-   }
+   // SPI2 clock (PCLK1), read from the RCC at each call: setSpeed() can come
+   // before init().
+   [[nodiscard]] uint32_t clockHz() const;
    void init();
    void fini();
    void setShift(uint8_t shift);
    [[nodiscard]] bool transfer(IspPins &pins, const uint8_t *out, uint8_t *in, uint32_t bytes);
 
    private:
-   // SPI2 clock (APB1); init() reads it from the RCC.
-   uint32_t clockHz_{ 72'000'000 };
    uint8_t shift_{ avr::spiMaxShift };
 };
 
