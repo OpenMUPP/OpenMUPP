@@ -22,7 +22,7 @@ using Bytes = std::vector<uint8_t>;
 namespace cmd = avr::isp::command;
 namespace status = avr::isp::status;
 
-constexpr uint32_t cyclesPerMs = 72'000;
+constexpr uint32_t cyclesPerMs = mupptest::ispClockHz / 1000u;
 
 // The values of avrdude.conf for the ATmega2560
 const Bytes enterRequest{ cmd::enterProgmode, 200, 1, 1, 32, 0, 0x53, 3, 0xAC, 0x53, 0x00, 0x00 };
@@ -184,7 +184,8 @@ TEST_CASE("AVR ISP scope: SET_BAUD sets the SCK frequency, GET_BAUD reads it, 0 
    Fixture f;
    CHECK(f.run({ cmd::getBaud }) == Bytes{ cmd::getBaud, 100, 0, status::ok });
    CHECK(f.run({ cmd::setBaud, 0xA0, 0x0F }) == Bytes{ cmd::setBaud, status::ok });
-   CHECK(f.engine.spiShift() == 5);
+   // 4000 kHz: 144 MHz / 64 = 2.25 MHz
+   CHECK(f.engine.spiShift() == 6);
    CHECK(f.run({ cmd::getBaud }) == Bytes{ cmd::getBaud, 0xA0, 0x0F, status::ok });
    CHECK(f.run({ cmd::setBaud, 0x00, 0x00 }) == Bytes{ cmd::setBaud, status::baudInvalid });
    CHECK(f.run({ cmd::setBaud, 0x20 }) == Bytes{ cmd::setBaud, status::failed });

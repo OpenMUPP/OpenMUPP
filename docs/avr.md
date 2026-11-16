@@ -97,7 +97,7 @@ Thus always give `-B`.
 | 1 MHz (factory setting of many chips) | 250 kHz | `-B 125kHz` |
 | 128 kHz (internal watchdog RC oscillator) | 32 kHz | `-B 16kHz` |
 
-- The probe has an SPI engine for SCK from 281 kHz to 18 MHz. For a lower SCK, it uses a software engine at the requested rate.
+- The probe has an SPI engine for SCK from 562.5 kHz to 36 MHz (SPI2 at the 144 MHz APB1 clock, divided by 4 to 256). For a lower SCK, it uses a software engine at the requested rate.
 - SCK is never faster than the request.
 - A slow SCK makes a write take more time. Use the fastest `-B` value that the target clock permits.
 - When a chip does not answer, try a lower SCK. A wrong fuse setting can select a clock that is much slower than you expect.

@@ -38,10 +38,10 @@
 //                              after. False on a hardware timeout.
 //
 // Speed: the SPI gives clockHz() >> shift, shift 2-8. With SPI2 on the
-// 72 MHz APB1 of the CH32V307, this is 18 MHz to 281 kHz. A request below
-// the slowest SPI rate is bit-bang, at the requested rate: a new AVR runs
-// at 1 MHz and needs SCK below 250 kHz, a 128 kHz target below 32 kHz.
-// SCK is never faster than the request.
+// 144 MHz PCLK1 of the CH32V307 (APB1 is not divided), this is 36 MHz to
+// 562.5 kHz. A request below the slowest SPI rate is bit-bang, at the
+// requested rate: a new AVR runs at 1 MHz and needs SCK below 250 kHz, a
+// 128 kHz target below 32 kHz. SCK is never faster than the request.
 //
 // Bit-bang bit, with SCK low at the start (mode 0):
 //
@@ -63,9 +63,9 @@
 
 namespace avr {
 
-// The SPI divider is 2^shift (SPI_CTLR1.BR + 1). Shift 1 (36 MHz) is
-// faster than any AVR allows: SCK must be below a quarter of the target
-// clock (20 MHz at most).
+// The SPI divider is 2^shift (SPI_CTLR1.BR + 1). Shift 1 (72 MHz at the
+// 144 MHz PCLK1 of the CH32V307) is faster than any AVR allows: SCK must be
+// below a quarter of the target clock (20 MHz at most).
 inline constexpr uint8_t spiMinShift = 2;
 inline constexpr uint8_t spiMaxShift = 8;
 

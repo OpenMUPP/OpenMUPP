@@ -34,6 +34,10 @@
 
 namespace mupptest {
 
+// The core clock and the SPI clock of the mock: the CH32V307, where HCLK and
+// PCLK1 (SPI2) are both 144 MHz.
+inline constexpr uint32_t ispClockHz = 144'000'000;
+
 class MockIspTarget {
    public:
    void reset(bool asserted) {
@@ -331,7 +335,7 @@ class MockIspPins {
       return time++;
    }
    [[nodiscard]] uint32_t coreHz() const {
-      return 72'000'000;
+      return ispClockHz;
    }
 
    [[nodiscard]] bool sckLevel() const {
@@ -359,7 +363,7 @@ class MockIspPins {
 class MockIspSpi {
    public:
    [[nodiscard]] uint32_t clockHz() const {
-      return 72'000'000;
+      return ispClockHz;
    }
    void init() {
       ++inits;
