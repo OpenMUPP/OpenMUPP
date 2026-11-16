@@ -102,7 +102,20 @@ void pinsToGpio() {
    Tms::setConfig<gpioOutput>();
 }
 
+// The engine choice at the 144 MHz PCLK1 (docs/usb-device.md): bit-bang up
+// to 1124 kHz, then the SPI from 1125 kHz up to 9 MHz. With a 72 MHz PCLK1,
+// 4500 kHz would select shift 4 too.
+static_assert(jtag::spiShiftFor(144'000'000, 1124) == 0);
+static_assert(jtag::spiShiftFor(144'000'000, 1125) == 7);
+static_assert(jtag::spiShiftFor(144'000'000, 4500) == 5);
+static_assert(jtag::spiShiftFor(144'000'000, 9000) == 4);
+static_assert(jtag::spiShiftFor(144'000'000, 100'000) == 4);
+
 } // namespace
+
+uint32_t JtagSpi::clockHz() const {
+   return spiMaster().getClockFrequency();
+}
 
 void JtagSpi::init() {
    Rcc::enableSPI2Clock();
@@ -114,7 +127,6 @@ void JtagSpi::init() {
    hw::Afio::remapSpi3(true);
    gpioPin(tckLink).configure(hw::GpioPin::Mode::Input);
    const Spi master = spiMaster();
-   clockHz_ = master.getClockFrequency();
 
    master.disable();
    master.configure(prescalerOf(shift_), Spi::Mode::Master, Spi::ClockPolarity::High, Spi::ClockPhase::TwoEdge,
@@ -162,7 +174,7 @@ bool JtagSpi::transfer(JtagPins &pins, const uint8_t *tdi, const uint8_t *tms, u
    const Dma::Channel tdoDma = tdoChannel();
    const Dma::Channel tdiDma = tdiChannel();
    // Twice the time of the bits, and 100 us for the setup
-   const uint32_t cyclesPerBit = (pins.coreHz() / clockHz_) << shift_;
+   const uint32_t cyclesPerBit = (pins.coreHz() / clockHz()) << shift_;
    const uint32_t timeout = bytes * 8u * cyclesPerBit * 2u + pins.coreHz() / 10'000u;
 
    startSlave();

@@ -101,6 +101,10 @@ void pinsToGpio() {
 
 } // namespace
 
+uint32_t JtagSpi::clockHz() const {
+   return Rcc::getAPBClock();
+}
+
 void JtagSpi::init() {
    Rcc::enableSPI1Clock();
    Rcc::enableSPI2Clock();
@@ -109,8 +113,6 @@ void JtagSpi::init() {
    // are board pins.
    hw::Afio::remapSpi1(true);
    gpioPin(tckLink).configure(hw::GpioPin::Mode::Input);
-   clockHz_ = Rcc::getAPBClock();
-
    const Spi master = spiMaster();
    master.disable();
    master.configure(prescalerOf(shift_), Spi::Mode::Master, Spi::ClockPolarity::High, Spi::ClockPhase::TwoEdge,
@@ -155,7 +157,7 @@ bool JtagSpi::transfer(JtagPins &pins, const uint8_t *tdi, const uint8_t *tms, u
    const Dma::Channel tdoDma = tdoChannel();
    const Dma::Channel tdiDma = tdiChannel();
    // Twice the time of the bits, and 100 us for the setup
-   const uint32_t cyclesPerBit = (pins.coreHz() / clockHz_) << shift_;
+   const uint32_t cyclesPerBit = (pins.coreHz() / clockHz()) << shift_;
    const uint32_t timeout = bytes * 8u * cyclesPerBit * 2u + pins.coreHz() / 10'000u;
 
    startSlave();

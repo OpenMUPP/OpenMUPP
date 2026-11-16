@@ -127,6 +127,10 @@ static_assert(jtag::spiShiftFor(125'000'000, 100'000) == 4);
 
 } // namespace
 
+uint32_t JtagSpi::clockHz() const {
+   return spiMaster().getClockFrequency();
+}
+
 void JtagSpi::init() {
    Rcc::enableSPI1Clock();
    Rcc::enableSPI2Clock();
@@ -139,7 +143,6 @@ void JtagSpi::init() {
    }
    gpioPin(tckLink).configure(GpioPin::Mode::Alternate);
    const Spi master = spiMaster();
-   clockHz_ = master.getClockFrequency();
 
    master.configure(prescalerOf(shift_), Spi::Mode::Master, Spi::ClockPolarity::High, Spi::ClockPhase::TwoEdge,
                     Spi::DataSize::Bits8, Spi::FirstBit::Lsb, Spi::NssMode::Soft);
@@ -164,7 +167,7 @@ bool JtagSpi::transfer(JtagPins &pins, const uint8_t *tdi, const uint8_t *tms, u
    const Spi master = spiMaster();
    const auto count = static_cast<uint16_t>(bytes);
    // Twice the time of the bits, and 100 us for the setup
-   const uint32_t cyclesPerBit = (pins.coreHz() / clockHz_) << shift_;
+   const uint32_t cyclesPerBit = (pins.coreHz() / clockHz()) << shift_;
    const uint32_t timeout = bytes * 8u * cyclesPerBit * 2u + pins.coreHz() / 10'000u;
 
    // The opening order of RM0481 58.4.14: DMA channels, TXDMAEN, SPE.
