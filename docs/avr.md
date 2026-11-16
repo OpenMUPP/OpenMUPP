@@ -18,21 +18,12 @@ The protocol is in [cmsis-dap.md](cmsis-dap.md#avr-commands).
 The probe has the USB ID `1209:0001` (the test ID of pid.codes) and the product name `OpenMUPP CMSIS-DAP`.
 The product name must contain `CMSIS-DAP`, because avrdude uses it to select the packet size.
 
-The build option `MUPP_AVR_USB_ID=medbg` gives the probe the USB ID of the Microchip mEDBG (`03eb:2145`).
-The preset `ydch32v307-cmsis-dap-avr-medbg` sets it.
-The option needs `MUPP_CMSIS_DAP_AVR`.
-With this ID, a host tool that has no entry for the probe finds it, for example Bloom and the `xplainedmini` programmer of avrdude.
-The vendor ID belongs to Microchip.
-Use this image for personal use only.
-Do not publish it.
-
 ## Linux access
 
 avrdude uses the HID interface of the probe.
 Copy `etc/70-openmupp-avr.rules` to `/etc/udev/rules.d/`.
 The rule gives a normal user access to the `hidraw` device of the probe.
 Then run `udevadm control --reload` and plug in the probe again.
-For a `medbg` image, remove the `#` from the last line of the file.
 
 The file `etc/70-openmupp-cmsis-dap.rules` gives access to the USB device, for the other CMSIS-DAP tools (see [cmsis-dap.md](cmsis-dap.md#use-the-probe)).
 
@@ -85,8 +76,6 @@ avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -U lfuse:r:-:h
 # Write the EEPROM
 avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -U eeprom:w:data.hex:i
 ```
-
-With a `medbg` image, use `-c xplainedmini` and no `-C` option. This combination also has no hardware test yet.
 
 ## Low-clock targets
 

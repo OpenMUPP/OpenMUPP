@@ -47,17 +47,8 @@
 
 namespace usb::dap {
 
-// The own ID is the pid.codes test ID until the project has its own PID.
-// MUPP_AVR_USB_ID=medbg (personal use only: the vendor ID belongs to
-// Microchip) gives the ID of the mEDBG, so that unpatched avrdude and Bloom
-// find the probe.
-#if defined(MUPP_AVR_USB_ID_MEDBG)
-inline constexpr uint16_t vendorId = 0x03EB;
-inline constexpr uint16_t productId = 0x2145;
-#else
 inline constexpr uint16_t vendorId = 0x1209;
 inline constexpr uint16_t productId = 0x0001;
-#endif
 
 inline constexpr uint8_t dapInterface = 0;
 inline constexpr uint8_t outEndpoint = versaloonOutEndpoint;

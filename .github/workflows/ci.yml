@@ -94,8 +94,6 @@ jobs:
           # The AVR commands on the HID interface (MUPP_CMSIS_DAP_AVR)
           - ydch32v307-cmsis-dap-avr
           - ydch32v307-all-avr
-          # The USB ID of the mEDBG (MUPP_AVR_USB_ID=medbg), personal use only: no artifacts
-          - ydch32v307-cmsis-dap-avr-medbg
     steps:
       - uses: actions/checkout@v5
         with:
@@ -104,7 +102,7 @@ jobs:
       - run: ci/compile-preset.sh ${{ matrix.preset }}
       # Only the files with the board, the build type and the version in the name.
       - uses: actions/upload-artifact@v4
-        if: matrix.preset != 'mini-cmsis-dap-no-rv-bridge' && matrix.preset != 'weacth523-dual-hid' && !startsWith(matrix.preset, 'ydch32v307') && !endsWith(matrix.preset, '-medbg')
+        if: matrix.preset != 'mini-cmsis-dap-no-rv-bridge' && matrix.preset != 'weacth523-dual-hid' && !startsWith(matrix.preset, 'ydch32v307')
         with:
           name: openmupp-${{ matrix.preset }}-${{ github.sha }}
           path: |

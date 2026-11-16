@@ -5,6 +5,3 @@
 
 # The test ID of pid.codes. Many devices share it, so the rules also check the product string.
 KERNEL=="hidraw*", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP CMSIS-DAP", MODE="0660", TAG+="uaccess"
-
-# An image built with MUPP_AVR_USB_ID=medbg uses the ID of the Microchip mEDBG. Remove the "#" for such an image.
-# KERNEL=="hidraw*", ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="2145", ATTRS{product}=="OpenMUPP CMSIS-DAP", MODE="0660", TAG+="uaccess"
