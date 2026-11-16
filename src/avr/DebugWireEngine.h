@@ -85,7 +85,7 @@ inline constexpr int32_t dwFramingError = 0x100;
 // The baud rate range of the measurement in sync(). 500 baud is a 64 kHz
 // target clock, 1 Mbaud is above the 156 kbaud of a 20 MHz target. The
 // receiver of the board can have a smaller range: then sync() gives
-// BaudRange (the YD board: 1099 baud or more, a target clock of 141 kHz or
+// BaudRange (the YD board: 2198 baud or more, a target clock of 282 kHz or
 // more, see docs/boards.md).
 inline constexpr uint32_t dwMinBaud = 500;
 inline constexpr uint32_t dwMaxBaud = 1'000'000;

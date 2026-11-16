@@ -53,8 +53,8 @@ bool DebugWirePins::rxEnable(uint32_t baud) {
    const Usart port = usart();
    port.disable();
    // BRR is the bus clock / baud (16 times oversampling). The register has
-   // 16 bits, and the USART needs 16 or more. At a 72 MHz bus clock: 1099
-   // baud to 4.5 Mbaud. Usart::setBaudRate() does not check the range.
+   // 16 bits, and the USART needs 16 or more. At a 144 MHz bus clock (APB1
+   // is not divided): 2198 baud to 9 Mbaud. Usart::setBaudRate() does not check the range.
    const uint32_t divider = baud == 0 ? 0 : Usart::calculateBRR(baud, port.getClockFrequency());
    if(divider < 16 || divider > 0xFFFF) {
       return false;
