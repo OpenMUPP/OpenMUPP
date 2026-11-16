@@ -296,6 +296,9 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   nullptr,
 #endif
                                   &targetPower };
+// The owner of the target pins (protocol/TargetPinOwner.h), for the HID
+// interface and for a board without safe debug outputs.
+protocol::TargetPinOwner dapPinOwner;
 #if defined(MUPP_CMSIS_DAP_HID)
 // The CMSIS-DAP v1 (HID) interface: its own processor on the same engines
 // and pins. The first interface that drives the pins owns them
@@ -304,7 +307,6 @@ cmsisdap::Processor dapProcessor{ dapSwd,
 // other vendor commands (personality, bootloader, target power) and the
 // UART commands are on the v2 interface only. With MUPP_CMSIS_DAP_AVR, the
 // vendor commands of this interface are the AVR commands.
-protocol::TargetPinOwner dapPinOwner;
 #if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
 cmsisdap::Bridge *const dapHidBridge = &dapRvBridge;
 #else
@@ -346,6 +348,12 @@ void setDapSerialNumber() {
 // The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
 void startDap() {
    setDapSerialNumber();
+   if constexpr(!board::current.debugOutputs) {
+      // No DAP command can take the pins: DAP_Connect gives port 0, and
+      // DAP_SWJ_Pins only reads.
+      static_cast<void>(dapPinOwner.acquire(protocol::PinClient::Board));
+      dapProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapBulk);
+   }
 #if defined(MUPP_CMSIS_DAP_HID)
    dapProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapBulk);
    dapHidProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapHid);

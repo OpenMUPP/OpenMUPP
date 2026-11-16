@@ -14,9 +14,11 @@ namespace board {
 // The definition has only the pins that the board layer knows. The board
 // layer does not drive the shifter direction pins (DIR_OUT PB10, DIR_SWDIO
 // PC3, UART_TX_DIR PC9) and the power pins (target switches, VPP). The
-// pull-downs on DIR_OUT and DIR_SWDIO keep the target side of the JTAG, SWD
-// and ISP outputs high-impedance, so only the UART bridge reaches the
-// target (docs/boards.md).
+// pull-downs on DIR_OUT and DIR_SWDIO set the shifters from the target to
+// the probe, so the shifters drive PB13, PB15, PB9 and PC11. An MCU output
+// on these pins would drive against them: debugOutputs is false, so the
+// debug engines do not run. Only the UART bridge reaches the target
+// (docs/boards.md).
 inline constexpr Definition openMuppV1{
    .name = "openmuppv1",
    .hseFrequency = 8'000'000,
@@ -52,6 +54,7 @@ inline constexpr Definition openMuppV1{
    // SW1 on the BOOT0 net
    .key = Signal{ { Port::B, 3 }, Active::High },
    .usbPullUp = std::nullopt,
+   .debugOutputs = false,
 };
 
 static_assert(isValid(openMuppV1));

@@ -41,6 +41,7 @@ The board definition holds all board-specific data:
 
 - The pin map: JTAG and SWD, UART, Vref sense, power switch, LEDs, key and USB pull-up.
 - The MCU family.
+- `debugOutputs`: false when the debug pins must not become outputs (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)).
 - The crystal frequency. The value 0 is a board without a crystal. Only an STM32H5 board can have no crystal: its USB clock comes from the HSI48 and the clock recovery system (CRS).
 - The JTAG fast path (SPI and DMA, see [JTAG fast path](usb-device.md#jtag-fast-path)). It is only available when the board links TCK (PB13) to PB3.
 - The hardware ID that `VERSALOON_GET_HARDWARE` returns.
@@ -403,9 +404,11 @@ The board layer does not know the direction pins and the power functions yet.
 Thus only the UART bridge reaches the target:
 
 - `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) have external pull-downs. The firmware does not drive them.
-  Thus the target side of the TCK, TDI, TRST, AUX and SWDIO shifters stays high-impedance.
+  Thus the TCK, TDI, TRST, AUX and SWDIO shifters work from the target to the probe. The target side stays high-impedance, and the shifters drive PB13, PB15, PB9 and PC11.
+- An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
+  `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.
+- Only the CMSIS-DAP personality has this lock. A build with the Versaloon or WCH-Link personality fails for this board.
 - `UART_TX_DIR` (PC9) has a pull-up, so UART TX drives the target. UART RX has a fixed shifter.
-- The CMSIS-DAP reset drives `SRST` open-drain and active low. On this board, that does not pull nRESET low.
 - The firmware does not turn on the target power switches and VPP.
 
 The firmware must follow these rules when it adds these functions:

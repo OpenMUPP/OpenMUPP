@@ -280,6 +280,10 @@ struct Definition {
    std::optional<Signal> usbPullUp;
    // The pull-up pin is an open-drain output: the board sets the high level.
    bool usbPullUpOpenDrain = false;
+   // False: the debug pins must not become outputs, because the board layer
+   // does not drive the level shifters of the board yet. The firmware then
+   // keeps the target pins (main.cpp), so no host command drives them.
+   bool debugOutputs = true;
    // Add each new pin field to detail::allPins() too, else isValid() and
    // swjConfig() do not see it.
 
