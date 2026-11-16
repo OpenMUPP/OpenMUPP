@@ -262,7 +262,7 @@ The response is `[0x82][status u8][mV u16]`:
 | Status | Meaning |
 |---|---|
 | `0x00` | Done. |
-| `0x01` | Refused: a protection keeps the supply off (see below). |
+| `0x01` | Refused: a protection keeps the supply off (see below), or the HID interface owns the target pins. |
 | `0xFF` | Not supported: op `0` or `1` on a board without a power switch, or an op that is not `0`, `1` or `2`. |
 
 `mV` is the target voltage after the operation, little-endian.
@@ -275,6 +275,11 @@ It is 0 when the board has no Vref sense or the measurement fails.
 - The voltage is not above 1.8 V 10 ms after the switch-on. The rail then has a short circuit or an overload, and the firmware switches the supply off again.
 
 A board without a Vref sense switches on without these checks.
+
+With the HID interface, one rule covers both interfaces.
+Only the interface that owns the target pins switches the supply on, or any interface while no interface owns them.
+The switch-off always works, also for the other interface: this is for safety, and for the recovery after a host that stopped.
+`82 01` on the v2 interface gives status `0x01` while the HID interface owns the pins.
 While the supply is on, the main loop switches it off when the voltage stays low, as in the Versaloon personality.
 
 The supply is off at power-up.

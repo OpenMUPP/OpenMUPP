@@ -547,7 +547,10 @@ bool Processor::targetPower(PacketReader &in, PacketWriter &out) {
    constexpr uint8_t opRead = 2;
    constexpr uint8_t statusRefused = 1;
    uint8_t status = statusOk;
-   if(op == opOn) {
+   if(op == opOn && otherOwnsPins()) {
+      // Only the owner of the pins, or anyone while nobody owns them
+      status = statusRefused;
+   } else if(op == opOn) {
       switch(power_->switchOn()) {
       case protocol::TargetPower::Result::Ok:
          break;

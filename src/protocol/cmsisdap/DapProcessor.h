@@ -88,7 +88,10 @@
 //   or 0xFF: op 0 or 1 on a board without a power switch, or another op.
 //   mV is the target voltage after the operation, 0 without a sense or
 //   when the measurement fails. Without a TargetPower, the command replies
-//   ID_DAP_Invalid. hostGone() keeps the supply on.
+//   ID_DAP_Invalid. hostGone() keeps the supply on. With a pin owner, op 1
+//   replies status 1 while the other processor owns the pins: only the
+//   owner, or any processor while nobody owns the pins, switches the
+//   supply on. Op 0 always works.
 // - With vendor commands (setVendorCommands()), 0x80-0x82 go to that
 //   object instead (the EDBG commands AVR_CMD, AVR_RSP, AVR_EVT on the HID
 //   interface). They take the rest of the packet, so in a

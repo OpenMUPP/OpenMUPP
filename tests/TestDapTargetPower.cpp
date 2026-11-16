@@ -147,3 +147,20 @@ TEST_CASE("Target power: in DAP_ExecuteCommands, a response that does not fit sw
    CHECK(response[1] == 15);
    CHECK(d.hardware.switches.empty());
 }
+
+TEST_CASE("Target power: with a pin owner, only the owner or anyone while the pins are free switches on") {
+   Dap d;
+   protocol::TargetPinOwner owner;
+   d.dap.sharePins(owner, protocol::PinClient::CmsisDapBulk);
+   // Nobody owns the pins.
+   CHECK(d.run({ vendor2, on }) == Bytes{ vendor2, done, 0xE4, 0x0C });
+   // The other interface owns them: switch-off works, switch-on does not.
+   REQUIRE(owner.acquire(protocol::PinClient::CmsisDapHid));
+   CHECK(d.run({ vendor2, off }) == Bytes{ vendor2, done, 0x00, 0x00 });
+   CHECK(d.run({ vendor2, on }) == Bytes{ vendor2, refused, 0x00, 0x00 });
+   CHECK(d.hardware.switches == std::vector<bool>{ true, false });
+   // This interface owns them.
+   owner.release(protocol::PinClient::CmsisDapHid);
+   REQUIRE(d.run({ 0x02, 0x01 }) == Bytes{ 0x02, 0x01 });
+   CHECK(d.run({ vendor2, on }) == Bytes{ vendor2, done, 0xE4, 0x0C });
+}
