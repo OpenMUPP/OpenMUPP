@@ -41,6 +41,7 @@ void startBridge(usb::UsbStack &usbStack) {
 
 void pollBridge() {
    if(bridge) {
+      port.pollRx();
       bridge->poll();
 #if defined(MUPP_WITH_CMSIS_DAP)
       dapChannel.poll();

@@ -2,6 +2,7 @@
 
 #include "uart/UartPort.h"
 
+#include <atomic>
 #include <cmsis_device.h>
 #include <peripherals/GpioPin.h>
 #include <utils/Interrupt.h>
@@ -9,6 +10,8 @@
 #include <peripherals/Rcc.h>
 #else
 #include <Afio.h>
+#include <peripherals/Dma.h>
+#include <peripherals/Rcc.h>
 // The CH32V30x status register (STATR) has the bits of the STM32F1 SR at the same positions, with other names
 #define USART_SR_RXNE USART_STATR_RXNE
 #define USART_SR_ORE USART_STATR_ORE
@@ -79,6 +82,7 @@ void enableClock() {
    if constexpr(uart7Remap) {
       hw::Afio::remapUsart7(hw::Afio::Usart7Remap::Remap1);
    }
+   Rcc::enableDMA2Clock();
 #else
    if constexpr(uartPins.usart == 1) {
       Rcc::enableUSART1Clock();
@@ -94,6 +98,25 @@ void enableClock() {
 [[maybe_unused]] USART_TypeDef *registers() {
    return reinterpret_cast<USART_TypeDef *>(peripheral.base);
 }
+
+#if defined(__riscv)
+// UART7_TX and UART7_RX requests (RM V2.5 table 11-4). The one-wire engine
+// uses DMA2 channels 10 and 11 (board/BoardDefinition.h).
+constexpr IRQn_Type txDmaIrq = DMA2_Channel8_IRQn;
+constexpr IRQn_Type rxDmaIrq = DMA2_Channel9_IRQn;
+
+Dma::Channel txDma() {
+   return { DMA2, 8 };
+}
+
+Dma::Channel rxDma() {
+   return { DMA2, 9 };
+}
+
+// The longest TX block. A shorter block gives its part of the tx ring back
+// earlier, so the main loop can fill it while the DMA sends.
+constexpr std::size_t maxTxBlock = 256;
+#endif
 
 constexpr hw::Usart::DataBits toUsart(DataBits dataBits) {
    return dataBits == DataBits::Seven ? hw::Usart::DataBits::Seven : hw::Usart::DataBits::Eight;
@@ -130,10 +153,14 @@ UartPort *UartPort::instance_ = nullptr;
 
 // The generic entry of Interrupt::connectMemberHandler calls the handler
 // through a pointer, so it saves all caller-saved integer and FPU registers
-// (about 90 instructions, issue #33). This entry inlines the handler
-// (flatten), so it saves only the registers that the handler uses.
-[[gnu::interrupt, gnu::flatten]] void UartPort::interruptEntry() {
-   instance_->handleInterrupt();
+// (about 90 instructions, issue #33). These entries inline the handler
+// (flatten), so they save only the registers that the handler uses.
+[[gnu::interrupt, gnu::flatten]] void UartPort::rxInterruptEntry() {
+   instance_->serviceRx();
+}
+
+[[gnu::interrupt, gnu::flatten]] void UartPort::txInterruptEntry() {
+   instance_->serviceTx();
 }
 #endif
 
@@ -162,13 +189,37 @@ void UartPort::start() {
 
 #if defined(__riscv)
    instance_ = this;
-   Interrupt::connectHandler(peripheral.irq, &UartPort::interruptEntry);
+   auto *data = const_cast<uint16_t *>(&registers()->DATAR);
+   const Dma::Channel rx = rxDma();
+   rx.disable();
+   rx.configure(data, rxDma_.data(), Dma::DataSize::Size8Bits, Dma::Direction::PeripheralToMemory, true, false);
+   rx.setCircular(true);
+   rx.setTransferCount(rxDmaSize);
+   rx.setPriority(Dma::ChannelPriority::very_high);
+   rx.clearGlobalInterruptFlag();
+   rx.enableHalfTransferInterrupt();
+   rx.enableTransferCompleteInterrupt();
+   // The channel waits for the requests: setFormat() turns them on.
+   rx.enable();
+   const Dma::Channel tx = txDma();
+   tx.disable();
+   tx.configure(data, nullptr, Dma::DataSize::Size8Bits, Dma::Direction::MemoryToPeripheral, true, false);
+   tx.setPriority(Dma::ChannelPriority::high);
+   tx.clearGlobalInterruptFlag();
+   tx.enableTransferCompleteInterrupt();
+   Interrupt::connectHandler(rxDmaIrq, &UartPort::rxInterruptEntry);
+   Interrupt::connectHandler(txDmaIrq, &UartPort::txInterruptEntry);
+   for(const IRQn_Type irq : { rxDmaIrq, txDmaIrq }) {
+      NVIC_SetPriority(irq, hardware::uartIrqPriority);
+      NVIC_ClearPendingIRQ(irq);
+      NVIC_EnableIRQ(irq);
+   }
 #else
    Interrupt::connectMemberHandler<UartPort, &UartPort::handleInterrupt>(peripheral.irq, *this);
-#endif
    NVIC_SetPriority(peripheral.irq, hardware::uartIrqPriority);
    NVIC_ClearPendingIRQ(peripheral.irq);
    NVIC_EnableIRQ(peripheral.irq);
+#endif
 }
 
 uint32_t UartPort::clockFrequency() const {
@@ -184,10 +235,105 @@ void UartPort::setFormat(const FrameFormat &format) {
    // sends no frame with a wrong baud rate.
    usart_.enableTx();
    usart_.enableRx();
+#if defined(__riscv)
+   dataMask_ = format.dataBits == DataBits::Seven ? 0x7F : 0xFF;
+   usart_.enableDmaRx();
+   usart_.enableDmaTx();
+#else
    usart_.enableRxNotEmptyInterrupt();
+#endif
    usart_.enable();
 }
 
+#if defined(__riscv)
+bool UartPort::isTxIdle() const {
+   return txLength_ == 0 && usart_.isTransferComplete();
+}
+
+void UartPort::startTx() {
+   txEnabled_ = true;
+   // The interrupt starts a block when the DMA is idle.
+   NVIC_SetPendingIRQ(txDmaIrq);
+}
+
+void UartPort::stopTx() {
+   Interrupt::CriticalSection cs;
+   txEnabled_ = false;
+   const Dma::Channel dma = txDma();
+   dma.disable();
+   dma.clearGlobalInterruptFlag();
+   if(txLength_ != 0) {
+      // The bytes that the DMA has written to the UART leave tx.
+      buffers_.tx.commit_read(txLength_ - dma.getDataCount());
+      txLength_ = 0;
+   }
+}
+
+void UartPort::pollRx() {
+   const std::size_t head = (rxDmaSize - rxDma().getDataCount()) % rxDmaSize;
+   if(head != rxTail_) {
+      NVIC_SetPendingIRQ(rxDmaIrq);
+   }
+}
+
+void UartPort::serviceRx() {
+   const Dma::Channel dma = rxDma();
+   dma.clearGlobalInterruptFlag();
+   const uint32_t status = usart_.returnStatusFlag();
+   // CNTR counts down from rxDmaSize and reloads after 0 (circular).
+   const std::size_t head = (rxDmaSize - dma.getDataCount()) % rxDmaSize;
+   // The DMA wrote the bytes up to head before the CNTR read.
+   std::atomic_signal_fence(std::memory_order_acquire);
+   // An error flag clears only when a data register read follows a status
+   // read, and the DMA does the read with the next byte. Thus a flag stays
+   // set between two checks when no byte came: count it again only when
+   // the DMA has moved. Two errors between two checks give one count.
+   if((status & (USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE)) != 0 && head != errorHead_) {
+      errorHead_ = head;
+      if((status & USART_SR_ORE) != 0) {
+         buffers_.overrun();
+      }
+      if((status & (USART_SR_FE | USART_SR_NE | USART_SR_PE)) != 0) {
+         buffers_.receiveError((status & USART_SR_PE) != 0);
+      }
+   }
+   std::size_t tail = rxTail_;
+   while(tail != head) {
+      buffers_.received(rxDma_[tail] & dataMask_);
+      tail = (tail + 1) % rxDmaSize;
+   }
+   rxTail_ = tail;
+}
+
+void UartPort::serviceTx() {
+   const Dma::Channel dma = txDma();
+   if(txLength_ != 0) {
+      // startTx() requests the interrupt also while a block is sent.
+      if(!dma.isTransferCompleteInterruptFlagSet()) {
+         return;
+      }
+      dma.clearGlobalInterruptFlag();
+      dma.disable();
+      buffers_.tx.commit_read(txLength_);
+      txLength_ = 0;
+   }
+   if(!txEnabled_) {
+      return;
+   }
+   std::size_t length = 0;
+   const uint8_t *data = buffers_.tx.read_ptr(length);
+   if(length == 0) {
+      return;
+   }
+   length = length < maxTxBlock ? length : maxTxBlock;
+   // TC is set from the last block. isTxIdle() reads it after this block.
+   usart_.clearStatusFlag(USART_STATR_TC);
+   dma.setMemoryAddress(reinterpret_cast<uintptr_t>(data));
+   dma.setTransferCount(static_cast<uint16_t>(length));
+   txLength_ = length;
+   dma.enable();
+}
+#else
 bool UartPort::isTxIdle() const {
    return !usart_.isTxEmptyInterruptEnabled() && usart_.isTransferComplete();
 }
@@ -201,6 +347,9 @@ void UartPort::startTx() {
 void UartPort::stopTx() {
    Interrupt::CriticalSection cs;
    usart_.disableTxEmptyInterrupt();
+}
+
+void UartPort::pollRx() {
 }
 
 void UartPort::handleInterrupt() {
@@ -249,5 +398,6 @@ void UartPort::handleInterrupt() {
       }
    }
 }
+#endif
 
 } // namespace uart
