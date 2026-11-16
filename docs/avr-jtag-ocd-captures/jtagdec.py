@@ -34,7 +34,8 @@ for r in rows:
         if nst in ('UPDR', 'UPIR'):
             flush_idle(); n = len(tin)
             kind = 'IR' if nst == 'UPIR' else 'DR'
-            print(f'{t_end:14.6f}  {kind}[{n:2}] in=0x{val(tin):0{(n+3)//4}X} out=0x{val(tout):0{(n+3)//4}X}')
+            if n:  # Capture -> Exit1 -> Update shifts no bits: not a scan
+                print(f'{t_end:14.6f}  {kind}[{n:2}] in=0x{val(tin):0{(n+3)//4}X} out=0x{val(tout):0{(n+3)//4}X}')
             tin, tout = [], []
         st = nst
     prev = s
