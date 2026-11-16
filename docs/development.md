@@ -230,6 +230,8 @@ The jobs:
   The limit is the full zero-wait area, because the settings page is in the non-zero-wait area. These jobs keep no artifacts.
 - `build-ydch32v307-wch-link`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-wch-link` preset, plus the size check.
   It is the CH32 image that links the one-wire engine. This job keeps no artifacts.
+- `build-ydch32v307-avr`: a `parallel:matrix` job for the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` presets, plus the size check.
+  These images have the AVR commands on the HID interface (`MUPP_CMSIS_DAP_AVR`). These jobs keep no artifacts.
 
 The build jobs of the Mini, the WeAct STM32H523 core board and the YD-CH32V307VCT6 board run in each pipeline.
 The build jobs of the ST-Link boards are manual: start them in the pipeline view of GitLab.

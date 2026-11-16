@@ -89,6 +89,9 @@ jobs:
           - ydch32v307-dual
           - ydch32v307-all
           - ydch32v307-wch-link
+          # The AVR commands on the HID interface (MUPP_CMSIS_DAP_AVR)
+          - ydch32v307-cmsis-dap-avr
+          - ydch32v307-all-avr
     steps:
       - uses: actions/checkout@v5
         with:

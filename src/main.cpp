@@ -41,6 +41,10 @@
 #include "protocol/cmsisdap/RvBridge.h"
 #include "protocol/cmsisdap/RvDtmTap.h"
 #endif
+#if defined(MUPP_CMSIS_DAP_AVR)
+#include "board/BoardIsp.h"
+#include "protocol/avr/EdbgTransport.h"
+#endif
 #endif
 #if defined(MUPP_WITH_VERSALOON)
 #include "protocol/versaloon/GpioBlock.h"
@@ -298,7 +302,8 @@ cmsisdap::Processor dapProcessor{ dapSwd,
 // (protocol/TargetPinOwner.h). It has the RISC-V bridge, so that
 // DAP_SWJ_Pins re-attaches the wire and ID_DAP_Vendor1 sets the mode. The
 // other vendor commands (personality, bootloader, target power) and the
-// UART commands are on the v2 interface only.
+// UART commands are on the v2 interface only. With MUPP_CMSIS_DAP_AVR, the
+// vendor commands of this interface are the AVR commands.
 protocol::TargetPinOwner dapPinOwner;
 #if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
 cmsisdap::Bridge *const dapHidBridge = &dapRvBridge;
@@ -307,6 +312,22 @@ cmsisdap::Bridge *const dapHidBridge = nullptr;
 #endif
 cmsisdap::Processor dapHidProcessor{ dapSwd,  boardGpio, dapPlatform, dapInfo,     dapJtag,
                                      nullptr, nullptr,   nullptr,     dapHidBridge };
+#endif
+#if defined(MUPP_CMSIS_DAP_AVR)
+// The AVR commands of avrdude and Bloom on the HID interface
+// (protocol/avr/EdbgTransport.h), with the ISP engine on the target pins.
+board::IspPins ispPins;
+board::BoardIsp ispEngine{ ispPins, &serialService };
+avr::IspScope<board::BoardIsp> ispScope{ ispEngine };
+const avr::ToolInfo edbgTool{
+   .name = dapProduct,
+   .serialNumber = dapSerialNumber.data(),
+   .hardwareVersion = 0,
+   .firmwareMajor = VERSION_MAJOR,
+   .firmwareMinor = VERSION_MINOR,
+   .firmwareBuild = VERSION_BUILD,
+};
+avr::EdbgTransport edbgTransport{ edbgTool, ispScope, dapHidProcessor, &targetPower, &dapPinOwner };
 #endif
 
 // The chip UID as the 24 hexadecimal digits of the USB serial number
@@ -328,6 +349,9 @@ void startDap() {
 #if defined(MUPP_CMSIS_DAP_HID)
    dapProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapBulk);
    dapHidProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapHid);
+#endif
+#if defined(MUPP_CMSIS_DAP_AVR)
+   dapHidProcessor.setVendorCommands(edbgTransport);
 #endif
 }
 

@@ -232,3 +232,14 @@ build-ydch32v307-wch-link:
     BOARD: ydch32v307
     VARIANT: -wch-link
   artifacts: null
+
+# YD-CH32V307VCT6: the AVR commands on the HID interface
+# (MUPP_CMSIS_DAP_AVR), with one and with all personalities. Build and size
+# check only, no artifacts.
+build-ydch32v307-avr:
+  extends: .build-board-template
+  parallel:
+    matrix:
+      - BOARD: ydch32v307
+        VARIANT: [-cmsis-dap-avr, -all-avr]
+  artifacts: null

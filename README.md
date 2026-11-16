@@ -138,6 +138,7 @@ The preset `ydch32v307` builds the stub image of the YD-CH32V307VCT6 board with 
 The presets `ydch32v307-cmsis-dap`, `ydch32v307-dual` and `ydch32v307-all` build the firmware image instead (`-DMUPP_CH32_STUB_IMAGE=OFF`, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board)).
 `ydch32v307-all` has all personalities.
 The preset `ydch32v307-wch-link` builds the firmware image with the WCH-Link personality.
+The presets `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` add the AVR commands on the CMSIS-DAP v1 (HID) interface (`MUPP_CMSIS_DAP_AVR`, see [docs/cmsis-dap.md](docs/cmsis-dap.md#avr-commands)).
 It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.
 [docs/cmake.md](docs/cmake.md#cmake-presets) describes them.

@@ -156,6 +156,12 @@ mupp_personality_test(hid-multi "tag=\\[-dap\\+vsl\\+wch-hid\\] defines=.*,MUPP_
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link -DMUPP_CMSIS_DAP_HID=ON)
 mupp_personality_test(hid-without-cmsis-dap "MUPP_CMSIS_DAP_HID needs cmsis-dap"
         -DMUPP_PERSONALITIES=versaloon -DMUPP_CMSIS_DAP_HID=ON)
+mupp_personality_test(avr "tag=\\[-cmsis-dap-hid-avr\\] defines=MUPP_WITH_CMSIS_DAP,MUPP_CMSIS_DAP_HID,MUPP_CMSIS_DAP_AVR,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON)
+mupp_personality_test(avr-multi "tag=\\[-dap\\+vsl\\+wch-hid-avr\\] defines=.*,MUPP_CMSIS_DAP_AVR,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+        -DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON)
+mupp_personality_test(avr-without-hid "MUPP_CMSIS_DAP_AVR needs MUPP_CMSIS_DAP_HID=ON"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_AVR=ON)
 # Ignored without cmsis-dap
 mupp_personality_test(rv-bridge-wch-link "tag=\\[-wch-link\\] defines=MUPP_WITH_WCH_LINK\n"
         -DMUPP_PERSONALITIES=wch-link -DMUPP_CMSIS_DAP_RV_BRIDGE=ON)

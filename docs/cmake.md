@@ -16,6 +16,7 @@ These options select the board, the personality and the debug features:
 | `MUPP_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `MUPP_PERSONALITIES`. Empty: `cmsis-dap` when the image has it, else the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `MUPP_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `MUPP_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
 | `MUPP_CMSIS_DAP_HID` | `OFF` | Add the CMSIS-DAP v1 (HID) interface to the CMSIS-DAP personality, next to the v2 interface (see [cmsis-dap.md](cmsis-dap.md#cmsis-dap-v1-hid)). The AVR support needs it. It needs `cmsis-dap` in `MUPP_PERSONALITIES`. The STM32F1 boards refuse it: their USB packet memory has no room for two more endpoints. |
+| `MUPP_CMSIS_DAP_AVR` | `OFF` | Add the AVR commands of the Microchip EDBG tools (avrdude, Bloom) to the CMSIS-DAP v1 (HID) interface (see [cmsis-dap.md](cmsis-dap.md#avr-commands)). It needs `MUPP_CMSIS_DAP_HID`. Only the CH32V307 boards accept it: the AVR ISP engine has no code for the other chips. |
 | `MUPP_CMSIS_DAP_RV_BRIDGE` | `ON` | Add the RISC-V bridge to the CMSIS-DAP personality, also in a multi image. The JTAG port can then be an emulated RISC-V DTM on the WCH debug wire. In the auto mode, the probe finds the target at `DAP_Connect`. The vendor command `ID_DAP_Vendor1` sets the mode and can store it (see [cmsis-dap.md](cmsis-dap.md#risc-v-dtm-bridge)). The stored mode needs the settings page, so an image with the bridge has 1 KB (STM32F103) or 8 KB (STM32H5) less flash. On the CH32V307, the page is outside the flash of the image. An image without `cmsis-dap` ignores the option. A build directory with `OFF` in its cache keeps `OFF`: use `--fresh` or `-DMUPP_CMSIS_DAP_RV_BRIDGE=ON`. On the STM32H5 boards, only the OpenOCD rates of the bridge are measured (WeAct STM32H523, see [cmsis-dap.md](cmsis-dap.md#ch32v006-rates-on-the-weact-stm32h523)). |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `MUPP_LTO` | `ON` in a `Release` build, else `OFF` | Link-time optimisation (LTO) of the firmware and of the libraries. The images are about 13 % smaller. The option sets `CMAKE_INTERPROCEDURAL_OPTIMIZATION`. CMake then makes the libraries with `gcc-ar` and `gcc-ranlib`, because `ar` and `ranlib` give no symbol index for LTO objects. |
@@ -42,6 +43,7 @@ The tag after the board in the file name tells the personalities of the image:
 - With `MUPP_WCH_LINK_WCH_USB_ID=ON`, the tag ends with `-wch-id`, for example `-wch-link-wch-id`.
 - An image with `cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` has a tag that ends with `-no-rv-bridge`, for example `-cmsis-dap-no-rv-bridge` or `-dap+vsl-no-rv-bridge`.
 - An image with `MUPP_CMSIS_DAP_HID=ON` has a tag that ends with `-hid`, for example `-cmsis-dap-hid` or `-dap+vsl+wch-hid`.
+- An image with `MUPP_CMSIS_DAP_AVR=ON` has `-avr` after `-hid`, for example `-cmsis-dap-hid-avr`.
 
 | `MUPP_PERSONALITIES` | `MUPP_DEFAULT_PERSONALITY` | Tag |
 |---|---|---|
@@ -127,6 +129,8 @@ The default is `/usr`.
 | `ydch32v307-dual` | YD-CH32V307VCT6 development board | `cmsis-dap,wch-link` (tag `-dap+wch`), with `MUPP_CH32_STUB_IMAGE=OFF` | Release |
 | `ydch32v307-all` | YD-CH32V307VCT6 development board | `cmsis-dap,wch-link,versaloon` (tag `-dap+vsl+wch`), with `MUPP_CH32_STUB_IMAGE=OFF` | Release |
 | `ydch32v307-wch-link` | YD-CH32V307VCT6 development board | `wch-link`, with `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image with the one-wire engine | Release |
+| `ydch32v307-cmsis-dap-avr` | YD-CH32V307VCT6 development board | as `ydch32v307-cmsis-dap`, with `MUPP_CMSIS_DAP_HID` and `MUPP_CMSIS_DAP_AVR` (tag `-cmsis-dap-hid-avr`) | Release |
+| `ydch32v307-all-avr` | YD-CH32V307VCT6 development board | as `ydch32v307-all`, with `MUPP_CMSIS_DAP_HID` and `MUPP_CMSIS_DAP_AVR` (tag `-dap+vsl+wch-hid-avr`) | Release |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
