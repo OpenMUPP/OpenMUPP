@@ -276,16 +276,16 @@ TEST_CASE("The CH32V307 has the ADC channels of the STM32F103 and the one-wire t
    CHECK(board::adcChannelOf(V30x, { Port::B, 0 }) == 8);
    CHECK(board::adcChannelOf(V30x, { Port::C, 5 }) == 15);
    CHECK_FALSE(board::adcChannelOf(V30x, { Port::B, 2 }));
-   // TIM10_CH4 on PC11, TIM10_CH1 samples; TIM10_UP on DMA2 ch11, TIM10_CH1 on ch8
+   // TIM10_CH4 on PC11, TIM10_CH2 samples; TIM10_UP on DMA2 ch11, TIM10_CH2 on ch10
    const auto timer = board::oneWireTimerOf(V30x, board::ydCh32V307.debug.tmsOut);
    REQUIRE(timer);
    CHECK(timer->timer == 10);
    CHECK(timer->channel == 4);
    CHECK_FALSE(timer->complementary);
    CHECK_FALSE(timer->partialRemap);
-   CHECK(timer->sampleChannel == 1);
+   CHECK(timer->sampleChannel == 2);
    CHECK(timer->updateDma == 11);
-   CHECK(timer->sampleDma == 8);
+   CHECK(timer->sampleDma == 10);
    // The pins of the STM32F103 timers have no timer on the CH32V307
    CHECK_FALSE(board::oneWireTimerOf(V30x, { Port::B, 4 }));
    CHECK_FALSE(board::oneWireTimerOf(V30x, { Port::B, 14 }));

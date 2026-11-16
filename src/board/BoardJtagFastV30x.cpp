@@ -45,7 +45,7 @@ Spi spiSlave() {
 }
 
 // RM tables 11-2 and 11-3. The one-wire engine (BoardRvSwdV30x.cpp) uses
-// DMA2 channels 8 and 11.
+// DMA2 channels 10 and 11, the UART bridge channels 8 and 9.
 Dma::Channel tmsChannel() {
    return { DMA2, 2 }; // SPI3 TX
 }
