@@ -10,13 +10,16 @@
 //                   The interface string contains "CMSIS-DAP": the host
 //                   tools find a CMSIS-DAP v2 interface by that string.
 //   Interfaces 1-2  CDC-ACM with IAD, as in the Versaloon personality
-//   Interface 3     MUPP_CMSIS_DAP_HID only (interface 0 with
-//                   MUPP_AVR_USB_ID_MEDBG, the others then move up by one): the CMSIS-DAP v1 interface,
+//   Interface 3     MUPP_CMSIS_DAP_HID only: the CMSIS-DAP v1 interface,
 //                   HID class 0x03, interrupt OUT 0x05, interrupt IN 0x85,
 //                   64-byte reports at both speeds, bInterval 1 (1 ms at
 //                   full speed, 125 us at high speed). The v1 tools find it
 //                   by "CMSIS-DAP" in the product string. It is after the
 //                   other interfaces, so their numbers stay.
+//
+// With MUPP_AVR_USB_ID_MEDBG (ID 03eb:2145) the numbers are different: HID 0,
+// CMSIS-DAP v2 1, CDC 2-3. Bloom opens the HID interface of this ID by the
+// number 0. WinUSB then binds interface 1.
 //
 // Windows 8.1 and later bind WinUSB to interface 0 with no driver
 // installation: bcdUSB 2.01 makes Windows read the BOS, the BOS has the

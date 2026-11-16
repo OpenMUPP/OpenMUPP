@@ -86,6 +86,7 @@ These numbers are without the HID interface.
 With `MUPP_CMSIS_DAP_HID`, interface 3 is the CMSIS-DAP v1 interface: HID class `0x03`, interrupt IN `0x85` and interrupt OUT `0x05`, 64 bytes each, `bInterval` 1 (1 ms at full speed, 125 µs at high speed), at both speeds.
 The v1 tools find it by the text `CMSIS-DAP` in the product string.
 It is after the other interfaces, so their numbers do not change.
+With `MUPP_AVR_USB_ID=medbg`, the HID interface is interface 0, CMSIS-DAP v2 is interface 1, and the serial port is interfaces 2 and 3 (see [avr.md](avr.md#bloom)).
 Windows and Linux bind their HID driver with no driver installation.
 It needs 6 endpoints and two more 64-byte buffers: 640 bytes in the STM32F1 count, more than its 512 bytes. Thus the STM32F1 boards do not have it (see [cmsis-dap.md](cmsis-dap.md#cmsis-dap-v1-hid)).
 The STM32H5 (2 KB packet memory) and the CH32V307 (4 KB USBHS packet pool, 2704 bytes used at high speed with HID) have room.
@@ -151,7 +152,7 @@ The serial port keeps the CDC driver of Windows (`usbser.sys`), which binds with
    It gives the vendor code `0x20` and the size of the descriptor set (170 bytes).
 3. Windows reads the descriptor set with a vendor request: `bmRequestType` `0xC0`, `bRequest` `0x20`, `wIndex` `7`.
    `UsbStack` answers it with `msos20::DescriptorSetHandler`, in the Address and Configured states.
-4. The set has one function subset, for interface 0.
+4. The set has one function subset, for interface 0 (interface 1 with `MUPP_AVR_USB_ID=medbg`).
    It has the compatible ID `WINUSB` and the device interface GUID `{CDB3B5AD-293B-4663-AA36-1AAE46463776}`.
    This is the GUID of the Arm CMSIS-DAP and DAPLink firmware.
    The device has one configuration, so the set has no configuration subset.
