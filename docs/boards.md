@@ -508,7 +508,6 @@ Pin 1 of the two headers is at the end with P4 and the USB2 connector. The nets 
 | Key (`USR`, active low) | PB3 | on the board |
 
 The UART bridge uses UART7 on its default pins PC2 and PC3 (AFIO `USART7_RM` = 00).
-UART7 is on APB1, so a Vref measurement does not change its baud rate.
 The remap pins of UART7 (PA6, PA7) are not used: on this board, they are also DO and DI of the SPI flash U4.
 
 The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
