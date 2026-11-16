@@ -204,6 +204,7 @@ TEST_CASE("YD-CH32V307VCT6 has the pin map of plan D10") {
    CHECK(yd.debug.tmsOut == Pin{ Port::C, 11 });
    CHECK(yd.debug.tmsIn == Pin{ Port::C, 11 });
    CHECK(yd.debug.srst == Pin{ Port::B, 12 });
+   CHECK(yd.debug.srstSense == Pin{ Port::B, 11 });
    CHECK(yd.debug.trst == Pin{ Port::B, 9 });
    CHECK(yd.debug.rtck == Pin{ Port::A, 8 });
    CHECK(yd.uart == board::Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } });
@@ -317,6 +318,9 @@ TEST_CASE("isValid rejects pin conflicts") {
    }
    SUBCASE("TMS input pin number out of range") {
       def.debug.tmsIn = Pin{ Port::B, 16 };
+   }
+   SUBCASE("RESET read-back on another signal") {
+      def.debug.srstSense = def.debug.trst;
    }
 
    CHECK_FALSE(board::isValid(def));

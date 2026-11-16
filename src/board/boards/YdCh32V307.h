@@ -36,6 +36,8 @@ inline constexpr Definition ydCh32V307{
    .trst = Pin{ Port::B, 9 },
    .srst{ Port::B, 12 },
    .rtck = Pin{ Port::A, 8 },
+   // debugWIRE: wire PB12 and PB11 to the target RESET
+   .srstSense = Pin{ Port::B, 11 },
    },
    .jtagFastPath = JtagFastPath{ .tckLink{ Port::C, 10 } },
    .uart = Uart{ .usart = 1, .tx{ Port::A, 9 }, .rx{ Port::A, 10 } },

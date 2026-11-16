@@ -66,6 +66,10 @@ struct DebugPins {
    // low. CMSIS-DAP and the GPIO block do not use it yet: they drive SRST
    // open-drain and active low. A board with High must change them too.
    Active srstActive = Active::Low;
+   // The input that reads the RESET line back, for debugWIRE
+   // (board/BoardDebugWire.h): USART3 RX (PB11) on the CH32V307. Empty: the
+   // board has no debugWIRE.
+   std::optional<Pin> srstSense = std::nullopt;
 
    constexpr bool operator==(const DebugPins &) const = default;
 };
@@ -308,7 +312,7 @@ constexpr bool isValidPin(const Pin &pin) {
 }
 
 // All pins of a definition. Unused optional pins are empty.
-constexpr std::array<std::optional<Pin>, 18> allPins(const Definition &def) {
+constexpr std::array<std::optional<Pin>, 19> allPins(const Definition &def) {
    auto pinOf = [](const auto &opt) -> std::optional<Pin> { return opt ? std::optional<Pin>(opt->pin) : std::nullopt; };
    return { {
    def.debug.tck,
@@ -319,6 +323,7 @@ constexpr std::array<std::optional<Pin>, 18> allPins(const Definition &def) {
    def.debug.tdo,
    def.debug.trst,
    def.debug.srst,
+   def.debug.srstSense,
    def.debug.rtck,
    def.jtagFastPath ? std::optional<Pin>(def.jtagFastPath->tckLink) : std::nullopt,
    def.uart ? std::optional<Pin>(def.uart->tx) : std::nullopt,
