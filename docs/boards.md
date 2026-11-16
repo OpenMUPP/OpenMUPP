@@ -511,6 +511,9 @@ The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-p
 Connect TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
 Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more).
 
+The board definition also has PB11 (USART3 RX) as the read-back pin of SRST, for debugWIRE.
+The firmware does not use debugWIRE yet.
+
 Use a wire as the link. With a resistor as the link, JTAG-DP transfers on the fast path fail (see [TCK link](clock-pacing.md#tck-link) and [issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)):
 
 - With 2.2 kΩ, a rising TMS edge on PC11 couples into PC10 as a short pulse. SPI3 counts it as a clock, and TMS is then one bit early.
