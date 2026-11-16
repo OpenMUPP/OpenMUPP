@@ -240,7 +240,7 @@ The boot address of avrdude is the start of the last 4 pages, and that address i
 | `0x10` Activate physical | Needs variant 1, physical 5 and a valid device context, else code `0x33`. The probe connects and stops the target with a break. |
 | `0x11` Deactivate physical | A stopped target loses its software breakpoints, gets a reset and runs. Then the probe releases the line. Without an active physical: OK. |
 | `0x12` Get ID | DATA `[ID low][ID high][0x1E][0]`, for example `0F 95 1E 00` on an ATmega328P. |
-| `0x13` Attach, `0x14` Detach | Attach with break: the target stays stopped, and a break event comes. Detach: the target runs. |
+| `0x13` Attach, `0x14` Detach | Attach with break: the target stays stopped, and a break event comes. Detach: the probe removes the software breakpoints from flash, and the target runs. |
 | `0x15`, `0x16` Programming mode | OK. The memory commands work without a programming mode. |
 | `0x17` Disable debugWIRE | dW is off until the next power cycle. ISP then works. |
 | `0x21` Read memory, `0x22` masked read | `[type][address u32][length u32]`, for the masked read also a bit mask (bit 0: do not read, the byte is 0). |
@@ -264,7 +264,8 @@ The memory types:
 A read gives up to 505 bytes.
 An address outside the device gives code `0x38`. A command that is too short gives code `0x35`.
 
-Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to, step or detach.
+Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to or step.
+Detach removes all software breakpoints from flash.
 After a clear, the probe writes the original word back at the same time.
 A flash read gives the flash with the `BREAK` instructions, as the EDBG tools do.
 A flash write keeps the breakpoints of its page, with the new original words.

@@ -28,7 +28,7 @@
 //        example 0x950F) as the signature 1E 95 0F, read backwards.
 //   0x13 ATTACH [break]: break 1: the target stays stopped, and a break
 //        event comes. Break 0: the target runs.
-//   0x14 DETACH: the target runs.
+//   0x14 DETACH: the software breakpoints are removed, the target runs.
 //   0x15 ENTER_PROGMODE, 0x16 LEAVE_PROGMODE: OK. debugWIRE has no
 //        programming mode: the memory commands work in the debug mode.
 //   0x17 DISABLE_DEBUGWIRE: dW off until a power cycle (ISP works then).
@@ -73,8 +73,8 @@
 //   is not in the smallest boot section of an ATmega168).
 //
 // Software breakpoints: the probe writes BREAK (0x9598) into flash at the
-// next RUN, RUN_TO, STEP or DETACH, and the original word back after a
-// clear. A read of flash gives the flash as it is (with BREAK), as the
+// next RUN, RUN_TO or STEP, and the original word back after a clear.
+// DETACH removes all of them. A read of flash gives the flash as it is (with BREAK), as the
 // EDBG tools do. A run or step from a software breakpoint writes the
 // original word, steps, and writes BREAK again: two page writes. Limit:
 // this wears the flash (some 10000 cycles per page). An injection of the
@@ -535,10 +535,9 @@ class Avr8Scope final : public Avr8Handler {
       if(!target_.isStopped()) {
          return ok();
       }
+      // The program runs without the debugger: no BREAK may stay in flash.
+      clearAllBreaks();
       DwStatus status = commitBreaks();
-      if(status == DwStatus::Ok) {
-         status = stepOverBreak();
-      }
       if(status == DwStatus::Ok) {
          status = target_.go(std::nullopt);
       }

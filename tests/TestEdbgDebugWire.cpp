@@ -493,3 +493,24 @@ TEST_CASE("EDBG debugWIRE: avrdude gives a boot address also to the parts withou
       CHECK(b.dwTarget.device().bootStartWords == 0);
    }
 }
+
+TEST_CASE("EDBG debugWIRE: DETACH removes the software breakpoints") {
+   Bench b;
+   b.bloomInit();
+   b.bloomActivate();
+   const uint16_t at = 0x0400;
+   b.avr.flash[2u * at] = 0x0C;
+   b.avr.flash[2u * at + 1u] = 0x94;
+   CHECK(b.avr8(withAddress(avr8::command::swBreakSet, 2u * at)) == ok);
+   CHECK(b.avr8({ avr8::command::run, 0x00 }) == ok);
+   b.runFor(400);
+   CHECK(b.event() == b.breakEvent(at, true));
+   CHECK(b.avr8({ avr8::command::detach, 0x00 }) == ok);
+   CHECK(b.avr.flash[2u * at] == 0x0C);
+   CHECK(b.avr.flash[2u * at + 1u] == 0x94);
+   CHECK(b.avr.running);
+   CHECK(b.avr.goPc == at);
+   CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
+   CHECK_FALSE(b.dwPins.driven);
+   b.checkClean();
+}
