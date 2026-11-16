@@ -44,7 +44,7 @@ These targets are planned. None of them works yet.
 
 | Target | Protocols | State |
 |---|---|---|
-| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | The firmware has ISP programming for the YD-CH32V307VCT6 board (see [docs/avr.md](docs/avr.md)). It has no hardware test yet. debugWIRE is not available yet. |
+| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | The firmware has ISP programming for the YD-CH32V307VCT6 board (see [docs/avr.md](docs/avr.md)). ISP passed a hardware test on an ATmega32U4. debugWIRE is not available yet. |
 | PIC | Programming. High-voltage programming uses the VPP supply of the board. | Planned. No design yet. |
 | STM8 | SWIM (single-wire debug and programming interface) | Planned. No design yet. |
 

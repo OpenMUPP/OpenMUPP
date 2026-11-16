@@ -1,7 +1,7 @@
 # AVR programming
 
 The CMSIS-DAP personality can program AVR chips through the ISP (SPI) interface.
-ISP programming has no hardware test yet.
+ISP programming passed a hardware test with avrdude 8.3 on the YD-CH32V307VCT6 board (see [Hardware test](#hardware-test)).
 Tools that use the Microchip EDBG protocol, for example avrdude, find the probe over USB.
 The probe does not have debugWIRE or other AVR interfaces yet.
 
@@ -36,7 +36,7 @@ Connect the target GND to the probe GND.
 
 ### YD-CH32V307VCT6 board
 
-The [pinout image](boards.md#yd-ch32v307vct6-development-board) shows the ISP pins and the ICSP header of the target.
+The [pinout image](boards.md#yd-ch32v307vct6-development-board) shows the ISP pins.
 
 | ISP signal | Probe pin | Header pin | 6-pin ICSP header of the target |
 |---|---|---|---|
@@ -99,3 +99,19 @@ Thus always give `-B`.
 - SCK is never faster than the request.
 - A slow SCK makes a write take more time. Use the fastest `-B` value that the target clock permits.
 - When a chip does not answer, try a lower SCK. A wrong fuse setting can select a clock that is much slower than you expect.
+
+## Hardware test
+
+The test used a YD-CH32V307VCT6 board and a Seeeduino Lite (ATmega32U4) with a 3.3 V supply.
+
+| Test | Result |
+|---|---|
+| Read the signature, fuses and lock bits | Pass |
+| Read 32 KiB flash and 1 KiB EEPROM at `-B 2MHz` and at `-B 125kHz` | Pass. The two reads are the same. The flash read takes 1.6 s at 2 MHz and 9.2 s at 125 kHz. |
+| Erase, write and verify 32 KiB flash at `-B 2MHz` | Pass. The write takes 2.7 s. |
+| Write and verify 1 KiB EEPROM at `-B 2MHz` | Pass |
+| Write a fuse and read it back | Pass |
+| Target at 1 MHz (internal RC oscillator, CKDIV8): flash and EEPROM at `-B 125kHz` | Pass. The flash write takes 10.4 s. At `-B 2MHz`, the probe cannot enter programming mode, as expected. |
+| Target at 1 MHz: EEPROM at `-B 16kHz` | Pass |
+
+A target at 128 kHz is not tested: the ATmega32U4 has no 128 kHz clock source.
