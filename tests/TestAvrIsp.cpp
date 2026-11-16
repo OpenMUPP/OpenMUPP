@@ -49,7 +49,7 @@ Instruction readSignature(Engine &engine, uint8_t index) {
 
 } // namespace
 
-TEST_CASE("AVR ISP: the SPI rates at 144 MHz are 36 MHz to 562.5 kHz, bit-bang below, SCK never faster than the request") {
+TEST_CASE("AVR ISP: SPI rates at 144 MHz are 36 MHz to 562.5 kHz, bit-bang below, SCK not above the request") {
    CHECK(spiShiftFor(spiClockHz, 100'000) == 2);
    CHECK(spiShiftFor(spiClockHz, 36'000) == 2);
    CHECK(spiShiftFor(spiClockHz, 35'999) == 3);
