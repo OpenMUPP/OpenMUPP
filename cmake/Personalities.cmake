@@ -80,6 +80,9 @@ endfunction()
 #                             CMSIS-DAP personality. Needs cmsis-dap.
 #   MUPP_CMSIS_DAP_AVR        the AVR commands (EDBG) on the HID interface.
 #                             Needs MUPP_CMSIS_DAP_HID.
+#   MUPP_AVR_USB_ID           own (default) or medbg, the ID 03eb:2145 of the
+#                             Xplained Mini. medbg needs MUPP_CMSIS_DAP_AVR and
+#                             the cmsis-dap personality alone.
 #   MUPP_DEBUG_CDC            the debug log on the CDC port
 # Sets these variables in the caller:
 #   MUPP_PERSONALITY_SET         the personalities, in canonical order
@@ -166,6 +169,18 @@ function(mupp_resolve_personalities)
     if (MUPP_CMSIS_DAP_AVR AND NOT _hid)
         message(FATAL_ERROR "MUPP_CMSIS_DAP_AVR needs MUPP_CMSIS_DAP_HID=ON: the AVR commands use the HID interface.")
     endif ()
+    if (NOT "${MUPP_AVR_USB_ID}" MATCHES "^(own|medbg|)$")
+        message(FATAL_ERROR "MUPP_AVR_USB_ID: unknown value '${MUPP_AVR_USB_ID}', use own or medbg.")
+    endif ()
+    if ("${MUPP_AVR_USB_ID}" STREQUAL "medbg")
+        if (NOT MUPP_CMSIS_DAP_AVR)
+            message(FATAL_ERROR "MUPP_AVR_USB_ID=medbg needs MUPP_CMSIS_DAP_AVR=ON.")
+        endif ()
+        # The other personalities keep the interface numbers of the default image
+        if (NOT _personalities STREQUAL "cmsis-dap")
+            message(FATAL_ERROR "MUPP_AVR_USB_ID=medbg needs MUPP_PERSONALITIES=cmsis-dap alone.")
+        endif ()
+    endif ()
     if (MUPP_CMSIS_DAP_AVR)
         set(_avr ON)
     else ()
@@ -198,6 +213,9 @@ function(mupp_resolve_personalities)
     endif ()
     if (_avr)
         list(APPEND _defines MUPP_CMSIS_DAP_AVR)
+        if ("${MUPP_AVR_USB_ID}" STREQUAL "medbg")
+            list(APPEND _defines MUPP_AVR_USB_ID_MEDBG)
+        endif ()
     else ()
         list(APPEND _dropped "src/protocol/avr/.*\\.cpp")
     endif ()
@@ -235,6 +253,10 @@ function(mupp_resolve_personalities)
     endif ()
     if (_avr)
         string(APPEND _tag "-avr")
+        # The name tells the image apart: it must not be a release artifact
+        if ("${MUPP_AVR_USB_ID}" STREQUAL "medbg")
+            string(APPEND _tag "-medbg")
+        endif ()
     endif ()
 
     set(MUPP_PERSONALITY_SET ${_personalities} PARENT_SCOPE)

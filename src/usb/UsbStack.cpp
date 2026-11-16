@@ -245,7 +245,7 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
    , wch_(*functions.wch)
 #endif
 #if defined(MUPP_USB_SERIAL_PORT)
-   , serialPort_(cdcControlInterface, serialPortEndpoints)
+   , serialPort_(dap::cdcControlInterface, serialPortEndpoints)
 #endif
    , switchRequest_(functions.personalitySwitch, functions.bootloader, nextVendorHandlerOf(active)) {
 #if defined(MUPP_USB_SERIAL_PORT)

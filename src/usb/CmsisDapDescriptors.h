@@ -10,7 +10,8 @@
 //                   The interface string contains "CMSIS-DAP": the host
 //                   tools find a CMSIS-DAP v2 interface by that string.
 //   Interfaces 1-2  CDC-ACM with IAD, as in the Versaloon personality
-//   Interface 3     MUPP_CMSIS_DAP_HID only: the CMSIS-DAP v1 interface,
+//   Interface 3     MUPP_CMSIS_DAP_HID only (interface 0 with
+//                   MUPP_AVR_USB_ID_MEDBG, the others then move up by one): the CMSIS-DAP v1 interface,
 //                   HID class 0x03, interrupt OUT 0x05, interrupt IN 0x85,
 //                   64-byte reports at both speeds, bInterval 1 (1 ms at
 //                   full speed, 125 us at high speed). The v1 tools find it
@@ -47,10 +48,24 @@
 
 namespace usb::dap {
 
+#if defined(MUPP_AVR_USB_ID_MEDBG)
+// The ID of the Atmel Xplained Mini (mEDBG), for personal use only. Bloom
+// opens the HID interface of this ID by the number 0, so the HID interface
+// is first and the other interfaces move up by one (docs/avr.md).
+inline constexpr uint16_t vendorId = 0x03EB;
+inline constexpr uint16_t productId = 0x2145;
+inline constexpr uint8_t hidInterface = 0;
+inline constexpr uint8_t dapInterface = 1;
+inline constexpr uint8_t cdcControlInterface = 2;
+inline constexpr uint8_t cdcDataInterface = 3;
+#else
 inline constexpr uint16_t vendorId = 0x1209;
 inline constexpr uint16_t productId = 0x0001;
-
+inline constexpr uint8_t hidInterface = 3;
 inline constexpr uint8_t dapInterface = 0;
+inline constexpr uint8_t cdcControlInterface = usb::cdcControlInterface;
+inline constexpr uint8_t cdcDataInterface = usb::cdcDataInterface;
+#endif
 inline constexpr uint8_t outEndpoint = versaloonOutEndpoint;
 inline constexpr uint8_t inEndpoint = versaloonInEndpoint;
 // One CMSIS-DAP command or response is one packet: 64 bytes at full speed,
@@ -67,7 +82,6 @@ inline constexpr bool hasHid = true;
 #else
 inline constexpr bool hasHid = false;
 #endif
-inline constexpr uint8_t hidInterface = 3;
 inline constexpr uint8_t hidOutEndpoint = 0x05;
 inline constexpr uint8_t hidInEndpoint = 0x85;
 // One CMSIS-DAP v1 command or response is one report, also at high speed:
@@ -158,7 +172,11 @@ constexpr auto makeConfiguration(uint16_t bulkPacketSize, uint8_t notificationIn
                                           desc::endpoint(cdcDataInEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)));
    const desc::ConfigurationFields fields{ .maxPowerMilliamps = maxPowerMilliamps };
    if constexpr(withHid) {
+#if defined(MUPP_AVR_USB_ID_MEDBG)
+      return desc::configuration(fields, hidInterfaceDescriptor, interfaces);
+#else
       return desc::configuration(fields, interfaces, hidInterfaceDescriptor);
+#endif
    } else {
       return desc::configuration(fields, interfaces);
    }
