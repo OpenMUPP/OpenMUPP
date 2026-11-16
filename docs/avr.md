@@ -19,6 +19,46 @@ The protocol is in [cmsis-dap.md](cmsis-dap.md#avr-commands).
 The probe has the USB ID `1209:0001` (the test ID of pid.codes) and the product name `OpenMUPP CMSIS-DAP`.
 The product name must contain `CMSIS-DAP`, because avrdude uses it to select the packet size.
 
+## Bloom
+
+Bloom is a debug server for avr-gdb.
+It finds a tool by the USB ID and opens the HID interface by a fixed number.
+Bloom has no entry for the ID `1209:0001`.
+Until Bloom has this entry, use one of the two ways below.
+
+### The medbg build
+
+The build option `MUPP_AVR_USB_ID=medbg` gives the probe the ID of the Atmel Xplained Mini (`03eb:2145`).
+Bloom then treats the probe as an Xplained Mini.
+The build also puts the HID interface at number 0, because Bloom opens the HID interface of the Xplained Mini by this number.
+The other interfaces move up by one: CMSIS-DAP v2 is interface 1, and the serial port is interfaces 2 and 3.
+The product name stays `OpenMUPP CMSIS-DAP`.
+
+Use the preset `ydch32v307-cmsis-dap-avr-medbg`, or set `-DMUPP_AVR_USB_ID=medbg` with the options of the preset `ydch32v307-cmsis-dap-avr`.
+The option needs `MUPP_CMSIS_DAP_AVR` and the `cmsis-dap` personality alone.
+The image name has `-medbg` at the end of its tag.
+
+The vendor ID `03eb` belongs to Microchip.
+Use this build for personal use only.
+Do not publish or sell an image with this ID.
+CI builds the image to check it, and does not publish it.
+Other USB tools that use the ID `03eb:2145` can select the probe by mistake.
+The udev rule `etc/70-openmupp-avr.rules` has a line for this ID.
+
+### A patched Bloom
+
+You can build Bloom for the own USB ID `1209:0001`.
+Bloom has one tool class for each USB ID.
+Copy the class `XplainedMini` and change these items:
+
+1. Set the USB ID to `1209:0001`.
+2. Set the HID interface number to 3, as in the default image.
+3. Add the new class to the list of supported tools.
+
+Then build Bloom with the new class.
+The patch is for personal use.
+An entry in the upstream Bloom repository waits for a USB ID that pid.codes assigns to the project.
+
 ## Linux access
 
 avrdude uses the HID interface of the probe.

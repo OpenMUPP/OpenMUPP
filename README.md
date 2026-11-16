@@ -141,6 +141,7 @@ The presets `ydch32v307-cmsis-dap`, `ydch32v307-dual` and `ydch32v307-all` build
 The preset `ydch32v307-wch-link` builds the firmware image with the WCH-Link personality.
 The preset `openmuppv1-cmsis-dap` builds the firmware image of the OpenMUPP v1 probe board with the CMSIS-DAP personality.
 The presets `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` add the AVR commands on the CMSIS-DAP v1 (HID) interface (`MUPP_CMSIS_DAP_AVR`, see [docs/cmsis-dap.md](docs/cmsis-dap.md#avr-commands)).
+The preset `ydch32v307-cmsis-dap-avr-medbg` also gives the probe the USB ID of the Atmel Xplained Mini and puts the HID interface at number 0, so that Bloom finds it (personal use only, see [docs/avr.md](docs/avr.md#bloom)).
 It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.
 [docs/cmake.md](docs/cmake.md#cmake-presets) describes them.
@@ -331,7 +332,7 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/cmsis-dap.md](docs/cmsis-dap.md): the CMSIS-DAP personality and its command processor for SWD and JTAG.
 - [docs/clock-pacing.md](docs/clock-pacing.md): how the SWD, JTAG and RVSWD engines time their clock, with measurements on the wire.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
-- [docs/avr.md](docs/avr.md): AVR ISP programming: USB ID, udev rule, wiring, avrdude commands and low-clock targets.
+- [docs/avr.md](docs/avr.md): AVR programming: USB ID, Bloom, udev rule, wiring, avrdude commands and low-clock targets.
 - [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule, size, implementation and hardware test.
 - [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures ([docs/wch-link-captures/](docs/wch-link-captures/README.md)).
 - [docs/cmake.md](docs/cmake.md): the CMake options and the CMake presets.
