@@ -162,6 +162,12 @@ mupp_personality_test(avr-multi "tag=\\[-dap\\+vsl\\+wch-hid-avr\\] defines=.*,M
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON)
 mupp_personality_test(avr-without-hid "MUPP_CMSIS_DAP_AVR needs MUPP_CMSIS_DAP_HID=ON"
         -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_AVR=ON)
+mupp_personality_test(avr-medbg "tag=\\[-cmsis-dap-hid-avr-medbg\\] defines=MUPP_WITH_CMSIS_DAP,MUPP_AVR_USB_ID_MEDBG,MUPP_CMSIS_DAP_HID,MUPP_CMSIS_DAP_AVR,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON -DMUPP_AVR_USB_ID=medbg)
+mupp_personality_test(medbg-without-avr "MUPP_AVR_USB_ID=medbg needs MUPP_CMSIS_DAP_AVR"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_AVR_USB_ID=medbg)
+mupp_personality_test(avr-usb-id-unknown "MUPP_AVR_USB_ID 'foo' is unknown"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON -DMUPP_AVR_USB_ID=foo)
 # Ignored without cmsis-dap
 mupp_personality_test(rv-bridge-wch-link "tag=\\[-wch-link\\] defines=MUPP_WITH_WCH_LINK\n"
         -DMUPP_PERSONALITIES=wch-link -DMUPP_CMSIS_DAP_RV_BRIDGE=ON)

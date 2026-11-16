@@ -254,5 +254,5 @@ build-ydch32v307-avr:
   parallel:
     matrix:
       - BOARD: ydch32v307
-        VARIANT: [-cmsis-dap-avr, -all-avr]
+        VARIANT: [-cmsis-dap-avr, -all-avr, -cmsis-dap-avr-medbg]
   artifacts: null

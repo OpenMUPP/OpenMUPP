@@ -80,6 +80,9 @@ endfunction()
 #                             CMSIS-DAP personality. Needs cmsis-dap.
 #   MUPP_CMSIS_DAP_AVR        the AVR commands (EDBG) on the HID interface.
 #                             Needs MUPP_CMSIS_DAP_HID.
+#   MUPP_AVR_USB_ID           the USB ID of the CMSIS-DAP personality in an
+#                             image with MUPP_CMSIS_DAP_AVR. Empty: the own
+#                             ID. medbg: the ID of the mEDBG (03eb:2145).
 #   MUPP_DEBUG_CDC            the debug log on the CDC port
 # Sets these variables in the caller:
 #   MUPP_PERSONALITY_SET         the personalities, in canonical order
@@ -171,6 +174,12 @@ function(mupp_resolve_personalities)
     else ()
         set(_avr OFF)
     endif ()
+    if (NOT "${MUPP_AVR_USB_ID}" STREQUAL "" AND NOT "${MUPP_AVR_USB_ID}" STREQUAL "medbg")
+        message(FATAL_ERROR "MUPP_AVR_USB_ID '${MUPP_AVR_USB_ID}' is unknown. Use medbg, or leave it empty for the own ID.")
+    endif ()
+    if ("${MUPP_AVR_USB_ID}" STREQUAL "medbg" AND NOT _avr)
+        message(FATAL_ERROR "MUPP_AVR_USB_ID=medbg needs MUPP_CMSIS_DAP_AVR=ON.")
+    endif ()
     # The log goes to the CDC port. In a multi image the log is silent while
     # the WCH-Link personality is active.
     if (MUPP_DEBUG_CDC AND _personalities STREQUAL "wch-link")
@@ -192,6 +201,9 @@ function(mupp_resolve_personalities)
     endif ()
     if (MUPP_WCH_LINK_WCH_USB_ID)
         list(APPEND _defines MUPP_WCH_LINK_WCH_USB_ID)
+    endif ()
+    if ("${MUPP_AVR_USB_ID}" STREQUAL "medbg")
+        list(APPEND _defines MUPP_AVR_USB_ID_MEDBG)
     endif ()
     if (_hid)
         list(APPEND _defines MUPP_CMSIS_DAP_HID)
@@ -235,6 +247,9 @@ function(mupp_resolve_personalities)
     endif ()
     if (_avr)
         string(APPEND _tag "-avr")
+    endif ()
+    if ("${MUPP_AVR_USB_ID}" STREQUAL "medbg")
+        string(APPEND _tag "-medbg")
     endif ()
 
     set(MUPP_PERSONALITY_SET ${_personalities} PARENT_SCOPE)

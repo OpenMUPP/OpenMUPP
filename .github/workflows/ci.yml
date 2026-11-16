@@ -94,6 +94,8 @@ jobs:
           # The AVR commands on the HID interface (MUPP_CMSIS_DAP_AVR)
           - ydch32v307-cmsis-dap-avr
           - ydch32v307-all-avr
+          # The USB ID of the mEDBG (MUPP_AVR_USB_ID=medbg), personal use only: no artifacts
+          - ydch32v307-cmsis-dap-avr-medbg
     steps:
       - uses: actions/checkout@v5
         with:

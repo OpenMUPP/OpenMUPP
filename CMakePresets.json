@@ -494,6 +494,16 @@
       ]
     },
     {
+      "name": "ydch32v307-cmsis-dap-avr-medbg",
+      "displayName": "YD-CH32V307VCT6, CMSIS-DAP, with the AVR commands and the USB ID of the mEDBG, personal use only (firmware image)",
+      "inherits": [
+        "ydch32v307-cmsis-dap-avr"
+      ],
+      "cacheVariables": {
+        "MUPP_AVR_USB_ID": "medbg"
+      }
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "description": "Native build of the unit tests (no toolchain file)",
@@ -635,6 +645,10 @@
     {
       "name": "ydch32v307-all-avr",
       "configurePreset": "ydch32v307-all-avr"
+    },
+    {
+      "name": "ydch32v307-cmsis-dap-avr-medbg",
+      "configurePreset": "ydch32v307-cmsis-dap-avr-medbg"
     },
     {
       "name": "host-tests",
