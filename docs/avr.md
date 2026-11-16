@@ -55,8 +55,8 @@ The [pinout image](boards.md#yd-ch32v307vct6-development-board) shows the ISP pi
 
 ### OpenMUPP v1 board
 
-The firmware has no board definition for OpenMUPP v1 yet.
-The board definition with the AVR pins comes later. Thus the AVR commands do not work on this board today.
+The board definition of OpenMUPP v1 (`openmuppv1`) has the AVR pins, but the firmware does not drive the shifter direction pins yet.
+Thus the AVR commands do not reach the target on this board today (see [OpenMUPP v1 probe board](boards.md#openmupp-v1-probe-board)).
 The adapter that maps the target connector J4 to the ICSP pins is part of the board design.
 See the [board repository](https://github.com/OpenMUPP/openmupp-v1) for the pin map of J4.
 

@@ -256,3 +256,13 @@ build-ydch32v307-avr:
       - BOARD: ydch32v307
         VARIANT: [-cmsis-dap-avr, -all-avr]
   artifacts: null
+
+# OpenMUPP v1 probe board (CH32V307RCT6): the firmware image with the
+# CMSIS-DAP personality. It checks the UART7 remap (PA6, PA7). Build and
+# size check only, no artifacts.
+build-openmuppv1-cmsis-dap:
+  extends: .build-board-template
+  variables:
+    BOARD: openmuppv1
+    VARIANT: -cmsis-dap
+  artifacts: null

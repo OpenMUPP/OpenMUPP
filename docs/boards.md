@@ -383,29 +383,44 @@ The original firmware has read protection: see [Install the bootloader](firmware
 
 OpenMUPP v1 is the probe board of this project.
 It is open hardware.
-It has an STM32H523CC, a 24 MHz crystal and level shifters for targets from 1.2 V to 5 V.
-The schematics and the design notes are in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1).
+It has a CH32V307RCT6 (LQFP64), an 8 MHz crystal and level shifters for targets from 1.2 V to 5 V.
+The schematics, the design notes and the full pin map are in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1) (`docs/hardware.md`).
 
-The firmware has no board definition for this board yet.
-The board layer needs the direction pins, the split nRESET path and the power functions that this section lists.
-The WeAct STM32H523 core board is the test board for the same MCU until then.
+The board `openmuppv1` is the board definition `src/board/boards/OpenMuppV1.h`.
+The preset `openmuppv1-cmsis-dap` builds its firmware image.
+The image is not tested on hardware.
+The YD-CH32V307VCT6 board is the test board for the same MCU.
+The definition uses the pin map of the YD board for the JTAG, SWD and debugWIRE pins and the TCK link (PC10, through R10).
+These items are different:
 
-The board has more functions than the Versaloon Mini.
-This table lists the rules that the firmware must follow for each function.
-The README of the board repository has the full pin map.
+- UART bridge: UART7 on its remap pins, PA6 (TX) and PA7 (RX), with DMA (see [DMA on the CH32V307](uart-bridge.md#dma-on-the-ch32v307)).
+- `SRST` (PB12) drives the gate of a low-side FET (Q1). High pulls nRESET low (`srstActive` high).
+- `VTREF_SENSE` (PB0) shows half of the target voltage.
+- LEDs: state on PA10 (red), USB on PA9 (green). Both are active high. The blue LED (PC4) is not used yet.
+- The key (SW1) is on the `BOOT0` net. PB3 reads it, active high.
+
+The board layer does not know the direction pins and the power functions yet.
+Thus only the UART bridge reaches the target:
+
+- `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) have external pull-downs. The firmware does not drive them.
+  Thus the target side of the TCK, TDI, TRST, AUX and SWDIO shifters stays high-impedance.
+- `UART_TX_DIR` (PC9) has a pull-up, so UART TX drives the target. UART RX has a fixed shifter.
+- The CMSIS-DAP reset drives `SRST` open-drain and active low. On this board, that does not pull nRESET low.
+- The firmware does not turn on the target power switches and VPP.
+
+The firmware must follow these rules when it adds these functions:
 
 | Function | Pins | Rule for the firmware |
 |---|---|---|
-| Direction of the level shifters | `DIR_OUT` PB12, `DIR_SWDIO` PB5 | External pull-downs keep the target side high-impedance at reset. Set `DIR_OUT` high only while an engine runs. |
-| One-wire SWDIO | `DIR_SWDIO` PB5 (TIM3_CH2), SWDIO PA6 and PA7 | A timer channel changes the direction in each bit. The SWDIO pull-up to `VTREF` is 2.2 kΩ. |
-| nRESET and debugWIRE | `SRST` PB6 (LPUART1_TX, inverted), `SRST_RX` PB7 (LPUART1_RX) | A low-side FET pulls nRESET low. The MCU never drives nRESET high. The USART runs full-duplex and reads back the real line level. |
-| Target power, 3.3 V | `TARGET_PWR_EN` PB8 | The limit is about 520 mA. With the switch off, `VTREF_SENSE` (PB0) shows half of the target voltage. |
-| Target power, 5 V | `TARGET_5V_EN` PB10 | The limit is about 300 mA. `+5V` is near 4.4 V at full load. See the sequence below. |
-| High voltage (VPP) | `VPP_EN` PC14, `VPP_ON` PC15, `VPP_12V_SEL` PA8, `VPP_SENSE` PA4 (ADC) | Both `VPP_EN` and `VPP_ON` must be high. The default level is 8.4 V. VPP is on J4 pin 19. See the sequence below. |
-| Adapter ID | `ADAPTER_ID` PB1 (ADC) | A 10 kΩ series resistor gives a high source impedance. Use a long sample time. Keep the internal pull resistors off. |
-| TCK link | PB13 to PA5 | Resistor R10 (0 Ω) is fitted. It links the TCK net to PA5, the clock input of SPI1 in slave mode. The fast path can then shift TMS with SPI1. The firmware must accept PA5 as the link. PA5 is not 5 V tolerant. |
-| Other pins | `AUX1` PA2, `AUX2` PB3 | Outputs in the `DIR_OUT` group. |
-| LEDs and key | LED state PB2 and PA1, LED USB PA15, key PC13 | The 5-pin header J3 (PA13, PA14, NRST) debugs the probe MCU. It is not a target connector. The target connector is J4. |
+| Direction of the level shifters | `DIR_OUT` PB10, `DIR_SWDIO` PC3 | External pull-downs keep the target side high-impedance at reset. Set `DIR_OUT` high only while an engine runs. |
+| One-wire SWDIO | `DIR_SWDIO` PC3 (TIM10_CH3), SWDIO PC11 | A timer channel can change the direction in each bit. TIM10_CH3 has its DMA request on DMA2 channel 9, which UART7 RX uses. The SWDIO pull-up to `VTREF` is 2.2 kΩ. |
+| UART TX direction | `UART_TX_DIR` PC9 | High (pull-up) drives the target. Set it low to read the line, for example for a single-wire UART. |
+| Target power, 3.3 V | `TARGET_PWR_EN` PB8 | The limit is about 300 mA. With both switches off, `VTREF_SENSE` (PB0) shows half of the target voltage. |
+| Target power, 5 V | `TARGET_5V_EN` PB5 | The limit is about 300 mA. See the sequence below. |
+| Power faults | `3V3_OUT_FAULT` PA11, `5V_OUT_FAULT` PA12 | Open-drain, active low, no external pull-up. Turn on the internal pull-ups. Turn off the switch when its fault line goes low. Keep USBFS off: PA11 and PA12 are its pins. |
+| High voltage (VPP) | `VPP_EN` PC14, `VPP_ON` PC15, `VPP_12V_ADJ` PA5 (DAC), `VPP_SENSE` PA4, `VPP_SENSE2` PC1, `VPP_PD` PC5 | Set the DAC before `VPP_EN`. Check `VPP_SENSE` before `VPP_ON`. Both `VPP_EN` and `VPP_ON` must be high. VPP is on J4 pin 19. See the sequence below. |
+| Adapter ID, board ID | `ADAPTER_ID` PB1, `BOARD_ID` PC2 (ADC) | Dividers. The ID table is in the README of the board repository. |
+| SWIM input | PA1 (TIM2_CH2) | R55 connects PA1 to SWDIO. Keep PA1 a floating input when SWIM does not run. |
 
 ### Target power sequence
 
@@ -419,26 +434,19 @@ Use this sequence for each change:
 4. For a change from 5 V to 3.3 V, wait until `VTREF` is less than 3.4 V. `VTREF_SENSE` shows half of `VTREF`, so wait for less than 1.7 V.
 5. Turn on one switch.
 
-Never set `TARGET_PWR_EN` and `TARGET_5V_EN` high at the same time.
-
 ### VPP sequence
 
-The boost converter cannot pull its output down.
-When the level changes from 12 V to 8.4 V, the output capacitor needs 0.5 s to 1 s to discharge.
-Use this sequence for each change:
+The DAC on PA5 sets VPP from 5 V to 14 V. A higher DAC voltage gives a lower VPP.
+With the DAC off, VPP is about 11.4 V. The hardware maximum is 14.7 V.
+The boost converter cannot pull its output down. Use this sequence for each change:
 
 1. Set `VPP_ON` low.
-2. Set `VPP_12V_SEL` to the new level. High gives 12 V. Low gives 8.4 V.
+2. Set the DAC to the new level.
 3. Keep `VPP_EN` high. Wait until `VPP_SENSE` shows the new level. If this takes more than 2 s, stop and report an error.
 4. Set `VPP_ON` high.
 
 Apply VPP only when the adapter ID shows a high-voltage adapter and the protocol needs VPP.
-The divider on `VPP_SENSE` gives about 2.1 V at 8.4 V and about 3.0 V at 12 V.
-
-These levels are for R34 = 130 kΩ.
-The schematic has 191 kΩ.
-Then VPP is about 12 V with `VPP_12V_SEL` low and about 17 V with `VPP_12V_SEL` high.
-Do not apply VPP on a board with R34 = 191 kΩ.
+Limit the DAC setting to the maximum VPP of each target family.
 
 ## YD-CH32V307VCT6 development board
 

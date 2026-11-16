@@ -4,8 +4,8 @@
 
 // The board of this build: board::current. CMake defines one of
 // MUPP_BOARD_MINI, MUPP_BOARD_OTHERUSE, MUPP_BOARD_STLINKV21,
-// MUPP_BOARD_STLINKV2MINICLONE, MUPP_BOARD_WEACTH523 or MUPP_BOARD_YDCH32V307
-// from BOARD.
+// MUPP_BOARD_STLINKV2MINICLONE, MUPP_BOARD_WEACTH523, MUPP_BOARD_YDCH32V307
+// or MUPP_BOARD_OPENMUPPV1 from BOARD.
 // The protocol and the engines read board data only through board::current.
 // With MUPP_DEBUG_SWD, board::current is the debug variant of the board.
 
@@ -21,8 +21,10 @@
 #include "board/boards/WeActH523.h"
 #elif defined(MUPP_BOARD_YDCH32V307)
 #include "board/boards/YdCh32V307.h"
+#elif defined(MUPP_BOARD_OPENMUPPV1)
+#include "board/boards/OpenMuppV1.h"
 #else
-#error "No board selected: define MUPP_BOARD_MINI, MUPP_BOARD_OTHERUSE, MUPP_BOARD_STLINKV21, MUPP_BOARD_STLINKV2MINICLONE, MUPP_BOARD_WEACTH523 or MUPP_BOARD_YDCH32V307"
+#error "No board selected: define MUPP_BOARD_MINI, MUPP_BOARD_OTHERUSE, MUPP_BOARD_STLINKV21, MUPP_BOARD_STLINKV2MINICLONE, MUPP_BOARD_WEACTH523, MUPP_BOARD_YDCH32V307 or MUPP_BOARD_OPENMUPPV1"
 #endif
 
 namespace board {
@@ -39,6 +41,8 @@ inline constexpr const Definition &selected = stLinkV2MiniClone;
 inline constexpr const Definition &selected = weActH523;
 #elif defined(MUPP_BOARD_YDCH32V307)
 inline constexpr const Definition &selected = ydCh32V307;
+#elif defined(MUPP_BOARD_OPENMUPPV1)
+inline constexpr const Definition &selected = openMuppV1;
 #endif
 
 // A debug build with MUPP_DEBUG_SWD keeps the SW-DP of the dongle MCU on

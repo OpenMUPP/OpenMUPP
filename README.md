@@ -1,7 +1,7 @@
 # OpenMUPP
 
 OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is the firmware of the OpenMUPP v1 probe.
-OpenMUPP v1 is an open hardware USB debug probe with an STM32H523 MCU.
+OpenMUPP v1 is an open hardware USB debug probe with a CH32V307 MCU.
 It has level shifters for targets from 1.2 V to 5 V, a target power supply and a high-voltage (VPP) supply.
 The schematics are in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1).
 The firmware debugs and programs target chips of more than one architecture.
@@ -60,16 +60,17 @@ OpenMUPP v1 is the main target. The other boards are for development, tests and 
 
 | `BOARD` | Hardware | Crystal | Role | Status |
 |---|---|---|---|---|
-| (none yet) | OpenMUPP v1 probe board, STM32H523CC | 24 MHz | Main target | No board definition yet |
-| `weacth523` | WeAct STM32H523 core board | 8 MHz | Test board for the OpenMUPP v1 MCU | target, 3.3 V targets only |
+| `openmuppv1` | OpenMUPP v1 probe board, CH32V307RCT6, see [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) | 8 MHz | Main target | Not tested on hardware. Only the UART bridge reaches the target |
+| `weacth523` | WeAct STM32H523 core board | 8 MHz | Secondary | target, 3.3 V targets only |
 | `mini` | Versaloon Mini | 12 MHz | Secondary | target |
 | `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | 8 MHz | Secondary | WCH-Link one wire tested, SWD only (no JTAG pins) |
 | `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | 8 MHz | Secondary | target, SWD only (no JTAG pins) |
 | `ydch32v307` | YD-CH32V307VCT6 development board, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board) | 8 MHz | Test board for the CH32V307 port | Port in progress: the image is a stub that blinks an LED |
 
 [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
-The board layer needs the direction pins, the split nRESET path and the power functions before the firmware can drive the board.
-The WeAct STM32H523 core board uses an STM32H523CC, as the OpenMUPP v1 probe does.
+The board layer needs the direction pins, the nRESET drive and the power functions before the firmware can drive the debug signals of the board.
+The YD-CH32V307VCT6 board uses the same MCU family as the OpenMUPP v1 probe.
+The WeAct STM32H523 core board uses an STM32H523CC.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
 The Mini and the ST-Link/V2-1 use an STM32F103x8 or STM32F103xB. The ST-Link/V2 mini clone uses an STM32F103 compatible MCU.
@@ -92,7 +93,7 @@ The submodules are:
 - `system-stm32`: start-up code, CMSIS and peripheral drivers. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/system-stm32.
 - `libart-stm32`: STM32 adapters for libArT. Its `main` branch has the STM32F1 and the STM32H5 support. The primary repository is https://github.com/armint/libart-stm32.
 - `openmupp-bootloader`: the USB bootloader. The `master` branch has the CMake build and the boot request in `BKP->DR1`.
-- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`ydch32v307`) use it. Its `main` branch has the CH32V30x support. The primary repository is https://github.com/armint/ch32v00x-system.
+- `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`ydch32v307`, `openmuppv1`) use it. Its `main` branch has the CH32V30x support. The primary repository is https://github.com/armint/ch32v00x-system.
 - `ch32v00x-art`: the libArT adapters for the CH32V30x (the USB device controller). Only the CH32 boards use it. Its default branch is `dev`, not `main`. The primary repository is https://github.com/armint/ch32v00x-art.
 
 ## Requirements
@@ -138,6 +139,7 @@ The preset `ydch32v307` builds the stub image of the YD-CH32V307VCT6 board with 
 The presets `ydch32v307-cmsis-dap`, `ydch32v307-dual` and `ydch32v307-all` build the firmware image instead (`-DMUPP_CH32_STUB_IMAGE=OFF`, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board)).
 `ydch32v307-all` has all personalities.
 The preset `ydch32v307-wch-link` builds the firmware image with the WCH-Link personality.
+The preset `openmuppv1-cmsis-dap` builds the firmware image of the OpenMUPP v1 probe board with the CMSIS-DAP personality.
 The presets `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` add the AVR commands on the CMSIS-DAP v1 (HID) interface (`MUPP_CMSIS_DAP_AVR`, see [docs/cmsis-dap.md](docs/cmsis-dap.md#avr-commands)).
 It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.
