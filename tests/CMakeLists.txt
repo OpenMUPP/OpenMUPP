@@ -75,6 +75,7 @@ add_executable(mupp-tests
         TestDapTargetPower.cpp
         TestAvrIsp.cpp
         TestAvrIspScope.cpp
+        TestEdbg.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
@@ -87,6 +88,7 @@ add_executable(mupp-tests
         ../src/protocol/versaloon/JtagRawBlock.cpp
         ../src/protocol/versaloon/PowerBlock.cpp
         ../src/protocol/TargetPower.cpp
+        ../src/protocol/avr/EdbgTransport.cpp
         ../src/protocol/versaloon/SwdBlock.cpp
         ../src/protocol/versaloon/UsbToAll.cpp
         ../src/protocol/versaloon/UsbToXxx.cpp

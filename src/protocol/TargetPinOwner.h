@@ -4,7 +4,7 @@
 
 // The owner of the target pins (SWD, JTAG and the AVR pins share them).
 // Two USB interfaces of one image can drive the pins: the CMSIS-DAP v2
-// bulk interface and the HID interface (CMSIS-DAP v1, and later the AVR
+// bulk interface and the HID interface (CMSIS-DAP v1 and the AVR
 // commands). The first interface that drives the pins owns them. The other
 // gets "busy" until the owner releases them: DAP_Disconnect, or the host
 // of the owner goes away. A host tool that stops without DAP_Disconnect
@@ -41,6 +41,11 @@ class TargetPinOwner {
       if(owner_ == client) {
          owner_ = PinClient::None;
       }
+   }
+
+   // True when the client owns the pins, or nobody owns them
+   [[nodiscard]] bool isFreeFor(PinClient client) const {
+      return owner_ == PinClient::None || owner_ == client;
    }
 
    [[nodiscard]] PinClient owner() const {
