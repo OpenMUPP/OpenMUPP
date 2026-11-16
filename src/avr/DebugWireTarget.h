@@ -67,9 +67,13 @@ namespace avr {
 struct DwDevice {
    uint16_t flashPageBytes{ 128 };
    uint32_t flashBytes{ 32768 };
-   // The first word of the boot section (megaAVR). SPM executes only
-   // there. 0: no boot section (tinyAVR), SPM executes from all
-   // addresses.
+   // A word address in the smallest boot section (megaAVR): SPM executes
+   // only in the boot section, and the probe sets the PC register to this
+   // address for each SPM. The smallest boot section (BOOTSZ = 11, the
+   // last 256 words on an ATmega328P) is in the boot section for all
+   // BOOTSZ values, so its first word, or the start of the last flash page,
+   // works for all fuse settings. 0: no boot section (tinyAVR), SPM
+   // executes from all addresses.
    uint16_t bootStartWords{ 0 };
    uint16_t eepromBytes{ 1024 };
    uint8_t dwdr{ 0x31 };
