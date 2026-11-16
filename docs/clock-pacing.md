@@ -10,6 +10,7 @@ The engines are:
 - AVR ISP below the slowest SPI rate (281 kHz on the CH32V307): `src/avr/IspEngine.h`. Above 281 kHz, the engine uses SPI2.
 
 The one-wire (SDI) engine uses a hardware timer and DMA (see [wch-link.md](wch-link.md)). This document does not apply to it.
+The debugWIRE engine (`src/avr/DebugWireEngine.h`) sends UART frames, not a clock. It sends each frame with the interrupts off, and each bit edge comes at a fixed time from the start of the frame. This document does not apply to it either.
 
 ## Requirement
 
