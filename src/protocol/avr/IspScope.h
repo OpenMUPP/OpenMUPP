@@ -62,6 +62,9 @@
 // pollMethod above 1 gives STATUS_CMD_FAILED. Target commands before
 // ENTER_PROGMODE also give STATUS_CMD_FAILED. A hardware fault of the
 // engine gives STATUS_PHY_ERROR.
+//
+// release() ends the programming mode without a command, for a host that
+// went away (avr/EdbgTransport.h).
 
 #include <array>
 #include <cstddef>
@@ -125,8 +128,23 @@ inline constexpr uint32_t pollTimeoutMs = 100;
 
 } // namespace isp
 
+// The ISP scope as the EDBG transport sees it
+class IspHandler {
+   public:
+   // See IspScope::process().
+   virtual std::size_t process(art::span<const uint8_t> request, art::span<uint8_t> response) = 0;
+   // Leaves the programming mode and releases the pins, without the delays
+   // of LEAVE_PROGMODE. No effect outside the programming mode.
+   virtual void release() = 0;
+   // True between a successful ENTER_PROGMODE and LEAVE_PROGMODE
+   [[nodiscard]] virtual bool programming() const = 0;
+
+   protected:
+   ~IspHandler() = default;
+};
+
 template <typename Engine>
-class IspScope {
+class IspScope final : public IspHandler {
    public:
    explicit IspScope(Engine &engine)
       : engine_(engine) {
@@ -136,7 +154,7 @@ class IspScope {
    // response must hold isp::maxResponseBytes; with less, a read that does
    // not fit gives STATUS_CMD_FAILED. An empty request or a response
    // smaller than 4 bytes gives no response (0).
-   std::size_t process(art::span<const uint8_t> request, art::span<uint8_t> response) {
+   std::size_t process(art::span<const uint8_t> request, art::span<uint8_t> response) override {
       if(request.empty() || response.size() < 4) {
          return 0;
       }
@@ -156,8 +174,14 @@ class IspScope {
       return length_;
    }
 
-   // True between a successful ENTER_PROGMODE and LEAVE_PROGMODE
-   [[nodiscard]] bool programming() const {
+   void release() override {
+      if(programming_) {
+         engine_.disconnect();
+         programming_ = false;
+      }
+   }
+
+   [[nodiscard]] bool programming() const override {
       return programming_;
    }
 

@@ -545,3 +545,18 @@ TEST_CASE("AVR ISP scope: a read above maxDataBytes fails with a larger response
    CHECK(large[1] == status::failed);
    CHECK(f.target.frames.empty());
 }
+
+TEST_CASE("AVR ISP scope: release() ends the programming mode without a command") {
+   Fixture f;
+   f.scope.release();
+   CHECK(f.pins.finis == 0);
+   f.enter();
+   REQUIRE(f.pins.driven);
+   f.scope.release();
+   CHECK_FALSE(f.scope.programming());
+   CHECK_FALSE(f.pins.driven);
+   CHECK_FALSE(f.target.inReset());
+   CHECK(f.run({ cmd::readSignature, 4, 0x30, 0x00, 0x00, 0x00 }) == Bytes{ cmd::readSignature, status::failed });
+   f.scope.release();
+   CHECK(f.pins.finis == 1);
+}
