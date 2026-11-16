@@ -254,7 +254,7 @@ build-ydch32v307-avr:
   parallel:
     matrix:
       - BOARD: ydch32v307
-        VARIANT: [-cmsis-dap-avr, -all-avr]
+        VARIANT: [-cmsis-dap-avr, -cmsis-dap-avr-medbg, -all-avr]
   artifacts: null
 
 # OpenMUPP v1 probe board (CH32V307RCT6): the firmware image with the

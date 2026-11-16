@@ -497,6 +497,16 @@
       ]
     },
     {
+      "name": "ydch32v307-cmsis-dap-avr-medbg",
+      "displayName": "YD-CH32V307VCT6, CMSIS-DAP, AVR commands, USB ID of the Xplained Mini (personal use only)",
+      "inherits": [
+        "ydch32v307-cmsis-dap-avr"
+      ],
+      "cacheVariables": {
+        "MUPP_AVR_USB_ID": "medbg"
+      }
+    },
+    {
       "name": "ydch32v307-all-avr",
       "displayName": "YD-CH32V307VCT6, all personalities, with the AVR commands (firmware image)",
       "inherits": [
@@ -658,6 +668,10 @@
       "configurePreset": "ydch32v307-cmsis-dap-avr"
     },
     {
+      "name": "ydch32v307-cmsis-dap-avr-medbg",
+      "configurePreset": "ydch32v307-cmsis-dap-avr-medbg"
+    },
+    {
       "name": "ydch32v307-all-avr",
       "configurePreset": "ydch32v307-all-avr"
     },
@@ -669,7 +683,8 @@
       "name": "host-tests",
       "configurePreset": "host-tests",
       "targets": [
-        "mupp-tests"
+        "mupp-tests",
+        "mupp-medbg-tests"
       ]
     }
   ],

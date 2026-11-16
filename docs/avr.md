@@ -19,6 +19,63 @@ The protocol is in [cmsis-dap.md](cmsis-dap.md#avr-commands).
 The probe has the USB ID `1209:0001` (the test ID of pid.codes) and the product name `OpenMUPP CMSIS-DAP`.
 The product name must contain `CMSIS-DAP`, because avrdude uses it to select the packet size.
 
+## Bloom
+
+Bloom is a debug server for avr-gdb.
+Each Bloom tool class has a fixed USB ID and a fixed HID interface number.
+Bloom has no class for the ID `1209:0001`.
+Until Bloom has one, use one of the two ways below.
+The steps were checked against Bloom commit `9c066aa`.
+
+### The medbg build
+
+The build option `MUPP_AVR_USB_ID=medbg` gives the probe the ID of the Atmel Xplained Mini (`03eb:2145`).
+The build also puts the HID interface at number 0, because Bloom opens the HID interface of the Xplained Mini by this number.
+The other interfaces move up by one: CMSIS-DAP v2 is interface 1, and the serial port is interfaces 2 and 3.
+On Windows, WinUSB binds interface 1.
+The product name stays `OpenMUPP CMSIS-DAP`.
+
+In `bloom.yaml`, set `tool: xplained_mini`.
+The value `xplained_nano` also works, because that class has the same ID and interface number.
+Bloom selects the driver by this name, not by the USB ID.
+
+Use the preset `ydch32v307-cmsis-dap-avr-medbg`, or set `-DMUPP_AVR_USB_ID=medbg` with the options of the preset `ydch32v307-cmsis-dap-avr`.
+The option needs `MUPP_CMSIS_DAP_AVR` and the `cmsis-dap` personality alone.
+The image name has `-medbg` at the end of its tag.
+
+The vendor ID `03eb` belongs to Microchip.
+Use this build for personal use only.
+Do not publish or sell an image with this ID.
+CI builds the image to check it, and does not publish it.
+Other USB tools that use the ID `03eb:2145` can select the probe by mistake.
+
+### A patched Bloom
+
+You can build Bloom for the own USB ID `1209:0001`.
+Copy the class `XplainedMini` (`src/DebugToolDrivers/Microchip/XplainedMini/`) to a new class and change these items:
+
+1. In the new `.hpp`, set `USB_VENDOR_ID` to `0x1209` and `USB_PRODUCT_ID` to `0x0001`.
+2. Set `CMSIS_HID_INTERFACE_NUMBER` to 3, the HID interface of the default image.
+3. Change the text that `getName()` returns.
+4. Add the new `.cpp` to the list in `src/DebugToolDrivers/CMakeLists.txt`.
+   Without it, the link fails.
+5. Add an `#include` for the new class to `src/DebugToolDrivers/DebugTools.hpp`.
+6. Add a new lower-case key for the class to the map in `TargetControllerComponent::getSupportedDebugTools()`.
+   Set this key as `tool` in `bloom.yaml`.
+
+Then build Bloom.
+The patch is for personal use.
+An entry in the upstream Bloom repository waits for a USB ID that pid.codes assigns to the project.
+
+### Access rights on Linux
+
+Bloom opens the USB device node with libusb, and then the `hidraw` node.
+It needs access to both.
+For the own ID, install `etc/70-openmupp-cmsis-dap.rules` (USB device node) and `etc/70-openmupp-avr.rules` (`hidraw`).
+For the medbg build, use the udev rules of Bloom (`99-bloom.rules`).
+Alternatively, copy the `SUBSYSTEM=="usb"` line of `etc/70-openmupp-cmsis-dap.rules` and change the ID to `03eb`/`2145`.
+The file `etc/70-openmupp-avr.rules` has a `hidraw` line for the medbg ID.
+
 ## Linux access
 
 avrdude uses the HID interface of the probe.

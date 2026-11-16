@@ -93,6 +93,8 @@ jobs:
           - ydch32v307-wch-link
           # The AVR commands on the HID interface (MUPP_CMSIS_DAP_AVR)
           - ydch32v307-cmsis-dap-avr
+          # The same with the USB ID of the Xplained Mini and the HID at interface 0 (Bloom)
+          - ydch32v307-cmsis-dap-avr-medbg
           - ydch32v307-all-avr
           # The OpenMUPP v1 probe board (CH32V307): build and size check only
           - openmuppv1-cmsis-dap

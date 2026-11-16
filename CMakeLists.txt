@@ -129,6 +129,14 @@ option(MUPP_CMSIS_DAP_HID "Add the CMSIS-DAP v1 (HID) interface to the cmsis-dap
 # with the AVR ISP engine code: only the CH32V307.
 option(MUPP_CMSIS_DAP_AVR "Add the AVR commands (EDBG) to the CMSIS-DAP v1 (HID) interface" OFF)
 
+# The USB ID of an image with the AVR commands. "own" is the ID of the
+# project. "medbg" is the ID of the Atmel Xplained Mini (03eb:2145) and puts the
+# HID interface at number 0: Bloom finds the tool by this ID and number
+# (docs/avr.md). The vendor ID belongs to Microchip: use it for personal use
+# only. CI does not publish this image.
+set(MUPP_AVR_USB_ID "own" CACHE STRING "USB ID of an image with the AVR commands: own or medbg (personal use only)")
+set_property(CACHE MUPP_AVR_USB_ID PROPERTY STRINGS own medbg)
+
 # A CH32 board builds the stub image of the CH32V307 port and stops here
 # (cmake/Ch32StubImage.cmake), until the port is complete. OFF builds the
 # normal firmware image for the CH32 board.

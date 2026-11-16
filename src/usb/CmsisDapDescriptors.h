@@ -17,6 +17,10 @@
 //                   by "CMSIS-DAP" in the product string. It is after the
 //                   other interfaces, so their numbers stay.
 //
+// With MUPP_AVR_USB_ID_MEDBG (ID 03eb:2145) the numbers are different: HID 0,
+// CMSIS-DAP v2 1, CDC 2-3. Bloom opens the HID interface of this ID by the
+// number 0. WinUSB then binds interface 1.
+//
 // Windows 8.1 and later bind WinUSB to interface 0 with no driver
 // installation: bcdUSB 2.01 makes Windows read the BOS, the BOS has the
 // MS OS 2.0 platform capability, and the MS OS 2.0 descriptor set gives
@@ -47,10 +51,24 @@
 
 namespace usb::dap {
 
+#if defined(MUPP_AVR_USB_ID_MEDBG)
+// The ID of the Atmel Xplained Mini (mEDBG), for personal use only. Bloom
+// opens the HID interface of this ID by the number 0, so the HID interface
+// is first and the other interfaces move up by one (docs/avr.md).
+inline constexpr uint16_t vendorId = 0x03EB;
+inline constexpr uint16_t productId = 0x2145;
+inline constexpr uint8_t hidInterface = 0;
+inline constexpr uint8_t dapInterface = 1;
+inline constexpr uint8_t cdcControlInterface = 2;
+inline constexpr uint8_t cdcDataInterface = 3;
+#else
 inline constexpr uint16_t vendorId = 0x1209;
 inline constexpr uint16_t productId = 0x0001;
-
+inline constexpr uint8_t hidInterface = 3;
 inline constexpr uint8_t dapInterface = 0;
+inline constexpr uint8_t cdcControlInterface = usb::cdcControlInterface;
+inline constexpr uint8_t cdcDataInterface = usb::cdcDataInterface;
+#endif
 inline constexpr uint8_t outEndpoint = versaloonOutEndpoint;
 inline constexpr uint8_t inEndpoint = versaloonInEndpoint;
 // One CMSIS-DAP command or response is one packet: 64 bytes at full speed,
@@ -67,7 +85,6 @@ inline constexpr bool hasHid = true;
 #else
 inline constexpr bool hasHid = false;
 #endif
-inline constexpr uint8_t hidInterface = 3;
 inline constexpr uint8_t hidOutEndpoint = 0x05;
 inline constexpr uint8_t hidInEndpoint = 0x85;
 // One CMSIS-DAP v1 command or response is one report, also at high speed:
@@ -158,7 +175,11 @@ constexpr auto makeConfiguration(uint16_t bulkPacketSize, uint8_t notificationIn
                                           desc::endpoint(cdcDataInEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)));
    const desc::ConfigurationFields fields{ .maxPowerMilliamps = maxPowerMilliamps };
    if constexpr(withHid) {
+#if defined(MUPP_AVR_USB_ID_MEDBG)
+      return desc::configuration(fields, hidInterfaceDescriptor, interfaces);
+#else
       return desc::configuration(fields, interfaces, hidInterfaceDescriptor);
+#endif
    } else {
       return desc::configuration(fields, interfaces);
    }

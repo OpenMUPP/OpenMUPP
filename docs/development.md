@@ -231,7 +231,7 @@ The jobs:
   The limit is the full zero-wait area, because the settings page is in the non-zero-wait area. These jobs keep no artifacts.
 - `build-ydch32v307-wch-link`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-wch-link` preset, plus the size check.
   It is the CH32 image that links the one-wire engine. This job keeps no artifacts.
-- `build-ydch32v307-avr`: a `parallel:matrix` job for the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` presets, plus the size check.
+- `build-ydch32v307-avr`: a `parallel:matrix` job for the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap-avr`, `ydch32v307-cmsis-dap-avr-medbg` and `ydch32v307-all-avr` presets, plus the size check.
   These images have the AVR commands on the HID interface (`MUPP_CMSIS_DAP_AVR`). These jobs keep no artifacts.
 - `build-openmuppv1-cmsis-dap`: build of the firmware image of the OpenMUPP v1 probe board with the `openmuppv1-cmsis-dap` preset, plus the size check.
   It builds the UART7 remap (PA6, PA7). This job keeps no artifacts.

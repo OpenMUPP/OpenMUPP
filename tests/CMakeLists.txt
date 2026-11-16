@@ -128,6 +128,16 @@ target_link_libraries(mupp-tests PRIVATE doctest::doctest etl::etl)
 # Discover all tests
 doctest_discover_tests(mupp-tests)
 
+# The descriptors of the medbg build (MUPP_AVR_USB_ID=medbg): the ID of the
+# Xplained Mini and the HID interface at number 0. A separate binary, because
+# the define changes constants that the other tests use.
+add_executable(mupp-medbg-tests test_main.cpp TestMedbgDescriptors.cpp)
+target_compile_options(mupp-medbg-tests PRIVATE -O0 -g -Wall -Wextra)
+target_include_directories(mupp-medbg-tests PRIVATE ../src ${PROJECT_BINARY_DIR} ../dependencies/libArT/src)
+target_compile_definitions(mupp-medbg-tests PRIVATE UNIT_TESTING MUPP_CMSIS_DAP_HID MUPP_AVR_USB_ID_MEDBG)
+target_link_libraries(mupp-medbg-tests PRIVATE doctest::doctest etl::etl)
+doctest_discover_tests(mupp-medbg-tests)
+
 # The personality options of the firmware build (cmake/Personalities.cmake),
 # in script mode. Each case passes when the output matches <regex>: the result
 # line, or the text of the error or of the deprecation warning.
@@ -163,6 +173,14 @@ mupp_personality_test(avr "tag=\\[-cmsis-dap-hid-avr\\] defines=MUPP_WITH_CMSIS_
         -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON)
 mupp_personality_test(avr-multi "tag=\\[-dap\\+vsl\\+wch-hid-avr\\] defines=.*,MUPP_CMSIS_DAP_AVR,MUPP_CMSIS_DAP_RV_BRIDGE\n"
         -DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON)
+mupp_personality_test(medbg "tag=\\[-cmsis-dap-hid-avr-medbg\\] defines=MUPP_WITH_CMSIS_DAP,MUPP_CMSIS_DAP_HID,MUPP_CMSIS_DAP_AVR,MUPP_AVR_USB_ID_MEDBG,MUPP_CMSIS_DAP_RV_BRIDGE\n"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON -DMUPP_AVR_USB_ID=medbg)
+mupp_personality_test(medbg-without-avr "MUPP_AVR_USB_ID=medbg needs MUPP_CMSIS_DAP_AVR=ON"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_HID=ON -DMUPP_AVR_USB_ID=medbg)
+mupp_personality_test(medbg-multi "MUPP_AVR_USB_ID=medbg needs MUPP_PERSONALITIES=cmsis-dap alone"
+        -DMUPP_PERSONALITIES=versaloon,cmsis-dap -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON -DMUPP_AVR_USB_ID=medbg)
+mupp_personality_test(avr-usb-id-unknown "MUPP_AVR_USB_ID: unknown value 'foo'"
+        -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_HID=ON -DMUPP_CMSIS_DAP_AVR=ON -DMUPP_AVR_USB_ID=foo)
 mupp_personality_test(avr-without-hid "MUPP_CMSIS_DAP_AVR needs MUPP_CMSIS_DAP_HID=ON"
         -DMUPP_PERSONALITIES=cmsis-dap -DMUPP_CMSIS_DAP_AVR=ON)
 # Ignored without cmsis-dap
