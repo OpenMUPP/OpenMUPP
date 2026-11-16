@@ -17,8 +17,8 @@ using avr::Instruction;
 using avr::spiShiftFor;
 using Engine = avr::IspEngine<mupptest::MockIspPins, mupptest::MockIspSpi>;
 
-constexpr uint32_t spiClockHz = 72'000'000;
-constexpr uint32_t cyclesPerMs = 72'000;
+constexpr uint32_t spiClockHz = mupptest::ispClockHz;
+constexpr uint32_t cyclesPerMs = mupptest::ispClockHz / 1000u;
 
 constexpr avr::EnableParams enableParams{
    .stabDelayMs = 20,
@@ -49,18 +49,22 @@ Instruction readSignature(Engine &engine, uint8_t index) {
 
 } // namespace
 
-TEST_CASE("AVR ISP: the SPI rates are 18 MHz to 281 kHz, bit-bang below, SCK never faster than the request") {
+TEST_CASE("AVR ISP: SPI rates at 144 MHz are 36 MHz to 562.5 kHz, bit-bang below, SCK not above the request") {
    CHECK(spiShiftFor(spiClockHz, 100'000) == 2);
-   CHECK(spiShiftFor(spiClockHz, 18'000) == 2);
-   CHECK(spiShiftFor(spiClockHz, 17'999) == 3);
-   CHECK(spiShiftFor(spiClockHz, 9000) == 3);
-   CHECK(spiShiftFor(spiClockHz, 4500) == 4);
-   CHECK(spiShiftFor(spiClockHz, 2250) == 5);
-   CHECK(spiShiftFor(spiClockHz, 1125) == 6);
-   CHECK(spiShiftFor(spiClockHz, 563) == 7);
-   CHECK(spiShiftFor(spiClockHz, 562) == 8);
-   CHECK(spiShiftFor(spiClockHz, 282) == 8);
-   // 281.25 kHz is above 281 kHz: bit-bang
+   CHECK(spiShiftFor(spiClockHz, 36'000) == 2);
+   CHECK(spiShiftFor(spiClockHz, 35'999) == 3);
+   CHECK(spiShiftFor(spiClockHz, 18'000) == 3);
+   CHECK(spiShiftFor(spiClockHz, 9000) == 4);
+   CHECK(spiShiftFor(spiClockHz, 4500) == 5);
+   // -B 2MHz of docs/avr.md: 1.125 MHz
+   CHECK(spiShiftFor(spiClockHz, 2000) == 7);
+   CHECK(spiShiftFor(spiClockHz, 2250) == 6);
+   CHECK(spiShiftFor(spiClockHz, 1125) == 7);
+   CHECK(spiShiftFor(spiClockHz, 1124) == 8);
+   CHECK(spiShiftFor(spiClockHz, 563) == 8);
+   // 562.5 kHz is above 562 kHz: bit-bang. With a 72 MHz SPI clock, the
+   // SPI would give 281.25 kHz here, and 562.5 kHz is twice that.
+   CHECK(spiShiftFor(spiClockHz, 562) == 0);
    CHECK(spiShiftFor(spiClockHz, 281) == 0);
    CHECK(spiShiftFor(spiClockHz, 250) == 0);
    CHECK(spiShiftFor(spiClockHz, 1) == 0);
@@ -73,21 +77,22 @@ TEST_CASE("AVR ISP: setSpeed selects the SPI or bit-bang, 0 is refused") {
    Engine engine{ pins };
    // Before setSpeed: bit-bang at 100 kHz
    CHECK(engine.spiShift() == 0);
-   CHECK(engine.halfCycles() == 360);
+   // 144 MHz / (2 * 100 kHz) = 720
+   CHECK(engine.halfCycles() == 720);
    CHECK(engine.speedKHz() == 100);
 
    CHECK(engine.setSpeed(2000));
-   CHECK(engine.spiShift() == 6);
-   CHECK(engine.spi().shift() == 6);
+   CHECK(engine.spiShift() == 7);
+   CHECK(engine.spi().shift() == 7);
 
    CHECK(engine.setSpeed(32));
    CHECK(engine.spiShift() == 0);
-   // 72 MHz / (2 * 32 kHz) = 1125
-   CHECK(engine.halfCycles() == 1125);
+   // 144 MHz / (2 * 32 kHz) = 2250
+   CHECK(engine.halfCycles() == 2250);
 
    CHECK_FALSE(engine.setSpeed(0));
    CHECK(engine.spiShift() == 0);
-   CHECK(engine.halfCycles() == 1125);
+   CHECK(engine.halfCycles() == 2250);
    CHECK(engine.speedKHz() == 32);
 }
 
@@ -105,7 +110,7 @@ TEST_CASE("AVR ISP: connect drives the pins with RESET asserted, disconnect rele
 }
 
 TEST_CASE("AVR ISP: programming enable and signature read, over the SPI and over bit-bang") {
-   for(const uint32_t kHz : { 18'000u, 281u + 1u, 250u, 32u }) {
+   for(const uint32_t kHz : { 36'000u, 563u, 562u, 250u, 32u }) {
       CAPTURE(kHz);
       Fixture f(kHz);
       REQUIRE(f.engine.enableProgramming(enableParams));
@@ -131,7 +136,7 @@ TEST_CASE("AVR ISP: bit-bang gives the requested SCK period") {
    Instruction response{};
    REQUIRE(f.engine.instruction({ { 0xAC, 0x53, 0x00, 0x00 } }, response));
    REQUIRE(f.pins.risingTimes.size() == 32);
-   const uint32_t period = 2 * 1125;
+   const uint32_t period = 2 * 2250;
    for(std::size_t i = 1; i < f.pins.risingTimes.size(); ++i) {
       CAPTURE(i);
       const uint32_t delta = f.pins.risingTimes[i] - f.pins.risingTimes[i - 1];
@@ -150,7 +155,7 @@ TEST_CASE("AVR ISP: the RESET pulse and the stabilisation delay come before the 
    REQUIRE(f.pins.assertTimes.size() == 2);
    CHECK(f.target.resets == 2);
    const uint32_t pulseEnd = f.pins.assertTimes[1];
-   CHECK(pulseEnd - connected >= 2 * avr::resetPulseUs * 72u);
+   CHECK(pulseEnd - connected >= 2 * avr::resetPulseUs * (cyclesPerMs / 1000u));
    REQUIRE_FALSE(f.pins.risingTimes.empty());
    CHECK(f.pins.risingTimes[0] - pulseEnd >= 20u * cyclesPerMs);
    CHECK_FALSE(f.target.sckHighAtReset);

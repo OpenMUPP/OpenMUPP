@@ -85,18 +85,16 @@ class JtagPins {
 
 class JtagSpi {
    public:
-   [[nodiscard]] uint32_t clockHz() const {
-      return clockHz_;
-   }
+   // SPI master clock (PCLK1 on the STM32F1 and the CH32V307, the kernel
+   // clock on the STM32H5), read from the RCC at each call: setSpeed() can
+   // come before init().
+   [[nodiscard]] uint32_t clockHz() const;
    void init();
    void fini();
    void setShift(uint8_t shift);
    [[nodiscard]] bool transfer(JtagPins &pins, const uint8_t *tdi, const uint8_t *tms, uint8_t *tdo, uint32_t bytes);
 
    private:
-   // SPI2 clock (APB1 on the STM32F1 and the CH32V307, the kernel clock on
-   // the STM32H5); init() reads it from the RCC.
-   uint32_t clockHz_{ 36'000'000 };
    uint8_t shift_{ jtag::spiMinShift };
 };
 

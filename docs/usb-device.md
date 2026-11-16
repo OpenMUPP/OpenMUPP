@@ -669,7 +669,7 @@ RTCK becomes an input with pull-down.
 `FINI` makes TCK, TMS and TDI floating inputs.
 
 `CONFIG` sets the TCK frequency in kHz.
-The firmware rounds the half period up to full core clock cycles (72 MHz), so TCK is never faster than the request.
+The firmware rounds the half period up to full core clock cycles (72 MHz on the STM32F1, 144 MHz on the CH32V307, 250 MHz on the STM32H5), so TCK is never faster than the request.
 A request above the fastest rate of the bit-bang loop gives that fastest rate.
 On a board with the fast path, `CONFIG` can select the SPI instead (see [JTAG fast path](#jtag-fast-path)).
 An interrupt can make a TCK period longer, but not shorter.
@@ -798,7 +798,7 @@ A separate SWDIO input pin gets a pull-up, so an open SWDIO reads 1.
 |---|---|---|---|---|---|---|---|
 | SWCLK | 1.85 MHz | 235 kHz | 130 kHz | 102 kHz | 85 kHz | 72 kHz | 500000 / (`delay` + 1) Hz |
 
-The firmware rounds the half period up to full core clock cycles (72 MHz).
+The firmware rounds the half period up to full core clock cycles (72 MHz on the STM32F1, 144 MHz on the CH32V307, 250 MHz on the STM32H5).
 Each SWCLK edge comes at a deadline of the core cycle counter.
 Thus the loop code does not change the SWCLK rate (see [Clock pacing](clock-pacing.md)).
 An interrupt makes a period longer, but not shorter.

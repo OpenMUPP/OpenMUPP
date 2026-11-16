@@ -82,10 +82,13 @@ void IspPins::reset(bool asserted) {
    configureOutput(resetSignal, asserted, resetType);
 }
 
+uint32_t IspSpi::clockHz() const {
+   return spi().getClockFrequency();
+}
+
 void IspSpi::init() {
    Rcc::enableSPI2Clock();
    const Spi master = spi();
-   clockHz_ = master.getClockFrequency();
    master.disable();
    master.configure(prescalerOf(shift_), Spi::Mode::Master, Spi::ClockPolarity::Low, Spi::ClockPhase::OneEdge,
                     Spi::DataSize::Bits8, Spi::FirstBit::Msb, Spi::NssMode::Soft);
