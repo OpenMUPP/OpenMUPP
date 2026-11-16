@@ -11,7 +11,7 @@ NEXT = {  # state: (tms0, tms1)
  'EX1IR': ('PAUSEIR', 'UPIR'), 'PAUSEIR': ('PAUSEIR', 'EX2IR'), 'EX2IR': ('SHIR', 'UPIR'),
  'UPIR': ('IDLE', 'SELDR')}
 rows = csv.reader(open(sys.argv[1])); next(rows)
-st, prev, tin, tout, idle, tms1 = 'RESET', None, [], [], 0, 0
+st, prev, tin, tout, idle, tms1, t_end = 'RESET', None, [], [], 0, 0, 0.0
 def val(b): return sum(v << i for i, v in enumerate(b))
 def flush_idle():
     global idle, tms1
@@ -29,9 +29,12 @@ for r in rows:
         elif st == 'RESET' and s[TMS] == 1: tms1 += 1
         nst = NEXT[st][s[TMS]]
         if st in ('SHDR', 'SHIR') and nst not in ('SHDR', 'SHIR'):
+            t_end = t  # the time of a scan is the time of its last shift
+        # Print a scan when it ends (Update-DR/IR), so a scan through Pause-DR/IR stays one scan.
+        if nst in ('UPDR', 'UPIR'):
             flush_idle(); n = len(tin)
-            kind = 'IR' if st == 'SHIR' else 'DR'
-            print(f'{t:14.6f}  {kind}[{n:2}] in=0x{val(tin):0{(n+3)//4}X} out=0x{val(tout):0{(n+3)//4}X}')
+            kind = 'IR' if nst == 'UPIR' else 'DR'
+            print(f'{t_end:14.6f}  {kind}[{n:2}] in=0x{val(tin):0{(n+3)//4}X} out=0x{val(tout):0{(n+3)//4}X}')
             tin, tout = [], []
         st = nst
     prev = s
