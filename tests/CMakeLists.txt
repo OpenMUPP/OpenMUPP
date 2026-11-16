@@ -76,6 +76,7 @@ add_executable(mupp-tests
         TestAvrIsp.cpp
         TestAvrIspScope.cpp
         TestDebugWire.cpp
+        TestDebugWireTarget.cpp
         TestEdbg.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp

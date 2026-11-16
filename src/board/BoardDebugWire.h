@@ -18,6 +18,7 @@
 #include <cstdint>
 
 #include "avr/DebugWireEngine.h"
+#include "avr/DebugWireTarget.h"
 #include "board/Board.h"
 #include "board/BoardPins.h"
 #include "board/CycleCounter.h"
@@ -71,10 +72,13 @@ class DebugWirePins {
 };
 
 using BoardDebugWire = avr::DebugWireEngine<DebugWirePins>;
+using BoardDebugWireTarget = avr::DebugWireTarget<BoardDebugWire>;
 
 } // namespace board
 
-// BoardDebugWireV30x.cpp instantiates the engine, with -O2 (CMakeLists.txt).
+// BoardDebugWireV30x.cpp instantiates the engine and the target
+// operations, with -O2 (CMakeLists.txt).
 #if defined(CH32V30x_D8C)
 extern template class avr::DebugWireEngine<board::DebugWirePins>;
+extern template class avr::DebugWireTarget<board::BoardDebugWire>;
 #endif
