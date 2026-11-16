@@ -379,6 +379,10 @@ TEST_CASE("EDBG: a new fragment 1 drops the response that the host did not read"
    b.sendFrame({ avr::edbg::sof, 0x00, 0x02, 0x00, handler::housekeeping, 0x11, 0x00, 0x00 });
    CHECK(b.receiveFrame() == Bytes{ 0x0E, 0x02, 0x00, handler::housekeeping, 0x80, 0x00 });
    CHECK_FALSE(b.receiveFrame().has_value());
+   // A frame that is not complete yet: the old response is gone too.
+   b.sendFrame({ avr::edbg::sof, 0x00, 0x01, 0x00, handler::housekeeping, 0x10, 0x00 });
+   CHECK(b.fragment(0x12, { avr::edbg::sof, 0x00, 0x02, 0x00, handler::housekeeping }) == avr::edbg::fragmentMore);
+   CHECK_FALSE(b.receiveFrame().has_value());
    // A response that the host read half: the rest is gone too.
    b.enterProgmode();
    b.sendFrame({ avr::edbg::sof, 0x00, 0x03, 0x00, handler::avrIsp, isp::command::readFlash, 0x01, 0x00, 0x20 });
