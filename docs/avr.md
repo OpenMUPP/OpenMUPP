@@ -62,19 +62,20 @@ The file `etc/avrdude-openmupp.conf` has a programmer entry with the name `openm
 Read it with `-C +etc/avrdude-openmupp.conf`. Use avrdude version 7.1 or later.
 Run the commands in the top directory of the repository, or give the full path of the file.
 The entry is not part of avrdude.
+The examples are for a target clock of 8 MHz or more. For a slower target, change the `-B` value (see [Low-clock targets](#low-clock-targets)).
 
 ```sh
 # Read the signature of an ATmega328P
-avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -B 2MHz
 
 # Write and verify the flash from an Intel HEX file
-avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -U flash:w:firmware.hex:i
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -B 2MHz -U flash:w:firmware.hex:i
 
 # Read the fuses
-avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -U lfuse:r:-:h -U hfuse:r:-:h -U efuse:r:-:h
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -B 2MHz -U lfuse:r:-:h -U hfuse:r:-:h -U efuse:r:-:h
 
 # Write the EEPROM
-avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -U eeprom:w:data.hex:i
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m328p -P usb -B 2MHz -U eeprom:w:data.hex:i
 ```
 
 ## Low-clock targets
