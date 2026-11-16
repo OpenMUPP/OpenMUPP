@@ -132,6 +132,7 @@ The default is `/usr`.
 | `ydch32v307-wch-link` | YD-CH32V307VCT6 development board | `wch-link`, with `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image with the one-wire engine | Release |
 | `ydch32v307-cmsis-dap-avr` | YD-CH32V307VCT6 development board | as `ydch32v307-cmsis-dap`, with `MUPP_CMSIS_DAP_HID` and `MUPP_CMSIS_DAP_AVR` (tag `-cmsis-dap-hid-avr`) | Release |
 | `ydch32v307-all-avr` | YD-CH32V307VCT6 development board | as `ydch32v307-all`, with `MUPP_CMSIS_DAP_HID` and `MUPP_CMSIS_DAP_AVR` (tag `-dap+vsl+wch-hid-avr`) | Release |
+| `openmuppv1-cmsis-dap` | OpenMUPP v1 probe board | `cmsis-dap`, with `MUPP_CH32_STUB_IMAGE=OFF` | Release |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
@@ -146,7 +147,7 @@ The `-cmsis-dap-wch-link` presets do not exist: use the `-dual` presets.
 For a dual image with `versaloon,cmsis-dap`, add `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `mupp-tests` target, and a test preset that runs `ctest` with `--output-on-failure`.
-CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, `mini-cmsis-dap-no-rv-bridge`, `ydch32v307` and the `ydch32v307-` presets.
+CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, `mini-cmsis-dap-no-rv-bridge`, `ydch32v307`, the `ydch32v307-` presets and `openmuppv1-cmsis-dap`.
 The other presets are for local builds only.
 CI uses these presets (see [Continuous integration](development.md#continuous-integration)).
 

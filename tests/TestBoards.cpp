@@ -2,6 +2,7 @@
 
 #include "board/VrefScale.h"
 #include "board/boards/Mini.h"
+#include "board/boards/OpenMuppV1.h"
 #include "board/boards/OtherUse.h"
 #include "board/boards/StLinkV21.h"
 #include "board/boards/StLinkV2MiniClone.h"
@@ -189,6 +190,7 @@ TEST_CASE("All boards are valid") {
    CHECK(board::isValid(board::stLinkV2MiniClone));
    CHECK(board::isValid(board::weActH523));
    CHECK(board::isValid(board::ydCh32V307));
+   CHECK(board::isValid(board::openMuppV1));
 }
 
 TEST_CASE("YD-CH32V307VCT6 has the pin map of plan D10") {
@@ -217,6 +219,32 @@ TEST_CASE("YD-CH32V307VCT6 has the pin map of plan D10") {
    CHECK(yd.jtagFastPath->tckLink == Pin{ Port::C, 10 });
    CHECK_FALSE(yd.powerSwitch);
    CHECK_FALSE(yd.usbPullUp);
+}
+
+TEST_CASE("OpenMUPP v1 has the pin map of docs/hardware.md of openmupp-v1") {
+   const Definition &v1 = board::openMuppV1;
+
+   CHECK(v1.name == "openmuppv1");
+   CHECK(v1.family == V30x);
+   CHECK(v1.hseFrequency == 8'000'000);
+   // The debug pins of the YD board, except the SRST polarity: PB12 drives the gate of Q1
+   board::DebugPins ydPins = board::ydCh32V307.debug;
+   ydPins.srstActive = Active::High;
+   CHECK(v1.debug == ydPins);
+   CHECK(v1.uart == board::Uart{ .usart = 7, .tx{ Port::A, 6 }, .rx{ Port::A, 7 } });
+   CHECK(v1.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 2 });
+   CHECK(v1.leds.state == Signal{ { Port::A, 10 }, Active::High });
+   CHECK(v1.leds.usb == Signal{ { Port::A, 9 }, Active::High });
+   CHECK_FALSE(v1.leds.power);
+   CHECK(v1.key == Signal{ { Port::B, 3 }, Active::High });
+   REQUIRE(v1.hasJtagFastPath());
+   CHECK(v1.jtagFastPath->tckLink == Pin{ Port::C, 10 });
+   CHECK_FALSE(v1.powerSwitch);
+   CHECK_FALSE(v1.usbPullUp);
+   CHECK(board::swjConfig(v1) == board::SwjConfig::NoJtag);
+   // The shifters drive the debug pins until the board layer sets their direction
+   CHECK_FALSE(v1.debugOutputs);
+   CHECK(board::ydCh32V307.debugOutputs);
 }
 
 TEST_CASE("isValid checks the CH32V307 rules") {
@@ -276,16 +304,16 @@ TEST_CASE("The CH32V307 has the ADC channels of the STM32F103 and the one-wire t
    CHECK(board::adcChannelOf(V30x, { Port::B, 0 }) == 8);
    CHECK(board::adcChannelOf(V30x, { Port::C, 5 }) == 15);
    CHECK_FALSE(board::adcChannelOf(V30x, { Port::B, 2 }));
-   // TIM10_CH4 on PC11, TIM10_CH1 samples; TIM10_UP on DMA2 ch11, TIM10_CH1 on ch8
+   // TIM10_CH4 on PC11, TIM10_CH2 samples; TIM10_UP on DMA2 ch11, TIM10_CH2 on ch10
    const auto timer = board::oneWireTimerOf(V30x, board::ydCh32V307.debug.tmsOut);
    REQUIRE(timer);
    CHECK(timer->timer == 10);
    CHECK(timer->channel == 4);
    CHECK_FALSE(timer->complementary);
    CHECK_FALSE(timer->partialRemap);
-   CHECK(timer->sampleChannel == 1);
+   CHECK(timer->sampleChannel == 2);
    CHECK(timer->updateDma == 11);
-   CHECK(timer->sampleDma == 8);
+   CHECK(timer->sampleDma == 10);
    // The pins of the STM32F103 timers have no timer on the CH32V307
    CHECK_FALSE(board::oneWireTimerOf(V30x, { Port::B, 4 }));
    CHECK_FALSE(board::oneWireTimerOf(V30x, { Port::B, 14 }));

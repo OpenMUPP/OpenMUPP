@@ -27,10 +27,13 @@
 #   ydch32v307
 #             YD-CH32V307VCT6 development board. Build only: the image is a
 #             stub (src/ch32v30x/), the port is not complete.
+#   openmuppv1
+#             OpenMUPP v1 probe board (CH32V307RCT6). Only the UART bridge
+#             reaches the target (docs/boards.md). Not tested on hardware.
 # The STM32F1 boards have an STM32F103x8 or an STM32F103xB. CMSIS has one
 # define (STM32F103xB) for both parts. The firmware uses only the 64 KB of
 # the STM32F103x8.
-set(MUPP_BOARDS mini otheruse stlinkv21 stlinkv2miniclone weacth523 ydch32v307)
+set(MUPP_BOARDS mini otheruse stlinkv21 stlinkv2miniclone weacth523 ydch32v307 openmuppv1)
 #                         family  device      crystal  ldscript      flash
 set(MUPP_BOARD_mini        STM32F1 STM32F103xB 12000000 mem-F103x8.ld 65536)
 set(MUPP_BOARD_otheruse    STM32F1 STM32F103xB 12000000 mem-F103x8.ld 65536)
@@ -38,11 +41,13 @@ set(MUPP_BOARD_stlinkv21   STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
 set(MUPP_BOARD_stlinkv2miniclone STM32F1 STM32F103xB 8000000  mem-F103x8.ld 65536)
 set(MUPP_BOARD_weacth523   STM32H5 STM32H523xx 8000000  mem-H523xC.ld 262144)
 set(MUPP_BOARD_ydch32v307  CH32V30X CH32V30x_D8C 8000000 mem-ch32v307.ld 262144)
+set(MUPP_BOARD_openmuppv1  CH32V30X CH32V30x_D8C 8000000 mem-ch32v307.ld 262144)
 # The full flash of the CH32 boards. The flash column above is the
 # zero-wait area that the image links into (the default memory split of the
 # option bytes, 256 KB code + 64 KB RAM). The settings page is the last page
 # of the full flash, in the non-zero-wait area (CMakeLists.txt).
 set(MUPP_FLASH_TOTAL_ydch32v307 491520)
+set(MUPP_FLASH_TOTAL_openmuppv1 491520)
 # Boards that openmupp-bootloader supports (cmake/Bootloader.cmake)
 set(MUPP_BOOTLOADER_BOARDS mini otheruse stlinkv21 stlinkv2miniclone)
 # Boards that also ship with the 32 KB Versaloon bootloader: the newer

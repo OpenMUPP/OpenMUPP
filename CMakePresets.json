@@ -95,6 +95,17 @@
       }
     },
     {
+      "name": "board-openmuppv1",
+      "description": "Board openmuppv1",
+      "hidden": true,
+      "inherits": [
+        "base-riscv"
+      ],
+      "cacheVariables": {
+        "BOARD": "openmuppv1"
+      }
+    },
+    {
       "name": "board-ydch32v307",
       "description": "Board ydch32v307",
       "hidden": true,
@@ -494,6 +505,20 @@
       ]
     },
     {
+      "name": "openmuppv1-cmsis-dap",
+      "displayName": "OpenMUPP v1, CMSIS-DAP (firmware image)",
+      "inherits": [
+        "board-openmuppv1",
+        "personalities-cmsis-dap"
+      ],
+      "cacheVariables": {
+        "MUPP_CH32_STUB_IMAGE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "description": "Native build of the unit tests (no toolchain file)",
@@ -635,6 +660,10 @@
     {
       "name": "ydch32v307-all-avr",
       "configurePreset": "ydch32v307-all-avr"
+    },
+    {
+      "name": "openmuppv1-cmsis-dap",
+      "configurePreset": "openmuppv1-cmsis-dap"
     },
     {
       "name": "host-tests",

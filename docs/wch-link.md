@@ -553,10 +553,11 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `sr
 | ST-Link/V2-1 | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | WeAct STM32H523 | PA6 | TIM3_CH1 (AF2) | TIM3_UP, GPDMA1 channel 3 | TIM3_CH3, GPDMA1 channel 4 |
-| YD-CH32V307VCT6 | PC11 | TIM10_CH4, default map | TIM10_UP, DMA2 channel 11 | TIM10_CH1, DMA2 channel 8 |
+| YD-CH32V307VCT6 | PC11 | TIM10_CH4, default map | TIM10_UP, DMA2 channel 11 | TIM10_CH2, DMA2 channel 10 |
 
 `board::oneWireTimerOf()` (`src/board/BoardDefinition.h`) holds this table. The timers run at the core clock (72 MHz on the STM32F1, 250 MHz on the STM32H5, 144 MHz on the CH32V307).
 The JTAG fast path of the STM32H5 uses GPDMA1 channels 0 to 2, thus the one-wire engine uses channels 3 and 4.
+On the CH32V307, the UART bridge uses DMA2 channels 8 and 9 (UART7). TIM10_CH1 and TIM10_CH3 have their requests on these channels, thus the sample channel is TIM10_CH2.
 
 The STM32H5 engine works as the STM32F1 engine, with these differences:
 

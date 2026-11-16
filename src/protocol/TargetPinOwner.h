@@ -23,6 +23,9 @@ enum class PinClient : uint8_t {
    None,
    CmsisDapBulk,
    CmsisDapHid,
+   // The board keeps the pins for all time: its debug pins must not become
+   // outputs (board::Definition::debugOutputs).
+   Board,
 };
 
 class TargetPinOwner {

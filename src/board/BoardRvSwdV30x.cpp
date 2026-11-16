@@ -20,8 +20,9 @@
 //   did not end within the shortest bit (620 ns) at 72 MHz. The CH32V307
 //   bus runs at 144 MHz. The frames work with a CH32V003 (docs/wch-link.md),
 //   but the wire times are not measured.
-// - The requests are on DMA2: TIM10_UP on channel 11, TIM10_CH1 (the
-//   sample) on channel 8 (RM table 11-3).
+// - The requests are on DMA2: TIM10_UP on channel 11, TIM10_CH2 (the
+//   sample) on channel 10 (RM table 11-4). The UART bridge uses channels 8
+//   and 9 (UART7).
 //
 // TIM10 runs at the core clock: PCLK2 is HCLK (initialize_hardware.cpp), and
 // the timer clock is PCLK2 when the APB2 prescaler is 1 (RM clock tree).

@@ -137,6 +137,8 @@ constexpr DapConfiguration fromDapControl(uint8_t control, uint32_t baudRate, ui
 
 // Uart is the UART of UartBridge (uart/UartBridge.h), and:
 //   void stopTx();   TX interrupt off: the interrupt takes no more bytes
+//   void pollRx();   moves the received bytes that wait in the UART (DMA
+//                    buffer) into the rx ring
 template <typename Uart, std::size_t Size>
 class DapUartChannel final : public cmsisdap::DapUart {
    public:
@@ -166,7 +168,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
    // main loop iteration, with the poll of the bridge.
    void poll() {
       if(transport_ == cmsisdap::uartTransport::none) {
-         buffers_.flushRx();
+         flushRx();
          return;
       }
       if(transport_ != cmsisdap::uartTransport::dap) {
@@ -175,11 +177,11 @@ class DapUartChannel final : public cmsisdap::DapUart {
       if(pending_ && buffers_.tx.empty() && uart_.isTxIdle()) {
          uart_.setFormat(*pending_);
          pending_.reset();
-         buffers_.flushRx();
+         flushRx();
          seen_ = counters();
       }
       if(!rxEnabled_) {
-         buffers_.flushRx();
+         flushRx();
       }
    }
 
@@ -210,7 +212,7 @@ class DapUartChannel final : public cmsisdap::DapUart {
       }
       uart_.stopTx();
       buffers_.flushTx();
-      buffers_.flushRx();
+      flushRx();
       if(transport_ == t::comPort) {
          bridge_->setActive(false);
       }
@@ -253,13 +255,13 @@ class DapUartChannel final : public cmsisdap::DapUart {
          if(!configured_) {
             ok = false;
          } else if(!rxEnabled_) {
-            buffers_.flushRx();
+            flushRx();
             seen_ = counters();
             rxEnabled_ = true;
          }
       }
       if((control & c::rxFlush) != 0) {
-         buffers_.flushRx();
+         flushRx();
       }
       if((control & c::txDisable) != 0) {
          disableTx();
@@ -334,6 +336,12 @@ class DapUartChannel final : public cmsisdap::DapUart {
    }
 
    private:
+   // Discards the received bytes, also those that still wait in the UART.
+   void flushRx() {
+      uart_.pollRx();
+      buffers_.flushRx();
+   }
+
    struct Counters {
       uint32_t lost;
       uint32_t framing;

@@ -185,14 +185,15 @@ struct OneWireTimer {
 };
 
 // The timer of a SWDIO output pin: RM0008 9.3.7 and table 78 (STM32F103),
-// DS14540 table 14 (STM32H5), CH32FV2x_V3xRM tables 10-22 and 11-3
+// DS14540 table 14 (STM32H5), CH32FV2x_V3xRM tables 10-22 and 11-4
 // (CH32V307). Empty when the pin has no supported timer channel.
 constexpr std::optional<OneWireTimer> oneWireTimerOf(Family family, Pin tmsOut) {
    if(family == Family::Ch32V30x) {
-      // TIM10_CH4 (default map), TIM10_CH1 samples. TIM10_UP on DMA2 ch11,
-      // TIM10_CH1 on ch8. The JTAG fast path uses DMA2 ch2.
+      // TIM10_CH4 (default map), TIM10_CH2 samples. TIM10_UP on DMA2 ch11,
+      // TIM10_CH2 on ch10. Not CH1 (ch8) or CH3 (ch9): the UART7 bridge
+      // uses these DMA channels. The JTAG fast path uses DMA2 ch2.
       if(tmsOut == Pin{ Port::C, 11 }) {
-         return OneWireTimer{ 10, 4, false, false, 1, 11, 8 };
+         return OneWireTimer{ 10, 4, false, false, 2, 11, 10 };
       }
       return std::nullopt;
    }
@@ -279,6 +280,10 @@ struct Definition {
    std::optional<Signal> usbPullUp;
    // The pull-up pin is an open-drain output: the board sets the high level.
    bool usbPullUpOpenDrain = false;
+   // False: the debug pins must not become outputs, because the board layer
+   // does not drive the level shifters of the board yet. The firmware then
+   // keeps the target pins (main.cpp), so no host command drives them.
+   bool debugOutputs = true;
    // Add each new pin field to detail::allPins() too, else isValid() and
    // swjConfig() do not see it.
 

@@ -285,6 +285,18 @@ TEST_CASE("DapUartChannel: write() takes only what fits in the TX ring") {
    CHECK(bench.channel.txCount() == ringCapacity);
 }
 
+TEST_CASE("DapUartChannel: a flush also discards the bytes that wait in the UART") {
+   Bench bench;
+   bench.takeForDap();
+   // A byte that the DMA has stored, but that is not in the rx ring yet
+   bench.uart.onPollRx = [&bench] {
+      bench.buffers.received(0x5A);
+      bench.uart.onPollRx = nullptr;
+   };
+   CHECK(bench.channel.control(control::rxFlush));
+   CHECK(bench.channel.rxCount() == 0);
+}
+
 TEST_CASE("DapUartChannel: the UART must be configured before an enable") {
    Bench bench;
    REQUIRE(bench.channel.setTransport(transport::dap));

@@ -1,8 +1,8 @@
 # Status
 
 This document lists the functions of the firmware and the state of the hardware tests.
-The main target is the OpenMUPP v1 probe board. It has no board definition yet, so no hardware test covers it.
-The tests below run on the WeAct STM32H523 core board (the same MCU) and on the older STM32F1 boards.
+The main target is the OpenMUPP v1 probe board (CH32V307). Its board definition has only the UART bridge to the target, and no hardware test covers it.
+The tests below run on the YD-CH32V307VCT6 board (the same MCU family), the WeAct STM32H523 core board and the older STM32F1 boards.
 
 The Versaloon and CMSIS-DAP images have these functions:
 

@@ -50,6 +50,9 @@ struct FakeUart {
    std::vector<std::pair<uint8_t, FrameFormat>> sent;
    // Runs in stopTx(), for example to check the state of the rings then.
    std::function<void()> onStopTx;
+   // Runs in pollRx(): the bytes that the DMA has stored, but not yet put in
+   // the rx ring.
+   std::function<void()> onPollRx;
 
    [[nodiscard]] uint32_t clockFrequency() const {
       return clock;
@@ -72,6 +75,12 @@ struct FakeUart {
       txInterruptOn = false;
       if(onStopTx) {
          onStopTx();
+      }
+   }
+
+   void pollRx() {
+      if(onPollRx) {
+         onPollRx();
       }
    }
 
