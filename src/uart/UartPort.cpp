@@ -270,10 +270,9 @@ void UartPort::stopTx() {
 }
 
 void UartPort::pollRx() {
-   const std::size_t head = (rxDmaSize - rxDma().getDataCount()) % rxDmaSize;
-   if(head != rxTail_) {
-      NVIC_SetPendingIRQ(rxDmaIrq);
-   }
+   // The interrupt of the channel also runs serviceRx(): only one at a time.
+   Interrupt::CriticalSection cs;
+   serviceRx();
 }
 
 void UartPort::serviceRx() {

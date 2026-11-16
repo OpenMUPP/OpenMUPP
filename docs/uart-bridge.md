@@ -75,7 +75,7 @@ The interrupt for each sent byte also made the SWD clock slower ([issue #33](htt
 - RX: DMA2 channel 9 writes the received bytes into a circular buffer of 256 bytes.
   The interrupt of the channel copies the new bytes into the RX ring buffer.
   It runs at the half and at the end of the buffer, thus each 128 bytes.
-  The main loop also starts it in each pass (`UartPort::pollRx()`), so a short message does not wait for 128 bytes.
+  The main loop also does the copy in each pass, and before each flush of the RX ring (`UartPort::pollRx()`). Thus a short message does not wait for 128 bytes, and a flush also discards the bytes in the DMA buffer.
   At 2 Mbaud, 128 bytes take 640 µs. The interrupt must run within this time, else the DMA writes over bytes that are not copied.
 - TX: DMA2 channel 8 sends a block of the TX ring buffer, 256 bytes at most.
   At the end of the block, the interrupt releases the block and starts the next block.

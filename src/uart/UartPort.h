@@ -15,8 +15,8 @@
 // CH32V307 (UART7): DMA moves the bytes (RX on DMA2 channel 9, TX on
 // channel 8), so the CPU gets no interrupt for each byte (issues #20, #33).
 // - RX: a circular DMA fills rxDma_. The interrupt of the RX channel copies
-//   the new bytes into rx: at the half and the end of rxDma_, and when
-//   pollRx() requests it. The DMA reads the data register, so the receive
+//   the new bytes into rx at the half and the end of rxDma_. pollRx() does
+//   the same copy, with the interrupts locked. The DMA reads the data register, so the receive
 //   errors come only from the status register: one count for each check
 //   that finds an error flag (see serviceRx()).
 // - TX: startTx() requests the interrupt of the TX channel. The interrupt
