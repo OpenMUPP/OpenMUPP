@@ -44,7 +44,7 @@ These targets are planned. None of them works yet.
 
 | Target | Protocols | State |
 |---|---|---|
-| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | Design work started. The firmware does not exist. |
+| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | ISP programming works on the CH32V307 boards (see [docs/avr.md](docs/avr.md)). debugWIRE is not available yet. |
 | PIC | Programming. High-voltage programming uses the VPP supply of the board. | Planned. No design yet. |
 | STM8 | SWIM (single-wire debug and programming interface) | Planned. No design yet. |
 
@@ -138,7 +138,7 @@ The preset `ydch32v307` builds the stub image of the YD-CH32V307VCT6 board with 
 The presets `ydch32v307-cmsis-dap`, `ydch32v307-dual` and `ydch32v307-all` build the firmware image instead (`-DMUPP_CH32_STUB_IMAGE=OFF`, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board)).
 `ydch32v307-all` has all personalities.
 The preset `ydch32v307-wch-link` builds the firmware image with the WCH-Link personality.
-The presets `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` add the AVR commands on the CMSIS-DAP v1 (HID) interface (`MUPP_CMSIS_DAP_AVR`, see [docs/cmsis-dap.md](docs/cmsis-dap.md#avr-commands)).
+The presets `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` add the AVR commands on the CMSIS-DAP v1 (HID) interface (`MUPP_CMSIS_DAP_AVR`, see [docs/cmsis-dap.md](docs/cmsis-dap.md#avr-commands)). The preset `ydch32v307-cmsis-dap-avr-medbg` adds the USB ID of the mEDBG (`MUPP_AVR_USB_ID=medbg`, personal use only, see [docs/avr.md](docs/avr.md#usb-id)).
 It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.
 [docs/cmake.md](docs/cmake.md#cmake-presets) describes them.
@@ -329,6 +329,7 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/cmsis-dap.md](docs/cmsis-dap.md): the CMSIS-DAP personality and its command processor for SWD and JTAG.
 - [docs/clock-pacing.md](docs/clock-pacing.md): how the SWD, JTAG and RVSWD engines time their clock, with measurements on the wire.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
+- [docs/avr.md](docs/avr.md): AVR ISP programming: USB ID, udev rule, wiring, avrdude commands and low-clock targets.
 - [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule, size, implementation and hardware test.
 - [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures ([docs/wch-link-captures/](docs/wch-link-captures/README.md)).
 - [docs/cmake.md](docs/cmake.md): the CMake options and the CMake presets.
