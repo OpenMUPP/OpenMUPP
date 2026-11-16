@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "board/BoardDebugWire.h"
+#include "protocol/avr/Avr8Scope.h"
 
 #include <peripherals/Rcc.h>
 #include <peripherals/Usart.h>
@@ -10,6 +11,8 @@
 
 template class avr::DebugWireEngine<board::DebugWirePins>;
 template class avr::DebugWireTarget<board::BoardDebugWire>;
+// The AVR8 generic scope of the EDBG protocol on these target operations
+template class avr::Avr8Scope<board::BoardDebugWireTarget>;
 
 namespace board {
 
