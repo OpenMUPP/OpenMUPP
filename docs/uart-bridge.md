@@ -106,5 +106,7 @@ The unit tests of the script need no pyserial and no hardware:
 python3 -m unittest discover -s tools -p "test_*.py"
 ```
 
-Status: the host tests pass. The test on a Mini is not done yet.
+Status: the host tests pass. On the YD-CH32V307VCT6 (UART7, wire from PC2 to PC3), all combinations pass from 9600 baud to 1 Mbaud. The test host (Linux) cannot make 1.5 stop bits, so they are not tested.
+At 2 Mbaud, some runs lose bytes ([issue #20](https://github.com/OpenMUPP/OpenMUPP/issues/20)).
+The test on a Mini is not done yet.
 
