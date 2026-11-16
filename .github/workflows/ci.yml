@@ -104,7 +104,7 @@ jobs:
       - run: ci/compile-preset.sh ${{ matrix.preset }}
       # Only the files with the board, the build type and the version in the name.
       - uses: actions/upload-artifact@v4
-        if: matrix.preset != 'mini-cmsis-dap-no-rv-bridge' && matrix.preset != 'weacth523-dual-hid' && !startsWith(matrix.preset, 'ydch32v307')
+        if: matrix.preset != 'mini-cmsis-dap-no-rv-bridge' && matrix.preset != 'weacth523-dual-hid' && !startsWith(matrix.preset, 'ydch32v307') && !endsWith(matrix.preset, '-medbg')
         with:
           name: openmupp-${{ matrix.preset }}-${{ github.sha }}
           path: |
