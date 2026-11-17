@@ -209,8 +209,6 @@ avrdude does both steps itself. When ISP fails on a chip with DWEN, avrdude send
 `avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p t85 -P usb -B 125kHz -U hfuse:w:0xDF:m`.
 For this step, avrdude sends no device parameters. The probe then accepts only "disable debugWIRE" and the end of the session.
 
-- After the disable, Bloom 2.1 logs `AVR8 Detach command failed - Failure reason: Physical not activated`. dW is off and ISP works. Only the message is wrong.
-
 ## Low-clock targets
 
 The ISP clock (SCK) must be less than a quarter of the clock of the target.

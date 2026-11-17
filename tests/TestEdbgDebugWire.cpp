@@ -325,6 +325,8 @@ TEST_CASE("EDBG debugWIRE: avrdude leaves debugWIRE without a device context") {
       CHECK(b.avr8({ avr8::command::disableDebugWire, 0x00 }) == ok);
       CHECK(b.avr.disables == 1);
       CHECK_FALSE(b.avr8Scope.active());
+      // Bloom with disable_debug_wire_pre_disconnect sends DETACH next.
+      CHECK(b.avr8({ avr8::command::detach, 0x00 }) == ok);
       b.avrdudeClose();
       b.enterProgmode();
       CHECK(b.avr.io(osccal) == 0xA5);

@@ -33,6 +33,7 @@
 //   0x13 ATTACH [break]: break 1: the target stays stopped, and a break
 //        event comes. Break 0: the target runs.
 //   0x14 DETACH: the software breakpoints are removed, the target runs.
+//        OK also without an active physical (Bloom after a disable).
 //   0x15 ENTER_PROGMODE, 0x16 LEAVE_PROGMODE: OK. debugWIRE has no
 //        programming mode: the memory commands work in the debug mode.
 //   0x17 DISABLE_DEBUGWIRE: dW off until a power cycle (ISP works then).
@@ -341,6 +342,8 @@ class Avr8Scope final : public Avr8Handler {
          return activate();
       case cmd::deactivatePhysical:
          return deactivate();
+      case cmd::detach:
+         return active_ ? detach() : ok();
       case cmd::erase:
       case cmd::crc:
       case cmd::pageErase:
@@ -359,8 +362,6 @@ class Avr8Scope final : public Avr8Handler {
          return getId();
       case cmd::attach:
          return attach();
-      case cmd::detach:
-         return detach();
       case cmd::enterProgmode:
       case cmd::leaveProgmode:
          return ok();
