@@ -68,6 +68,9 @@ class MockAvrJtag final : public JtagTarget {
          return 16;
       case 0x5: // PROG_COMMANDS
          return 15;
+      case 0x6: // PROG_PAGELOAD
+      case 0x7: // PROG_PAGEREAD
+         return 8;
       case 0xA: // instruction execute, revision 4
          return 38;
       case 0xB: // OCD register access
