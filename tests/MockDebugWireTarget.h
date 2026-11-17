@@ -26,6 +26,7 @@
 #include <functional>
 #include <iterator>
 #include <map>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -343,29 +344,34 @@ class MockDwPins {
       // Without a change of the line, no frame ends before rxWake_.
       rxVersion_ = target_.version;
       rxWake_ = UINT64_MAX;
-      for(const uint64_t change : target_.changesFrom(rxFrom_)) {
-         if(change == 0 || !target_.level(change - 1) || target_.level(change)) {
-            continue;
-         }
-         const uint64_t stopSample = change + 9u * rxBitCycles_ + rxBitCycles_ / 2u;
-         if(time_ < stopSample) {
-            rxWake_ = stopSample;
-            return -1;
-         }
-         int32_t value = 0;
-         for(uint32_t bit = 0; bit < 8; ++bit) {
-            const uint64_t sample = change + (bit + 1u) * rxBitCycles_ + rxBitCycles_ / 2u;
-            value |= (target_.level(sample) ? 1 : 0) << bit;
-         }
-         if(!target_.level(stopSample)) {
-            value |= 0x100;
-         }
-         rxFrom_ = stopSample;
-         rxWake_ = 0;
-         rxBytes.push_back(value);
-         return value;
+      const auto start = nextFrame(rxFrom_);
+      if(!start) {
+         return -1;
       }
-      return -1;
+      const uint64_t stopSample = *start + 9u * rxBitCycles_ + rxBitCycles_ / 2u;
+      if(time_ < stopSample) {
+         rxWake_ = stopSample;
+         return -1;
+      }
+      int32_t value = 0;
+      for(uint32_t bit = 0; bit < 8; ++bit) {
+         const uint64_t sample = *start + (bit + 1u) * rxBitCycles_ + rxBitCycles_ / 2u;
+         value |= (target_.level(sample) ? 1 : 0) << bit;
+      }
+      if(!target_.level(stopSample)) {
+         value |= 0x100;
+      }
+      rxFrom_ = stopSample;
+      // The USART holds one byte: a frame that ended while this one waited
+      // for the read is lost (overrun).
+      for(auto next = nextFrame(rxFrom_); next && *next + 9u * rxBitCycles_ + rxBitCycles_ / 2u <= time_;
+          next = nextFrame(rxFrom_)) {
+         rxFrom_ = *next + 9u * rxBitCycles_ + rxBitCycles_ / 2u;
+         ++rxOverruns;
+      }
+      rxWake_ = 0;
+      rxBytes.push_back(value);
+      return value;
    }
 
    // The 64-bit time, for the tests
@@ -388,11 +394,23 @@ class MockDwPins {
    // times, as the CH32V307 USART (debugWIRE hardware test).
    uint32_t rxBlindBits{ 10 };
    std::vector<int32_t> rxBytes;
+   // Frames that the receiver lost, because the byte before was not read
+   int rxOverruns{ 0 };
    int inits{ 0 };
    int finis{ 0 };
    int begins{ 0 };
 
    private:
+   // The start bit (falling edge) of the first frame from the time
+   std::optional<uint64_t> nextFrame(uint64_t from) const {
+      for(const uint64_t change : target_.changesFrom(from)) {
+         if(change != 0 && target_.level(change - 1) && !target_.level(change)) {
+            return change;
+         }
+      }
+      return std::nullopt;
+   }
+
    MockDwTarget &target_;
    // Starts near the wrap of the 32-bit counter.
    uint64_t time_{ 0xFFFFF000u };
