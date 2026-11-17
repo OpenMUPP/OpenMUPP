@@ -5,6 +5,7 @@ ISP programming passed a hardware test with avrdude 8.3 on the YD-CH32V307VCT6 b
 Tools that use the Microchip EDBG protocol, for example avrdude, find the probe over USB.
 avrdude can also program a chip over debugWIRE. debugWIRE has no hardware test yet.
 The probe does not have the other AVR interfaces (JTAG, UPDI, PDI, TPI).
+[AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol, for a later JTAG debug function.
 
 ## Build
 

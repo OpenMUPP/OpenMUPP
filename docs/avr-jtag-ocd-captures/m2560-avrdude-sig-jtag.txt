@@ -1,0 +1,53 @@
+                tms1 x4 (reset path)
+      0.682815  IR[ 4] in=0xC out=0x1
+      0.682831  DR[ 1] in=0x1 out=0x0
+      0.732875  IR[ 4] in=0x4 out=0x1
+      0.732925  DR[16] in=0xA370 out=0x0000
+      0.733946  IR[ 4] in=0x5 out=0x1
+      0.733992  DR[15] in=0x2308 out=0x33FF
+      0.734041  DR[15] in=0x0300 out=0x23FF
+      0.734088  DR[15] in=0x3200 out=0x03FF
+      0.734151  DR[15] in=0x3300 out=0x321E
+      0.734181  IR[ 4] in=0x5 out=0x1
+      0.734226  DR[15] in=0x2308 out=0x33FF
+      0.734274  DR[15] in=0x0301 out=0x23FF
+      0.734321  DR[15] in=0x3201 out=0x03FF
+      0.734383  DR[15] in=0x3300 out=0x3298
+      0.734411  IR[ 4] in=0x5 out=0x1
+      0.734457  DR[15] in=0x2308 out=0x33FF
+      0.734504  DR[15] in=0x0302 out=0x23FF
+      0.734552  DR[15] in=0x3202 out=0x03FF
+      0.734614  DR[15] in=0x3300 out=0x3201
+      0.734640  IR[ 4] in=0x5 out=0x1
+      0.734686  DR[15] in=0x2308 out=0x33FF
+      0.734733  DR[15] in=0x0303 out=0x23FF
+      0.734780  DR[15] in=0x3203 out=0x03FF
+      0.734842  DR[15] in=0x3300 out=0x32FF
+      0.745946  IR[ 4] in=0x5 out=0x1
+      0.745992  DR[15] in=0x2308 out=0x33FF
+      0.746040  DR[15] in=0x0300 out=0x23FF
+      0.746087  DR[15] in=0x3200 out=0x03FF
+      0.746150  DR[15] in=0x3300 out=0x321E
+      0.746179  IR[ 4] in=0x5 out=0x1
+      0.746225  DR[15] in=0x2308 out=0x33FF
+      0.746272  DR[15] in=0x0301 out=0x23FF
+      0.746318  DR[15] in=0x3201 out=0x03FF
+      0.746380  DR[15] in=0x3300 out=0x3298
+      0.746408  IR[ 4] in=0x5 out=0x1
+      0.746454  DR[15] in=0x2308 out=0x33FF
+      0.746501  DR[15] in=0x0302 out=0x23FF
+      0.746547  DR[15] in=0x3202 out=0x03FF
+      0.746609  DR[15] in=0x3300 out=0x3201
+      0.746636  IR[ 4] in=0x5 out=0x1
+      0.746682  DR[15] in=0x2308 out=0x33FF
+      0.746729  DR[15] in=0x0303 out=0x23FF
+      0.746776  DR[15] in=0x3203 out=0x03FF
+      0.746838  DR[15] in=0x3300 out=0x32FF
+      0.747938  IR[ 4] in=0x5 out=0x1
+      0.747985  DR[15] in=0x2300 out=0x33FF
+      0.748032  DR[15] in=0x3300 out=0x23FF
+      0.748055  IR[ 4] in=0x4 out=0x1
+      0.748104  DR[16] in=0x0000 out=0xA370
+      0.758134  IR[ 4] in=0xC out=0x1
+      0.758150  DR[ 1] in=0x0 out=0x1
+                idle x1
