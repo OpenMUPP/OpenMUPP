@@ -211,6 +211,7 @@ SET and GET are `[command][0][context][address][bytes][data]`: a range of parame
 
 Another handler fails with code `0x10`.
 A host that goes away (bus reset or deconfigure) loses its frame, its response, the AVR8 parameters and the breakpoints.
+`DAP_Disconnect` and USB suspend also drop the AVR8 parameters and the breakpoints. Thus each host connection starts without a device context.
 
 ### AVR8 generic scope
 

@@ -439,7 +439,9 @@ void EdbgTransport::edbgControl(art::span<const uint8_t> payload, Writer &out) {
 
 void EdbgTransport::releasePins() {
    isp_.release();
-   avr8_.release();
+   // The next host connection can be another tool on another chip: a device
+   // context that stays would attach with its DWDR (issue #69).
+   avr8_.forget();
 }
 
 void EdbgTransport::hostGone() {

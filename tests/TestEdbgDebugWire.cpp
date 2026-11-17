@@ -284,9 +284,10 @@ TEST_CASE("EDBG debugWIRE: no target") {
    Bench b;
    b.avr.disabled = true;
    b.avrdudeOpen();
-   CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
    CHECK(b.signOn() == failed(0x10));
    CHECK_FALSE(b.dwPins.driven);
+   // DAP_Disconnect drops the parameters: it comes after the sign-on.
+   CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
    CHECK(b.owner.owner() == PinClient::None);
    CHECK(b.avr8(readMemory(avr8::memory::sram, 0x100, 1)) == failed(0x31));
 }
@@ -340,6 +341,24 @@ TEST_CASE("EDBG debugWIRE: avrdude leaves debugWIRE without a device context") {
       CHECK(b.avr.running);
       CHECK(b.avr.disables == 0);
    }
+   b.checkClean();
+}
+
+// The device context of an earlier session must not stay: avrdude on a
+// ATtiny85 after a session on an ATmega328P (issue #69).
+TEST_CASE("EDBG debugWIRE: DAP_Disconnect drops the device context") {
+   Bench b;
+   b.avrdudeOpen();
+   REQUIRE(b.signOn() == ok);
+   b.avrdudeClose();
+   b.avr.device = mupptest::MockAvrDw::attiny85;
+   constexpr uint8_t osccal = 0x31;
+   b.avr.io(osccal) = 0xA5;
+   b.avrdudeOpen({});
+   REQUIRE(b.signOn() == ok);
+   CHECK(b.avr8(readMemory(avr8::memory::sram, 0x60, 1)) == failed(0x33));
+   CHECK(b.avr8({ avr8::command::disableDebugWire, 0x00 }) == ok);
+   CHECK(b.avr.io(osccal) == 0xA5);
    b.checkClean();
 }
 
