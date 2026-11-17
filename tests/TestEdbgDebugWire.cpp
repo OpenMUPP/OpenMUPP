@@ -362,6 +362,24 @@ TEST_CASE("EDBG debugWIRE: DAP_Disconnect drops the device context") {
    b.checkClean();
 }
 
+// Bloom sends no DAP_Disconnect: the end of the session drops the device
+// context.
+TEST_CASE("EDBG debugWIRE: the end of a Bloom session drops the device context") {
+   Bench b;
+   b.bloomInit();
+   b.bloomActivate();
+   CHECK(b.avr8({ avr8::command::detach, 0x00 }) == ok);
+   CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
+   b.avr.device = mupptest::MockAvrDw::attiny85;
+   constexpr uint8_t osccal = 0x31;
+   b.avr.io(osccal) = 0xA5;
+   b.avrdudeOpen({});
+   REQUIRE(b.signOn() == ok);
+   CHECK(b.avr8({ avr8::command::disableDebugWire, 0x00 }) == ok);
+   CHECK(b.avr.io(osccal) == 0xA5);
+   b.checkClean();
+}
+
 TEST_CASE("EDBG debugWIRE: a Bloom debug session") {
    Bench b;
    for(uint8_t i = 0; i < 32; ++i) {

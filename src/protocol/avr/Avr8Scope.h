@@ -61,7 +61,9 @@
 // (3 bytes: 0x1E and the dW ID). One read gives up to the response size
 // minus 3 bytes.
 //
-// The device context (context 2, as avrdude struct mega_device_desc):
+// The device context (context 2, as avrdude struct mega_device_desc), for
+// one debugWIRE session: its end clears it. avrdude and Bloom send it before
+// each ACTIVATE_PHYSICAL.
 //   0x00 flash page bytes u16, 0x02 flash bytes u32, 0x0A boot start
 //   (words) u32, 0x10 EEPROM bytes u16, 0x18 DWDR (OCDR), 0x19 EEARH,
 //   0x1A EEARL, 0x1B EECR, 0x1C EEDR, 0x1D SPMCSR. avrdude and Bloom send
@@ -522,6 +524,8 @@ class Avr8Scope final : public Avr8Handler {
    void end() {
       active_ = false;
       bare_ = false;
+      // The next session can be another host on another chip (issue #69).
+      device_ = {};
       running_ = false;
       event_ = false;
       hardwareBreak_.reset();
