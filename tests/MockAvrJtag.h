@@ -179,7 +179,8 @@ class MockAvrJtag final : public JtagTarget {
    std::array<uint8_t, 3> fuses{ 0x5E, 0x99, 0xF3 };
    uint8_t lockBits{ 0xFF };
    std::array<uint8_t, 3> signature{ 0x1E, 0x95, 0x87 };
-   uint8_t calibration{ 0x5A };
+   // The ATmega16 and ATmega32 have four calibration bytes.
+   std::array<uint8_t, 4> calibration{ 0x5A, 0xA1, 0xA2, 0xA3 };
    // Results that are not ready after each write strobe
    uint32_t busyPolls{ 3 };
    // The ready bit never comes.
@@ -455,7 +456,7 @@ class MockAvrJtag final : public JtagTarget {
             return;
          }
          if(high == 0x36) {
-            readResult(calibration);
+            readResult(addressLow_ < calibration.size() ? calibration[addressLow_] : 0xFF);
             return;
          }
          break;

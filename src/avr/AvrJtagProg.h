@@ -107,7 +107,7 @@ inline constexpr uint16_t idleB = 0x3B00;
 inline constexpr uint16_t strobeB = 0x3900;
 // The reads: the first command selects the byte, the next scan returns it.
 inline constexpr uint16_t readLow = 0x3200;  // flash low byte, EEPROM, low fuse, signature
-inline constexpr uint16_t readHigh = 0x3600; // flash high byte, lock bits, calibration
+inline constexpr uint16_t readHigh = 0x3600; // flash high byte, lock bits, calibration byte
 inline constexpr uint16_t readFuseHigh = 0x3E00;
 inline constexpr uint16_t idleF = 0x3F00;
 inline constexpr uint16_t readFuseExtended = 0x3A00;
@@ -294,9 +294,12 @@ class AvrJtagProg {
              command(idle3, &value);
    }
 
-   [[nodiscard]] bool readCalibration(uint8_t &value) {
+   // Calibration byte 0, or 0 to 3 on the ATmega16 and ATmega32 (1, 2, 4
+   // and 8 MHz)
+   [[nodiscard]] bool readCalibration(uint8_t index, uint8_t &value) {
       using namespace jtagProg::cmd;
-      return programming_ && command(enterSignatureRead) && command(loadAddressLow) && command(readHigh) && command(idle7, &value);
+      return programming_ && command(enterSignatureRead) && command(loadAddressLow | index) && command(readHigh) &&
+             command(idle7, &value);
    }
 
    private:

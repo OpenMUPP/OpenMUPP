@@ -78,7 +78,7 @@ TEST_CASE("AvrJtagProg: no operation outside the programming mode") {
    Bytes data(4);
    CHECK_FALSE(b.prog.chipErase());
    CHECK_FALSE(b.prog.readSignature(0, value));
-   CHECK_FALSE(b.prog.readCalibration(value));
+   CHECK_FALSE(b.prog.readCalibration(0, value));
    CHECK_FALSE(b.prog.readFuse(Fuse::Low, value));
    CHECK_FALSE(b.prog.writeFuse(Fuse::Low, 0xFF));
    CHECK_FALSE(b.prog.readLockBits(value));
@@ -99,8 +99,12 @@ TEST_CASE("AvrJtagProg: signature and calibration byte") {
    }
    CHECK(signature == Bytes{ 0x1E, 0x95, 0x87 });
    uint8_t calibration = 0;
-   REQUIRE(b.prog.readCalibration(calibration));
+   REQUIRE(b.prog.readCalibration(0, calibration));
    CHECK(calibration == 0x5A);
+   REQUIRE(b.prog.readCalibration(3, calibration));
+   CHECK(calibration == 0xA3);
+   CHECK(b.target.commands.back() == cmd::idle7);
+   CHECK(countOf(b.target.commands, cmd::loadAddressLow | 0x03u) == 1);
    CHECK(b.target.unknownCommands.empty());
 }
 
