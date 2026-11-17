@@ -3,7 +3,8 @@
 The CMSIS-DAP personality can program AVR chips through the ISP (SPI) interface and through debugWIRE (dW).
 ISP programming passed a hardware test with avrdude 8.3 on the YD-CH32V307VCT6 board (see [Hardware test](#hardware-test)).
 Tools that use the Microchip EDBG protocol, for example avrdude, find the probe over USB.
-avrdude can also program a chip over debugWIRE. debugWIRE has no hardware test yet.
+avrdude can also program a chip over debugWIRE, and Bloom with avr-gdb can debug it.
+debugWIRE passed a hardware test on an ATtiny85 at 8 MHz and at 1 MHz (see [debugWIRE hardware test](#debugwire-hardware-test)).
 The probe does not have the other AVR interfaces (JTAG, UPDI, PDI, TPI).
 [AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol, for a later JTAG debug function.
 
@@ -36,9 +37,30 @@ The other interfaces move up by one: CMSIS-DAP v2 is interface 1, and the serial
 On Windows, WinUSB binds interface 1.
 The product name stays `OpenMUPP CMSIS-DAP`.
 
-In `bloom.yaml`, set `tool: xplained_mini`.
+In `bloom.yaml`, set the tool name `xplained_mini`.
 The value `xplained_nano` also works, because that class has the same ID and interface number.
 Bloom selects the driver by this name, not by the USB ID.
+This `bloom.yaml` is for an ATtiny85 over debugWIRE, in the format of Bloom 2.1:
+
+```yaml
+environments:
+  default:
+    shutdown_post_debug_session: true
+    tool:
+      name: "xplained_mini"
+    target:
+      name: "attiny85"
+      physical_interface: "debug_wire"
+      hardware_breakpoints: true
+      disable_debug_wire_pre_disconnect: false
+    server:
+      name: "avr_gdb_rsp"
+      ip_address: "127.0.0.1"
+      port: 1442
+```
+
+Then connect avr-gdb with `target remote 127.0.0.1:1442`.
+Set `disable_debug_wire_pre_disconnect` to `true` to turn debugWIRE off at the end of the session (see [Back to ISP](#back-to-isp)).
 
 Use the preset `ydch32v307-cmsis-dap-avr-medbg`, or set `-DMUPP_AVR_USB_ID=medbg` with the options of the preset `ydch32v307-cmsis-dap-avr`.
 The option needs `MUPP_CMSIS_DAP_AVR` and the `cmsis-dap` personality alone.
@@ -149,7 +171,8 @@ The DWEN fuse enables it. When DWEN is programmed, ISP does not work.
 
 ### Wiring
 
-On the YD-CH32V307VCT6 board, connect PB12 (drive) and PB11 (read-back) to the RESET pin of the target.
+On the YD-CH32V307VCT6 board, connect PB12 (drive, P3-46) and PB11 (read-back, P2-42) to the RESET pin of the target.
+Keep the ISP wires connected, because ISP sets and clears the DWEN fuse.
 The target needs its pull-up on RESET (10 kOhm or more). Remove a capacitor on RESET.
 Connect the target GND to the probe GND. Only 3.3 V targets.
 The target clock must be 282 kHz or more (see [boards.md](boards.md)).
@@ -178,8 +201,12 @@ At the end of the session, the probe resets the target, and the program starts.
 
 ### Back to ISP
 
-The probe command "disable debugWIRE" (Bloom sends it) turns dW off until the next power cycle.
+The probe command "disable debugWIRE" turns dW off until the next power cycle.
+Bloom sends it at the end of the session when `disable_debug_wire_pre_disconnect` is `true`.
 Then program the DWEN fuse back to 1 over ISP, without a power cycle in between.
+
+- avrdude cannot turn dW off with this probe. On a chip with DWEN programmed, `-c openmupp` stops with `unable to return from debugWIRE to ISP` ([issue #69](https://github.com/OpenMUPP/OpenMUPP/issues/69)).
+- After the disable, Bloom 2.1 logs `AVR8 Detach command failed - Failure reason: Physical not activated`. dW is off and ISP works. Only the message is wrong.
 
 ## Low-clock targets
 
@@ -215,3 +242,27 @@ The test used a YD-CH32V307VCT6 board and a Seeeduino Lite (ATmega32U4) with a 3
 | Target at 1 MHz: EEPROM at `-B 16kHz` | Pass |
 
 A target at 128 kHz is not tested: the ATmega32U4 has no 128 kHz clock source.
+
+### debugWIRE hardware test
+
+The test used a YD-CH32V307VCT6 board and a Digispark (ATtiny85) with a 3.3 V supply on its 5V pin.
+The target had a 10 kOhm pull-up from RESET to VCC.
+The tools were avrdude 8.3, Bloom 2.1.0 (commit `3e9ddfa2`) and avr-gdb 17.2.
+The target clock was the internal 8 MHz RC oscillator (low fuse `0xE2`) and the same oscillator with CKDIV8, 1 MHz (low fuse `0x62`).
+At 8 MHz, the measured dW baud rate was 51.6 kbaud in some sessions and 61.6 kbaud in others. The cause is not known.
+
+| Test | 8 MHz | 1 MHz |
+|---|---|---|
+| ISP: program DWEN, then a power cycle | Pass | Pass |
+| avrdude `openmupp_dw`: sign-on and signature | Pass | Pass |
+| avrdude `openmupp_dw`: write and verify 1656 bytes (26 pages) with `-D`, then write a different image and verify it again in a new session | Pass. The write takes 4.6 s. | Pass. The write takes 34.7 s. |
+| avr-gdb `load` and `compare-sections` through Bloom | Pass | Pass |
+| A breakpoint on `main` and on a line in the loop, `continue` | Pass | Pass |
+| `next` and `stepi` | Pass | Pass |
+| Read and write a variable in SRAM, `display` at each stop | Pass | Pass |
+| Interrupt of a running target (Ctrl-C in avr-gdb) | Pass | Not tested |
+| "disable debugWIRE" from Bloom, then ISP without a power cycle: clear DWEN | Pass | Pass |
+
+Bloom shows `Available hardware breakpoints: 0`, so it uses software breakpoints.
+The probe writes one flash page to insert or remove a software breakpoint. A run or step from a software breakpoint writes two pages (see [cmsis-dap.md](cmsis-dap.md#avr-commands)).
+A gdb `watch` on SRAM is not tested. dW has no data breakpoint, so avr-gdb steps each instruction.

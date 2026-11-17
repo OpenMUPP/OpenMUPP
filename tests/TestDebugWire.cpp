@@ -231,6 +231,14 @@ TEST_CASE("debugWIRE: the break and 0x55 of a target that stops") {
       CHECK(f.engine.waitBreak(0) == DwStatus::Timeout);
       CHECK(f.engine.waitBreak(100'000) == DwStatus::Ok);
    }
+   SUBCASE("a late check after the break: the 0x55 is lost in the receiver") {
+      f.target.sendBreak(f.pins.time() + 10u);
+      // The host polls 5 ms later: the break waits in the receiver, and the 0x55 overruns it.
+      f.pins.setTime(f.pins.time() + 5u * (mupptest::MockDwPins::clockHz / 1000u));
+      CHECK(f.engine.waitBreak(0) == DwStatus::Ok);
+      CHECK(f.pins.rxOverruns == 1);
+      CHECK(f.pins.rxRead() < 0);
+   }
    SUBCASE("receive sees the break") {
       f.target.sendBreak(f.pins.time() + 10u);
       uint8_t value = 0;
@@ -248,6 +256,16 @@ TEST_CASE("debugWIRE: the break and 0x55 of a target that stops") {
    }
    SUBCASE("another byte is not a break") {
       f.target.send(0x42, f.pins.time() + 10u);
+      CHECK(f.engine.waitBreak(10'000) == DwStatus::NoSync);
+   }
+   SUBCASE("a break and then another byte is not a stop") {
+      const uint64_t start = f.pins.time() + 10u;
+      f.target.pullLow(start, start + 12u * f.target.bitCycles);
+      f.target.send(0x42, start + 14u * f.target.bitCycles);
+      CHECK(f.engine.waitBreak(10'000) == DwStatus::NoSync);
+   }
+   SUBCASE("a line that stays low (no target power) is not a stop") {
+      f.target.pullLow(f.pins.time() + 10u, UINT64_MAX);
       CHECK(f.engine.waitBreak(10'000) == DwStatus::NoSync);
    }
 }
