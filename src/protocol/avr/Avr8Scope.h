@@ -6,8 +6,12 @@
 // Tools Protocols", DS50002630A, chapter 7): the commands of avrdude
 // (jtagice3_dw) and Bloom. Hardware-independent: it runs on an
 // avr::DebugWireTarget (avr/DebugWireTarget.h), and the host unit tests use
-// the mock dW target. The EDBG transport gives one command payload and
-// sends the response, and gives the AVR_EVT requests to event().
+// the mock dW target. The target gives the traits of its physical
+// interface: avr8Variant and avr8Physical (the values that
+// ACTIVATE_PHYSICAL needs), hardwareBreaks (the host numbers 1 to
+// hardwareBreaks) and hasProgmode. The EDBG transport gives one command
+// payload and sends the response, and gives the AVR_EVT requests to
+// event().
 //
 // A command is [id][version 0][fields]. Values are LSB first. The
 // responses are OK [0x80][0], DATA [0x84][1][data][0], PC [0x83][0][pc
@@ -18,8 +22,9 @@
 //        Context 0: variant, function. Context 1: physical interface.
 //        Context 2: the device context (below). Context 3 address 0: run
 //        the timers of the target while it is stopped.
-//   0x10 ACTIVATE_PHYSICAL [reset]: needs variant 1 (debugWIRE) and
-//        physical 5 (debugWIRE), connects and stops the target (break).
+//   0x10 ACTIVATE_PHYSICAL [reset]: needs the variant and the physical of
+//        the target (debugWIRE: 1 and 5), connects and stops the target
+//        (break).
 //        The reset flag is not used: the RESET pin is the dW line.
 //        Without a device context (all 0, as avrdude sends it before
 //        DISABLE_DEBUGWIRE): the attach does not save SREG (DWDR is not
@@ -174,8 +179,6 @@ inline constexpr uint8_t signature = 0xB4;
 } // namespace memory
 
 // Parameters
-inline constexpr uint8_t variantDebugWire = 0x01;
-inline constexpr uint8_t physicalDebugWire = 0x05;
 inline constexpr uint8_t eventBreak = 0x40;
 inline constexpr uint8_t handler = 0x12;
 inline constexpr std::size_t eventFrameBytes = 13;
@@ -213,6 +216,11 @@ class Avr8Handler {
 
 template <typename Target>
 class Avr8Scope final : public Avr8Handler {
+   // One stored hardware breakpoint, and ENTER_PROGMODE and LEAVE_PROGMODE
+   // without an action: a target with more needs more scope code.
+   static_assert(Target::hardwareBreaks == 1, "the scope stores one hardware breakpoint");
+   static_assert(!Target::hasProgmode, "the scope has no programming mode");
+
    public:
    explicit Avr8Scope(Target &target)
       : target_(target) {
@@ -484,7 +492,7 @@ class Avr8Scope final : public Avr8Handler {
       const auto dw = device();
       // Without a device, the breakpoint table cannot go to flash.
       const bool bare = noDevice() && breakCount_ == 0;
-      if(config_[0] != avr8::variantDebugWire || physical_[0] != avr8::physicalDebugWire || (!dw && !bare)) {
+      if(config_[0] != Target::avr8Variant || physical_[0] != Target::avr8Physical || (!dw && !bare)) {
          return failed(avr8::failure::invalidConfig);
       }
       if(dw) {
@@ -701,7 +709,8 @@ class Avr8Scope final : public Avr8Handler {
       if(request_.size() < bytes) {
          return failed(avr8::failure::length);
       }
-      if(request_[set ? 3 : 2] != 1) {
+      const uint8_t number = request_[set ? 3 : 2];
+      if(number == 0 || number > Target::hardwareBreaks) {
          return failed(avr8::failure::resources);
       }
       if(!set) {

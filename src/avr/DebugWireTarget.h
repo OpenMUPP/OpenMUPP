@@ -136,6 +136,14 @@ inline constexpr uint8_t eecrMasterWrite = 0x04;
 template <typename Engine>
 class DebugWireTarget {
    public:
+   // The traits for avr::Avr8Scope: the EDBG variant (1, debugWIRE) and
+   // physical interface (5, debugWIRE), one hardware breakpoint, and no
+   // programming mode (the memory commands work in the debug mode).
+   static constexpr uint8_t avr8Variant = 0x01;
+   static constexpr uint8_t avr8Physical = 0x05;
+   static constexpr std::size_t hardwareBreaks = 1;
+   static constexpr bool hasProgmode = false;
+
    DebugWireTarget(Engine &engine, const DwDevice &device)
       : engine_(engine)
       , device_(device) {
