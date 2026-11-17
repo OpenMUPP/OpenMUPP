@@ -46,8 +46,9 @@
 //                      the parameters are read-only. FW_UPGRADE (0x50) and
 //                      the others: FAILED 0x10 (not supported).
 //   0x11 AVR ISP       the STK500v2 commands (avr/IspScope.h).
-//   0x12 AVR8 generic  debugWIRE (protocol/avr/Avr8Scope.h). avrdude
-//                      sets its parameters before ISP programming too.
+//   0x12 AVR8 generic  debugWIRE and JTAG programming
+//                      (protocol/avr/Avr8Scope.h). avrdude sets its
+//                      parameters before ISP programming too.
 //   0x20 EDBG control  SET and GET of context 0 address 0x10, TARGET_POWER
 //                      (1 byte): 0 off, 1 on. FAILED 0x01 (not supported)
 //                      on a board without a power switch, and for the other
@@ -58,17 +59,17 @@
 //
 // The target pins (protocol/TargetPinOwner.h): the HID interface owns
 // them. ENTER_PROGMODE and ACTIVATE_PHYSICAL take them: STATUS_CMD_FAILED
-// or FAILED 0x33 while the v2 interface owns them, or while the other AVR
-// interface (ISP or debugWIRE) is active. After a command that ends the
-// programming mode or the debugWIRE session, the transport gives them back,
-// unless the HID processor is connected (DAP_Connect): then its
-// DAP_Disconnect gives them back. The target supply
-// switches on only for the owner, or while nobody owns the pins; the
-// switch-off always works.
+// or FAILED 0x33 while the v2 interface owns them, or while another AVR
+// interface (ISP, debugWIRE or JTAG) is active. After a command that ends
+// the ISP programming mode or the debugWIRE or JTAG session, the transport
+// gives them back, unless the HID processor is connected (DAP_Connect):
+// then its DAP_Disconnect gives them back. The target supply switches on
+// only for the owner, or while nobody owns the pins; the switch-off always
+// works.
 //
 // releasePins() (the HID processor gives the pins back: DAP_Disconnect, USB
-// suspend, bus reset) ends the programming mode and the debugWIRE session,
-// and drops the AVR8 parameters and breakpoints. hostGone() also drops the
+// suspend, bus reset) ends the programming mode and the debugWIRE or JTAG
+// session, and drops the AVR8 parameters and breakpoints. hostGone() also drops the
 // frame and the response of the old host.
 
 #include <array>
