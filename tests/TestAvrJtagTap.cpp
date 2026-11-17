@@ -180,6 +180,26 @@ TEST_CASE("AvrJtagTap: DR scan lengths out of range") {
    CHECK(all == 0x0000'0000'0000'0002u);
 }
 
+TEST_CASE("AvrJtagTap: a long DR scan of whole bytes") {
+   Bench b;
+   REQUIRE(b.tap.open(1000));
+   CHECK(b.tap.kHz() == 1000);
+   REQUIRE(b.tap.setIr(ir::progPageLoad));
+   std::vector<uint8_t> data(20);
+   for(std::size_t i = 0; i < data.size(); ++i) {
+      data[i] = static_cast<uint8_t>(0x30 + i);
+   }
+   const std::size_t before = b.pins.rising.size();
+   REQUIRE(b.tap.shiftDr(data));
+   CHECK(b.pins.rising.size() - before == 3u + 8u * data.size() + 2u);
+   CHECK(b.target.state == State::Idle);
+   // The 8-bit DR of the model keeps the last byte.
+   REQUIRE(b.target.drScans.size() == 1);
+   CHECK(b.target.drScans[0] == MockAvrJtag::DrScan{ ir::progPageLoad, 8, 0x43 });
+   CHECK_FALSE(b.tap.shiftDr({}));
+   CHECK(b.target.drScans.size() == 1);
+}
+
 TEST_CASE("AvrJtagTap: a failed shift forgets the IR") {
    FailingPort port;
    AvrJtagTap tap(port);

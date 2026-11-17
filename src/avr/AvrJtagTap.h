@@ -12,7 +12,8 @@
 // - The IR is 4 bits. An IR scan returns the Capture-IR value (bits 1..0
 //   are 01 on each IEEE 1149.1 TAP).
 // - A DR scan has 1 to maxDrBits bits, LSB first. It sends the data and
-//   returns the bits that the target shifted out.
+//   returns the bits that the target shifted out. shiftDr() sends a
+//   longer DR of whole bytes and ignores TDO.
 // - Each scan starts and ends in Run-Test/Idle, with no extra idle
 //   cycles, as in cmsisdap::JtagDp.
 // - setIr() keeps the IR from one call to the next, as
@@ -27,9 +28,12 @@
 // The AVR has no RTCK. The TCK limit of the datasheet is 1/4 of the CPU
 // clock: the host gives the frequency.
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+
+#include <utils/compat/span.h>
 
 #include "protocol/JtagPort.h"
 
@@ -98,7 +102,17 @@ class AvrJtagTap {
    }
 
    [[nodiscard]] bool setSpeed(uint32_t kHz) {
-      return kHz != 0 && port_.setSpeed(kHz);
+      if(kHz == 0 || !port_.setSpeed(kHz)) {
+         return false;
+      }
+      kHz_ = kHz;
+      return true;
+   }
+
+   // The TCK frequency of the last setSpeed(), 0 before it. The real TCK
+   // is not faster.
+   [[nodiscard]] uint32_t kHz() const {
+      return kHz_;
    }
 
    // Test-Logic-Reset (5 TCK cycles with TMS high), then Run-Test/Idle.
@@ -152,6 +166,43 @@ class AvrJtagTap {
       return true;
    }
 
+   // One DR scan of all bits of data, LSB of data[0] first, in the
+   // current IR. TDO is ignored. For the long DRs, as the virtual flash
+   // page load register (one flash page) of the ATmega16 and ATmega32.
+   [[nodiscard]] bool shiftDr(art::span<const uint8_t> data) {
+      if(data.empty()) {
+         return false;
+      }
+      start();
+      // Select-DR-Scan, Capture-DR, Shift-DR
+      put(0, 1, true);
+      put(0, 2, false);
+      if(!run()) {
+         return false;
+      }
+      // Shift-DR keeps the state between the shifts: chunks of chunkBytes.
+      for(std::size_t done = 0; done < data.size(); done += chunkBytes) {
+         const std::size_t count = std::min(chunkBytes, data.size() - done);
+         const bool last = done + count == data.size();
+         start();
+         for(std::size_t i = 0; i < count; ++i) {
+            const uint8_t byte = data[done + i];
+            put(byte, 7, false);
+            // The last bit goes to Exit1-DR.
+            put(byte >> 7u, 1, last && i + 1 == count);
+         }
+         if(last) {
+            // Update-DR, Run-Test/Idle
+            put(0, 1, true);
+            put(0, 1, false);
+         }
+         if(!run()) {
+            return false;
+         }
+      }
+      return true;
+   }
+
    // setIr() and scanDr()
    [[nodiscard]] bool scanDr(uint8_t instruction, uint64_t &data, uint8_t bitCount) {
       return setIr(instruction) && scanDr(data, bitCount);
@@ -182,6 +233,10 @@ class AvrJtagTap {
    // Select-DR-Scan to Shift-xR, the data, Exit1, Update, Run-Test/Idle
    static constexpr uint32_t maxScanBits = 4 + tap::maxDrBits + 2;
    static constexpr std::size_t scanBytes = protocol::jtagRaw::byteCount(maxScanBits);
+   // The data bytes of one shift of shiftDr(), plus Update-DR and
+   // Run-Test/Idle
+   static constexpr std::size_t chunkBytes = tap::maxDrBits / 8;
+   static_assert(chunkBytes * 8 + 2 <= maxScanBits);
 
    void start() {
       bits_ = 0;
@@ -236,6 +291,7 @@ class AvrJtagTap {
 
    protocol::JtagPort &port_;
    uint8_t ir_{ noIr };
+   uint32_t kHz_{ 0 };
    std::array<uint8_t, scanBytes> tdi_{};
    std::array<uint8_t, scanBytes> tms_{};
    std::array<uint8_t, scanBytes> tdo_{};
