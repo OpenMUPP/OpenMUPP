@@ -101,6 +101,10 @@ inline constexpr uint32_t dwMaxBaud = 1'000'000;
 inline constexpr uint32_t dwFirstBreakUs = 30'000;
 inline constexpr uint32_t dwBreakBits = 40;
 
+// The idle time of the receiver after sync(), before the first byte (bit
+// times)
+inline constexpr uint32_t dwRxIdleBits = 12;
+
 // The wait for the start bit of the 0x55 after a break
 inline constexpr uint32_t dwSyncTimeoutUs = 50'000;
 
@@ -153,6 +157,10 @@ class DebugWireEngine {
          bitCycles_ = 0;
          return DwStatus::BaudRange;
       }
+      // An idle frame before the first byte: the CH32V307 USART misses a
+      // start bit 0.2 bit times after the enable (hardware test). The
+      // target waits for the command without a time limit.
+      waitCycles(dwRxIdleBits * bitCycles_);
       return DwStatus::Ok;
    }
 

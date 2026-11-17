@@ -324,7 +324,7 @@ class MockDwPins {
       }
       rxBaud = baud;
       rxBitCycles_ = (clockHz + baud / 2u) / baud;
-      rxFrom_ = time_;
+      rxFrom_ = time_ + rxBlindBits * rxBitCycles_;
       rxWake_ = 0;
       rxOn_ = true;
       return true;
@@ -384,6 +384,9 @@ class MockDwPins {
    // The baud rate range of the receiver. Default: no limit.
    uint32_t rxMinBaud{ 0 };
    uint32_t rxMaxBaud{ UINT32_MAX };
+   // After rxEnable(), the receiver misses a start bit for this many bit
+   // times, as the CH32V307 USART (debugWIRE hardware test).
+   uint32_t rxBlindBits{ 10 };
    std::vector<int32_t> rxBytes;
    int inits{ 0 };
    int finis{ 0 };
