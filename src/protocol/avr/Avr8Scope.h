@@ -21,6 +21,10 @@
 //   0x10 ACTIVATE_PHYSICAL [reset]: needs variant 1 (debugWIRE) and
 //        physical 5 (debugWIRE), connects and stops the target (break).
 //        The reset flag is not used: the RESET pin is the dW line.
+//        Without a device context (all 0, as avrdude sends it before
+//        DISABLE_DEBUGWIRE): the attach does not save SREG (DWDR is not
+//        known), and only DISABLE_DEBUGWIRE, DETACH and
+//        DEACTIVATE_PHYSICAL work. The other commands give FAILED 0x33.
 //   0x11 DEACTIVATE_PHYSICAL: a stopped target gets its software
 //        breakpoints removed, a reset and runs; the line is then
 //        released. OK also without an active physical (avrdude ISP).
@@ -347,6 +351,9 @@ class Avr8Scope final : public Avr8Handler {
       if(!active_) {
          return failed(avr8::failure::notActivated);
       }
+      if(bare_ && id != cmd::disableDebugWire) {
+         return failed(avr8::failure::invalidConfig);
+      }
       switch(id) {
       case cmd::getId:
          return getId();
@@ -433,6 +440,10 @@ class Avr8Scope final : public Avr8Handler {
       return data(bytes);
    }
 
+   [[nodiscard]] bool noDevice() const {
+      return std::all_of(device_.begin(), device_.end(), [](uint8_t value) { return value == 0; });
+   }
+
    // The device context in DwDevice form. No value: a value out of range.
    [[nodiscard]] std::optional<DwDevice> device() const {
       const art::span<const uint8_t> d(device_.data(), device_.size());
@@ -468,17 +479,22 @@ class Avr8Scope final : public Avr8Handler {
          return ok();
       }
       const auto dw = device();
-      if(config_[0] != avr8::variantDebugWire || physical_[0] != avr8::physicalDebugWire || !dw) {
+      // Without a device, the breakpoint table cannot go to flash.
+      const bool bare = noDevice() && breakCount_ == 0;
+      if(config_[0] != avr8::variantDebugWire || physical_[0] != avr8::physicalDebugWire || (!dw && !bare)) {
          return failed(avr8::failure::invalidConfig);
       }
-      target_.setDevice(*dw);
+      if(dw) {
+         target_.setDevice(*dw);
+      }
       target_.setRunTimers(options_[0] != 0);
-      const DwStatus status = target_.attach();
+      const DwStatus status = target_.attach(!bare);
       if(status != DwStatus::Ok) {
          static_cast<void>(target_.detach());
          return failed(failureOf(status));
       }
       active_ = true;
+      bare_ = bare;
       running_ = false;
       event_ = false;
       hardwareBreak_.reset();
@@ -504,6 +520,7 @@ class Avr8Scope final : public Avr8Handler {
 
    void end() {
       active_ = false;
+      bare_ = false;
       running_ = false;
       event_ = false;
       hardwareBreak_.reset();
@@ -1014,6 +1031,8 @@ class Avr8Scope final : public Avr8Handler {
    std::array<uint8_t, avr8::deviceBytes> device_{};
    std::array<uint8_t, 1> options_{};
    bool active_{ false };
+   // Active without a device context (see ACTIVATE_PHYSICAL)
+   bool bare_{ false };
    // The probe started the program (RUN, RUN_TO, ATTACH without break).
    bool running_{ false };
    // A break event waits for the host.
