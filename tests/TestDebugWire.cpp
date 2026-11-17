@@ -258,6 +258,16 @@ TEST_CASE("debugWIRE: the break and 0x55 of a target that stops") {
       f.target.send(0x42, f.pins.time() + 10u);
       CHECK(f.engine.waitBreak(10'000) == DwStatus::NoSync);
    }
+   SUBCASE("a break and then another byte is not a stop") {
+      const uint64_t start = f.pins.time() + 10u;
+      f.target.pullLow(start, start + 12u * f.target.bitCycles);
+      f.target.send(0x42, start + 14u * f.target.bitCycles);
+      CHECK(f.engine.waitBreak(10'000) == DwStatus::NoSync);
+   }
+   SUBCASE("a line that stays low (no target power) is not a stop") {
+      f.target.pullLow(f.pins.time() + 10u, UINT64_MAX);
+      CHECK(f.engine.waitBreak(10'000) == DwStatus::NoSync);
+   }
 }
 
 TEST_CASE("debugWIRE: flush drops the received bytes") {

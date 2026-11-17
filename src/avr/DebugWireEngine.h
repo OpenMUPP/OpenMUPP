@@ -187,7 +187,7 @@ class DebugWireEngine {
 
    // Receives bytes. timeoutUs is the limit for each byte, 0 for
    // dwByteTimeoutBits bit times. Break: the target sent a break; the 0x55
-   // after it is still in the receiver. waitBreak() or receive() reads it.
+   // can follow. waitBreak() accepts the break also without it.
    [[nodiscard]] DwStatus receive(uint8_t *data, uint32_t bytes, uint32_t timeoutUs = 0) {
       if(!synced()) {
          return DwStatus::NotSynced;
@@ -210,9 +210,10 @@ class DebugWireEngine {
    // Waits up to timeoutUs for the break and the 0x55 of a target that
    // stops. 0 checks one time: for a poll while the target runs. A first
    // byte of 0x55 is also Ok: the sync after a break that receive() read.
-   // A break without the 0x55 is Ok too: the receiver holds one byte, so
-   // a late check finds the break and the 0x55 lost (overrun). Timeout: no
-   // byte. NoSync: another byte than the break or 0x55.
+   // A break without the 0x55 is Ok too, when the line is high again: the
+   // receiver holds one byte, so a late check finds the break and the 0x55
+   // lost (overrun). Timeout: no byte. NoSync: another byte than the break
+   // or 0x55, or a line that stays low.
    [[nodiscard]] DwStatus waitBreak(uint32_t timeoutUs) {
       if(!synced()) {
          return DwStatus::NotSynced;
@@ -237,7 +238,11 @@ class DebugWireEngine {
       // The time limit also lets a 0x55 on the line end before the next
       // command.
       const int32_t sync = readByte(dwByteTimeoutBits * bitCycles_);
-      return sync < 0 || sync == 0x55 ? DwStatus::Ok : DwStatus::NoSync;
+      if(sync < 0) {
+         // A line that stays low (no target power) is not a stop.
+         return pins_.sense() ? DwStatus::Ok : DwStatus::NoSync;
+      }
+      return sync == 0x55 ? DwStatus::Ok : DwStatus::NoSync;
    }
 
    // Drops the received bytes.
