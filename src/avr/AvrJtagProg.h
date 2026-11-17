@@ -20,11 +20,13 @@
 //   the signature to know that the mode works.
 // - leave(): the no-operation command, PROG_ENABLE 0, AVR_RESET 0.
 // - Writes (chip erase, flash and EEPROM page, fuses, lock bits) poll the
-//   ready bit (bit 9) with the last command of the write, as the table
-//   does. For the extended fuse, the ATmega32U4 and ATmega2560 tables give
-//   0x3700 for the poll, the ATmega16 pattern gives 0x3B00: the poll does
-//   not strobe, so the probe uses 0x3B00, the same as the write. A poll
-//   that does not see ready within writeTimeoutMs fails. Each poll is one
+//   ready bit (bit 9) with the idle command of the write, as the table
+//   does. Exception: for the extended fuse (6d) the ATmega32U4 and
+//   ATmega2560 tables give 0x3700, the poll value of the high fuse (6g),
+//   where every other poll repeats the idle of its own write. Bits 11..10
+//   (BS2, BS1) only select the byte, and RDY/BSY does not depend on them,
+//   so the probe polls with 0x3B00 and keeps the byte select of the write.
+//   A poll that does not see ready within writeTimeoutMs fails. Each poll is one
 //   scan, so the JTAG engine services the Background (protocol/Background.h)
 //   during a long write.
 // - Flash pages: byte addresses, one page for each write, the page buffer

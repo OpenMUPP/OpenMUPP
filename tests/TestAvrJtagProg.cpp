@@ -247,6 +247,27 @@ TEST_CASE("AvrJtagProg: EEPROM write over two pages and read") {
    CHECK(b.target.unknownCommands.empty());
 }
 
+TEST_CASE("AvrJtagProg: the commands of each fuse write") {
+   struct Case {
+      Fuse fuse;
+      uint16_t idle;
+      uint16_t strobe;
+   };
+   for(const Case c : { Case{ Fuse::Low, cmd::idle3, cmd::strobe3 }, Case{ Fuse::High, cmd::idle7, cmd::strobe7 },
+                        Case{ Fuse::Extended, cmd::idleB, cmd::strobeB } }) {
+      CAPTURE(static_cast<int>(c.fuse));
+      Bench b;
+      REQUIRE(b.prog.enter());
+      REQUIRE(b.prog.writeFuse(c.fuse, 0xCB));
+      std::vector<uint16_t> expected{ cmd::enterFuseWrite, cmd::loadDataLow | 0xCBu, c.idle, c.strobe, c.idle, c.idle };
+      // The busyPolls results after the strobe are not ready: those of the
+      // two idle commands and of the first polls. Each scan returns the
+      // result of the scan before it, so the probe polls busyPolls times.
+      expected.insert(expected.end(), b.target.busyPolls, c.idle);
+      CHECK(b.target.commands == expected);
+   }
+}
+
 TEST_CASE("AvrJtagProg: fuses") {
    Bench b;
    REQUIRE(b.prog.enter());
