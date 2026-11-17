@@ -163,11 +163,11 @@ The reference debugger does not read the BSR. These values come from the experim
 
 | Bit | Meaning |
 |---|---|
-| 15 | Probably a device-specific control bit. The ATmega2560 script writes `0x8000` here only behind a device condition that is false for this chip, and the captures have no write to reg D. We did not check the scripts of other devices. |
+| 15 | Probably a device-specific control bit. The ATmega2560 script writes `0x8000` here only behind a device condition. That condition is false for this chip, and the captures have no write to reg D. We did not check the scripts of other devices. |
 | 4 | Set when the OCDR holds data from the core. The reference debugger reads reg D until bit 4 is set, then it reads reg C. |
 | 3 | Set while the core is stopped. The meaning is open. |
 | 2 | The core is stopped |
-| 0 | Set while the core runs, but only when BCR bit 14 is set (see above). The meaning is open. Use bit 2, not bit 0, to see if the core runs. |
+| 0 | Set while the core runs in the MPLAB X captures (BCR bit 14 set). It was 0 in the experiments (BCR = 0). The cause is not confirmed, and the meaning is open. Use bit 2, not bit 0, to see if the core runs. |
 
 Values: `0x0001` while the core runs (MPLAB X captures), `0x0000` while the core runs with BCR = 0 (experiments). `0x000C` while the core is stopped.
 After FORCE_BREAK, reg D read `0x0000` for 70 ms before it changed to `0x000C` (30.2926 s to 30.3625 s).
@@ -198,7 +198,8 @@ On revision 4, the reference debugger reads the flash with two IR `0xA` scans fo
 1. Bits 21..0 = word address. Bits 37..22 hold the word of the read before, with its two low bits clear (example: `0x4094` after `0x4097`). The meaning of these bits is open.
 2. Bits 37..22 = `0xFFFF`, bits 21..0 = the current PC field (`in=0x3FFFC00106` at 141.7179 s). The scan returns the flash word in bits 37..22.
 
-The data agree with this rule, which is an inference: each IR `0xA` scan with bits 21..0 not 0 reads the flash word at that address, and the next scan returns it.
+The data agree with a rule, which is an inference.
+The rule: each IR `0xA` scan with bits 21..0 not 0 reads the flash word at that address, and the next scan returns it.
 Example: the second scan of a PC read sends the PC field `0xCD` (138.8809 s), and the next scan returns `0x70EF`, the word at `0xCD`.
 A second scan with bits 21..0 = 0 was not tested.
 
@@ -237,8 +238,8 @@ These are the sequences of the reference debugger on the ATmega2560 (`m2560-mpla
 
 | Operation | Sequence |
 |---|---|
-| Enter debug mode | Read IDCODE (30.2901 s). The script first reads reg D. It resets the TAP, sets up the pins and reads IDCODE only when the low byte of reg D is `0x00` or `0xFF`. The capture shows only this setup path, with no reg D read before it. |
-| Halt | Read BCR, write BCR = (BCR & `0x9FFC`) \| `0x4000`. Read reg D (`0x0001`, the core runs). IR `0x8` (FORCE_BREAK). Read reg D until bit 2 is set. Then write BCR = BCR & ~`0x03E0` (clears bits 9 to 5: mask mode, reg 2 and the mode fields), and then BCR = `0xC000`. (30.2915 s to 30.3638 s) |
+| Enter debug mode | Read IDCODE (30.2901 s). The script first reads reg D. It always resets the TAP. It sets up the pins and reads IDCODE only when the low byte of reg D is `0x00` or `0xFF`. The capture shows only this setup path, with no reg D read before it. |
+| Halt | Read BCR, write BCR = (BCR & `0x9FFC`) \| `0x4000`. Read reg D (`0x0001`, the core runs). IR `0x8` (FORCE_BREAK). Read reg D until bit 2 is set. Then write BCR = BCR & ~`0x03E0`. This clears bits 9 to 5: mask mode, the enables of reg 2 and reg 3, and the mode of reg 2. The mode of reg 3 (bits 4..3) stays. Then write BCR = `0xC000`. (30.2915 s to 30.3638 s) |
 | Status | Read reg D. Bit 2 = stopped. |
 | Run | Write back the CPU state, then IR `0x9` (RUN) |
 | Single step | Write back the CPU state. Write BCR = (BCR & `0x9FFC`) \| `0x2000`: bit 14 clear, bit 13 set, usually `0xA000`. Then IR `0x9`. |
@@ -278,7 +279,7 @@ The AVR executes `SPM` only from the boot section. Thus the debugger moves the P
 The sequence below comes from the instruction scans of `m2560-mplab-swbp-jtag.txt` (141.70 s to 142.92 s).
 
 1. Save the state:
-   1. Copy SPMCSR to r14 (`LD r14, Z` with Z = `0x0057`). This changes Z and r14, so it comes first.
+   1. Copy SPMCSR to r14 (`LD r14, Z` with Z = `0x0057`). The capture does this first.
    2. Read SREG (`IN r16, 0x3F`, value `0x35` in the capture), and write it back.
    3. Read EIND (`0x3C`) and RAMPZ (`0x3B`) through the OCDR.
    4. Write RAMPZ = bits 17..16 of the page byte address. The capture writes 0, because its page is below 64 KB.
@@ -292,7 +293,10 @@ The sequence below comes from the instruction scans of `m2560-mplab-swbp-jtag.tx
    1. Z = bits 15..0 of the byte address. r0:r1 = data. `r16 = 0x01` (SPMEN), `ST Y, r16`.
    2. Execute `SPM` as a single step.
    3. Read SPMCSR, then `EIJMP` back to `0x1FE00`.
-5. Write the page: Z = bits 15..0 of the page byte address, `r16 = 0x05` (PGWRT and SPMEN), `ST Y, r16`, `SPM` as a single step (142.8983 s to 142.9000 s). Then enable the RWW section with `r16 = 0x11`.
+5. Write the page (142.8983 s to 142.9000 s):
+   1. Z = bits 15..0 of the page byte address. `r16 = 0x05` (PGWRT and SPMEN), `ST Y, r16`.
+   2. Execute `SPM` as a single step.
+   3. Enable the RWW section with `r16 = 0x11`, as in sub-step 3.4.
 6. Restore the state: SREG, SPMCSR (`ST Z, r14`), EIND and RAMPZ. Then write back the CPU registers that the sequence changes: r0, r1, r14, r16 and r28 to r31.
 
 The reference debugger reads SPMCSR only once after each `SPM`. After the page write, the read gave `0x45` (142.9028 s): SPMEN was still set. MPLAB X did not read again.
