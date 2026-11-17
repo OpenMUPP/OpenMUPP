@@ -79,11 +79,16 @@ class AvrJtagTap {
    }
 
    // Drives the pins, sets TCK to kHz and resets the TAP. False when the
-   // port cannot do kHz or the reset fails. kHz 0 (adaptive clocking)
-   // fails: the AVR has no RTCK.
+   // port cannot do kHz or the reset fails: the pins are then released.
+   // kHz 0 (adaptive clocking) fails: the AVR has no RTCK.
    [[nodiscard]] bool open(uint32_t kHz) {
+      // init() first: the fast path sets up its SPI in init().
       port_.init();
-      return setSpeed(kHz) && reset();
+      if(setSpeed(kHz) && reset()) {
+         return true;
+      }
+      close();
+      return false;
    }
 
    // Releases the pins.

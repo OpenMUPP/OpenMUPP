@@ -42,6 +42,7 @@ class FailingPort final : public protocol::JtagPort {
    void init() override {
    }
    void fini() override {
+      ++finis;
    }
    [[nodiscard]] bool setSpeed(uint32_t) override {
       return true;
@@ -52,6 +53,7 @@ class FailingPort final : public protocol::JtagPort {
    }
    bool fail{ false };
    int shifts{ 0 };
+   int finis{ 0 };
 };
 
 } // namespace
@@ -76,6 +78,9 @@ TEST_CASE("AvrJtagTap: no adaptive clocking") {
    Bench b;
    CHECK_FALSE(b.tap.open(0));
    CHECK(b.pins.rising.empty());
+   // A failed open releases the pins.
+   CHECK(b.pins.inits == 1);
+   CHECK(b.pins.finis == 1);
    CHECK(b.tap.ir() == AvrJtagTap::noIr);
    CHECK_FALSE(b.tap.setSpeed(0));
    CHECK(b.tap.setSpeed(1000));
@@ -130,8 +135,8 @@ TEST_CASE("AvrJtagTap: DR scans of each length") {
       uint8_t ir;
       uint8_t bits;
    };
-   for(const Case c : { Case{ ir::avrReset, 1 }, Case{ ir::progCommands, 15 }, Case{ ir::progEnable, 16 },
-                        Case{ ir::ocdAccess, 21 }, Case{ ir::execute, 38 } }) {
+   for(const Case c : { Case{ ir::avrReset, 1 }, Case{ ir::progPageLoad, 8 }, Case{ ir::progCommands, 15 },
+                        Case{ ir::progEnable, 16 }, Case{ ir::ocdAccess, 21 }, Case{ ir::execute, 38 } }) {
       CAPTURE(c.bits);
       Bench b;
       const uint64_t mask = (uint64_t{ 1 } << c.bits) - 1u;
@@ -192,6 +197,15 @@ TEST_CASE("AvrJtagTap: a failed shift forgets the IR") {
    const int shifts = port.shifts;
    REQUIRE(tap.setIr(ir::ocdAccess));
    CHECK(port.shifts == shifts + 1);
+}
+
+TEST_CASE("AvrJtagTap: a failed reset at open releases the pins") {
+   FailingPort port;
+   port.fail = true;
+   AvrJtagTap tap(port);
+   CHECK_FALSE(tap.open(1000));
+   CHECK(port.finis == 1);
+   CHECK(tap.ir() == AvrJtagTap::noIr);
 }
 
 TEST_CASE("AvrJtagTap: close releases the pins and forgets the IR") {
