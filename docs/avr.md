@@ -205,8 +205,9 @@ The probe command "disable debugWIRE" turns dW off until the next power cycle.
 Bloom sends it at the end of the session when `disable_debug_wire_pre_disconnect` is `true`.
 Then program the DWEN fuse back to 1 over ISP, without a power cycle in between.
 
-- avrdude cannot turn dW off with this probe. On a chip with DWEN programmed, `-c openmupp` stops with `unable to return from debugWIRE to ISP` ([issue #69](https://github.com/OpenMUPP/OpenMUPP/issues/69)).
-- After the disable, Bloom 2.1 logs `AVR8 Detach command failed - Failure reason: Physical not activated`. dW is off and ISP works. Only the message is wrong.
+avrdude does both steps itself. When ISP fails on a chip with DWEN, avrdude sends "disable debugWIRE" and then uses ISP:
+`avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p t85 -P usb -B 125kHz -U hfuse:w:0xDF:m`.
+For this step, avrdude sends no device parameters. The probe then accepts only "disable debugWIRE" and the end of the session.
 
 ## Low-clock targets
 

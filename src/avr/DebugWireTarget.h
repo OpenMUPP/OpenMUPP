@@ -51,6 +51,13 @@
 //
 // Each operation needs an attached, stopped target (else TargetRunning),
 // except stop(), poll() and attach().
+//
+// SREG is the only part of the context that uses DWDR (in and out through
+// r0). attach(false) is for a host without a device context (avrdude
+// before DISABLE_DEBUGWIRE): DWDR is not known, so the stops and go do not
+// save and restore SREG. A wrong DWDR writes r0 into another I/O register
+// (OSCCAL on an ATtiny85 with the ATmega328P default). The memory
+// functions need a correct device; do not use them after attach(false).
 
 #include <array>
 #include <cstddef>
@@ -146,8 +153,10 @@ class DebugWireTarget {
       mask_ = run ? 0xDFu : 0xFFu;
    }
 
-   // Connects the engine and stops the target (break).
-   [[nodiscard]] DwStatus attach() {
+   // Connects the engine and stops the target (break). saveSreg false:
+   // without the SREG save and restore (see above).
+   [[nodiscard]] DwStatus attach(bool saveSreg = true) {
+      saveSreg_ = saveSreg;
       engine_.connect();
       attached_ = true;
       stopped_ = false;
@@ -707,7 +716,7 @@ class DebugWireTarget {
       if(DwStatus status = repeatQuery(0x01, 0, 32, regs_.data(), 32); status != DwStatus::Ok) {
          return status;
       }
-      return readIo(avrIoSreg, sreg_);
+      return saveSreg_ ? readIo(avrIoSreg, sreg_) : DwStatus::Ok;
    }
 
    // Writes the context back: SREG first (it uses r0), then the
@@ -717,8 +726,10 @@ class DebugWireTarget {
          return DwStatus::TargetRunning;
       }
       engine_.flush();
-      if(DwStatus status = writeIo(avrIoSreg, sreg_); status != DwStatus::Ok) {
-         return status;
+      if(saveSreg_) {
+         if(DwStatus status = writeIo(avrIoSreg, sreg_); status != DwStatus::Ok) {
+            return status;
+         }
       }
       return writeRegs(0, regs_);
    }
@@ -728,6 +739,7 @@ class DebugWireTarget {
    uint8_t mask_{ 0xFF };
    bool attached_{ false };
    bool stopped_{ false };
+   bool saveSreg_{ true };
    uint16_t pc_{ 0 };
    uint8_t sreg_{ 0 };
    std::array<uint8_t, 32> regs_{};

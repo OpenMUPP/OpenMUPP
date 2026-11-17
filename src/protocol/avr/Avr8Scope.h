@@ -21,6 +21,10 @@
 //   0x10 ACTIVATE_PHYSICAL [reset]: needs variant 1 (debugWIRE) and
 //        physical 5 (debugWIRE), connects and stops the target (break).
 //        The reset flag is not used: the RESET pin is the dW line.
+//        Without a device context (all 0, as avrdude sends it before
+//        DISABLE_DEBUGWIRE): the attach does not save SREG (DWDR is not
+//        known), and only DISABLE_DEBUGWIRE, DETACH and
+//        DEACTIVATE_PHYSICAL work. The other commands give FAILED 0x33.
 //   0x11 DEACTIVATE_PHYSICAL: a stopped target gets its software
 //        breakpoints removed, a reset and runs; the line is then
 //        released. OK also without an active physical (avrdude ISP).
@@ -29,6 +33,7 @@
 //   0x13 ATTACH [break]: break 1: the target stays stopped, and a break
 //        event comes. Break 0: the target runs.
 //   0x14 DETACH: the software breakpoints are removed, the target runs.
+//        OK also without an active physical (Bloom after a disable).
 //   0x15 ENTER_PROGMODE, 0x16 LEAVE_PROGMODE: OK. debugWIRE has no
 //        programming mode: the memory commands work in the debug mode.
 //   0x17 DISABLE_DEBUGWIRE: dW off until a power cycle (ISP works then).
@@ -56,7 +61,9 @@
 // (3 bytes: 0x1E and the dW ID). One read gives up to the response size
 // minus 3 bytes.
 //
-// The device context (context 2, as avrdude struct mega_device_desc):
+// The device context (context 2, as avrdude struct mega_device_desc), for
+// one debugWIRE session: its end clears it. avrdude and Bloom send it before
+// each ACTIVATE_PHYSICAL.
 //   0x00 flash page bytes u16, 0x02 flash bytes u32, 0x0A boot start
 //   (words) u32, 0x10 EEPROM bytes u16, 0x18 DWDR (OCDR), 0x19 EEARH,
 //   0x1A EEARL, 0x1B EECR, 0x1C EEDR, 0x1D SPMCSR. avrdude and Bloom send
@@ -337,6 +344,8 @@ class Avr8Scope final : public Avr8Handler {
          return activate();
       case cmd::deactivatePhysical:
          return deactivate();
+      case cmd::detach:
+         return active_ ? detach() : ok();
       case cmd::erase:
       case cmd::crc:
       case cmd::pageErase:
@@ -347,13 +356,14 @@ class Avr8Scope final : public Avr8Handler {
       if(!active_) {
          return failed(avr8::failure::notActivated);
       }
+      if(bare_ && id != cmd::disableDebugWire) {
+         return failed(avr8::failure::invalidConfig);
+      }
       switch(id) {
       case cmd::getId:
          return getId();
       case cmd::attach:
          return attach();
-      case cmd::detach:
-         return detach();
       case cmd::enterProgmode:
       case cmd::leaveProgmode:
          return ok();
@@ -433,6 +443,10 @@ class Avr8Scope final : public Avr8Handler {
       return data(bytes);
    }
 
+   [[nodiscard]] bool noDevice() const {
+      return std::all_of(device_.begin(), device_.end(), [](uint8_t value) { return value == 0; });
+   }
+
    // The device context in DwDevice form. No value: a value out of range.
    [[nodiscard]] std::optional<DwDevice> device() const {
       const art::span<const uint8_t> d(device_.data(), device_.size());
@@ -468,17 +482,22 @@ class Avr8Scope final : public Avr8Handler {
          return ok();
       }
       const auto dw = device();
-      if(config_[0] != avr8::variantDebugWire || physical_[0] != avr8::physicalDebugWire || !dw) {
+      // Without a device, the breakpoint table cannot go to flash.
+      const bool bare = noDevice() && breakCount_ == 0;
+      if(config_[0] != avr8::variantDebugWire || physical_[0] != avr8::physicalDebugWire || (!dw && !bare)) {
          return failed(avr8::failure::invalidConfig);
       }
-      target_.setDevice(*dw);
+      if(dw) {
+         target_.setDevice(*dw);
+      }
       target_.setRunTimers(options_[0] != 0);
-      const DwStatus status = target_.attach();
+      const DwStatus status = target_.attach(!bare);
       if(status != DwStatus::Ok) {
          static_cast<void>(target_.detach());
          return failed(failureOf(status));
       }
       active_ = true;
+      bare_ = bare;
       running_ = false;
       event_ = false;
       hardwareBreak_.reset();
@@ -504,6 +523,9 @@ class Avr8Scope final : public Avr8Handler {
 
    void end() {
       active_ = false;
+      bare_ = false;
+      // The next session can be another host on another chip (issue #69).
+      device_ = {};
       running_ = false;
       event_ = false;
       hardwareBreak_.reset();
@@ -1014,6 +1036,8 @@ class Avr8Scope final : public Avr8Handler {
    std::array<uint8_t, avr8::deviceBytes> device_{};
    std::array<uint8_t, 1> options_{};
    bool active_{ false };
+   // Active without a device context (see ACTIVATE_PHYSICAL)
+   bool bare_{ false };
    // The probe started the program (RUN, RUN_TO, ATTACH without break).
    bool running_{ false };
    // A break event waits for the host.

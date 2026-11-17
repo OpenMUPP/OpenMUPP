@@ -81,7 +81,8 @@ struct Bench : EdbgBench {
       return transact(handler::avr8, command);
    }
 
-   // avrdude jtagice3_dw: jtag3_open_dw() and jtag3_initialize()
+   // avrdude jtagice3_dw: jtag3_open_dw() and jtag3_initialize(). An
+   // empty desc: no device context (stk500v2 before DISABLE_DEBUGWIRE).
    void avrdudeOpen(const Bytes &desc = megaDeviceDesc()) {
       // jtag3_edbg_prepare(): DAP_Connect and DAP_HostStatus
       CHECK(hidCommand({ 0x02, 0x01 })[1] == 0x01);
@@ -92,7 +93,9 @@ struct Bench : EdbgBench {
       CHECK(avr8(avr8Set(0, 0, { 0x01 })) == ok);
       CHECK(avr8(avr8Set(0, 1, { 0x01 })) == ok);
       CHECK(avr8(avr8Set(1, 0, { 0x05 })) == ok);
-      CHECK(avr8(avr8Set(2, 0, desc)) == ok);
+      if(!desc.empty()) {
+         CHECK(avr8(avr8Set(2, 0, desc)) == ok);
+      }
    }
 
    // AVR sign-on (ACTIVATE_PHYSICAL) without and with external reset
@@ -247,9 +250,7 @@ TEST_CASE("EDBG debugWIRE: ACTIVATE_PHYSICAL checks the parameters and the pins"
       b.avrdudeOpen();
       CHECK(b.avr8(avr8Set(1, 0, { 0x01 })) == ok);
    }
-   SUBCASE("no device context") {
-      CHECK(b.avr8(avr8Set(0, 0, { 0x01 })) == ok);
-      CHECK(b.avr8(avr8Set(1, 0, { 0x05 })) == ok);
+   SUBCASE("no variant and no physical") {
    }
    SUBCASE("a flash page of 256 bytes") {
       b.avrdudeOpen(megaDeviceDesc(256, 65536));
@@ -283,9 +284,10 @@ TEST_CASE("EDBG debugWIRE: no target") {
    Bench b;
    b.avr.disabled = true;
    b.avrdudeOpen();
-   CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
    CHECK(b.signOn() == failed(0x10));
    CHECK_FALSE(b.dwPins.driven);
+   // DAP_Disconnect drops the parameters: it comes after the sign-on.
+   CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
    CHECK(b.owner.owner() == PinClient::None);
    CHECK(b.avr8(readMemory(avr8::memory::sram, 0x100, 1)) == failed(0x31));
 }
@@ -302,6 +304,80 @@ TEST_CASE("EDBG debugWIRE: ISP waits for the end of the session") {
    CHECK_FALSE(b.dwPins.driven);
    CHECK_FALSE(b.avr8Scope.active());
    b.enterProgmode();
+}
+
+// stk500v2_program_enable(): ISP fails on a part with DWEN, so avrdude
+// turns debugWIRE off without a device context (issue #69).
+TEST_CASE("EDBG debugWIRE: avrdude leaves debugWIRE without a device context") {
+   Bench b;
+   // ATtiny85: DWDR is 0x22. The default DwDevice has 0x31, OSCCAL here.
+   b.avr.device = mupptest::MockAvrDw::attiny85;
+   constexpr uint8_t osccal = 0x31;
+   b.avr.io(osccal) = 0xA5;
+   b.avr.io(avr::avrIoSreg) = 0x83;
+   b.avrdudeOpen({});
+   REQUIRE(b.signOn() == ok);
+   CHECK(b.avr8Scope.active());
+   // Only the disable, DETACH and DEACTIVATE_PHYSICAL work.
+   CHECK(b.avr8(readMemory(avr8::memory::sram, 0x60, 1)) == failed(0x33));
+   CHECK(b.avr8({ avr8::command::getId, 0x00 }) == failed(0x33));
+   CHECK(b.avr8({ avr8::command::run, 0x00 }) == failed(0x33));
+   SUBCASE("DISABLE_DEBUGWIRE, then ISP") {
+      CHECK(b.avr8({ avr8::command::disableDebugWire, 0x00 }) == ok);
+      CHECK(b.avr.disables == 1);
+      CHECK_FALSE(b.avr8Scope.active());
+      // Bloom with disable_debug_wire_pre_disconnect sends DETACH next.
+      CHECK(b.avr8({ avr8::command::detach, 0x00 }) == ok);
+      b.avrdudeClose();
+      b.enterProgmode();
+      CHECK(b.avr.io(osccal) == 0xA5);
+      CHECK(b.avr.io(avr::avrIoSreg) == 0x83);
+   }
+   SUBCASE("DEACTIVATE_PHYSICAL: reset, the target runs") {
+      // The reset clears the I/O of the mock. An SREG read through the
+      // wrong DWDR gets no answer, and the sign-off fails.
+      b.avrdudeClose();
+      CHECK(b.avr.resets == 1);
+      CHECK(b.avr.running);
+      CHECK(b.avr.disables == 0);
+   }
+   b.checkClean();
+}
+
+// The device context of an earlier session must not stay: avrdude on a
+// ATtiny85 after a session on an ATmega328P (issue #69).
+TEST_CASE("EDBG debugWIRE: DAP_Disconnect drops the device context") {
+   Bench b;
+   b.avrdudeOpen();
+   REQUIRE(b.signOn() == ok);
+   b.avrdudeClose();
+   b.avr.device = mupptest::MockAvrDw::attiny85;
+   constexpr uint8_t osccal = 0x31;
+   b.avr.io(osccal) = 0xA5;
+   b.avrdudeOpen({});
+   REQUIRE(b.signOn() == ok);
+   CHECK(b.avr8(readMemory(avr8::memory::sram, 0x60, 1)) == failed(0x33));
+   CHECK(b.avr8({ avr8::command::disableDebugWire, 0x00 }) == ok);
+   CHECK(b.avr.io(osccal) == 0xA5);
+   b.checkClean();
+}
+
+// Bloom sends no DAP_Disconnect: the end of the session drops the device
+// context.
+TEST_CASE("EDBG debugWIRE: the end of a Bloom session drops the device context") {
+   Bench b;
+   b.bloomInit();
+   b.bloomActivate();
+   CHECK(b.avr8({ avr8::command::detach, 0x00 }) == ok);
+   CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
+   b.avr.device = mupptest::MockAvrDw::attiny85;
+   constexpr uint8_t osccal = 0x31;
+   b.avr.io(osccal) = 0xA5;
+   b.avrdudeOpen({});
+   REQUIRE(b.signOn() == ok);
+   CHECK(b.avr8({ avr8::command::disableDebugWire, 0x00 }) == ok);
+   CHECK(b.avr.io(osccal) == 0xA5);
+   b.checkClean();
 }
 
 TEST_CASE("EDBG debugWIRE: a Bloom debug session") {

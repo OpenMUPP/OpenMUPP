@@ -67,9 +67,9 @@
 // switch-off always works.
 //
 // releasePins() (the HID processor gives the pins back: DAP_Disconnect, USB
-// suspend, bus reset) ends the programming mode and the debugWIRE session.
-// hostGone() also drops the frame and the response of the old host, and the
-// AVR8 parameters and breakpoints.
+// suspend, bus reset) ends the programming mode and the debugWIRE session,
+// and drops the AVR8 parameters and breakpoints. hostGone() also drops the
+// frame and the response of the old host.
 
 #include <array>
 #include <cstddef>
