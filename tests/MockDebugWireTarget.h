@@ -364,8 +364,7 @@ class MockDwPins {
       rxFrom_ = stopSample;
       // The USART holds one byte: a frame that ended while this one waited
       // for the read is lost (overrun).
-      for(auto next = nextFrame(rxFrom_); next && *next + 9u * rxBitCycles_ + rxBitCycles_ / 2u <= time_;
-          next = nextFrame(rxFrom_)) {
+      for(auto next = nextFrame(rxFrom_); next && *next + 9u * rxBitCycles_ + rxBitCycles_ / 2u <= time_; next = nextFrame(rxFrom_)) {
          rxFrom_ = *next + 9u * rxBitCycles_ + rxBitCycles_ / 2u;
          ++rxOverruns;
       }
