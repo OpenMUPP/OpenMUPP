@@ -79,6 +79,7 @@ add_executable(mupp-tests
         TestDebugWireTarget.cpp
         TestAvrJtagTap.cpp
         TestAvrJtagProg.cpp
+        TestAvrJtagOcd.cpp
         TestEdbg.cpp
         TestEdbgDebugWire.cpp
         TestEdbgJtag.cpp
