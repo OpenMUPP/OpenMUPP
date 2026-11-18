@@ -665,3 +665,43 @@ TEST_CASE("AvrJtagDebug: the BSR after a step and a reset") {
    REQUIRE(b.debug.reset() == JtagDebugStatus::Ok);
    CHECK(b.debug.breakStatus() == bsr::break3);
 }
+
+TEST_CASE("AvrJtagDebug: a step after a cleared breakpoint has no stale enable") {
+   SUBCASE("breakpoint 1 hit, cleared, step (gdb step-over)") {
+      Bench b;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.setBreakpoint(1, 0xCC) == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      REQUIRE(b.target.reach(0xCC));
+      bool stopped = false;
+      REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+      CHECK(b.target.ocdRegs[8] == 0xC400);
+      REQUIRE(b.debug.clearBreakpoint(1) == JtagDebugStatus::Ok);
+      b.writes();
+      REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+      const auto writes = b.writes();
+      REQUIRE(writes.size() >= 2);
+      CHECK(writes[0] == 0x18C000);
+      CHECK(writes[1] == 0x18A000);
+      CHECK(b.target.pc == 0xCD);
+   }
+   SUBCASE("a run to that did not hit") {
+      Bench b;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.setBreakpoint(1, 0x40) == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.run(0x80) == JtagDebugStatus::Ok);
+      CHECK(b.target.ocdRegs[8] == 0xCC00);
+      REQUIRE(b.target.reach(0x40));
+      bool stopped = false;
+      REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+      CHECK(b.debug.breakStatus() == bsr::break1);
+      b.writes();
+      REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+      const auto writes = b.writes();
+      REQUIRE(writes.size() >= 3);
+      // Reg 1 again, the BCR without bit 11, then the step
+      CHECK(writes[0] == 0x110040);
+      CHECK(writes[1] == 0x18C400);
+      CHECK(writes[2] == 0x18A400);
+   }
+}

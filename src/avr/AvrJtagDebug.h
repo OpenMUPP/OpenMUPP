@@ -40,10 +40,12 @@
 // - Hardware breakpoints (program addresses, word addresses): the host
 //   numbers 1 to 3 use reg 1, reg 2 and reg 3 (mode 3), reg 0 (one-shot)
 //   is the RUN_TO address. The probe keeps them and writes them before
-//   each run: halt and reset clear the BCR enables (reference sequences).
-//   On revision 4, reg 4 + n gets the word bits 23..16 of reg n (inference:
-//   only 0 and 0xFF were seen, docs/avr-jtag-ocd.md). A step does not
-//   write them: it keeps the BCR enables, as the reference step formula.
+//   each run and step: halt and reset clear the BCR enables (reference
+//   sequences), and a cleared breakpoint must not stay enabled for a step
+//   (a step over a breakpoint would stop at the same PC). A step drops a
+//   RUN_TO address that was not hit. On revision 4, reg 4 + n gets the
+//   word bits 23..16 of reg n (inference: only 0 and 0xFF were seen,
+//   docs/avr-jtag-ocd.md).
 // - After each stop the probe reads the BSR (the cause of the stop). The
 //   reference debugger does not read it.
 // - A failed context read (NoOcd, Timeout) leaves no valid context: run,
@@ -275,7 +277,9 @@ class AvrJtagDebug {
       if(JtagDebugStatus status = ready(); status != JtagDebugStatus::Ok) {
          return status;
       }
-      if(!writeBack() || !writeBcr(static_cast<uint16_t>(keep(bcr_) | jtagOcd::bcr::step)) || !ocd_.run()) {
+      breaks_[0].reset();
+      if(!writeBack() || !writeBreakpoints() || !writeBcr(static_cast<uint16_t>(keep(bcr_) | jtagOcd::bcr::step)) ||
+         !ocd_.run()) {
          return JtagDebugStatus::NoOcd;
       }
       stopped_ = false;
