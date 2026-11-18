@@ -95,6 +95,17 @@ struct Uart {
    constexpr bool operator==(const Uart &) const = default;
 };
 
+// SWO (serial wire output) input of the trace receiver: the RX pin of a
+// USART in UART (NRZ) mode. The pin must be the default RX pin of the USART
+// (board/BoardChecks.cpp). Only the receiver is used: the TX pin of the
+// USART stays free.
+struct Swo {
+   uint8_t usart; // USARTn
+   Pin rx;
+
+   constexpr bool operator==(const Swo &) const = default;
+};
+
 // Target voltage (Vref) sense: Vref = ADC input voltage * divider.
 // The pin must have an ADC channel (see adcChannelOf()).
 struct VrefSense {
@@ -272,6 +283,8 @@ struct Definition {
    DebugPins debug;
    std::optional<JtagFastPath> jtagFastPath;
    std::optional<Uart> uart;
+   // Empty: the board has no SWO receiver.
+   std::optional<Swo> swo = std::nullopt;
    std::optional<VrefSense> vref;
    std::optional<PowerSwitch> powerSwitch;
    Leds leds;
@@ -317,7 +330,7 @@ constexpr bool isValidPin(const Pin &pin) {
 }
 
 // All pins of a definition. Unused optional pins are empty.
-constexpr std::array<std::optional<Pin>, 19> allPins(const Definition &def) {
+constexpr std::array<std::optional<Pin>, 20> allPins(const Definition &def) {
    auto pinOf = [](const auto &opt) -> std::optional<Pin> { return opt ? std::optional<Pin>(opt->pin) : std::nullopt; };
    return { {
    def.debug.tck,
@@ -333,6 +346,7 @@ constexpr std::array<std::optional<Pin>, 19> allPins(const Definition &def) {
    def.jtagFastPath ? std::optional<Pin>(def.jtagFastPath->tckLink) : std::nullopt,
    def.uart ? std::optional<Pin>(def.uart->tx) : std::nullopt,
    def.uart ? std::optional<Pin>(def.uart->rx) : std::nullopt,
+   def.swo ? std::optional<Pin>(def.swo->rx) : std::nullopt,
    pinOf(def.vref),
    pinOf(def.powerSwitch),
    pinOf(def.leds.power),

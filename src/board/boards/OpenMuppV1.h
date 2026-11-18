@@ -42,6 +42,8 @@ inline constexpr Definition openMuppV1{
    .jtagFastPath = JtagFastPath{ .tckLink{ Port::C, 10 } },
    // UART7 remap: its RX and TX DMA channels (DMA2 8, 9) do not collide with the JTAG fast path.
    .uart = Uart{ .usart = 7, .tx{ Port::A, 6 }, .rx{ Port::A, 7 } },
+   // SWO: the TDO net also goes to PA3 (USART2 RX). PB14 cannot receive it.
+   .swo = Swo{ .usart = 2, .rx{ Port::A, 3 } },
    // R5, R6: VTREF / 2
    .vref = VrefSense{ .pin{ Port::B, 0 }, .divider = 2 },
    .powerSwitch = std::nullopt,

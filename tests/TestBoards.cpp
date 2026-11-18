@@ -210,6 +210,8 @@ TEST_CASE("YD-CH32V307VCT6 has the pin map of plan D10") {
    CHECK(yd.debug.trst == Pin{ Port::B, 9 });
    CHECK(yd.debug.rtck == Pin{ Port::A, 8 });
    CHECK(yd.uart == board::Uart{ .usart = 7, .tx{ Port::C, 2 }, .rx{ Port::C, 3 } });
+   // The SWO input needs a wire from TDO (PB14) to PA3
+   CHECK(yd.swo == board::Swo{ .usart = 2, .rx{ Port::A, 3 } });
    CHECK(yd.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 1 });
    CHECK(yd.leds.state == Signal{ { Port::B, 4 }, Active::High });
    CHECK(yd.leds.usb == Signal{ { Port::A, 15 }, Active::High });
@@ -232,6 +234,7 @@ TEST_CASE("OpenMUPP v1 has the pin map of docs/hardware.md of openmupp-v1") {
    ydPins.srstActive = Active::High;
    CHECK(v1.debug == ydPins);
    CHECK(v1.uart == board::Uart{ .usart = 7, .tx{ Port::A, 6 }, .rx{ Port::A, 7 } });
+   CHECK(v1.swo == board::Swo{ .usart = 2, .rx{ Port::A, 3 } });
    CHECK(v1.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 2 });
    CHECK(v1.leds.state == Signal{ { Port::A, 10 }, Active::High });
    CHECK(v1.leds.usb == Signal{ { Port::A, 9 }, Active::High });
@@ -281,6 +284,9 @@ TEST_CASE("isValid checks the CH32V307 rules") {
    }
    SUBCASE("SWD pin PA14 (no SW_CFG write)") {
       def.leds.usb = Signal{ { Port::A, 14 }, Active::High };
+   }
+   SUBCASE("SWO pin used twice") {
+      def.swo->rx = def.debug.tdo;
    }
    SUBCASE("Vref pin without an ADC channel") {
       // PB8 is free on the YD board, so only the ADC rule rejects it.
