@@ -315,6 +315,22 @@ class ManchesterEdges {
       }
    }
 
+   // Drops all edges up to the write counts, and sets the line level after
+   // them. Use it when the level that the counts give is wrong: an edge
+   // came while the capture started, and the streams have the wrong order.
+   void realign(uint32_t risingWritten, uint32_t fallingWritten, bool high) {
+      risingRead_ = risingWritten;
+      fallingRead_ = fallingWritten;
+      fallingFirst_ = fallingRead_ - risingRead_ + (high ? 1 : 0);
+   }
+
+   // True when merge() left edges that are not read: it waits for an edge
+   // of the other stream. That is normal for an edge that just came, and
+   // an error when no new edge comes.
+   [[nodiscard]] bool waiting(uint32_t risingWritten, uint32_t fallingWritten) const {
+      return risingWritten != risingRead_ || fallingWritten != fallingRead_;
+   }
+
    // The line level after the edges that merge() gave to the decoder
    [[nodiscard]] bool lineHigh() const {
       return !nextIsRising();
@@ -322,7 +338,8 @@ class ManchesterEdges {
 
    private:
    // The falling edges since reset(), less the rising edges: fallingFirst_
-   // before a rising edge, fallingFirst_ - 1 before a falling edge.
+   // before a rising edge, fallingFirst_ - 1 before a falling edge. Only
+   // the difference counts: realign() can give any value.
    [[nodiscard]] bool nextIsRising() const {
       return fallingRead_ - risingRead_ == fallingFirst_;
    }

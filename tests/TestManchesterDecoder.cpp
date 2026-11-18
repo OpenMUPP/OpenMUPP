@@ -434,6 +434,32 @@ TEST_CASE("Manchester edges: drop with a falling count one ahead skips the risin
    CHECK(rec.got[1].time == 4);
 }
 
+TEST_CASE("Manchester edges: realign corrects the order after an edge at the start of the capture") {
+   Edges edges;
+   // The line was low at the read, but went high before the capture started.
+   edges.reset(false);
+   FakeCapture dma{ edges };
+   Recorder rec;
+   dma.write({ { 5, false }, { 9, true }, { 12, false } });
+   // The merge waits for a rising edge first: wrong order
+   CHECK(edges.merge(dma.rising, dma.falling, rec, noSink));
+   REQUIRE(rec.got.size() == 2);
+   CHECK(rec.got[0].time == 9);
+   CHECK(rec.got[1].time == 5);
+   // The edge at 12 waits for a rising edge before it, which never comes.
+   CHECK(edges.waiting(dma.rising, dma.falling));
+   // The line is low now: realign drops the edge at 12, and the order is right.
+   edges.realign(dma.rising, dma.falling, false);
+   CHECK_FALSE(edges.lineHigh());
+   rec.got.clear();
+   dma.write({ { 20, true }, { 25, false } });
+   CHECK(edges.merge(dma.rising, dma.falling, rec, noSink));
+   REQUIRE(rec.got.size() == 2);
+   CHECK(rec.got[0].time == 20);
+   CHECK(rec.got[1].time == 25);
+   CHECK_FALSE(edges.waiting(dma.rising, dma.falling));
+}
+
 TEST_CASE("Manchester edges: lapped finds a DMA write over the edges of the last merge") {
    Edges edges;
    edges.reset(false);
