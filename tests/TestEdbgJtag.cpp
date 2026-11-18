@@ -686,10 +686,16 @@ TEST_CASE("EDBG JTAG: Bloom loads a program") {
    Bench b;
    b.bloomOpen();
    b.bloomAttach();
+   // A stop at a breakpoint keeps its BCR enable.
    CHECK(b.breakSet(1, 0x200) == ok);
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.reach(0x100));
+   CHECK(b.event() == b.breakEvent(0x100, true));
    CHECK(b.breakClear(1) == ok);
    CHECK(b.avr8({ avr8::command::enterProgmode, 0x00 }) == ok);
    CHECK(b.jtagAvr.programming);
+   // No breakpoint enable stays for the new program.
+   CHECK((b.jtagAvr.ocdRegs[8] & 0x0FF8) == 0);
    CHECK(b.stop() == failed(0x32));
    CHECK(b.avr8(eraseCommand()) == ok);
    const Bytes page = pattern(128, 0x60);

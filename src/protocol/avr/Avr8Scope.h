@@ -756,6 +756,8 @@ class Avr8Scope final : public Avr8Handler {
       attached_ = false;
       running_ = false;
       event_ = false;
+      // The clock values were checked at SET.
+      static_cast<void>(target_.setSpeed(modeClock()));
       if(!debug.ocdAnswers()) {
          return JtagDebugStatus::Ok;
       }
@@ -766,7 +768,6 @@ class Avr8Scope final : public Avr8Handler {
       if(status == JtagDebugStatus::Ok) {
          status = debug.run();
       }
-      static_cast<void>(target_.setSpeed(modeClock()));
       return status;
    }
 
@@ -1699,16 +1700,10 @@ class Avr8Scope final : public Avr8Handler {
       if(prog.programming() == enter) {
          return ok();
       }
-      if(enter && attached_) {
-         // Bloom loads a program: the programming mode resets the core, and
-         // the host attaches again after it.
-         clearHardwareBreaks();
-         attached_ = false;
-         running_ = false;
-         event_ = false;
-         if(!target_.setSpeed(modeClock())) {
-            return failed(avr8::failure::clockSpeed);
-         }
+      if(enter) {
+         // Bloom loads a program: no breakpoint enable may stay in the OCD
+         // for the new program, and the host attaches again after it.
+         static_cast<void>(freeCore());
       }
       return (enter ? prog.enter() : prog.leave()) ? ok() : failed(avr8::failure::jtag);
    }
