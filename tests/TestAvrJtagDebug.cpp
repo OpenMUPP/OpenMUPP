@@ -206,3 +206,347 @@ TEST_CASE("AvrJtagDebug: reset of a running core") {
    CHECK(b.target.stopped);
    CHECK(b.target.pc == 0);
 }
+
+TEST_CASE("AvrJtagDebug: a reset timeout removes the match-all breakpoint") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   b.target.stopDelay = 100'000;
+   CHECK(b.debug.reset() == JtagDebugStatus::Timeout);
+   CHECK(b.target.ocdRegs[8] == 0xC000);
+}
+
+namespace {
+
+// Fills r0 to r31 of the mock with 0x40 + n, as the known-pattern test of
+// the research.
+void fillRegisters(MockAvrJtag &target) {
+   for(uint8_t r = 0; r < 32; ++r) {
+      target.data[r] = static_cast<uint8_t>(0x40 + r);
+   }
+}
+
+std::vector<uint8_t> registers(const MockAvrJtag &target) {
+   return { target.data.begin(), target.data.begin() + 32 };
+}
+
+constexpr uint16_t dataEind = 0x5C;
+
+} // namespace
+
+TEST_CASE("AvrJtagDebug: the context after a stop") {
+   for(const uint8_t revision : { uint8_t{ 3 }, uint8_t{ 4 } }) {
+      CAPTURE(revision);
+      Bench b{ revision };
+      fillRegisters(b.target);
+      const auto pattern = registers(b.target);
+      b.target.data[dataEind] = 0x01;
+      b.target.pc = 0x123;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.pc() == 0x123);
+      CHECK(b.debug.eind() == 0x01);
+      std::vector<uint8_t> read(32);
+      REQUIRE(b.debug.readData(0, read.data(), 32) == JtagDebugStatus::Ok);
+      CHECK(read == pattern);
+      // OUT OCDR, rN for each register first, then IN r16, EIND
+      REQUIRE(b.target.executed.size() == 34);
+      CHECK(b.target.executed[0] == avr::jtagDebug::out(0x31, 0));
+      CHECK(b.target.executed[31] == avr::jtagDebug::out(0x31, 31));
+      CHECK(b.target.executed[32] == avr::jtagDebug::in(16, 0x3C));
+      CHECK(b.target.unknownInstructions.empty());
+   }
+}
+
+TEST_CASE("AvrJtagDebug: the write-back before a step, in the reference order") {
+   for(const uint8_t revision : { uint8_t{ 3 }, uint8_t{ 4 } }) {
+      CAPTURE(revision);
+      Bench b{ revision };
+      fillRegisters(b.target);
+      b.target.pc = 0x200;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      // The memory access changes r16, r30 and r31 on the target.
+      uint8_t sram = 0;
+      REQUIRE(b.debug.readData(0x100, &sram, 1) == JtagDebugStatus::Ok);
+      const uint8_t r5 = 0xA5;
+      REQUIRE(b.debug.writeData(5, &r5, 1) == JtagDebugStatus::Ok);
+      CHECK(b.target.data[5] == 0x45);
+      b.debug.setPc(0xC9);
+      b.target.executed.clear();
+      REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+
+      // The context read after the stop changes r16 (IN r16, EIND).
+      auto expected = registers(b.target);
+      fillRegisters(b.target);
+      std::vector<uint8_t> pattern = registers(b.target);
+      pattern[5] = 0xA5;
+      pattern[16] = b.target.data[dataEind];
+      CHECK(expected == pattern);
+      CHECK(b.target.pc == 0xCA);
+      CHECK(b.debug.pc() == 0xCA);
+      CHECK(b.target.bsr == bsr::step);
+      // The PC field at RUN: Z + 1 + 10 (revision 4), Z + 1 + 5 (revision 3)
+      CHECK(b.target.runFields.back() == (revision >= 4 ? 0xC9u : 0xCAu));
+
+      // r0 to r15 with LDI r16 and MOV, r16 to r31 with LDI
+      namespace d = avr::jtagDebug;
+      REQUIRE(b.target.executed.size() >= 48 + 6 + 5);
+      CHECK(b.target.executed[0] == d::ldi(16, 0x40));
+      CHECK(b.target.executed[1] == d::mov(0, 16));
+      CHECK(b.target.executed[11] == d::mov(5, 16));
+      CHECK(b.target.executed[10] == d::ldi(16, 0xA5));
+      CHECK(b.target.executed[32] == d::ldi(16, 0x50));
+      CHECK(b.target.executed[47] == d::ldi(31, 0x5F));
+      const uint16_t z = revision >= 4 ? 0xC9 - 11 : 0xC9 - 5;
+      const std::vector<uint16_t> pcWrite{ d::ldi(31, 0),    d::ldi(30, static_cast<uint8_t>(z)),
+                                           d::wdr,           d::ldi(16, 0),
+                                           d::out(0x3C, 16), d::eijmp,
+                                           d::ldi(31, 0x5F), d::ldi(30, 0x5E),
+                                           d::ldi(16, 0),    d::out(0x3C, 16),
+                                           d::ldi(16, 0x50) };
+      CHECK(std::vector<uint16_t>(b.target.executed.begin() + 48, b.target.executed.begin() + 59) == pcWrite);
+   }
+}
+
+TEST_CASE("AvrJtagDebug: PC writes at 0 and above 64 K words") {
+   SUBCASE("PC 0 wraps") {
+      for(const uint8_t revision : { uint8_t{ 3 }, uint8_t{ 4 } }) {
+         CAPTURE(revision);
+         Bench b{ revision };
+         b.target.pc = 0x40;
+         REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+         b.debug.setPc(0);
+         REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+         CHECK(b.target.pc == 1);
+      }
+   }
+   SUBCASE("revision 4: EIND") {
+      Bench b{ 4 };
+      b.target.flash.assign(262144, 0xFF);
+      b.target.data[dataEind] = 0x00;
+      b.target.pc = 0x1F000;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.pc() == 0x1F000);
+      const uint8_t eind = 0x01;
+      REQUIRE(b.debug.writeData(dataEind, &eind, 1) == JtagDebugStatus::Ok);
+      b.debug.setPc(0x1F010);
+      REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+      CHECK(b.target.pc == 0x1F011);
+      CHECK(b.target.data[dataEind] == 0x01);
+   }
+}
+
+TEST_CASE("AvrJtagDebug: run writes back the context") {
+   Bench b;
+   fillRegisters(b.target);
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   const uint8_t r30 = 0x12;
+   REQUIRE(b.debug.writeData(30, &r30, 1) == JtagDebugStatus::Ok);
+   b.debug.setPc(0x80);
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK_FALSE(b.target.stopped);
+   CHECK(b.target.pc == 0x80);
+   CHECK(b.target.data[30] == 0x12);
+   CHECK(b.target.data[16] == 0x50);
+   // The context needs a stop.
+   uint8_t value = 0;
+   CHECK(b.debug.readData(0x100, &value, 1) == JtagDebugStatus::TargetRunning);
+   CHECK(b.debug.run() == JtagDebugStatus::TargetRunning);
+   CHECK(b.debug.step() == JtagDebugStatus::TargetRunning);
+}
+
+TEST_CASE("AvrJtagDebug: halt of a stopped core keeps the context") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   const uint8_t r16 = 0x77;
+   REQUIRE(b.debug.writeData(16, &r16, 1) == JtagDebugStatus::Ok);
+   const std::size_t scans = b.target.drScans.size();
+   REQUIRE(b.debug.halt() == JtagDebugStatus::Ok);
+   CHECK(b.target.drScans.size() == scans);
+   uint8_t value = 0;
+   REQUIRE(b.debug.readData(16, &value, 1) == JtagDebugStatus::Ok);
+   CHECK(value == 0x77);
+}
+
+TEST_CASE("AvrJtagDebug: the data space") {
+   Bench b;
+   fillRegisters(b.target);
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   b.target.data[0x100] = 0x11;
+   b.target.data[0x101] = 0x22;
+   b.target.data[0x25] = 0x33; // PORTB, I/O 0x05
+   b.target.data[0x80] = 0x44; // extended I/O
+
+   std::vector<uint8_t> read(2);
+   REQUIRE(b.debug.readData(0x100, read.data(), 2) == JtagDebugStatus::Ok);
+   CHECK(read == std::vector<uint8_t>{ 0x11, 0x22 });
+   uint8_t value = 0;
+   b.target.executed.clear();
+   REQUIRE(b.debug.readData(0x25, &value, 1) == JtagDebugStatus::Ok);
+   CHECK(value == 0x33);
+   CHECK(b.target.executed == std::vector<uint16_t>{ avr::jtagDebug::in(16, 0x05), avr::jtagDebug::out(0x31, 16) });
+   REQUIRE(b.debug.readData(0x80, &value, 1) == JtagDebugStatus::Ok);
+   CHECK(value == 0x44);
+
+   const std::vector<uint8_t> write{ 0xA1, 0xA2 };
+   REQUIRE(b.debug.writeData(0x200, write.data(), 2) == JtagDebugStatus::Ok);
+   CHECK(b.target.data[0x200] == 0xA1);
+   CHECK(b.target.data[0x201] == 0xA2);
+   const uint8_t port = 0x5A;
+   REQUIRE(b.debug.writeData(0x25, &port, 1) == JtagDebugStatus::Ok);
+   CHECK(b.target.data[0x25] == 0x5A);
+
+   // The scratch registers come from the context, not from the target.
+   CHECK(b.target.data[16] != 0x50);
+   std::vector<uint8_t> scratch(32);
+   REQUIRE(b.debug.readData(0, scratch.data(), 32) == JtagDebugStatus::Ok);
+   CHECK(scratch[16] == 0x50);
+   CHECK(scratch[30] == 0x5E);
+   CHECK(scratch[31] == 0x5F);
+
+   // A range across the registers and the I/O
+   std::vector<uint8_t> across(4);
+   REQUIRE(b.debug.readData(0x1E, across.data(), 4) == JtagDebugStatus::Ok);
+   CHECK(across == std::vector<uint8_t>{ 0x5E, 0x5F, b.target.data[0x20], b.target.data[0x21] });
+
+   CHECK(b.debug.readData(0xFFFF, read.data(), 2) == JtagDebugStatus::OutOfRange);
+   CHECK(b.target.unknownInstructions.empty());
+}
+
+TEST_CASE("AvrJtagDebug: flash read") {
+   for(const uint8_t revision : { uint8_t{ 3 }, uint8_t{ 4 } }) {
+      CAPTURE(revision);
+      Bench b{ revision };
+      for(std::size_t i = 0; i < b.target.flash.size(); ++i) {
+         b.target.flash[i] = static_cast<uint8_t>(i * 7 + 1);
+      }
+      b.target.pc = 0x40;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+
+      SUBCASE("two scans for each word, no instruction executes") {
+         b.target.executed.clear();
+         const std::size_t from = b.target.drScans.size();
+         std::vector<uint8_t> read(4);
+         REQUIRE(b.debug.readFlash(0x200, read.data(), 4) == JtagDebugStatus::Ok);
+         CHECK(read == std::vector<uint8_t>(b.target.flash.begin() + 0x200, b.target.flash.begin() + 0x204));
+         CHECK(b.target.executed.empty());
+         const std::vector<MockAvrJtag::DrScan> scans(b.target.drScans.begin() + static_cast<std::ptrdiff_t>(from),
+                                                      b.target.drScans.end());
+         REQUIRE(scans.size() == 4);
+         const uint8_t field = avr::jtagOcd::fieldBits(revision);
+         CHECK(scans[0].data == ((uint64_t{ 0xFFFF } << field) | 0x100));
+         CHECK(scans[2].data == ((uint64_t{ 0xFFFF } << field) | 0x101));
+         // The second scan sends the PC field.
+         CHECK((scans[1].data & ((uint64_t{ 1 } << field) - 1)) == b.target.pcField);
+      }
+      SUBCASE("word 0 with LPM, odd address and length") {
+         std::vector<uint8_t> read(5);
+         REQUIRE(b.debug.readFlash(0, read.data(), 5) == JtagDebugStatus::Ok);
+         CHECK(read == std::vector<uint8_t>(b.target.flash.begin(), b.target.flash.begin() + 5));
+         std::vector<uint8_t> odd(3);
+         REQUIRE(b.debug.readFlash(0x101, odd.data(), 3) == JtagDebugStatus::Ok);
+         CHECK(odd == std::vector<uint8_t>(b.target.flash.begin() + 0x101, b.target.flash.begin() + 0x104));
+         CHECK(b.target.unknownInstructions.empty());
+      }
+      SUBCASE("range") {
+         uint8_t value = 0;
+         CHECK(b.debug.readFlash(32768, &value, 1) == JtagDebugStatus::OutOfRange);
+         CHECK(b.debug.readFlash(32767, &value, 1) == JtagDebugStatus::Ok);
+      }
+   }
+}
+
+TEST_CASE("AvrJtagDebug: EEPROM read and write") {
+   Bench b;
+   for(std::size_t i = 0; i < b.target.eeprom.size(); ++i) {
+      b.target.eeprom[i] = static_cast<uint8_t>(i ^ 0x5A);
+   }
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+
+   std::vector<uint8_t> read(3);
+   REQUIRE(b.debug.readEeprom(0x1FE, read.data(), 3) == JtagDebugStatus::Ok);
+   CHECK(read == std::vector<uint8_t>(b.target.eeprom.begin() + 0x1FE, b.target.eeprom.begin() + 0x201));
+
+   b.target.eepeBusyReads = 3;
+   const std::vector<uint8_t> write{ 0x01, 0x02 };
+   REQUIRE(b.debug.writeEeprom(0x300, write.data(), 2) == JtagDebugStatus::Ok);
+   CHECK(b.target.eeprom[0x300] == 0x01);
+   CHECK(b.target.eeprom[0x301] == 0x02);
+   CHECK(b.target.eepromWrites == 2);
+
+   uint8_t value = 0;
+   CHECK(b.debug.readEeprom(1024, &value, 1) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.writeEeprom(1023, write.data(), 2) == JtagDebugStatus::OutOfRange);
+
+   b.target.eepeBusyReads = 1'000'000;
+   CHECK(b.debug.writeEeprom(0, write.data(), 1) == JtagDebugStatus::Timeout);
+   CHECK(b.target.unknownInstructions.empty());
+}
+
+TEST_CASE("AvrJtagDebug: EEPROM with a one-byte address register") {
+   Bench b;
+   b.target.eearhIo = 0x21;
+   b.debug.setDevice({ .flashBytes = 32768, .eepromBytes = 256, .eearh = 0x21, .eearl = 0x21 });
+   b.target.eeprom[0x42] = 0x99;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   uint8_t value = 0;
+   b.target.executed.clear();
+   REQUIRE(b.debug.readEeprom(0x42, &value, 1) == JtagDebugStatus::Ok);
+   CHECK(value == 0x99);
+   namespace d = avr::jtagDebug;
+   CHECK(b.target.executed.front() == d::ldi(16, 0x42));
+   CHECK(b.debug.readEeprom(256, &value, 1) == JtagDebugStatus::OutOfRange);
+}
+
+TEST_CASE("AvrJtagDebug: a failed context read blocks run, step and halt until a reset") {
+   Bench b;
+   fillRegisters(b.target);
+   b.target.ocdrStuck = true;
+   CHECK(b.debug.attach() == JtagDebugStatus::Timeout);
+   CHECK(b.debug.isStopped());
+   b.target.ocdrStuck = false;
+   b.target.executed.clear();
+   const std::size_t irScans = b.target.irScans.size();
+   CHECK(b.debug.run() == JtagDebugStatus::NoContext);
+   CHECK(b.debug.step() == JtagDebugStatus::NoContext);
+   CHECK(b.debug.halt() == JtagDebugStatus::NoContext);
+   uint8_t value = 0;
+   CHECK(b.debug.readData(0, &value, 1) == JtagDebugStatus::NoContext);
+   CHECK(b.debug.readFlash(0x100, &value, 1) == JtagDebugStatus::NoContext);
+   // No write-back, no RUN
+   CHECK(b.target.executed.empty());
+   CHECK(std::find(b.target.irScans.begin() + static_cast<std::ptrdiff_t>(irScans), b.target.irScans.end(), ir::run) ==
+         b.target.irScans.end());
+   CHECK(b.target.stopped);
+
+   REQUIRE(b.debug.reset() == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.readData(5, &value, 1) == JtagDebugStatus::Ok);
+   CHECK(value == 0x45);
+   CHECK(b.debug.run() == JtagDebugStatus::Ok);
+}
+
+TEST_CASE("AvrJtagDebug: EEPROM write with adjacent OUTs and a read back") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   b.target.executed.clear();
+   const uint8_t value = 0x3C;
+   REQUIRE(b.debug.writeEeprom(0x10, &value, 1) == JtagDebugStatus::Ok);
+   namespace d = avr::jtagDebug;
+   const auto &e = b.target.executed;
+   const auto first = std::find(e.begin(), e.end(), d::out(0x1F, 16));
+   REQUIRE(first != e.end());
+   REQUIRE(first + 1 != e.end());
+   CHECK(*(first + 1) == d::out(0x1F, 31));
+   CHECK(*(first - 1) == d::ldi(31, 0x06));
+   CHECK(*(first - 2) == d::ldi(16, 0x04));
+
+   SUBCASE("the hardware ignores EEPE") {
+      b.target.eepeIgnored = true;
+      const uint8_t other = 0x99;
+      CHECK(b.debug.writeEeprom(0x11, &other, 1) == JtagDebugStatus::VerifyFailed);
+      CHECK(b.target.eeprom[0x11] != 0x99);
+   }
+   SUBCASE("r31 comes back at the write-back") {
+      fillRegisters(b.target);
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK(b.target.data[31] == 0x00);
+   }
+}
