@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The DAP_SWO_* commands of the CMSIS-DAP processor on a fake SWO receiver
 // (protocol/cmsisdap/DapSwo.h), with the baud rates of the CH32V307 USART2.
+// The last tests run the SWO trace endpoint of the CMSIS-DAP v2 function
+// (usb/CmsisDapFunction.h) on the fake USB controller.
 
 #include "protocol/cmsisdap/DapProcessor.h"
 #include "swo/SwoRing.h"
@@ -10,8 +12,10 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -94,11 +98,11 @@ Bytes cat(std::initializer_list<Bytes> parts) {
 }
 
 struct SwoBench {
-   explicit SwoBench(bool withSwo = true)
+   explicit SwoBench(bool withSwo = true, bool streaming = false)
       : info(mupptest::dapTestInfo())
       , dap(swd, gpio, platform, info) {
       if(withSwo) {
-         dap.setSwo(swo);
+         dap.setSwo(swo, streaming);
       }
    }
 
@@ -358,4 +362,146 @@ TEST_CASE("hostGone stops the capture and resets the SWO settings, DAP_Disconnec
    REQUIRE(b.run({ 0x1A, 0x01 }) == Bytes{ 0x1A, 0x00 });
    b.receive(2);
    CHECK(b.run({ 0x1C, 0x10, 0x00 }) == Bytes{ 0x1C, 0x01, 0x00, 0x00 });
+}
+
+TEST_CASE("Without the SWO trace endpoint, DAP_SWO_Transport 2 gives an error") {
+   SwoBench b;
+   CHECK(b.run({ 0x17, 0x02 }) == Bytes{ 0x17, 0xFF });
+   std::array<uint8_t, 8> data{};
+   b.receive(4);
+   CHECK(b.dap.readSwoStream(data) == 0);
+}
+
+TEST_CASE("With the SWO trace endpoint, DAP_Info reports SWO streaming and DAP_SWO_Transport 2 works") {
+   SwoBench b(true, true);
+   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x55 });
+   CHECK(b.run({ 0x17, 0x02 }) == Bytes{ 0x17, 0x00 });
+   REQUIRE(b.run({ 0x18, 0x01 }) == Bytes{ 0x18, 0x00 });
+   REQUIRE(b.run(cat({ { 0x19 }, word(2'000'000) })) == cat({ { 0x19 }, word(2'000'000) }));
+   REQUIRE(b.run({ 0x1A, 0x01 }) == Bytes{ 0x1A, 0x00 });
+   b.receive(5);
+   // DAP_SWO_Data gives no data with transport 2.
+   CHECK(b.run({ 0x1C, 0x10, 0x00 }) == Bytes{ 0x1C, 0x01, 0x00, 0x00 });
+   std::array<uint8_t, 3> data{};
+   CHECK(b.dap.readSwoStream(data) == 3);
+   CHECK(data == std::array<uint8_t, 3>{ 0x00, 0x01, 0x02 });
+   // Transport 2 cannot change during the capture.
+   CHECK(b.run({ 0x17, 0x01 }) == Bytes{ 0x17, 0xFF });
+   REQUIRE(b.run({ 0x1A, 0x00 }) == Bytes{ 0x1A, 0x00 });
+   REQUIRE(b.run({ 0x17, 0x01 }) == Bytes{ 0x17, 0x00 });
+   CHECK(b.dap.readSwoStream(data) == 0);
+}
+
+namespace {
+
+constexpr uint8_t swoIn = usb::dap::swoEndpoint;
+
+// The CMSIS-DAP v2 function with the SWO trace endpoint, on the fake
+// controller, with the fake receiver
+struct StreamBench : mupptest::DapBenchT<true> {
+   explicit StreamBench(bool highSpeed = false) {
+      processor.setSwo(swo, true);
+      controller().setHighSpeed(highSpeed);
+      enumerate();
+   }
+
+   Bytes command(const Bytes &request) {
+      REQUIRE(write(request));
+      const auto response = read();
+      REQUIRE(response.has_value());
+      mainLoop();
+      return *response;
+   }
+
+   // Transport 2, mode UART, 2 Mbaud, start
+   void startStream() {
+      REQUIRE(command({ 0x17, 0x02 }) == Bytes{ 0x17, 0x00 });
+      REQUIRE(command({ 0x18, 0x01 }) == Bytes{ 0x18, 0x00 });
+      REQUIRE(command(cat({ { 0x19 }, word(2'000'000) })) == cat({ { 0x19 }, word(2'000'000) }));
+      REQUIRE(command({ 0x1A, 0x01 }) == Bytes{ 0x1A, 0x00 });
+   }
+
+   void receive(std::size_t count, uint8_t first = 0) {
+      for(std::size_t i = 0; i < count; ++i) {
+         swo.data.push_back(static_cast<uint8_t>(first + i));
+      }
+   }
+
+   // The host reads one packet of the trace endpoint, then the main loop runs.
+   std::optional<Bytes> trace() {
+      auto packet = controller().takeIn(swoIn);
+      mainLoop();
+      return packet;
+   }
+
+   FakeSwo swo;
+};
+
+Bytes sequence(std::size_t count, uint8_t first = 0) {
+   Bytes result(count);
+   for(std::size_t i = 0; i < count; ++i) {
+      result[i] = static_cast<uint8_t>(first + i);
+   }
+   return result;
+}
+
+} // namespace
+
+TEST_CASE("The SWO trace endpoint sends the trace data of transport 2") {
+   for(const bool highSpeed : { false, true }) {
+      CAPTURE(highSpeed);
+      StreamBench b(highSpeed);
+      const std::size_t packetSize = highSpeed ? 512 : 64;
+      CHECK_FALSE(b.trace().has_value());
+      b.startStream();
+      b.receive(packetSize + 10);
+      b.mainLoop();
+      // One full packet, then the rest at once after the acknowledge
+      CHECK(b.trace() == sequence(packetSize));
+      CHECK(b.trace() == sequence(10, static_cast<uint8_t>(packetSize)));
+      CHECK_FALSE(b.trace().has_value());
+      // The data after a stop goes out too.
+      REQUIRE(b.command({ 0x1A, 0x00 }) == Bytes{ 0x1A, 0x00 });
+      b.receive(3, 0x40);
+      b.mainLoop();
+      CHECK(b.trace() == sequence(3, 0x40));
+   }
+}
+
+TEST_CASE("The SWO trace endpoint sends nothing with transport DAP_SWO_Data") {
+   StreamBench b;
+   REQUIRE(b.command({ 0x17, 0x01 }) == Bytes{ 0x17, 0x00 });
+   REQUIRE(b.command({ 0x18, 0x01 }) == Bytes{ 0x18, 0x00 });
+   REQUIRE(b.command(cat({ { 0x19 }, word(2'000'000) })) == cat({ { 0x19 }, word(2'000'000) }));
+   REQUIRE(b.command({ 0x1A, 0x01 }) == Bytes{ 0x1A, 0x00 });
+   b.receive(4);
+   b.mainLoop();
+   CHECK_FALSE(b.trace().has_value());
+   CHECK(b.command({ 0x1C, 0x10, 0x00 }) == Bytes{ 0x1C, 0x01, 0x04, 0x00, 0x00, 0x01, 0x02, 0x03 });
+}
+
+TEST_CASE("The SWO trace packet goes out again after a halt clear") {
+   StreamBench b;
+   b.startStream();
+   b.receive(5);
+   b.mainLoop();
+   b.request(0x02, 3, 0, swoIn); // SET_FEATURE(ENDPOINT_HALT)
+   CHECK_FALSE(b.trace().has_value());
+   b.request(0x02, 1, 0, swoIn); // CLEAR_FEATURE(ENDPOINT_HALT)
+   b.mainLoop();
+   CHECK(b.trace() == sequence(5));
+   CHECK_FALSE(b.trace().has_value());
+}
+
+TEST_CASE("A bus reset drops the SWO trace packet and stops the capture") {
+   StreamBench b;
+   b.startStream();
+   b.receive(5);
+   b.mainLoop();
+   b.enumerate();
+   CHECK_FALSE(b.swo.active());
+   b.receive(3);
+   b.mainLoop();
+   // Transport none after hostGone()
+   CHECK_FALSE(b.trace().has_value());
 }

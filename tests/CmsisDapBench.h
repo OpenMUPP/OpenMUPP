@@ -119,14 +119,17 @@ inline cmsisdap::DeviceInfo dapTestInfo(const char *product = "Product") {
    return info;
 }
 
-class DapBench {
+// withSwo: the CMSIS-DAP v2 interface has the SWO trace endpoint, as with
+// MUPP_CMSIS_DAP_SWO.
+template <bool withSwo = false>
+class DapBenchT {
    // Declared first: the processor copies it.
    cmsisdap::DeviceInfo info_;
 
    public:
-   explicit DapBench(const char *product = "Product",
-                     personality::PersonalitySwitch *personalitySwitch = nullptr,
-                     boot::BootloaderEntry *bootloader = nullptr)
+   explicit DapBenchT(const char *product = "Product",
+                      personality::PersonalitySwitch *personalitySwitch = nullptr,
+                      boot::BootloaderEntry *bootloader = nullptr)
       : info_(dapTestInfo(product))
       , processor(swd, gpio, platform, info_, nullptr, personalitySwitch, nullptr, bootloader)
       , function(processor)
@@ -160,8 +163,13 @@ class DapBench {
    }
 
    void request(uint8_t request, uint16_t value) {
+      this->request(standardDeviceOut, request, value, 0);
+   }
+
+   // A host-to-device request without data stage
+   void request(uint8_t requestType, uint8_t request, uint16_t value, uint16_t index) {
       bool ok = false;
-      const auto result = controller_.controlOut(setupPacket(standardDeviceOut, request, value, 0, 0), {}, &ok);
+      const auto result = controller_.controlOut(setupPacket(requestType, request, value, index, 0), {}, &ok);
       CHECK(ok);
       CHECK_FALSE(result.stalled);
    }
@@ -207,11 +215,15 @@ class DapBench {
    FakeDapGpio gpio;
    FakeDapPlatform platform;
    cmsisdap::Processor processor;
-   usb::CmsisDapFunction function;
+   usb::DapFunction<art::usb::VendorBulkFunction, withSwo> function;
 
    private:
    FakeDeviceController controller_;
    usb::SerialNumber serial_;
+   static constexpr auto configuration_ =
+   usb::dap::makeConfiguration<usb::dap::hasHid, withSwo>(usb::dap::packetSize, usb::cdcNotificationInterval);
+   static constexpr auto highSpeedConfiguration_ =
+   usb::dap::makeConfiguration<usb::dap::hasHid, withSwo>(usb::dap::highSpeedPacketSize, usb::dap::cdcNotificationHighSpeedInterval);
    const std::array<art::span<const uint8_t>, usb::dap::stringCount> strings_{
       usb::desc::asSpan(usb::dap::languageDescriptor),   usb::desc::asSpan(usb::dap::manufacturerDescriptor),
       usb::desc::asSpan(usb::dap::productDescriptor),    serial_.bytes(),
@@ -219,12 +231,12 @@ class DapBench {
    };
    const art::usb::Descriptors descriptors_{
       .device = usb::desc::asSpan(usb::dap::deviceDescriptor),
-      .configuration = usb::desc::asSpan(usb::dap::configurationDescriptor),
+      .configuration = usb::desc::asSpan(configuration_),
       .strings = art::span<const art::span<const uint8_t>>(strings_.data(), strings_.size()),
       .bos = usb::desc::asSpan(usb::dap::bosDescriptor),
       // As on the CH32V307. The fake controller is at full speed until
       // controller().setHighSpeed(true).
-      .highSpeedConfiguration = usb::desc::asSpan(usb::dap::highSpeedConfigurationDescriptor),
+      .highSpeedConfiguration = usb::desc::asSpan(highSpeedConfiguration_),
       .deviceQualifier = usb::desc::asSpan(usb::dap::deviceQualifierDescriptor),
    };
    art::usb::msos20::DescriptorSetHandler msOs20Handler_{ usb::dap::msOs20VendorCode,
@@ -233,5 +245,7 @@ class DapBench {
    art::usb::Device device_;
    art::usb::Function cdc_;
 };
+
+using DapBench = DapBenchT<>;
 
 } // namespace mupptest

@@ -131,11 +131,13 @@
 //   A Tx Count that is more than the request has gives ID_DAP_Invalid.
 // - The DAP_SWO_* commands run on the DapSwo object (DapSwo.h, setSwo()).
 //   Without one, they reply ID_DAP_Invalid, and DAP_Info reports no SWO.
-//   With one, DAP_Info reports SWO UART and the buffer size. The processor
-//   keeps the transport, the mode and the baud rate:
-//   - DAP_SWO_Transport accepts 0 (none) and 1 (DAP_SWO_Data). 2 (the
-//     streaming endpoint) gives DAP_ERROR. While the capture runs, it
-//     gives DAP_ERROR.
+//   With one, DAP_Info reports SWO UART and the buffer size, and SWO
+//   streaming trace when the transport has the SWO trace endpoint. The
+//   processor keeps the transport, the mode and the baud rate:
+//   - DAP_SWO_Transport accepts 0 (none), 1 (DAP_SWO_Data), and 2 (the
+//     SWO trace endpoint) only with streaming. While the capture runs, it
+//     gives DAP_ERROR. With transport 2, the transport takes the data with
+//     readSwoStream().
 //   - DAP_SWO_Mode stops the capture, and clears the baud rate. It accepts
 //     0 (off) and 1 (UART). Another mode (2, Manchester) gives DAP_ERROR
 //     and sets mode off.
@@ -271,6 +273,7 @@ namespace capability {
 inline constexpr uint16_t swd = 0x01;
 inline constexpr uint16_t jtag = 0x02;
 inline constexpr uint16_t swoUart = 0x04;
+inline constexpr uint16_t swoStreaming = 0x40;
 inline constexpr uint16_t atomicCommands = 0x10;
 inline constexpr uint16_t uartPort = 0x80;
 inline constexpr uint16_t usbComPort = 0x100;
@@ -285,8 +288,8 @@ struct DeviceInfo {
    const char *serialNumber{ nullptr };
    const char *firmwareVersion{ nullptr };
    // The processor adds JTAG when it has a JTAG port, the UART port and
-   // the USB COM port when it has a DapUart, and SWO UART when it has a
-   // DapSwo.
+   // the USB COM port when it has a DapUart, and SWO UART (and SWO
+   // streaming trace) when it has a DapSwo.
    uint16_t capabilities{ capability::swd | capability::atomicCommands };
 };
 
@@ -456,9 +459,17 @@ class Processor final : private TransferAbort {
    }
 
    // Gives the DAP_SWO_* commands to `swo`, which must outlive the
-   // processor. Call it before the first packet.
-   void setSwo(DapSwo &swo) {
+   // processor. streaming: the transport has the SWO trace endpoint and
+   // calls readSwoStream(). Call it before the first packet.
+   void setSwo(DapSwo &swo, bool streaming = false) {
       swo_ = &swo;
+      swoStreaming_ = streaming;
+   }
+
+   // The trace data for the SWO trace endpoint: up to data.size() bytes,
+   // only with DAP_SWO_Transport 2. Returns the count.
+   [[nodiscard]] std::size_t readSwoStream(art::span<uint8_t> data) {
+      return swoTransport_ == swoTransport::streaming ? swo_->read(data) : 0;
    }
 
    // Number of transfers with an error on the wire. It wraps at 2^32: only
@@ -545,6 +556,7 @@ class Processor final : private TransferAbort {
    protocol::TargetPower *power_;
    VendorCommands *vendor_{ nullptr };
    DapSwo *swo_{ nullptr };
+   bool swoStreaming_{ false };
    protocol::TargetPinOwner *pinOwner_{ nullptr };
    protocol::PinClient pinClient_{ protocol::PinClient::None };
 

@@ -716,7 +716,8 @@ bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
          ok = swo_->active() || (swoMode_ == swoMode::uart && swoBaud_ != 0 && swo_->start(swoBaud_) != 0);
       }
    } else if(id == command::swoTransport) {
-      ok = !swo_->active() && (value == swoTransport::none || value == swoTransport::dataCommand);
+      ok = !swo_->active() && (value == swoTransport::none || value == swoTransport::dataCommand ||
+                               (value == swoTransport::streaming && swoStreaming_));
       if(ok) {
          swoTransport_ = value;
       }
@@ -799,6 +800,9 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
       }
       if(swo_ != nullptr) {
          capabilities = static_cast<uint16_t>(capabilities | capability::swoUart);
+         if(swoStreaming_) {
+            capabilities = static_cast<uint16_t>(capabilities | capability::swoStreaming);
+         }
       }
       out.u8(capabilities > 0xFF ? 2 : 1);
       out.u8(static_cast<uint8_t>(capabilities));
