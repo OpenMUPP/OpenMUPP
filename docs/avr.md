@@ -337,14 +337,14 @@ The extended fuse reads `0xFB`, not `0xCB` as in the backup. Only the unused bit
 
 | Test | Result |
 |---|---|
-| Read the IDCODE, signature, fuses, lock bits and calibration byte | Pass. IDCODE `0x4958703F`. The fuses and lock bits are the same as over ISP. |
+| Read the IDCODE, signature, fuses, lock bits and calibration byte | Pass. IDCODE `0x4958703F`. The fuses and lock bits are the same as in the ISP backup, but with JTAGEN programmed (high fuse `0x98`). |
 | Read 32 KiB flash and 1 KiB EEPROM at 200 kHz (no `-B`) and at `-B 1MHz`. Compare with the ISP backup. | Pass. The flash read takes 8.3 s at 200 kHz and 3.0 s at 1 MHz. |
 | Erase, write and verify 32 KiB random flash data and 1 KiB random EEPROM data at `-B 1MHz`. Verify again in a new session. | Pass. The flash write takes 5.4 s, the EEPROM write 0.9 s. The lock bits read `0xFF` after the chip erase. |
 | Program OCDEN (high fuse `0x18`), read it back in a new session, then clear it (`0x98`) | Pass |
-| Write the extended fuse (`0xCF`, then `0xCB`) and read it back | Pass. avrdude writes the unused bits 7..4 as 1 (bit mask `0x0F`). Thus `0xCB` reads back as `0xFB`. |
+| Write the extended fuse (`0xCF`, then `0xCB`) and read it back | Pass. avrdude writes the unused bits 7..4 as 1 (bit mask `0x0F`). Thus `0xCF` reads back as `0xFF`, and `0xCB` as `0xFB`. |
 | Target at 1 MHz: write and verify flash and EEPROM at `-B 125kHz` | Pass. The flash write takes 19.4 s, the flash read 12.3 s. |
 | Target at 1 MHz: read the signature and verify flash and EEPROM at `-B 1MHz` | Pass. This TCK is more than the datasheet limit (a quarter of the target clock). The chip has a margin, but do not rely on it. |
-| `-x jtagchain=0,0,0,0`, and `-x jtagchain=0,1,0,4` | Pass. The first value works. With the second value, avrdude stops with "initialization failed". |
+| `-x jtagchain=0,0,0,0`, and `-x jtagchain=0,1,0,4` | Pass. The first value works. With the second value, avrdude stops with "initialization failed", as expected (see [avrdude over JTAG](#avrdude-over-jtag)). |
 
 The test did not use a TCK of 1125 kHz or more (the JTAG fast path).
 
