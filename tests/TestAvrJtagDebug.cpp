@@ -206,3 +206,11 @@ TEST_CASE("AvrJtagDebug: reset of a running core") {
    CHECK(b.target.stopped);
    CHECK(b.target.pc == 0);
 }
+
+TEST_CASE("AvrJtagDebug: a reset timeout removes the match-all breakpoint") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   b.target.stopDelay = 100'000;
+   CHECK(b.debug.reset() == JtagDebugStatus::Timeout);
+   CHECK(b.target.ocdRegs[8] == 0xC000);
+}

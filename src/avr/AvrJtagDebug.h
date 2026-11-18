@@ -177,6 +177,9 @@ class AvrJtagDebug {
          return JtagDebugStatus::NoOcd;
       }
       if(JtagDebugStatus status = waitStop(); status != JtagDebugStatus::Ok) {
+         // Remove the match-all breakpoint, else each later run stops at
+         // once. The status of the reset is the result.
+         static_cast<void>(writeBcr(jtagDebug::idle));
          return status;
       }
       if(!writeBcr(jtagDebug::idle)) {
