@@ -205,6 +205,12 @@ class AvrJtagDebug {
       return stopped_;
    }
 
+   // True when the core is stopped and its context is valid: the PC and
+   // the registers are the ones of the target.
+   [[nodiscard]] bool hasContext() const {
+      return stopped_ && contextValid_;
+   }
+
    // Stops the core. A stopped core stays stopped, with no scan: a new
    // context read would lose the context changes.
    [[nodiscard]] JtagDebugStatus halt() {

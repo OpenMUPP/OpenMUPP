@@ -3,7 +3,7 @@
 This document describes the on-chip debug (OCD) protocol of the classic AVR chips with a JTAG port.
 Examples of these chips are the ATmega16, ATmega32U4 and ATmega2560.
 Microchip does not publish this protocol. The datasheets name the JTAG instructions `0x8` to `0xB` only as "private".
-The firmware does not use this protocol yet. It is the base for a later JTAG debug function of the AVR support.
+The JTAG debug function of the firmware uses this protocol (`src/avr/AvrJtagOcd.h`, `src/avr/AvrJtagDebug.h`, see [AVR JTAG debug with Bloom](avr.md#jtag-debug-with-bloom)).
 
 The facts come from captures of a real debugger (MPLAB PICkit 5 with MPLAB X) and from tests on an ATmega2560.
 [AVR JTAG OCD research](avr-jtag-ocd-research.md) tells how we got each fact and which steps went wrong.

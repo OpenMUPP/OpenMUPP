@@ -15,8 +15,8 @@
 // payload and sends the response, and gives the AVR_EVT requests to
 // event().
 //
-// The commands below are for debugWIRE. JTAG (hasProgmode) is programming
-// only for now: see "JTAG" below.
+// The commands below are for debugWIRE. JTAG (hasProgmode): see "JTAG"
+// below.
 //
 // A command is [id][version 0][fields]. Values are LSB first. The
 // responses are OK [0x80][0], DATA [0x84][1][data][0], PC [0x83][0][pc
@@ -106,8 +106,9 @@
 // [0x40][pc u32][cause][0x01][0x00], with cause 1 at a breakpoint. While
 // the target runs, each event() checks the line one time.
 //
-// JTAG (avrdude: variant 2, function 1, physical 4): the programming mode
-// of avr/AvrJtagProg.h. The device context: 0x00 flash page bytes u16 (2
+// JTAG (avrdude: variant 2, function 1, physical 4; Bloom: function 2):
+// the programming mode of avr/AvrJtagProg.h and the debug mode of
+// avr/AvrJtagDebug.h. The device context: 0x00 flash page bytes u16 (2
 // to 256), 0x02 flash bytes u32 (up to 256 KiB), 0x10 EEPROM bytes u16,
 // 0x12 EEPROM page bytes, 0x13 OCD revision (0 to 4), 0x15 full-page bit
 // stream (not 0: the flash page goes in one PROG_PAGELOAD scan), 0x18
@@ -131,12 +132,42 @@
 //        OSCCAL index n is row byte 2n + 1. avrdude reads the signature
 //        (SIGN_JTAG 0 to 2) and its sigrow, prodsig and sernum memories in
 //        this way. A read can span pages.
-//   DEACTIVATE_PHYSICAL: leaves the programming mode and releases the
-//        pins.
-//   DETACH: OK. The debug commands (ATTACH, RESET, STOP, RUN, RUN_TO,
-//        STEP, PC, breakpoints, READ_MEMORY_MASKED) and DISABLE_DEBUGWIRE:
+//   DEACTIVATE_PHYSICAL: DETACH, leaves the programming mode and releases
+//        the pins. The device context stays for the next
+//        ACTIVATE_PHYSICAL (Bloom sends it only one time).
+//   ATTACH [break]: the debug mode at the debug clock. Not in the
+//        programming mode (FAILED 0x32). When the OCD answers, the core
+//        stops and a break event comes, also with break 0 (Bloom waits for
+//        it). Without an OCD answer (OCDEN not programmed) ATTACH is OK,
+//        and each command that needs the OCD gives FAILED 0x50 (Bloom:
+//        "check OCDEN fuse bit"). A second ATTACH is a STOP.
+//   DETACH: the hardware breakpoints are removed, a stopped core runs.
+//   STOP, RESET, RUN, RUN_TO [word address u32], STEP, PC_READ, PC_WRITE
+//        (word addresses), in the debug mode only (else FAILED 0x32): as on
+//        debugWIRE. The PC can be above 16 bits (ATmega2560).
+//   HW_BREAK_SET [type 1][number][byte address u32][mode], HW_BREAK_CLEAR
+//        [number]: numbers 1 to 3 (OCD reg 1 to 3), program breakpoints
+//        only (other types: FAILED 0x90). Bloom sends byte addresses, the
+//        OCD takes word addresses. They take effect at the next RUN or
+//        STEP. RUN_TO uses OCD reg 0.
+//   READ_MEMORY, READ_MEMORY_MASKED, WRITE_MEMORY in the debug mode (Bloom),
+//        with a stopped core: SRAM 0x20 (the data space; the OCDR reads as
+//        0, a write skips it), EEPROM 0x22 and read only SPM 0xA0 (the
+//        flash). FUSES 0xB2 (Bloom manage_ocden_fuse_bit), also with a
+//        running core: the probe enters the programming mode, reads or
+//        writes the fuses, leaves it and attaches again. The core is reset
+//        then, and no break event comes.
+//   ENTER_PROGMODE in the debug mode: the hardware breakpoints are
+//        removed and the debug mode ends (Bloom loads a program in this way
+//        and then sends DEACTIVATE_PHYSICAL, ACTIVATE_PHYSICAL, ATTACH).
+//   SW_BREAK_SET, SW_BREAK_CLEAR, SW_BREAK_CLEAR_ALL and DISABLE_DEBUGWIRE:
 //        FAILED 0x90.
-//   A failed JTAG scan or a write that does not end gives FAILED 0x13.
+//   Break events: as on debugWIRE, with cause 1 when the BSR shows a
+//        program breakpoint or a BREAK instruction. While the core runs,
+//        each event() reads OCD reg D one time.
+//   A failed JTAG scan, a write that does not end, a core that does not
+//        stop in time or a context that the probe could not read gives
+//        FAILED 0x13.
 //
 // All fields come from the host. The scope checks them before it touches
 // the target: a command that is too short gives FAILED 0x35, an address
@@ -211,6 +242,8 @@ inline constexpr uint8_t alignment = 0x37;
 inline constexpr uint8_t range = 0x38;
 inline constexpr uint8_t illegalValue = 0x39;
 inline constexpr uint8_t clockSpeed = 0x3B;
+// "Device not under control" (Bloom adds "check OCDEN fuse bit")
+inline constexpr uint8_t notUnderControl = 0x50;
 inline constexpr uint8_t resources = 0x81;
 inline constexpr uint8_t notSupported = 0x90;
 inline constexpr uint8_t unknown = 0x91;
@@ -282,9 +315,9 @@ class Avr8Handler {
 
 template <typename Target>
 class Avr8Scope final : public Avr8Handler {
-   // One stored hardware breakpoint: a target with more needs more scope
-   // code.
-   static_assert(Target::hardwareBreaks <= 1, "the scope stores one hardware breakpoint");
+   // debugWIRE: one stored hardware breakpoint. The JTAG debug mode keeps
+   // its own.
+   static_assert(Target::hasProgmode || Target::hardwareBreaks <= 1, "the scope stores one hardware breakpoint");
 
    public:
    explicit Avr8Scope(Target &target)
@@ -305,9 +338,7 @@ class Avr8Scope final : public Avr8Handler {
 
    std::size_t event(art::span<uint8_t> frame) override {
       if constexpr(Target::hasProgmode) {
-         // No break events in the programming mode
-         static_cast<void>(frame);
-         return 0;
+         return jtagEvent(frame);
       } else {
          return debugWireEvent(frame);
       }
@@ -318,6 +349,7 @@ class Avr8Scope final : public Avr8Handler {
          return;
       }
       if constexpr(Target::hasProgmode) {
+         static_cast<void>(freeCore());
          static_cast<void>(target_.close());
       } else {
          releaseDebugWire();
@@ -368,19 +400,40 @@ class Avr8Scope final : public Avr8Handler {
             stopped(true);
          }
       }
+      return breakFrame(frame, target_.pc());
+   }
+
+   // The waiting break event at pc (word address), 0 for none
+   std::size_t breakFrame(art::span<uint8_t> frame, uint32_t pc) {
       if(!event_) {
          return 0;
       }
       event_ = false;
-      const uint32_t pc = target_.pc();
       const std::array<uint8_t, avr8::eventFrameBytes> bytes{
          { 0x0E, 0x00, static_cast<uint8_t>(eventSequence_), static_cast<uint8_t>(eventSequence_ >> 8), avr8::handler,
-           avr8::eventBreak, static_cast<uint8_t>(pc), static_cast<uint8_t>(pc >> 8), 0x00, 0x00,
-           static_cast<uint8_t>(eventAtBreak_ ? 1 : 0), 0x01, 0x00 }
+           avr8::eventBreak, static_cast<uint8_t>(pc), static_cast<uint8_t>(pc >> 8), static_cast<uint8_t>(pc >> 16),
+           static_cast<uint8_t>(pc >> 24), static_cast<uint8_t>(eventAtBreak_ ? 1 : 0), 0x01, 0x00 }
       };
       ++eventSequence_;
       std::copy(bytes.begin(), bytes.end(), frame.begin());
       return bytes.size();
+   }
+
+   template <typename T = Target>
+   std::size_t jtagEvent(art::span<uint8_t> frame) {
+      if(frame.size() < avr8::eventFrameBytes) {
+         return 0;
+      }
+      if(attached_ && running_ && !event_) {
+         // A breakpoint stopped the core. A failed context read after the
+         // stop is still a stop: the next command gives the error.
+         bool stopped = false;
+         static_cast<void>(target_.debug().status(stopped));
+         if(stopped) {
+            jtagStopped();
+         }
+      }
+      return breakFrame(frame, target_.debug().pc());
    }
 
    void releaseDebugWire() {
@@ -412,6 +465,21 @@ class Avr8Scope final : public Avr8Handler {
       }
    }
 
+   [[nodiscard]] static uint8_t failureOf(JtagDebugStatus status) {
+      switch(status) {
+      case JtagDebugStatus::NoTap:
+         return avr8::failure::noDevice;
+      case JtagDebugStatus::NoOcd:
+         return avr8::failure::notUnderControl;
+      case JtagDebugStatus::TargetRunning:
+         return avr8::failure::illegalState;
+      case JtagDebugStatus::OutOfRange:
+         return avr8::failure::range;
+      default:
+         return avr8::failure::jtag;
+      }
+   }
+
    std::size_t ok() {
       response_[0] = avr8::response::ok;
       response_[1] = 0;
@@ -425,6 +493,9 @@ class Avr8Scope final : public Avr8Handler {
    }
    std::size_t result(DwStatus status) {
       return status == DwStatus::Ok ? ok() : failed(failureOf(status));
+   }
+   std::size_t result(JtagDebugStatus status) {
+      return status == JtagDebugStatus::Ok ? ok() : failed(failureOf(status));
    }
    // DATA with count bytes that the caller wrote at response_[2]
    std::size_t data(std::size_t count) {
@@ -535,29 +606,361 @@ class Avr8Scope final : public Avr8Handler {
       case cmd::erase:
          return chipErase();
       case cmd::readMemory:
-         return readJtag();
-      case cmd::writeMemory:
-         return writeJtag();
-      // The debug mode (OCD) is not available yet.
-      case cmd::attach:
-      case cmd::disableDebugWire:
       case cmd::readMemoryMasked:
-      case cmd::reset:
-      case cmd::stop:
-      case cmd::run:
-      case cmd::runTo:
-      case cmd::step:
-      case cmd::pcRead:
-      case cmd::pcWrite:
-      case cmd::hwBreakSet:
-      case cmd::hwBreakClear:
+         if(id == cmd::readMemory && target_.prog().programming()) {
+            return readJtag();
+         }
+         return attached_ ? readDebug(id == cmd::readMemoryMasked) : failed(avr8::failure::illegalState);
+      case cmd::writeMemory:
+         if(target_.prog().programming()) {
+            return writeJtag();
+         }
+         return attached_ ? writeDebug() : failed(avr8::failure::illegalState);
+      case cmd::attach:
+         return attachJtag();
+      case cmd::disableDebugWire:
       case cmd::swBreakSet:
       case cmd::swBreakClear:
       case cmd::swBreakClearAll:
          return failed(avr8::failure::notSupported);
       default:
+         break;
+      }
+      if(!attached_) {
+         switch(id) {
+         case cmd::reset:
+         case cmd::stop:
+         case cmd::run:
+         case cmd::runTo:
+         case cmd::step:
+         case cmd::pcRead:
+         case cmd::pcWrite:
+         case cmd::hwBreakSet:
+         case cmd::hwBreakClear:
+            return failed(avr8::failure::illegalState);
+         default:
+            return failed(avr8::failure::unknown);
+         }
+      }
+      AvrJtagDebug &debug = target_.debug();
+      switch(id) {
+      case cmd::reset:
+         return afterCommand(debug.reset());
+      case cmd::stop:
+         return stopJtag();
+      case cmd::run:
+         return runJtag(std::nullopt);
+      case cmd::runTo:
+         if(request_.size() < headerBytes + 4) {
+            return failed(avr8::failure::length);
+         }
+         return runJtag(u32(request_, headerBytes));
+      case cmd::step:
+         return afterCommand(debug.step());
+      case cmd::pcRead:
+         return debug.hasContext() ? pcData(debug.pc()) : failed(failureOf(contextFailure()));
+      case cmd::pcWrite:
+         return pcWriteJtag();
+      case cmd::hwBreakSet:
+      case cmd::hwBreakClear:
+         return hardwareBreakJtag(id == cmd::hwBreakSet);
+      default:
          return failed(avr8::failure::unknown);
       }
+   }
+
+   // The status of a stopped core without a valid context, or of a
+   // running core
+   template <typename T = Target>
+   [[nodiscard]] JtagDebugStatus contextFailure() {
+      return target_.debug().isStopped() ? JtagDebugStatus::NoContext : JtagDebugStatus::TargetRunning;
+   }
+
+   // The core stopped while it ran: one break event, with the cause from
+   // the BSR.
+   template <typename T = Target>
+   void jtagStopped() {
+      namespace bsr = jtagOcd::bsr;
+      constexpr uint16_t programBreak = bsr::breakInstruction | bsr::break0 | bsr::break1 | bsr::break2 | bsr::break3;
+      running_ = false;
+      event_ = true;
+      eventAtBreak_ = (target_.debug().breakStatus() & programBreak) != 0;
+   }
+
+   // A RESET, STEP or STOP that stopped the core: one break event with
+   // cause 0
+   std::size_t afterCommand(JtagDebugStatus status) {
+      if(status != JtagDebugStatus::Ok) {
+         return failed(failureOf(status));
+      }
+      running_ = false;
+      event_ = true;
+      eventAtBreak_ = false;
+      return ok();
+   }
+
+   // The clock of the current mode
+   [[nodiscard]] uint16_t modeClock() const {
+      return u16(attached_ ? clockDebug_ : clockProg_, 0);
+   }
+
+   template <typename T = Target>
+   std::size_t attachJtag() {
+      if(request_.size() < headerBytes + 1) {
+         return failed(avr8::failure::length);
+      }
+      if(target_.prog().programming()) {
+         return failed(avr8::failure::illegalState);
+      }
+      if(attached_) {
+         return stopJtag();
+      }
+      AvrJtagDebug &debug = target_.debug();
+      clearHardwareBreaks();
+      attached_ = true;
+      running_ = false;
+      event_ = false;
+      if(!target_.setSpeed(modeClock())) {
+         attached_ = false;
+         return failed(avr8::failure::clockSpeed);
+      }
+      if(const JtagDebugStatus status = debug.attach(); status != JtagDebugStatus::Ok) {
+         attached_ = false;
+         static_cast<void>(target_.setSpeed(modeClock()));
+         return failed(failureOf(status));
+      }
+      if(debug.isStopped()) {
+         // Bloom waits for this event, also after ATTACH with break 0.
+         event_ = true;
+         eventAtBreak_ = false;
+      }
+      return ok();
+   }
+
+   template <typename T = Target>
+   void clearHardwareBreaks() {
+      for(uint8_t number = 1; number <= Target::hardwareBreaks; ++number) {
+         static_cast<void>(target_.debug().clearBreakpoint(number));
+      }
+   }
+
+   // Ends the debug mode: no hardware breakpoints, and a core that the OCD
+   // holds runs again. Ok without an OCD answer: the core runs.
+   template <typename T = Target>
+   JtagDebugStatus freeCore() {
+      if(!attached_) {
+         return JtagDebugStatus::Ok;
+      }
+      AvrJtagDebug &debug = target_.debug();
+      clearHardwareBreaks();
+      attached_ = false;
+      running_ = false;
+      event_ = false;
+      // The clock values were checked at SET.
+      static_cast<void>(target_.setSpeed(modeClock()));
+      if(!debug.ocdAnswers()) {
+         return JtagDebugStatus::Ok;
+      }
+      // A running core may stop later at an old BCR enable: stop it, and
+      // let the run write the BCR without breakpoints. halt() of a stopped
+      // core sends no scan.
+      JtagDebugStatus status = debug.halt();
+      if(status == JtagDebugStatus::Ok) {
+         status = debug.run();
+      }
+      return status;
+   }
+
+   template <typename T = Target>
+   std::size_t stopJtag() {
+      AvrJtagDebug &debug = target_.debug();
+      if(running_) {
+         // The core can be at a breakpoint already: the event gets its
+         // cause.
+         bool stopped = false;
+         if(debug.status(stopped) == JtagDebugStatus::Ok && stopped) {
+            jtagStopped();
+            return ok();
+         }
+      }
+      return afterCommand(debug.halt());
+   }
+
+   template <typename T = Target>
+   std::size_t runJtag(std::optional<uint32_t> word) {
+      const JtagDebugStatus status = target_.debug().run(word);
+      if(status != JtagDebugStatus::Ok) {
+         return failed(failureOf(status));
+      }
+      running_ = true;
+      event_ = false;
+      return ok();
+   }
+
+   std::size_t pcData(uint32_t pc) {
+      response_[0] = avr8::response::pc;
+      response_[1] = 0;
+      for(std::size_t i = 0; i < 4; ++i) {
+         response_[2 + i] = static_cast<uint8_t>(pc >> (8 * i));
+      }
+      return 6;
+   }
+
+   template <typename T = Target>
+   std::size_t pcWriteJtag() {
+      if(request_.size() < headerBytes + 4) {
+         return failed(avr8::failure::length);
+      }
+      AvrJtagDebug &debug = target_.debug();
+      if(!debug.hasContext()) {
+         return failed(failureOf(contextFailure()));
+      }
+      const uint32_t word = u32(request_, headerBytes);
+      if(word >= target_.device().prog.flashBytes / 2u) {
+         return failed(avr8::failure::range);
+      }
+      debug.setPc(word);
+      return ok();
+   }
+
+   // HW_BREAK_SET [type][number][byte address u32][mode], HW_BREAK_CLEAR
+   // [number]
+   template <typename T = Target>
+   std::size_t hardwareBreakJtag(bool set) {
+      constexpr uint8_t programType = 1;
+      const std::size_t bytes = set ? headerBytes + 7 : headerBytes + 1;
+      if(request_.size() < bytes) {
+         return failed(avr8::failure::length);
+      }
+      const uint8_t number = request_[set ? 3 : 2];
+      if(number == 0 || number > Target::hardwareBreaks) {
+         return failed(avr8::failure::resources);
+      }
+      AvrJtagDebug &debug = target_.debug();
+      if(!set) {
+         return result(debug.clearBreakpoint(number));
+      }
+      if(request_[2] != programType) {
+         return failed(avr8::failure::notSupported);
+      }
+      const uint32_t address = u32(request_, 4);
+      if(address % 2 != 0) {
+         return failed(avr8::failure::range);
+      }
+      return result(debug.setBreakpoint(number, address / 2u));
+   }
+
+   // [type][address u32][length u32] (masked: [mask]), in the debug mode
+   template <typename T = Target>
+   std::size_t readDebug(bool masked) {
+      if(request_.size() < memoryHeaderBytes) {
+         return failed(avr8::failure::length);
+      }
+      const uint8_t type = request_[2];
+      const uint32_t address = u32(request_, 3);
+      const uint32_t length = u32(request_, 7);
+      if(length == 0 || length > response_.size() - 3) {
+         return failed(avr8::failure::length);
+      }
+      const uint8_t *mask = nullptr;
+      if(masked) {
+         if(type != avr8::memory::sram) {
+            return failed(avr8::failure::memoryType);
+         }
+         if(request_.size() < memoryHeaderBytes + (length + 7u) / 8u) {
+            return failed(avr8::failure::length);
+         }
+         mask = request_.data() + memoryHeaderBytes;
+      }
+      AvrJtagDebug &debug = target_.debug();
+      uint8_t *out = response_.data() + 2;
+      JtagDebugStatus status = JtagDebugStatus::Ok;
+      switch(type) {
+      case avr8::memory::sram:
+         if(!inRange(address, length, 0x10000u)) {
+            return failed(avr8::failure::range);
+         }
+         status = accessDebugData(static_cast<uint16_t>(address), out, static_cast<uint16_t>(length), mask, false);
+         break;
+      case avr8::memory::spm:
+         status = debug.readFlash(address, out, length);
+         break;
+      case avr8::memory::eeprom:
+         if(!inRange(address, length, target_.device().eepromBytes)) {
+            return failed(avr8::failure::range);
+         }
+         status = debug.readEeprom(static_cast<uint16_t>(address), out, static_cast<uint16_t>(length));
+         break;
+      case avr8::memory::fuses: {
+         const auto failure = fusesInDebug(address, response_.subspan(2, length), false);
+         return failure ? failed(*failure) : data(length);
+      }
+      default:
+         return failed(avr8::failure::memoryType);
+      }
+      return status == JtagDebugStatus::Ok ? data(length) : failed(failureOf(status));
+   }
+
+   // [type][address u32][length u32][async][data], in the debug mode
+   template <typename T = Target>
+   std::size_t writeDebug() {
+      constexpr std::size_t writeHeaderBytes = memoryHeaderBytes + 1;
+      if(request_.size() < writeHeaderBytes) {
+         return failed(avr8::failure::length);
+      }
+      const uint8_t type = request_[2];
+      const uint32_t address = u32(request_, 3);
+      const uint32_t length = u32(request_, 7);
+      if(length == 0 || request_.size() - writeHeaderBytes < length) {
+         return failed(avr8::failure::length);
+      }
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): a write does not change the buffer.
+      uint8_t *in = const_cast<uint8_t *>(request_.data() + writeHeaderBytes);
+      switch(type) {
+      case avr8::memory::sram:
+         if(!inRange(address, length, 0x10000u)) {
+            return failed(avr8::failure::range);
+         }
+         return result(accessDebugData(static_cast<uint16_t>(address), in, static_cast<uint16_t>(length), nullptr, true));
+      case avr8::memory::eeprom:
+         if(!inRange(address, length, target_.device().eepromBytes)) {
+            return failed(avr8::failure::range);
+         }
+         return result(target_.debug().writeEeprom(static_cast<uint16_t>(address), in, static_cast<uint16_t>(length)));
+      case avr8::memory::fuses: {
+         const auto failure = fusesInDebug(address, art::span<uint8_t>(in, length), true);
+         return failure ? failed(*failure) : ok();
+      }
+      default:
+         // The flash write in the debug mode (SPM) comes with the software
+         // breakpoints.
+         return failed(avr8::failure::memoryType);
+      }
+   }
+
+   // FUSES in the debug mode (Bloom manage_ocden_fuse_bit): the programming
+   // mode for the access, then the debug mode again. A value: the FAILED
+   // code.
+   template <typename T = Target>
+   std::optional<uint8_t> fusesInDebug(uint32_t address, art::span<uint8_t> bytes, bool write) {
+      if(!inRange(address, static_cast<uint32_t>(bytes.size()), 3)) {
+         return avr8::failure::range;
+      }
+      AvrJtagProg &prog = target_.prog();
+      bool done = prog.enter();
+      for(std::size_t i = 0; i < bytes.size() && done; ++i) {
+         const auto fuse = static_cast<Fuse>(address + i);
+         done = write ? prog.writeFuse(fuse, bytes[i]) : prog.readFuse(fuse, bytes[i]);
+      }
+      done = prog.leave() && done;
+      // The programming mode reset the core: a new attach (no break event,
+      // the host does not wait for one).
+      running_ = false;
+      event_ = false;
+      if(const JtagDebugStatus status = target_.debug().attach(); status != JtagDebugStatus::Ok) {
+         return failureOf(status);
+      }
+      return done ? std::nullopt : std::optional<uint8_t>{ avr8::failure::jtag };
    }
 
    // The JTAG table of the physical context (context 1) that holds
@@ -604,7 +1007,9 @@ class Avr8Scope final : public Avr8Handler {
          return avr8::failure::clockSpeed;
       }
       if constexpr(Target::hasProgmode) {
-         if(active_ && first == avr8::physical::clockProg && !target_.setSpeed(kHz)) {
+         // Only the clock of the current mode goes to the TAP.
+         const uint8_t current = attached_ ? avr8::physical::clockDebug : avr8::physical::clockProg;
+         if(active_ && first == current && !target_.setSpeed(kHz)) {
             return avr8::failure::clockSpeed;
          }
       }
@@ -779,8 +1184,12 @@ class Avr8Scope final : public Avr8Handler {
          return ok();
       }
       if constexpr(Target::hasProgmode) {
+         const JtagDebugStatus freed = freeCore();
          const bool closed = target_.close();
          end();
+         if(freed != JtagDebugStatus::Ok) {
+            return failed(failureOf(freed));
+         }
          return closed ? ok() : failed(avr8::failure::jtag);
       } else {
          DwStatus status = DwStatus::Ok;
@@ -800,8 +1209,14 @@ class Avr8Scope final : public Avr8Handler {
    void end() {
       active_ = false;
       bare_ = false;
+      attached_ = false;
       // The next session can be another host on another chip (issue #69).
-      device_ = {};
+      // JTAG keeps it: Bloom loads a program with DEACTIVATE_PHYSICAL and
+      // ACTIVATE_PHYSICAL and sends no new device context (forget() clears
+      // it).
+      if constexpr(!Target::hasProgmode) {
+         device_ = {};
+      }
       running_ = false;
       event_ = false;
       hardwareBreak_.reset();
@@ -831,9 +1246,7 @@ class Avr8Scope final : public Avr8Handler {
 
    std::size_t detach() {
       if constexpr(Target::hasProgmode) {
-         // No debug mode yet: the core runs, or the programming mode holds
-         // it in reset.
-         return ok();
+         return result(freeCore());
       } else {
          return detachDebugWire();
       }
@@ -955,14 +1368,7 @@ class Avr8Scope final : public Avr8Handler {
       if(!target_.isStopped()) {
          return failed(avr8::failure::illegalState);
       }
-      const uint16_t pc = target_.pc();
-      response_[0] = avr8::response::pc;
-      response_[1] = 0;
-      response_[2] = static_cast<uint8_t>(pc);
-      response_[3] = static_cast<uint8_t>(pc >> 8);
-      response_[4] = 0;
-      response_[5] = 0;
-      return 6;
+      return pcData(target_.pc());
    }
 
    std::size_t pcWrite() {
@@ -1294,6 +1700,11 @@ class Avr8Scope final : public Avr8Handler {
       if(prog.programming() == enter) {
          return ok();
       }
+      if(enter) {
+         // Bloom loads a program: no breakpoint enable may stay in the OCD
+         // for the new program, and the host attaches again after it.
+         static_cast<void>(freeCore());
+      }
       return (enter ? prog.enter() : prog.leave()) ? ok() : failed(avr8::failure::jtag);
    }
 
@@ -1445,12 +1856,34 @@ class Avr8Scope final : public Avr8Handler {
       return address <= size && length <= size - address;
    }
 
-   // The data space in runs without DWDR and without the masked bytes. A
-   // read gives 0 for them, a write skips them.
    DwStatus accessData(uint16_t address, uint8_t *buffer, uint16_t length, const uint8_t *mask, bool write) {
-      const uint32_t dwdr = avrIoData + target_.device().dwdr;
+      return dataRuns<DwStatus>(address, buffer, length, mask, write, target_.device().dwdr,
+                                [&](uint16_t from, uint8_t *at, uint16_t count) {
+                                   return write ? target_.writeData(from, at, count) : target_.readData(from, at, count);
+                                });
+   }
+
+   template <typename T = Target>
+   JtagDebugStatus accessDebugData(uint16_t address, uint8_t *buffer, uint16_t length, const uint8_t *mask, bool write) {
+      AvrJtagDebug &debug = target_.debug();
+      if(!debug.hasContext()) {
+         return contextFailure();
+      }
+      return dataRuns<JtagDebugStatus>(address, buffer, length, mask, write, target_.device().ocdr,
+                                       [&](uint16_t from, uint8_t *at, uint16_t count) {
+                                          return write ? debug.writeData(from, at, count) : debug.readData(from, at, count);
+                                       });
+   }
+
+   // The data space in runs without the OCD data register (DWDR, OCDR: I/O
+   // address ocdrIo) and without the masked bytes. A read gives 0 for them,
+   // a write skips them. access(address, buffer, count) does one run.
+   template <typename Status, typename Access>
+   static Status
+   dataRuns(uint16_t address, uint8_t *buffer, uint16_t length, const uint8_t *mask, bool write, uint8_t ocdrIo, Access access) {
+      const uint32_t ocdr = avrIoData + ocdrIo;
       const auto skip = [&](uint32_t i) {
-         return address + i == dwdr || (mask != nullptr && ((mask[i / 8u] >> (i % 8u)) & 1u) == 0);
+         return address + i == ocdr || (mask != nullptr && ((mask[i / 8u] >> (i % 8u)) & 1u) == 0);
       };
       uint32_t at = 0;
       while(at < length) {
@@ -1465,15 +1898,13 @@ class Avr8Scope final : public Avr8Handler {
          while(end < length && !skip(end)) {
             ++end;
          }
-         const auto from = static_cast<uint16_t>(address + at);
-         const auto count = static_cast<uint16_t>(end - at);
-         const DwStatus status = write ? target_.writeData(from, buffer + at, count) : target_.readData(from, buffer + at, count);
-         if(status != DwStatus::Ok) {
+         const Status status = access(static_cast<uint16_t>(address + at), buffer + at, static_cast<uint16_t>(end - at));
+         if(status != Status::Ok) {
             return status;
          }
          at = end;
       }
-      return DwStatus::Ok;
+      return Status::Ok;
    }
 
    Target &target_;
@@ -1487,6 +1918,8 @@ class Avr8Scope final : public Avr8Handler {
    std::array<uint8_t, avr8::deviceBytes> device_{};
    std::array<uint8_t, 1> options_{};
    bool active_{ false };
+   // JTAG: in the debug mode (ATTACH)
+   bool attached_{ false };
    // Active without a device context (see ACTIVATE_PHYSICAL)
    bool bare_{ false };
    // The probe started the program (RUN, RUN_TO, ATTACH without break).

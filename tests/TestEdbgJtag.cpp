@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The AVR8 generic scope on JTAG (protocol/avr/Avr8Scope.h,
 // avr/AvrJtagTarget.h) through the HID function and the EDBG transport: the
-// programming sessions of avrdude (jtagice3, JTAG) on the mock ATmega32U4
-// of tests/MockAvrJtag.h, the parameters of Bloom, the checks of the host
-// fields, the target pins and a host that goes away.
+// programming sessions of avrdude (jtagice3, JTAG) and the debug sessions
+// of Bloom on the mock ATmega32U4 of tests/MockAvrJtag.h, the parameters of
+// Bloom, the checks of the host fields, the target pins and a host that
+// goes away.
 
 #include "EdbgBench.h"
 
@@ -116,6 +117,77 @@ struct Bench : EdbgBench {
       CHECK(transact(handler::housekeeping, { 0x11, 0x00, 0x00 }) == ok);
       CHECK(hidCommand({ 0x03 })[1] == 0x00);
    }
+
+   // Bloom EdbgAvr8Interface::init() and Avr8::activate(): the parameters,
+   // ACTIVATE_PHYSICAL, ATTACH with break 0, and the break event of the
+   // stop
+   void bloomOpen(const Bytes &desc = megaDeviceDesc()) {
+      CHECK(avr8(avr8Set(1, 0x21, { 200, 0 })) == ok);
+      CHECK(avr8(avr8Set(1, 0x01, { 0, 0, 0, 0 })) == ok);
+      CHECK(avr8(avr8Set(0, 0, { 0x02 })) == ok);
+      CHECK(avr8(avr8Set(0, 1, { 0x02 })) == ok);
+      CHECK(avr8(avr8Set(1, 0, { 0x04 })) == ok);
+      CHECK(avr8(avr8Set(2, 0, desc)) == ok);
+      REQUIRE(avr8({ avr8::command::activatePhysical, 0x00, 0x00 }) == data(idcodeBytes));
+   }
+
+   void bloomAttach() {
+      REQUIRE(avr8({ avr8::command::attach, 0x00, 0x00 }) == ok);
+      CHECK(event() == breakEvent(jtagAvr.pc, false));
+   }
+
+   // Avr8::deactivate(): DETACH, DEACTIVATE_PHYSICAL
+   void bloomClose() {
+      CHECK(avr8({ avr8::command::detach, 0x00 }) == ok);
+      CHECK(avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
+   }
+
+   // The AVR_EVT report: the event frame, or empty
+   Bytes event() {
+      const Bytes report = hidCommand({ avr::edbg::avrEvt });
+      REQUIRE(report[0] == avr::edbg::avrEvt);
+      const std::size_t size = (std::size_t{ report[1] } << 8) | report[2];
+      return Bytes(report.begin() + 3, report.begin() + 3 + static_cast<std::ptrdiff_t>(size));
+   }
+
+   // The frame of a break event: the sequence is the count of events
+   Bytes breakEvent(uint32_t pc, bool atBreak) {
+      Bytes frame{ avr::edbg::sof, 0x00, byte(events, 0), byte(events, 1), handler::avr8, 0x40 };
+      putU32(frame, pc);
+      frame.insert(frame.end(), { static_cast<uint8_t>(atBreak ? 1 : 0), 0x01, 0x00 });
+      ++events;
+      return frame;
+   }
+
+   Bytes pcRead() {
+      return avr8({ avr8::command::pcRead, 0x00 });
+   }
+
+   Bytes run() {
+      return avr8({ avr8::command::run, 0x00 });
+   }
+
+   Bytes stop() {
+      return avr8({ avr8::command::stop, 0x00, 0x01 });
+   }
+
+   Bytes step() {
+      return avr8({ avr8::command::step, 0x00, 0x01, 0x01 });
+   }
+
+   // Bloom: type 1 (program), a byte address, mode 3
+   Bytes breakSet(uint8_t number, uint32_t address, uint8_t type = 1) {
+      Bytes command{ avr8::command::hwBreakSet, 0x00, type, number };
+      putU32(command, address);
+      command.push_back(0x03);
+      return avr8(command);
+   }
+
+   Bytes breakClear(uint8_t number) {
+      return avr8({ avr8::command::hwBreakClear, 0x00, number });
+   }
+
+   uint16_t events{ 0 };
 
    // The session is over: the pins are free, the core runs.
    void checkReleased() {
@@ -251,12 +323,13 @@ TEST_CASE("EDBG JTAG: Bloom sets the clock and the daisy chain before the varian
    set(2, 0x18, { 0x31 });
    CHECK(b.avr8({ avr8::command::activatePhysical, 0x00, 0x01 }) == data(idcodeBytes));
    CHECK(b.avr8({ avr8::command::getId, 0x00 }) == data(idcodeBytes));
-   // The debug mode (OCD) is not available yet.
-   for(const uint8_t command : { avr8::command::attach, avr8::command::stop, avr8::command::run, avr8::command::step,
-                                 avr8::command::reset, avr8::command::pcRead, avr8::command::disableDebugWire }) {
-      CHECK(b.avr8({ command, 0x00, 0x00 }) == failed(0x90));
+   // The debug commands need ATTACH.
+   for(const uint8_t command :
+       { avr8::command::stop, avr8::command::run, avr8::command::step, avr8::command::reset, avr8::command::pcRead }) {
+      CHECK(b.avr8({ command, 0x00, 0x00 }) == failed(0x32));
    }
-   CHECK(b.avr8(memoryCommand(avr8::command::readMemoryMasked, memory::sram, 0x100, 1)) == failed(0x90));
+   CHECK(b.avr8({ avr8::command::disableDebugWire, 0x00 }) == failed(0x90));
+   CHECK(b.avr8(memoryCommand(avr8::command::readMemoryMasked, memory::sram, 0x100, 1)) == failed(0x32));
    CHECK(b.avr8({ avr8::command::detach, 0x00 }) == ok);
    CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
    b.checkReleased();
@@ -415,4 +488,261 @@ TEST_CASE("EDBG JTAG: the host goes away in the programming mode") {
    b.checkReleased();
    CHECK(b.avr8(avr8Get(0, 0, 1)) == data({ 0x00 }));
    CHECK(b.bulkCommand({ 0x02, 0x01 }) == Bytes{ 0x02, 0x01 });
+}
+
+TEST_CASE("EDBG JTAG: a Bloom debug session") {
+   Bench b;
+   b.jtagAvr.pc = 0x123;
+   for(uint8_t r = 0; r < 32; ++r) {
+      b.jtagAvr.reg(r) = static_cast<uint8_t>(0x40 + r);
+   }
+   b.jtagAvr.data[0x50] = 0x11;
+   b.jtagAvr.data[0x52] = 0x33;
+   b.jtagAvr.data[0x100] = 0x5A;
+   b.jtagAvr.flash[0x200] = 0x0C;
+   b.jtagAvr.flash[0x201] = 0x94;
+   b.bloomOpen();
+   b.bloomAttach();
+   CHECK(b.jtagAvr.stopped);
+   // Bloom stop(): STOP of the stopped core, one more event
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(0x123, false));
+   CHECK(b.pcRead() == Bytes{ 0x83, 0x00, 0x23, 0x01, 0x00, 0x00 });
+
+   // Registers, I/O, SRAM: SRAM 0x20. The OCDR (0x51) reads as 0.
+   Bytes registers(32);
+   for(uint8_t r = 0; r < 32; ++r) {
+      registers[r] = static_cast<uint8_t>(0x40 + r);
+   }
+   CHECK(b.avr8(readMemory(memory::sram, 0, 32)) == data(registers));
+   CHECK(b.avr8(readMemory(memory::sram, 0x50, 3)) == data({ 0x11, 0x00, 0x33 }));
+   Bytes masked = memoryCommand(avr8::command::readMemoryMasked, memory::sram, 0x50, 3);
+   masked.push_back(0x05);
+   CHECK(b.avr8(masked) == data({ 0x11, 0x00, 0x33 }));
+   CHECK(b.avr8(readMemory(memory::sram, 0x100, 1)) == data({ 0x5A }));
+   CHECK(b.avr8(writeMemory(memory::sram, 0x100, { 0x01, 0x02 })) == ok);
+   CHECK(b.jtagAvr.data[0x100] == 0x01);
+   CHECK(b.jtagAvr.data[0x101] == 0x02);
+   // A register write goes to the target at the next run.
+   CHECK(b.avr8(writeMemory(memory::sram, 5, { 0x99 })) == ok);
+   // Flash: SPM, read only
+   CHECK(b.avr8(readMemory(memory::spm, 0x200, 2)) == data({ 0x0C, 0x94 }));
+   CHECK(b.avr8(writeMemory(memory::spm, 0, pattern(128, 0))) == failed(0x34));
+   // EEPROM
+   CHECK(b.avr8(writeMemory(memory::eeprom, 0x10, { 0xA5, 0x5A })) == ok);
+   CHECK(b.jtagAvr.eeprom[0x10] == 0xA5);
+   CHECK(b.avr8(readMemory(memory::eeprom, 0x10, 2)) == data({ 0xA5, 0x5A }));
+
+   // A hardware breakpoint at byte address 0x200 (word 0x100)
+   CHECK(b.breakSet(1, 0x200) == ok);
+   CHECK(b.run() == ok);
+   CHECK_FALSE(b.jtagAvr.stopped);
+   CHECK(b.jtagAvr.reg(5) == 0x99);
+   CHECK(b.event().empty());
+   CHECK(b.pcRead() == failed(0x32));
+   CHECK(b.avr8(readMemory(memory::sram, 0x100, 1)) == failed(0x32));
+   CHECK(b.run() == failed(0x32));
+   CHECK(b.jtagAvr.reach(0x100));
+   CHECK(b.event() == b.breakEvent(0x100, true));
+   CHECK(b.event().empty());
+   CHECK(b.pcRead() == Bytes{ 0x83, 0x00, 0x00, 0x01, 0x00, 0x00 });
+
+   // gdb steps over the breakpoint: clear, step, set
+   CHECK(b.breakClear(1) == ok);
+   CHECK(b.step() == ok);
+   CHECK(b.event() == b.breakEvent(0x101, false));
+   CHECK(b.breakSet(1, 0x200) == ok);
+
+   // RUN_TO a word address
+   CHECK(b.avr8({ avr8::command::runTo, 0x00, 0x80, 0x01, 0x00, 0x00 }) == ok);
+   CHECK(b.jtagAvr.reach(0x180));
+   CHECK(b.event() == b.breakEvent(0x180, true));
+
+   // STOP of a running core: cause 0
+   CHECK(b.breakClear(1) == ok);
+   CHECK(b.run() == ok);
+   CHECK_FALSE(b.jtagAvr.reach(0x100));
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(0x100, false));
+
+   // PC_WRITE, then a step from there
+   CHECK(b.avr8({ avr8::command::pcWrite, 0x00, 0x40, 0x00, 0x00, 0x00 }) == ok);
+   CHECK(b.pcRead() == Bytes{ 0x83, 0x00, 0x40, 0x00, 0x00, 0x00 });
+   CHECK(b.step() == ok);
+   CHECK(b.event() == b.breakEvent(0x41, false));
+
+   // RESET: the core stops at the reset vector, cause 0.
+   CHECK(b.avr8({ avr8::command::reset, 0x00, 0x01 }) == ok);
+   CHECK(b.event() == b.breakEvent(0x0000, false));
+
+   CHECK(b.breakSet(2, 0x300) == ok);
+   b.bloomClose();
+   CHECK_FALSE(b.jtagAvr.stopped);
+   // No breakpoint enable stays in the BCR.
+   CHECK((b.jtagAvr.ocdRegs[8] & 0x0FF8) == 0);
+   CHECK(b.jtagAvr.unknownInstructions.empty());
+   b.checkReleased();
+}
+
+TEST_CASE("EDBG JTAG: Bloom checks of the debug commands") {
+   Bench b;
+   b.bloomOpen();
+   b.bloomAttach();
+   SUBCASE("breakpoints") {
+      CHECK(b.breakSet(0, 0x200) == failed(0x81));
+      CHECK(b.breakSet(4, 0x200) == failed(0x81));
+      CHECK(b.breakClear(4) == failed(0x81));
+      // Data breakpoints
+      CHECK(b.breakSet(1, 0x200, 2) == failed(0x90));
+      CHECK(b.breakSet(1, 0x201) == failed(0x38));
+      CHECK(b.breakSet(1, 0x8000) == failed(0x38));
+      CHECK(b.avr8({ avr8::command::hwBreakSet, 0x00, 0x01, 0x01, 0x00 }) == failed(0x35));
+      // Software breakpoints come later.
+      CHECK(b.avr8({ avr8::command::swBreakSet, 0x00, 0x00, 0x02, 0x00, 0x00 }) == failed(0x90));
+      CHECK(b.avr8({ avr8::command::swBreakClearAll, 0x00 }) == failed(0x90));
+   }
+   SUBCASE("PC and run to") {
+      CHECK(b.avr8({ avr8::command::pcWrite, 0x00, 0x00, 0x40, 0x00, 0x00 }) == failed(0x38));
+      CHECK(b.avr8({ avr8::command::pcWrite, 0x00, 0x00 }) == failed(0x35));
+      CHECK(b.avr8({ avr8::command::runTo, 0x00, 0x00, 0x40, 0x00, 0x00 }) == failed(0x38));
+      CHECK(b.jtagAvr.runFields.empty());
+   }
+   SUBCASE("memory") {
+      CHECK(b.avr8(readMemory(memory::sram, 0xFFFF, 2)) == failed(0x38));
+      CHECK(b.avr8(readMemory(memory::spm, 0x7FFF, 2)) == failed(0x38));
+      CHECK(b.avr8(readMemory(memory::eeprom, 0x3FF, 2)) == failed(0x38));
+      CHECK(b.avr8(readMemory(memory::fuses, 2, 2)) == failed(0x38));
+      CHECK(b.avr8(readMemory(memory::flashPage, 0, 2)) == failed(0x34));
+      CHECK(b.avr8(writeMemory(memory::lockBits, 0, { 0xFC })) == failed(0x34));
+      Bytes masked = memoryCommand(avr8::command::readMemoryMasked, memory::eeprom, 0, 1);
+      masked.push_back(0x01);
+      CHECK(b.avr8(masked) == failed(0x34));
+      // No programming mode: no chip erase
+      CHECK(b.avr8(eraseCommand()) == failed(0x32));
+   }
+   SUBCASE("a second ATTACH is a STOP") {
+      CHECK(b.avr8({ avr8::command::attach, 0x00, 0x01 }) == ok);
+      CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+   }
+   SUBCASE("ATTACH in the programming mode") {
+      CHECK(b.avr8({ avr8::command::enterProgmode, 0x00 }) == ok);
+      CHECK(b.avr8({ avr8::command::attach, 0x00, 0x00 }) == failed(0x32));
+      CHECK(b.stop() == failed(0x32));
+      CHECK(b.avr8({ avr8::command::leaveProgmode, 0x00 }) == ok);
+   }
+   SUBCASE("the OCDR does not answer: no context") {
+      b.jtagAvr.ocdrStuck = true;
+      CHECK(b.avr8({ avr8::command::reset, 0x00, 0x01 }) == failed(0x13));
+      CHECK(b.pcRead() == failed(0x13));
+      CHECK(b.avr8(readMemory(memory::sram, 0x100, 1)) == failed(0x13));
+      CHECK(b.run() == failed(0x13));
+      b.jtagAvr.ocdrStuck = false;
+      CHECK(b.avr8({ avr8::command::reset, 0x00, 0x01 }) == ok);
+      CHECK(b.event() == b.breakEvent(0x0000, false));
+   }
+   b.bloomClose();
+   b.checkReleased();
+}
+
+// Bloom manage_ocden_fuse_bit: ATTACH without OCDEN, then the fuse write
+// with FUSES outside the programming mode
+TEST_CASE("EDBG JTAG: Bloom programs OCDEN in the debug mode") {
+   Bench b;
+   b.jtagAvr.ocden = false;
+   b.jtagAvr.ocdenFromFuse = true;
+   b.jtagAvr.pc = 0x234;
+   b.bloomOpen();
+   REQUIRE(b.avr8({ avr8::command::attach, 0x00, 0x00 }) == ok);
+   CHECK(b.event().empty());
+   // "Device not under control - check OCDEN fuse bit"
+   CHECK(b.stop() == failed(0x50));
+   CHECK(b.avr8({ avr8::command::reset, 0x00, 0x01 }) == failed(0x50));
+   CHECK(b.avr8({ avr8::command::getId, 0x00 }) == data(idcodeBytes));
+   CHECK(b.avr8(readMemory(memory::fuses, 0, 3)) == data({ 0x5E, 0x99, 0xF3 }));
+   CHECK_FALSE(b.jtagAvr.programming);
+   CHECK(b.avr8(writeMemory(memory::fuses, 1, { 0x19 })) == ok);
+   CHECK(b.jtagAvr.fuses[1] == 0x19);
+   CHECK(b.jtagAvr.ocden);
+   CHECK_FALSE(b.jtagAvr.programming);
+   // The new attach stopped the core: no event, Bloom sends STOP and RESET.
+   CHECK(b.jtagAvr.stopped);
+   CHECK(b.event().empty());
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+   CHECK(b.avr8({ avr8::command::reset, 0x00, 0x01 }) == ok);
+   CHECK(b.event() == b.breakEvent(0x0000, false));
+   // Avr8::deactivate(): OCDEN off again, then DETACH
+   CHECK(b.avr8(writeMemory(memory::fuses, 1, { 0x99 })) == ok);
+   CHECK_FALSE(b.jtagAvr.ocden);
+   CHECK(b.stop() == failed(0x50));
+   b.bloomClose();
+   b.checkReleased();
+}
+
+// Avr8::writeMemory() for the flash: the breakpoints off, ENTER_PROGMODE,
+// chip erase, FLASH_PAGE, LEAVE_PROGMODE, then DEACTIVATE_PHYSICAL,
+// ACTIVATE_PHYSICAL, ATTACH and STOP
+TEST_CASE("EDBG JTAG: Bloom loads a program") {
+   Bench b;
+   b.bloomOpen();
+   b.bloomAttach();
+   // A stop at a breakpoint keeps its BCR enable.
+   CHECK(b.breakSet(1, 0x200) == ok);
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.reach(0x100));
+   CHECK(b.event() == b.breakEvent(0x100, true));
+   CHECK(b.breakClear(1) == ok);
+   CHECK(b.avr8({ avr8::command::enterProgmode, 0x00 }) == ok);
+   CHECK(b.jtagAvr.programming);
+   // No breakpoint enable stays for the new program.
+   CHECK((b.jtagAvr.ocdRegs[8] & 0x0FF8) == 0);
+   CHECK(b.stop() == failed(0x32));
+   CHECK(b.avr8(eraseCommand()) == ok);
+   const Bytes page = pattern(128, 0x60);
+   CHECK(b.avr8(writeMemory(memory::flashPage, 0, page)) == ok);
+   CHECK(b.avr8({ avr8::command::leaveProgmode, 0x00 }) == ok);
+   CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
+   CHECK(b.jtagPins.inits == b.jtagPins.finis);
+   // No new device context
+   REQUIRE(b.avr8({ avr8::command::activatePhysical, 0x00, 0x00 }) == data(idcodeBytes));
+   b.bloomAttach();
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+   CHECK(b.avr8(readMemory(memory::spm, 0, 128)) == data(page));
+   b.bloomClose();
+   b.checkReleased();
+}
+
+TEST_CASE("EDBG JTAG: a break event above 64K words (ATmega2560)") {
+   Bench b;
+   b.jtagAvr.ocdRevision = 4;
+   b.jtagAvr.flashPageBytes = 256;
+   b.jtagAvr.flash.assign(0x40000, 0xFF);
+   b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
+   b.bloomAttach();
+   CHECK(b.breakSet(3, 0x3E000) == ok);
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.reach(0x1F000));
+   CHECK(b.event() == b.breakEvent(0x1F000, true));
+   CHECK(b.pcRead() == Bytes{ 0x83, 0x00, 0x00, 0xF0, 0x01, 0x00 });
+   b.bloomClose();
+}
+
+TEST_CASE("EDBG JTAG: the host goes away in the debug mode") {
+   Bench b;
+   b.bloomOpen();
+   b.bloomAttach();
+   CHECK(b.breakSet(1, 0x200) == ok);
+   CHECK(b.run() == ok);
+   SUBCASE("USB bus reset") {
+      b.enumerate();
+   }
+   SUBCASE("DAP_Disconnect") {
+      CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
+   }
+   // The core runs without the breakpoints.
+   CHECK_FALSE(b.jtagAvr.stopped);
+   CHECK((b.jtagAvr.ocdRegs[8] & 0x0FF8) == 0);
+   CHECK_FALSE(b.jtagAvr.reach(0x100));
+   b.checkReleased();
 }

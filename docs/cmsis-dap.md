@@ -219,7 +219,7 @@ The end of a debugWIRE or JTAG session (sign-off, "disable debugWIRE") drops the
 
 ### AVR8 generic scope
 
-The AVR8 scope runs the debugWIRE (dW) target operations of `src/avr/DebugWireTarget.h`, and the JTAG programming of `src/avr/AvrJtagTarget.h` (see [AVR8 scope on JTAG](#avr8-scope-on-jtag)).
+The AVR8 scope runs the debugWIRE (dW) target operations of `src/avr/DebugWireTarget.h`, and the JTAG programming and debug of `src/avr/AvrJtagTarget.h` (see [AVR8 scope on JTAG](#avr8-scope-on-jtag)).
 The probe has one scope for each interface. `Avr8Select` sends `SET` to both scopes, and the other commands to the active scope.
 Without an active scope, they go to the scope of the variant and the physical interface of the host.
 The host sends the device parameters, so the probe has no part database.
@@ -292,22 +292,28 @@ The probe stops the target, removes the software breakpoints from flash, lets th
 ### AVR8 scope on JTAG
 
 avrdude (`type = "jtagice3"`) sends variant 2 (mega), function 1 (programming) and physical 4 (JTAG).
-The probe has JTAG programming only. The debug commands are not available yet.
+Bloom sends function 2 (debugging). The probe has the JTAG programming mode and the debug mode (attach) on the same pins.
 The device context has the flash page size (`0x00`, 2 to 256 bytes), the flash size (`0x02`, up to 256 KiB), the EEPROM size (`0x10`), the EEPROM page size (`0x12`), the OCD revision (`0x13`, 0 to 4) and the full-page bit stream flag (`0x15`).
 A value out of range gives code `0x33` at activate physical.
 
 | Command | Function |
 |---|---|
 | `0x10` Activate physical | The probe drives the pins at the programming clock and reads the IDCODE. DATA `[IDCODE u32]`. An IDCODE that is not from Atmel (bits 11..0 not `0x03F`) gives code `0x20`. The reset flag is not used. |
-| `0x11` Deactivate physical | The probe leaves the programming mode and releases the pins. |
+| `0x11` Deactivate physical | Detach, then the probe leaves the programming mode and releases the pins. The device context stays for the next activate physical, because Bloom sends it only one time. |
 | `0x12` Get ID | DATA `[IDCODE u32]`, for example `3F 70 58 49` (an ATmega32U4: part number `0x9587`). |
-| `0x14` Detach | OK |
-| `0x15`, `0x16` Programming mode | The JTAG programming mode. The core is in reset in the programming mode. |
+| `0x13` Attach | The debug mode at the debug clock. Not in the programming mode (code `0x32`). When the OCD answers, the core stops and a break event comes, also with break 0 (Bloom waits for it). Without an OCD answer (OCDEN not programmed), attach gives OK, and each command that needs the OCD gives code `0x50`. A second attach is a stop. |
+| `0x14` Detach | The probe removes the hardware breakpoints, and a stopped core runs. |
+| `0x15`, `0x16` Programming mode | The JTAG programming mode. The core is in reset in the programming mode. Enter in the debug mode removes the hardware breakpoints and ends the debug mode. Bloom loads a program in this way, and then sends deactivate physical, activate physical and attach. |
 | `0x20` Erase | `[mode][address u32]`: mode 0 is the chip erase. Other modes give code `0x39`. |
-| `0x21` Read memory, `0x23` Write memory | Programming mode only, else code `0x32`. |
+| `0x21` Read memory, `0x22` masked read, `0x23` Write memory | In the programming mode or in the debug mode, else code `0x32`. The masked read is for the debug mode only. |
+| `0x30` Reset, `0x31` Stop, `0x34` Step | Debug mode only, else code `0x32`. The core stops, and a break event comes. |
+| `0x32` Run, `0x33` Run to | Debug mode only. Run to uses OCD register 0 for one run. |
+| `0x35`, `0x36` PC read and write | Debug mode only. The PC can be above 16 bits (ATmega2560). |
+| `0x40`, `0x41` Hardware breakpoint | Debug mode only. Numbers 1 to 3 (OCD registers 1 to 3), else code `0x81`. Type 1 (program) only, else code `0x90`. The address is a byte address, as Bloom sends it. The probe writes the breakpoints at the next run or step. |
 
-The debug commands (attach, reset, stop, run, run to, step, PC, breakpoints, masked read) and "disable debugWIRE" fail with code `0x90`.
-A JTAG scan that fails, or a write that does not end in time, gives code `0x13`.
+Software breakpoints (`0x43`, `0x44`, `0x45`) and "disable debugWIRE" fail with code `0x90`.
+A JTAG scan that fails, a write that does not end in time, a core that does not stop in time, or a CPU context that the probe could not read gives code `0x13`.
+After a failed context read, run, step, PC and memory access fail until a reset.
 
 The memory types in the programming mode:
 
@@ -317,8 +323,18 @@ The memory types in the programming mode:
 - Lock bits (`0xB3`): address 0.
 - Signature (`0xB4`) and calibration byte (`0xB5`), read only: the index 0 to `0xFF` of the signature row. avrdude reads the signature at index 0 to 2, and the even and odd bytes of its `sigrow` and `sernum` memories with these two types.
 
+The memory types in the debug mode (Bloom). SRAM, EEPROM and SPM need a stopped core, else code `0x32`:
+
+- SRAM (`0x20`): the data space with the registers, I/O and SRAM. The OCDR reads as 0, and a write does not change it. The registers r0 to r31 come from the CPU context, and a write goes to the target at the next run or step.
+- EEPROM (`0x22`): one byte at a time. The probe reads each byte back after the write.
+- SPM (`0xA0`): the flash, read only. A write gives code `0x34`.
+- Fuses (`0xB2`), also with a running core: for Bloom `manage_ocden_fuse_bit`. The probe enters the programming mode, reads or writes the fuses, leaves the programming mode and attaches again. The core is reset, and no break event comes.
+
+The break event has the same frame as on debugWIRE. The cause is 1 when the break status register of the OCD shows a program breakpoint or a `BREAK` instruction, else 0.
+While the core runs, each `AVR_EVT` reads the OCD control register one time.
+
 A bus reset, a USB suspend and `DAP_Disconnect` on the HID interface end the JTAG session.
-The probe leaves the programming mode, releases the core from reset and releases the pins.
+The probe removes the hardware breakpoints, lets a stopped core run, leaves the programming mode, releases the core from reset and releases the pins.
 
 ### Target pins
 

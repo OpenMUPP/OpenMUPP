@@ -53,7 +53,8 @@
 //   question 3).
 // - AVR_RESET (0xC): the core is in reset while the bit is 1, and starts
 //   at resetVector at the release, and stops there at once when a program
-//   breakpoint matches it (see reach()).
+//   breakpoint matches it (see reach()). With ocdenFromFuse, the OCD
+//   answers after the release only when the high fuse has OCDEN.
 // - Program breakpoints (mode 3 for reg 2 and reg 3): reach(word) moves
 //   the running core to word and stops it before that instruction when a
 //   breakpoint matches: reg 0 (BCR bit 11, one-shot: the hit clears bit
@@ -262,6 +263,9 @@ class MockAvrJtag final : public JtagTarget {
 
    // The OCD
    bool ocden{ true };
+   // OCDEN follows the high fuse (bit 7, 0 = programmed) at the end of
+   // each reset (the end of the programming mode)
+   bool ocdenFromFuse{ false };
    uint8_t ocdRevision{ 3 };
    // The I/O address OCD_DATAREG and the data address of SPMCSR
    uint8_t ocdDataReg{ 0x31 };
@@ -618,6 +622,9 @@ class MockAvrJtag final : public JtagTarget {
             stopped = false;
          } else {
             programming = false;
+            if(wasInReset && ocdenFromFuse) {
+               ocden = (fuses[1] & 0x80u) == 0;
+            }
             if(wasInReset) {
                pc = resetVector;
                if(ocden) {

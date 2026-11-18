@@ -7,9 +7,9 @@
 // one JTAG port. Hardware-independent: the host unit tests run it on the
 // JTAG bit-bang engine with mock pins.
 //
-// The scope uses the programming only: the debug mode (debug()) has no
-// scope commands yet, so the target has no hardware breakpoints for the
-// host.
+// The scope uses the programming mode (prog()) and the debug mode
+// (debug()) on the same TAP. The debug mode has the hardware breakpoints 1
+// to 3 for the host.
 //
 // The caller owns the target pins from open() to close(): the EDBG
 // transport takes them at ACTIVATE_PHYSICAL.
@@ -42,10 +42,10 @@ struct AvrJtagDevice {
 class AvrJtagTarget {
    public:
    // The traits for avr::Avr8Scope: the EDBG variant (2, mega) and physical
-   // interface (4, JTAG), and a programming mode.
+   // interface (4, JTAG), the hardware breakpoints and a programming mode.
    static constexpr uint8_t avr8Variant = 0x02;
    static constexpr uint8_t avr8Physical = 0x04;
-   static constexpr std::size_t hardwareBreaks = 0;
+   static constexpr std::size_t hardwareBreaks = AvrJtagDebug::hardwareBreaks;
    static constexpr bool hasProgmode = true;
 
    explicit AvrJtagTarget(protocol::JtagPort &port)
@@ -67,7 +67,8 @@ class AvrJtagTarget {
       return device_;
    }
 
-   // The OCD stops the timers at a break. Not used in programming.
+   // The OCD stops the timers at a break: the probe has no setting for
+   // it.
    void setRunTimers(bool) {
    }
 
