@@ -1,6 +1,6 @@
 # AVR programming
 
-The CMSIS-DAP personality can program AVR chips through the ISP (SPI) interface and through debugWIRE (dW).
+The CMSIS-DAP personality can program AVR chips through the ISP (SPI) interface, debugWIRE (dW) and JTAG.
 ISP programming passed a hardware test with avrdude 8.3 on the YD-CH32V307VCT6 board (see [Hardware test](#hardware-test)).
 Tools that use the Microchip EDBG protocol, for example avrdude, find the probe over USB.
 avrdude can also program a chip over debugWIRE, and Bloom with avr-gdb can debug it.
@@ -216,7 +216,9 @@ For this step, avrdude sends no device parameters. The probe then accepts only "
 The megaAVR chips with a JTAG port (for example ATmega16, ATmega32, ATmega32U4 and ATmega2560) can use JTAG programming.
 avrdude reads and writes the flash, the EEPROM, the fuses and the lock bits over JTAG.
 It also reads the signature, the calibration bytes and the signature row.
-JTAG has a chip erase. avrdude erases the chip before it writes the flash, unless you give `-D`.
+JTAG has a chip erase. avrdude erases the chip before it writes the flash.
+The probe needs this erase before a flash write.
+With `-D`, or with a flash read before the write in the same command, avrdude does not erase. Then give `-e`.
 The firmware has JTAG programming only. JTAG debug with Bloom is not available yet.
 
 ### JTAG wiring
@@ -236,7 +238,7 @@ The same rules as for ISP apply: 3.3 V targets only, the target has its own supp
 
 - The probe does not use RESET for JTAG. In the programming mode, the JTAG instruction AVR_RESET holds the core in reset.
 - TCK, TDI and TDO are the ISP pins SCK, MOSI and MISO of the probe.
-- The JTAG fast path link (PB13 to PC10) is necessary only for a TCK above 1 MHz (see [JTAG clock](#jtag-clock)).
+- The JTAG fast path link (PB13 to PC10) is necessary only for a TCK of 1125 kHz and more (see [JTAG clock](#jtag-clock)).
 
 ### JTAGEN and OCDEN
 
@@ -251,6 +253,7 @@ The same rules as for ISP apply: 3.3 V targets only, the target has its own supp
 ### avrdude over JTAG
 
 The entry `openmupp_jtag` of `etc/avrdude-openmupp.conf` has the type `jtagice3`, as `atmelice` and `jtag3` of avrdude.
+The flash example is for a target clock of 8 MHz or more. For a slower target, change the `-B` value (see [JTAG clock](#jtag-clock)).
 
 ```sh
 # Read the signature of an ATmega32U4
@@ -282,8 +285,8 @@ Each new host connection starts at 200 kHz again.
 | 8 MHz | 2 MHz | `-B 1MHz`. With the PB13 to PC10 link: `-B 2MHz` (the SPI gives 1.125 MHz). |
 | 1 MHz (factory setting of many chips) | 250 kHz | No `-B` (200 kHz), or `-B 125kHz` |
 
-- Up to 1 MHz, the probe uses the bit-bang engine at the requested rate.
-- Above 1 MHz, the probe uses the JTAG fast path (SPI and DMA, see [boards.md](boards.md)). The fast path needs the link from PB13 to PC10. Without the link, JTAG fails above 1 MHz.
+- Below 1125 kHz, the probe uses the bit-bang engine at the requested rate.
+- From 1125 kHz, the probe uses the JTAG fast path (SPI and DMA, see [boards.md](boards.md#yd-ch32v307vct6-development-board)). The fast path needs the link from PB13 to PC10. Without the link, JTAG fails at 1125 kHz and more.
 - TCK is never faster than the request.
 
 ## Low-clock targets
