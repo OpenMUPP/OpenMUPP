@@ -654,9 +654,9 @@ void Processor::swoReset() {
    swoBaud_ = 0;
 }
 
-uint8_t Processor::swoTraceStatus(uint32_t &count) {
+uint8_t Processor::swoTraceStatus() {
    const DapSwo::Status status = swo_->status();
-   count = status.count;
+   swo_->clearErrors();
    uint8_t bits = status.active ? swoStatus::active : 0;
    if(status.framingError) {
       bits = static_cast<uint8_t>(bits | swoStatus::error);
@@ -671,11 +671,10 @@ bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
    if(id == command::swoData) {
       return swoData(in, out);
    }
-   uint32_t count = 0;
    if(id == command::swoStatus) {
       out.u8(id);
-      out.u8(swoTraceStatus(count));
-      out.u32(count);
+      out.u8(swoTraceStatus());
+      out.u32(swo_->status().count);
       return true;
    }
    if(id == command::swoBaudrate) {
@@ -684,11 +683,12 @@ bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
          return false;
       }
       out.u8(id);
-      if(swo_->active()) {
-         out.u32(0);
-         return true;
-      }
       swoBaud_ = swoMode_ == swoMode::uart ? swo_->realBaud(baud) : 0;
+      if(swoBaud_ == 0) {
+         swo_->stop();
+      } else if(swo_->active()) {
+         static_cast<void>(swo_->setBaud(baud));
+      }
       out.u32(swoBaud_);
       return true;
    }
@@ -698,16 +698,11 @@ bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
    }
    out.u8(id);
    if(id == command::swoExtendedStatus) {
-      // A read of the status clears the error bits: only when it is asked
-      if((value & (swoExtended::status | swoExtended::count)) == 0) {
-         return true;
-      }
-      const uint8_t bits = swoTraceStatus(count);
       if((value & swoExtended::status) != 0) {
-         out.u8(bits);
+         out.u8(swoTraceStatus());
       }
       if((value & swoExtended::count) != 0) {
-         out.u32(count);
+         out.u32(swo_->status().count);
       }
       return true;
    }
@@ -720,18 +715,18 @@ bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
       } else {
          ok = swo_->active() || (swoMode_ == swoMode::uart && swoBaud_ != 0 && swo_->start(swoBaud_) != 0);
       }
-   } else if(swo_->active()) {
-      ok = false;
    } else if(id == command::swoTransport) {
-      ok = value == swoTransport::none || value == swoTransport::dataCommand;
+      ok = !swo_->active() && (value == swoTransport::none || value == swoTransport::dataCommand);
       if(ok) {
          swoTransport_ = value;
       }
    } else {
+      // DAP_SWO_Mode stops the capture, and the baud rate must be set
+      // again. A mode that is not available sets mode off.
+      swo_->stop();
+      swoBaud_ = 0;
       ok = value == swoMode::off || value == swoMode::uart;
-      if(ok) {
-         swoMode_ = value;
-      }
+      swoMode_ = ok ? value : swoMode::off;
    }
    out.u8(ok ? statusOk : statusError);
    return true;
@@ -748,16 +743,16 @@ bool Processor::swoData(PacketReader &in, PacketWriter &out) {
       return false;
    }
    out.u8(command::swoData);
-   const std::size_t statusAt = out.reserve(3);
+   // The status before the data, as in the reference implementation
+   out.u8(swoTraceStatus());
+   const std::size_t countAt = out.reserve(2);
    std::size_t received = 0;
    if(swoTransport_ == swoTransport::dataCommand) {
       received = swo_->read(out.free().first(std::min<std::size_t>(wanted, out.room())));
       out.advance(received);
    }
-   uint32_t count = 0;
-   out.set(statusAt, swoTraceStatus(count));
-   out.set(statusAt + 1, static_cast<uint8_t>(received));
-   out.set(statusAt + 2, static_cast<uint8_t>(received >> 8));
+   out.set(countAt, static_cast<uint8_t>(received));
+   out.set(countAt + 1, static_cast<uint8_t>(received >> 8));
    return true;
 }
 

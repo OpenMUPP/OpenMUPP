@@ -360,8 +360,8 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 | `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
 | `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
 | `0x17` | `DAP_SWO_Transport` | `0` none, `1` `DAP_SWO_Data`. `2` (streaming endpoint) replies an error. See [SWO commands](#swo-commands). |
-| `0x18` | `DAP_SWO_Mode` | `0` off, `1` UART. `2` (Manchester) replies an error. |
-| `0x19` | `DAP_SWO_Baudrate` | The response has the real baud rate of the USART divider, or 0. |
+| `0x18` | `DAP_SWO_Mode` | `0` off, `1` UART. `2` (Manchester) replies an error and sets mode off. Stops the capture. |
+| `0x19` | `DAP_SWO_Baudrate` | The response has the real baud rate of the USART divider, or 0. Above 9 Mbaud: 9 Mbaud. |
 | `0x1A` | `DAP_SWO_Control` | Bit 0: start or stop the capture. |
 | `0x1B` | `DAP_SWO_Status` | The trace status and the number of bytes in the trace buffer. |
 | `0x1C` | `DAP_SWO_Data` | The trace status and up to packet size - 4 bytes of trace data. |
@@ -592,20 +592,26 @@ Then read the data with `DAP_SWO_Data`, and stop the capture with `DAP_SWO_Contr
 
 Rules:
 
+- The commands follow the reference implementation of Arm (`SWO.c` of CMSIS-DAP).
 - `DAP_SWO_Transport` `2` (the SWO streaming endpoint) replies an error. The firmware does not have this endpoint yet.
-- `DAP_SWO_Mode` `2` (Manchester) replies an error.
-- `DAP_SWO_Baudrate` replies 0 in mode off, and for a baud rate out of range. The processor stores the reply, so a start after a reply of 0 fails.
-- While the capture runs, `DAP_SWO_Transport` and `DAP_SWO_Mode` reply an error. `DAP_SWO_Baudrate` replies 0 and keeps the baud rate.
+  While the capture runs, `DAP_SWO_Transport` replies an error.
+- `DAP_SWO_Mode` stops the capture and clears the baud rate. Thus send `DAP_SWO_Baudrate` after `DAP_SWO_Mode`.
+  `DAP_SWO_Mode` `2` (Manchester) replies an error and sets mode off.
+- `DAP_SWO_Baudrate` replies the real baud rate and stores it. A baud rate above 9 Mbaud gives 9 Mbaud.
+  It replies 0 in mode off, and for a baud rate below 2198 baud. It then stores 0 and stops the capture.
+- While the capture runs, `DAP_SWO_Baudrate` changes the baud rate at once. The capture goes on, and the trace buffer stays.
 - A start needs mode UART and a baud rate. Else `DAP_SWO_Control` replies an error.
 - A start empties the trace buffer and clears the errors. A start while the capture runs does nothing.
 - After a stop, the bytes in the trace buffer stay readable.
 - The trace status has these bits: bit 0 capture active, bit 6 error (a framing or noise error), bit 7 overrun (data lost).
   "Data lost" includes an overflow of the trace buffer and an overrun of the USART.
-- Each error bit shows the errors since the last read of the status or the last start. `DAP_SWO_Status`, `DAP_SWO_ExtendedStatus` and `DAP_SWO_Data` read the status.
+- The receiver does not pause on a full trace buffer, so bit 1 (capture paused) is always 0.
+  An overflow discards the data in the trace buffer, and sets the overrun bit.
+- Each error bit shows the errors since the last read of the status or the last start.
+  `DAP_SWO_Status`, `DAP_SWO_Data`, and `DAP_SWO_ExtendedStatus` with bit 0 read the status. A read of only the count does not clear the error bits.
 - After an overflow, the count is 0, and the next `DAP_SWO_Data` empties the trace buffer.
 - `DAP_SWO_Data` gives the bytes that fit in the response: up to 60 bytes at full speed, and up to 508 bytes at high speed.
-  It reads the status after the data, so the status includes an overflow that the read found.
-  With a transport other than `1`, it gives no data.
+  It reads the status before the data. With a transport other than `1`, it gives no data.
 - `DAP_SWO_ExtendedStatus` gives only the fields that the request asks for. Bit 2 (index and timestamp) is ignored, because the capabilities do not include the test domain timer.
 - `DAP_Disconnect` does not stop the capture.
 - When the host goes away (USB reset or unconfigure), the capture stops. The transport becomes none, the mode off and the baud rate 0.
