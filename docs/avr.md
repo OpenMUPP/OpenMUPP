@@ -331,7 +331,9 @@ The tools were avrdude 8.3 and the entry `openmupp_jtag`.
 The target clock was the 16 MHz crystal (low fuse `0xFF`), and the internal 8 MHz RC oscillator with CKDIV8, 1 MHz (low fuse `0x62`).
 The JTAG fast path link (PB13 to PC10) was not connected.
 Before the test, ISP made a backup of all memories and programmed JTAGEN (high fuse `0x98`).
-After the test, ISP wrote the backup back and set the high fuse to `0xD8` again.
+After the test, JTAG set the low fuse to `0xFF` again at `-B 125kHz`.
+Then ISP wrote back the flash and the EEPROM from the backup, the high fuse `0xD8` and the lock bits `0xEF`.
+The extended fuse reads `0xFB`, not `0xCB` as in the backup. Only the unused bits 7..4 are different (see the table).
 
 | Test | Result |
 |---|---|
