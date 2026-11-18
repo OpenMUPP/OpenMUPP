@@ -550,3 +550,158 @@ TEST_CASE("AvrJtagDebug: EEPROM write with adjacent OUTs and a read back") {
       CHECK(b.target.data[31] == 0x00);
    }
 }
+
+TEST_CASE("AvrJtagDebug: hardware breakpoints 1 to 3") {
+   struct Case {
+      uint8_t number;
+      uint16_t bcrBits;
+      uint16_t cause;
+   };
+   for(const Case c : { Case{ 1, 0x0400, bsr::break1 }, Case{ 2, 0x0160, bsr::break2 }, Case{ 3, 0x0098, bsr::break3 } }) {
+      CAPTURE(c.number);
+      Bench b;
+      b.target.pc = 0x40;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.breakStatus() == bsr::forceBreak);
+      REQUIRE(b.debug.setBreakpoint(c.number, 0xCC) == JtagDebugStatus::Ok);
+      b.writes();
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK(b.writes() == std::vector<uint32_t>{ 0x100000u | (uint32_t{ c.number } << 16) | 0xCC, 0x18C000u | c.bcrBits });
+
+      bool stopped = true;
+      CHECK_FALSE(b.target.reach(0xCB));
+      REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+      CHECK_FALSE(stopped);
+      CHECK(b.target.reach(0xCC));
+      REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+      CHECK(stopped);
+      CHECK(b.debug.pc() == 0xCC);
+      CHECK(b.debug.breakStatus() == c.cause);
+
+      // Cleared: the next run removes the enable.
+      REQUIRE(b.debug.clearBreakpoint(c.number) == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK((b.target.ocdRegs[8] & avr::jtagDebug::breakBits) == 0);
+      CHECK_FALSE(b.target.reach(0xCC));
+   }
+}
+
+TEST_CASE("AvrJtagDebug: three breakpoints, halt, and the next run") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.setBreakpoint(1, 0x100) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.setBreakpoint(2, 0x200) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.setBreakpoint(3, 0x300) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK(b.target.ocdRegs[8] == 0xC5F8);
+   // Halt clears the enables (reference sequence), the next run sets them.
+   REQUIRE(b.debug.halt() == JtagDebugStatus::Ok);
+   CHECK(b.target.ocdRegs[8] == 0xC000);
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK(b.target.ocdRegs[8] == 0xC5F8);
+   CHECK(b.target.reach(0x200));
+   bool stopped = false;
+   REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+   CHECK(b.debug.breakStatus() == bsr::break2);
+   CHECK(b.debug.pc() == 0x200);
+}
+
+TEST_CASE("AvrJtagDebug: run to an address with reg 0") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   b.writes();
+   REQUIRE(b.debug.run(0x50) == JtagDebugStatus::Ok);
+   CHECK(b.writes() == std::vector<uint32_t>{ 0x100050, 0x18C800 });
+   CHECK(b.target.reach(0x50));
+   bool stopped = false;
+   REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+   CHECK(b.debug.breakStatus() == bsr::break0);
+   // The hit clears the enable. A plain run does not set it again.
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK((b.target.ocdRegs[8] & avr::jtagOcd::bcr::enable0) == 0);
+   CHECK_FALSE(b.target.reach(0x50));
+}
+
+TEST_CASE("AvrJtagDebug: breakpoint address bits 23..16 on revision 4 only") {
+   SUBCASE("revision 4") {
+      Bench b{ 4 };
+      b.target.flash.assign(262144, 0xFF);
+      b.debug.setDevice({ .flashBytes = 262144 });
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.setBreakpoint(1, 0x1F000) == JtagDebugStatus::Ok);
+      b.writes();
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK(b.writes() == std::vector<uint32_t>{ 0x11F000, 0x150001, 0x18C400 });
+      CHECK_FALSE(b.target.reach(0xF000));
+      CHECK(b.target.reach(0x1F000));
+   }
+   SUBCASE("revision 3") {
+      Bench b{ 3 };
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.setBreakpoint(1, 0x1000) == JtagDebugStatus::Ok);
+      b.writes();
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK(b.writes() == std::vector<uint32_t>{ 0x111000, 0x18C400 });
+   }
+}
+
+TEST_CASE("AvrJtagDebug: breakpoint numbers and addresses out of range") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   CHECK(b.debug.setBreakpoint(0, 0x10) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.setBreakpoint(4, 0x10) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.setBreakpoint(1, 0x4000) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.clearBreakpoint(0) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.run(0x4000) == JtagDebugStatus::OutOfRange);
+   CHECK(b.target.stopped);
+   CHECK(b.debug.setBreakpoint(1, 0x3FFF) == JtagDebugStatus::Ok);
+}
+
+TEST_CASE("AvrJtagDebug: the BSR after a step and a reset") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+   CHECK(b.debug.breakStatus() == bsr::step);
+   REQUIRE(b.debug.reset() == JtagDebugStatus::Ok);
+   CHECK(b.debug.breakStatus() == bsr::break3);
+}
+
+TEST_CASE("AvrJtagDebug: a step after a cleared breakpoint has no stale enable") {
+   SUBCASE("breakpoint 1 hit, cleared, step (gdb step-over)") {
+      Bench b;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.setBreakpoint(1, 0xCC) == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      REQUIRE(b.target.reach(0xCC));
+      bool stopped = false;
+      REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+      CHECK(b.target.ocdRegs[8] == 0xC400);
+      REQUIRE(b.debug.clearBreakpoint(1) == JtagDebugStatus::Ok);
+      b.writes();
+      REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+      const auto writes = b.writes();
+      REQUIRE(writes.size() >= 2);
+      CHECK(writes[0] == 0x18C000);
+      CHECK(writes[1] == 0x18A000);
+      CHECK(b.target.pc == 0xCD);
+   }
+   SUBCASE("a run to that did not hit") {
+      Bench b;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.setBreakpoint(1, 0x40) == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.run(0x80) == JtagDebugStatus::Ok);
+      CHECK(b.target.ocdRegs[8] == 0xCC00);
+      REQUIRE(b.target.reach(0x40));
+      bool stopped = false;
+      REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+      CHECK(b.debug.breakStatus() == bsr::break1);
+      b.writes();
+      REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+      const auto writes = b.writes();
+      REQUIRE(writes.size() >= 3);
+      // Reg 1 again, the BCR without bit 11, then the step
+      CHECK(writes[0] == 0x110040);
+      CHECK(writes[1] == 0x18C400);
+      CHECK(writes[2] == 0x18A400);
+   }
+}

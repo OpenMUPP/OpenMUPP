@@ -52,9 +52,15 @@
 //   is a model of the reference offsets, not a hardware fact (open
 //   question 3).
 // - AVR_RESET (0xC): the core is in reset while the bit is 1, and starts
-//   at resetVector at the release. It stops there at once when reg 3 is
-//   a program breakpoint (mode 3) that matches resetVector, with reg 2 as
-//   the mask in mask mode: BSR bit 3. The mock checks no other breakpoint.
+//   at resetVector at the release, and stops there at once when a program
+//   breakpoint matches it (see reach()).
+// - Program breakpoints (mode 3 for reg 2 and reg 3): reach(word) moves
+//   the running core to word and stops it before that instruction when a
+//   breakpoint matches: reg 0 (BCR bit 11, one-shot: the hit clears bit
+//   11), reg 1 (bit 10), reg 2 (bit 8, not in mask mode), reg 3 (bit 7,
+//   with reg 2 as the mask in mask mode). The BSR gets the bits of all
+//   hits. Reg 4 to 7 compare with the word bits 23..16 (always 0 on
+//   revision 3). Data breakpoints are not modeled.
 // - stopDelay: the reg D reads after a stop that still show 0x0000, as
 //   after FORCE_BREAK in the captures (70 ms).
 // - Instruction execute (0xA, 38 bits on revision 4, 32 on revision 3):
@@ -289,6 +295,17 @@ class MockAvrJtag final : public JtagTarget {
    uint32_t spmPageErases{ 0 };
    uint32_t spmPageWrites{ 0 };
 
+   // The running core comes to word: it stops there when a program
+   // breakpoint matches. True: it stopped.
+   bool reach(uint32_t word) {
+      if(stopped || inReset || !ocden) {
+         return false;
+      }
+      pc = word;
+      breakAt(word);
+      return stopped;
+   }
+
    // Stops the core at word address at, as a breakpoint does.
    void stop(uint32_t at, uint16_t cause) {
       stopped = true;
@@ -344,12 +361,36 @@ class MockAvrJtag final : public JtagTarget {
       }
    }
 
-   // Reg 3 with mode 3 (program address) matches resetVector, through the
-   // mask in reg 2 in mask mode.
-   [[nodiscard]] bool resetBreak() const {
+   // The BSR bits of the program breakpoints that match word
+   [[nodiscard]] uint16_t programBreak(uint32_t word) const {
       const uint16_t bcr = ocdRegs[8];
-      const uint16_t mask = (bcr & (1u << 9)) != 0 ? ocdRegs[2] : 0xFFFF;
-      return (bcr & (1u << 7)) != 0 && ((bcr >> 3) & 3u) == 3u && ((resetVector ^ ocdRegs[3]) & mask) == 0;
+      const bool maskMode = (bcr & (1u << 9)) != 0;
+      const auto matches = [&](uint8_t n, uint16_t mask) {
+         return ((word ^ ocdRegs[n]) & mask) == 0 && (ocdRegs[4u + n] & 0xFFu) == ((word >> 16) & 0xFFu);
+      };
+      uint16_t cause = 0;
+      if((bcr & (1u << 11)) != 0 && matches(0, 0xFFFF)) {
+         cause |= 1u << 5;
+      }
+      if((bcr & (1u << 10)) != 0 && matches(1, 0xFFFF)) {
+         cause |= 1u << 4;
+      }
+      if((bcr & (1u << 8)) != 0 && !maskMode && ((bcr >> 5) & 3u) == 3u && matches(2, 0xFFFF)) {
+         cause |= 1u << 2;
+      }
+      if((bcr & (1u << 7)) != 0 && ((bcr >> 3) & 3u) == 3u && matches(3, maskMode ? ocdRegs[2] : 0xFFFF)) {
+         cause |= 1u << 3;
+      }
+      return cause;
+   }
+
+   void breakAt(uint32_t word) {
+      if(const uint16_t cause = programBreak(word); cause != 0) {
+         if((cause & (1u << 5)) != 0) {
+            ocdRegs[8] = static_cast<uint16_t>(ocdRegs[8] & ~(1u << 11));
+         }
+         stop(word, cause);
+      }
    }
 
    [[nodiscard]] uint16_t controlValue() const {
@@ -579,8 +620,8 @@ class MockAvrJtag final : public JtagTarget {
             programming = false;
             if(wasInReset) {
                pc = resetVector;
-               if(ocden && resetBreak()) {
-                  stop(resetVector, 1u << 3);
+               if(ocden) {
+                  breakAt(resetVector);
                }
             }
          }

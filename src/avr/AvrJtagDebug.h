@@ -37,11 +37,24 @@
 // - The EEPROM write sets EEMPE, then EEPE with two adjacent injected
 //   OUT instructions. That the 4-cycle limit of EEMPE holds for this is not
 //   tested, so each byte is read back after the write.
+// - Hardware breakpoints (program addresses, word addresses): the host
+//   numbers 1 to 3 use reg 1, reg 2 and reg 3 (mode 3), reg 0 (one-shot)
+//   is the RUN_TO address. The probe keeps them and writes them before
+//   each run and step: halt and reset clear the BCR enables (reference
+//   sequences), and a cleared breakpoint must not stay enabled for a step
+//   (a step over a breakpoint would stop at the same PC). A step drops a
+//   RUN_TO address that was not hit. On revision 4, reg 4 + n gets the
+//   word bits 23..16 of reg n (inference: only 0 and 0xFF were seen,
+//   docs/avr-jtag-ocd.md).
+// - After each stop the probe reads the BSR (the cause of the stop). The
+//   reference debugger does not read it.
 // - A failed context read (NoOcd, Timeout) leaves no valid context: run,
 //   step, halt and the memory access then give NoContext until a reset.
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 
 #include "avr/AvrJtagOcd.h"
 #include "avr/AvrJtagTap.h"
@@ -98,6 +111,8 @@ inline constexpr uint16_t idle = jtagOcd::bcr::bit15 | jtagOcd::bcr::bit14;
 inline constexpr uint16_t resetBreak =
 idle | jtagOcd::bcr::maskMode | jtagOcd::bcr::enable3 | (jtagOcd::bcr::modeProgram << jtagOcd::bcr::mode3Shift);
 static_assert(resetBreak == 0xC298);
+// The BCR bits of the breakpoints: enables, mask mode and modes (11 to 3)
+inline constexpr uint16_t breakBits = 0x0FF8;
 
 // The PC write loads Z with the PC minus this offset (word addresses).
 constexpr uint32_t pcOffset(uint8_t revision) {
@@ -213,12 +228,43 @@ class AvrJtagDebug {
       return stopped();
    }
 
-   // Writes back the context and starts the core.
-   [[nodiscard]] JtagDebugStatus run() {
+   // The hardware breakpoints for the host: numbers 1 to 3
+   static constexpr std::size_t hardwareBreaks = 3;
+
+   // Sets breakpoint number (1 to 3) at a word address. It takes effect at
+   // the next run.
+   [[nodiscard]] JtagDebugStatus setBreakpoint(uint8_t number, uint32_t word) {
+      if(number < 1 || number > hardwareBreaks || word >= device_.flashBytes / 2u) {
+         return JtagDebugStatus::OutOfRange;
+      }
+      breaks_[number] = word;
+      return JtagDebugStatus::Ok;
+   }
+
+   [[nodiscard]] JtagDebugStatus clearBreakpoint(uint8_t number) {
+      if(number < 1 || number > hardwareBreaks) {
+         return JtagDebugStatus::OutOfRange;
+      }
+      breaks_[number].reset();
+      return JtagDebugStatus::Ok;
+   }
+
+   // The BSR read at the last stop (jtagOcd::bsr bits)
+   [[nodiscard]] uint16_t breakStatus() const {
+      return breakStatus_;
+   }
+
+   // Writes back the context, writes the breakpoints and starts the core.
+   // runTo: a one-shot breakpoint (reg 0) at this word address.
+   [[nodiscard]] JtagDebugStatus run(std::optional<uint32_t> runTo = std::nullopt) {
       if(JtagDebugStatus status = ready(); status != JtagDebugStatus::Ok) {
          return status;
       }
-      if(!writeBack() || !ocd_.run()) {
+      if(runTo && *runTo >= device_.flashBytes / 2u) {
+         return JtagDebugStatus::OutOfRange;
+      }
+      breaks_[0] = runTo;
+      if(!writeBack() || !writeBreakpoints() || !ocd_.run()) {
          return JtagDebugStatus::NoOcd;
       }
       stopped_ = false;
@@ -231,7 +277,9 @@ class AvrJtagDebug {
       if(JtagDebugStatus status = ready(); status != JtagDebugStatus::Ok) {
          return status;
       }
-      if(!writeBack() || !writeBcr(static_cast<uint16_t>(keep(bcr_) | jtagOcd::bcr::step)) || !ocd_.run()) {
+      breaks_[0].reset();
+      if(!writeBack() || !writeBreakpoints() || !writeBcr(static_cast<uint16_t>(keep(bcr_) | jtagOcd::bcr::step)) ||
+         !ocd_.run()) {
          return JtagDebugStatus::NoOcd;
       }
       stopped_ = false;
@@ -445,6 +493,9 @@ class AvrJtagDebug {
    [[nodiscard]] JtagDebugStatus stopped() {
       stopped_ = true;
       contextValid_ = false;
+      if(!ocd_.readRegister(jtagOcd::reg::bsr, breakStatus_)) {
+         return JtagDebugStatus::NoOcd;
+      }
       // The PC field of the first scan after the stop is PC + 1.
       uint32_t field = 0;
       for(uint8_t r = 0; r < regs_.size(); ++r) {
@@ -463,6 +514,31 @@ class AvrJtagDebug {
 
    [[nodiscard]] uint32_t fieldMask() const {
       return (uint32_t{ 1 } << jtagOcd::fieldBits(ocd_.revision())) - 1u;
+   }
+
+   // Reg n (and reg 4 + n on revision 4) for each breakpoint, then the BCR
+   // enables. The BCR bits 11 to 3 come from the breakpoints only.
+   [[nodiscard]] bool writeBreakpoints() {
+      static constexpr std::array<uint16_t, 4> enable{
+         jtagOcd::bcr::enable0, jtagOcd::bcr::enable1,
+         static_cast<uint16_t>(jtagOcd::bcr::enable2 | (jtagOcd::bcr::modeProgram << jtagOcd::bcr::mode2Shift)),
+         static_cast<uint16_t>(jtagOcd::bcr::enable3 | (jtagOcd::bcr::modeProgram << jtagOcd::bcr::mode3Shift))
+      };
+      auto bcr = static_cast<uint16_t>(bcr_ & ~jtagDebug::breakBits);
+      for(uint8_t n = 0; n < breaks_.size(); ++n) {
+         if(!breaks_[n]) {
+            continue;
+         }
+         const uint32_t word = *breaks_[n];
+         if(!ocd_.writeRegister(n, static_cast<uint16_t>(word)) ||
+            (ocd_.revision() >= 4 && !ocd_.writeRegister(static_cast<uint8_t>(jtagOcd::reg::breakHigh0 + n),
+                                                         static_cast<uint16_t>((word >> 16) & 0xFFu)))) {
+            return false;
+         }
+         bcr = static_cast<uint16_t>(bcr | enable[n]);
+      }
+      // Without a change no BCR write: the reference run sequence
+      return bcr == bcr_ || writeBcr(bcr);
    }
 
    // The write-back before a run or step: r0 to r31, the PC, then r31,
@@ -639,6 +715,9 @@ class AvrJtagDebug {
    uint32_t pc_{ 0 };
    uint8_t eind_{ 0 };
    uint16_t bcr_{ 0 };
+   uint16_t breakStatus_{ 0 };
+   // Reg 0 (RUN_TO) to reg 3
+   std::array<std::optional<uint32_t>, 4> breaks_{};
    bool ocdAnswers_{ false };
    bool stopped_{ false };
    bool contextValid_{ false };
