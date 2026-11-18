@@ -47,7 +47,11 @@
 //   it executes one step: pc + 1 (the mock does not execute the flash),
 //   BSR bit 7, and bit 13 clear.
 // - AVR_RESET (0xC): the core is in reset while the bit is 1, and starts
-//   at resetVector at the release.
+//   at resetVector at the release. It stops there at once when reg 3 is
+//   a program breakpoint (mode 3) that matches resetVector, with reg 2 as
+//   the mask in mask mode: BSR bit 3. The mock checks no other breakpoint.
+// - stopDelay: the reg D reads after a stop that still show 0x0000, as
+//   after FORCE_BREAK in the captures (70 ms).
 // - Instruction execute (0xA, 38 bits on revision 4, 32 on revision 3):
 //   the instruction in the high 16 bits, the field below it. At Update-DR
 //   of the stopped core, a field of 0 executes the instruction, and any
@@ -254,6 +258,7 @@ class MockAvrJtag final : public JtagTarget {
    uint32_t pc{ 0 };
    uint32_t pcField{ 0 };
    uint32_t resetVector{ 0 };
+   uint32_t stopDelay{ 0 };
    // r0 to r31, the I/O registers and the SRAM of the ATmega32U4
    std::vector<uint8_t> data = std::vector<uint8_t>(0x0B00, 0);
    std::vector<uint16_t> executed;
@@ -267,6 +272,7 @@ class MockAvrJtag final : public JtagTarget {
       pc = at;
       pcField = at + 1;
       bsr = cause;
+      hiddenStopReads_ = stopDelay;
    }
 
    uint8_t &reg(uint8_t n) {
@@ -309,6 +315,14 @@ class MockAvrJtag final : public JtagTarget {
       }
    }
 
+   // Reg 3 with mode 3 (program address) matches resetVector, through the
+   // mask in reg 2 in mask mode.
+   [[nodiscard]] bool resetBreak() const {
+      const uint16_t bcr = ocdRegs[8];
+      const uint16_t mask = (bcr & (1u << 9)) != 0 ? ocdRegs[2] : 0xFFFF;
+      return (bcr & (1u << 7)) != 0 && ((bcr >> 3) & 3u) == 3u && ((resetVector ^ ocdRegs[3]) & mask) == 0;
+   }
+
    [[nodiscard]] uint16_t controlValue() const {
       if(stopped) {
          return static_cast<uint16_t>(0x000C | (ocdrFull ? 0x10 : 0));
@@ -340,6 +354,10 @@ class MockAvrJtag final : public JtagTarget {
          ocdrFull = false;
       } else if(n == 0xD) {
          result = controlValue();
+         if(stopped && hiddenStopReads_ > 0) {
+            --hiddenStopReads_;
+            result = 0;
+         }
       }
       ocdResult_ = static_cast<uint64_t>(n) << 16 | result;
    }
@@ -507,6 +525,9 @@ class MockAvrJtag final : public JtagTarget {
             programming = false;
             if(wasInReset) {
                pc = resetVector;
+               if(ocden && resetBreak()) {
+                  stop(resetVector, 1u << 3);
+               }
             }
          }
          break;
@@ -742,6 +763,7 @@ class MockAvrJtag final : public JtagTarget {
    uint32_t pageLoadBits_{ 0 };
    uint8_t byte_{ 0 };
    uint64_t ocdResult_{ 0 };
+   uint32_t hiddenStopReads_{ 0 };
    uint16_t flashRead_{ 0 };
    std::map<uint32_t, uint16_t> spmBuffer_;
 };
