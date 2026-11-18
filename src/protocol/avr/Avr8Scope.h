@@ -110,7 +110,9 @@
 // of avr/AvrJtagProg.h. The device context: 0x00 flash page bytes u16 (2
 // to 256), 0x02 flash bytes u32 (up to 256 KiB), 0x10 EEPROM bytes u16,
 // 0x12 EEPROM page bytes, 0x13 OCD revision (0 to 4), 0x15 full-page bit
-// stream (not 0: the flash page goes in one PROG_PAGELOAD scan).
+// stream (not 0: the flash page goes in one PROG_PAGELOAD scan), 0x18
+// OCDR, 0x19 EEARH, 0x1A EEARL, 0x1B EECR, 0x1C EEDR (I/O addresses, up to
+// 0x3F, for the debug mode).
 //   ACTIVATE_PHYSICAL [reset]: drives the pins at the programming clock
 //        and reads the IDCODE. -> DATA [IDCODE u32]. No Atmel IDCODE (bits
 //        11..0 not 0x03F): FAILED 0x20. The reset flag is not used: the
@@ -698,15 +700,20 @@ class Avr8Scope final : public Avr8Handler {
       const uint16_t eeprom = u16(d, 0x10);
       const uint8_t eepromPage = d[0x12];
       const auto powerOf2 = [](uint32_t value) { return value != 0 && (value & (value - 1u)) == 0; };
-      if(!powerOf2(page) || page < 2 || page > avr8::maxJtagPageBytes || flash < page ||
-         flash > avr8::maxJtagFlashBytes || flash % page != 0 || !powerOf2(eepromPage) || eeprom < eepromPage ||
-         eeprom % eepromPage != 0 || d[0x13] > avr8::maxOcdRevision) {
+      if(!powerOf2(page) || page < 2 || page > avr8::maxJtagPageBytes || flash < page || flash > avr8::maxJtagFlashBytes ||
+         flash % page != 0 || !powerOf2(eepromPage) || eeprom < eepromPage || eeprom % eepromPage != 0 || d[0x13] > avr8::maxOcdRevision ||
+         std::any_of(d.begin() + 0x18, d.begin() + 0x1D, [](uint8_t io) { return io > avrIoSreg; })) {
          return std::nullopt;
       }
       return AvrJtagDevice{
          .prog = { .flashPageBytes = page, .flashBytes = flash, .eepromPageBytes = eepromPage, .fullPageBitstream = d[0x15] != 0 },
          .eepromBytes = eeprom,
-         .ocdRevision = d[0x13]
+         .ocdRevision = d[0x13],
+         .ocdr = d[0x18],
+         .eearh = d[0x19],
+         .eearl = d[0x1A],
+         .eecr = d[0x1B],
+         .eedr = d[0x1C]
       };
    }
 

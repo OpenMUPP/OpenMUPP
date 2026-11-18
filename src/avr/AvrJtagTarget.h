@@ -31,6 +31,12 @@ struct AvrJtagDevice {
    uint16_t eepromBytes{ 1024 };
    // 2 to 4 for the parts with a JTAG OCD (docs/avr-jtag-ocd.md)
    uint8_t ocdRevision{ 3 };
+   // I/O addresses for the debug mode (ATmega32U4)
+   uint8_t ocdr{ 0x31 };
+   uint8_t eearh{ 0x22 };
+   uint8_t eearl{ 0x21 };
+   uint8_t eecr{ 0x1F };
+   uint8_t eedr{ 0x20 };
 };
 
 class AvrJtagTarget {
@@ -49,6 +55,13 @@ class AvrJtagTarget {
    void setDevice(const AvrJtagDevice &device) {
       device_ = device;
       ocd_.setRevision(device.ocdRevision);
+      debug_.setDevice({ .flashBytes = device.prog.flashBytes,
+                         .eepromBytes = device.eepromBytes,
+                         .ocdr = device.ocdr,
+                         .eearh = device.eearh,
+                         .eearl = device.eearl,
+                         .eecr = device.eecr,
+                         .eedr = device.eedr });
    }
    [[nodiscard]] const AvrJtagDevice &device() const {
       return device_;
