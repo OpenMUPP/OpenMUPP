@@ -45,6 +45,7 @@ add_executable(mupp-tests
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
+        TestSwoRing.cpp
         TestDapUart.cpp
         TestSerialEventQueue.cpp
         TestBootloaderEntry.cpp
