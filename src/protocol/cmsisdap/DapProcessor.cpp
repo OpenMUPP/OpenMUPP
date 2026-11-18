@@ -277,6 +277,7 @@ void Processor::hostGone() {
    if(uart_ != nullptr) {
       uart_->hostGone();
    }
+   swoReset();
 }
 
 void Processor::submit(art::span<const uint8_t> request) {
@@ -422,6 +423,18 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
    case command::uartStatus:
       if(uart_ != nullptr) {
          return uartCommand(id, in, out);
+      }
+      out.u8(command::invalid);
+      return true;
+   case command::swoTransport:
+   case command::swoMode:
+   case command::swoBaudrate:
+   case command::swoControl:
+   case command::swoStatus:
+   case command::swoData:
+   case command::swoExtendedStatus:
+      if(swo_ != nullptr) {
+         return swoCommand(id, in, out);
       }
       out.u8(command::invalid);
       return true;
@@ -632,6 +645,122 @@ bool Processor::uartTransfer(PacketReader &in, PacketWriter &out) {
    return true;
 }
 
+void Processor::swoReset() {
+   if(swo_ != nullptr) {
+      swo_->stop();
+   }
+   swoTransport_ = swoTransport::none;
+   swoMode_ = swoMode::off;
+   swoBaud_ = 0;
+}
+
+uint8_t Processor::swoTraceStatus(uint32_t &count) {
+   const DapSwo::Status status = swo_->status();
+   count = status.count;
+   uint8_t bits = status.active ? swoStatus::active : 0;
+   if(status.framingError) {
+      bits = static_cast<uint8_t>(bits | swoStatus::error);
+   }
+   if(status.overrun) {
+      bits = static_cast<uint8_t>(bits | swoStatus::overrun);
+   }
+   return bits;
+}
+
+bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
+   if(id == command::swoData) {
+      return swoData(in, out);
+   }
+   uint32_t count = 0;
+   if(id == command::swoStatus) {
+      out.u8(id);
+      out.u8(swoTraceStatus(count));
+      out.u32(count);
+      return true;
+   }
+   if(id == command::swoBaudrate) {
+      const uint32_t baud = in.u32();
+      if(!in.ok()) {
+         return false;
+      }
+      out.u8(id);
+      if(swo_->active()) {
+         out.u32(0);
+         return true;
+      }
+      swoBaud_ = swoMode_ == swoMode::uart ? swo_->realBaud(baud) : 0;
+      out.u32(swoBaud_);
+      return true;
+   }
+   const uint8_t value = in.u8();
+   if(!in.ok()) {
+      return false;
+   }
+   out.u8(id);
+   if(id == command::swoExtendedStatus) {
+      // A read of the status clears the error bits: only when it is asked
+      if((value & (swoExtended::status | swoExtended::count)) == 0) {
+         return true;
+      }
+      const uint8_t bits = swoTraceStatus(count);
+      if((value & swoExtended::status) != 0) {
+         out.u8(bits);
+      }
+      if((value & swoExtended::count) != 0) {
+         out.u32(count);
+      }
+      return true;
+   }
+   bool ok = false;
+   if(id == command::swoControl) {
+      const bool start = (value & swoControl::start) != 0;
+      if(!start) {
+         swo_->stop();
+         ok = true;
+      } else {
+         ok = swo_->active() || (swoMode_ == swoMode::uart && swoBaud_ != 0 && swo_->start(swoBaud_) != 0);
+      }
+   } else if(swo_->active()) {
+      ok = false;
+   } else if(id == command::swoTransport) {
+      ok = value == swoTransport::none || value == swoTransport::dataCommand;
+      if(ok) {
+         swoTransport_ = value;
+      }
+   } else {
+      ok = value == swoMode::off || value == swoMode::uart;
+      if(ok) {
+         swoMode_ = value;
+      }
+   }
+   out.u8(ok ? statusOk : statusError);
+   return true;
+}
+
+// [0x1C][count u16] -> [0x1C][status][count u16][data]
+bool Processor::swoData(PacketReader &in, PacketWriter &out) {
+   const uint16_t wanted = in.u16();
+   if(!in.ok()) {
+      return false;
+   }
+   constexpr std::size_t header = 4;
+   if(out.room() < header) {
+      return false;
+   }
+   out.u8(command::swoData);
+   const std::size_t statusAt = out.reserve(3);
+   std::size_t received = 0;
+   if(swoTransport_ == swoTransport::dataCommand) {
+      received = swo_->read(out.free().first(std::min<std::size_t>(wanted, out.room())));
+      out.advance(received);
+   }
+   uint32_t count = 0;
+   out.set(statusAt, swoTraceStatus(count));
+   out.set(statusAt + 1, static_cast<uint8_t>(received));
+   out.set(statusAt + 2, static_cast<uint8_t>(received >> 8));
+   return true;
+}
+
 bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
    const uint8_t id = in.u8();
    if(!in.ok()) {
@@ -673,6 +802,9 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
             capabilities = static_cast<uint16_t>(capabilities | capability::usbComPort);
          }
       }
+      if(swo_ != nullptr) {
+         capabilities = static_cast<uint16_t>(capabilities | capability::swoUart);
+      }
       out.u8(capabilities > 0xFF ? 2 : 1);
       out.u8(static_cast<uint8_t>(capabilities));
       if(capabilities > 0xFF) {
@@ -689,6 +821,14 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
       out.u8(4);
       out.u32(id == infoId::uartRxBufferSize ? uart_->rxBufferSize() : uart_->txBufferSize());
       break;
+   case infoId::swoBufferSize:
+      if(swo_ == nullptr) {
+         out.u8(0);
+         break;
+      }
+      out.u8(4);
+      out.u32(swo_->capacity());
+      break;
    case infoId::packetCount:
       out.u8(1);
       out.u8(static_cast<uint8_t>(packetCount));
@@ -698,8 +838,8 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
       out.u16(static_cast<uint16_t>(packetSize_));
       break;
    default:
-      // Not available: the target device and board, the test domain timer,
-      // and the SWO buffer
+      // Not available: the target device and board, and the test domain
+      // timer
       out.u8(0);
       break;
    }

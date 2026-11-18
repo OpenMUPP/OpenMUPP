@@ -4,7 +4,8 @@
 
 // The CMSIS-DAP v2.1 command processor for SWD and JTAG. Hardware-
 // independent: it runs on a DapSwd object, a protocol::JtagPort object, a
-// protocol::GpioPins object, a DapUart object and a Platform object, and
+// protocol::GpioPins object, a DapUart object, a DapSwo object and a
+// Platform object, and
 // the host unit tests use mock ones. usb::CmsisDapFunction moves the packets.
 //
 // The transport calls submit() for each request packet (at most
@@ -23,9 +24,13 @@
 //   0x09 DAP_Delay              0x1F DAP_UART_Transport
 //   0x0A DAP_ResetTarget        0x20 DAP_UART_Configure
 //                               0x21 DAP_UART_Transfer
-//   0x80 ID_DAP_Vendor0         0x22 DAP_UART_Control
-//   0x81 ID_DAP_Vendor1         0x23 DAP_UART_Status
-//   0x82 ID_DAP_Vendor2
+//   0x17 DAP_SWO_Transport      0x22 DAP_UART_Control
+//   0x18 DAP_SWO_Mode           0x23 DAP_UART_Status
+//   0x19 DAP_SWO_Baudrate
+//   0x1A DAP_SWO_Control        0x80 ID_DAP_Vendor0
+//   0x1B DAP_SWO_Status         0x81 ID_DAP_Vendor1
+//   0x1C DAP_SWO_Data           0x82 ID_DAP_Vendor2
+//   0x1E DAP_SWO_ExtendedStatus
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
 // DAP.c): posted AP reads, RDBUFF at the end of a read sequence, a read of
@@ -124,6 +129,35 @@
 //   and the buffer sizes. A DAP_UART_Transfer takes the received bytes
 //   that fit in the response, and replies the status after the transfer.
 //   A Tx Count that is more than the request has gives ID_DAP_Invalid.
+// - The DAP_SWO_* commands run on the DapSwo object (DapSwo.h, setSwo()).
+//   Without one, they reply ID_DAP_Invalid, and DAP_Info reports no SWO.
+//   With one, DAP_Info reports SWO UART and the buffer size. The processor
+//   keeps the transport, the mode and the baud rate:
+//   - DAP_SWO_Transport accepts 0 (none) and 1 (DAP_SWO_Data). 2 (the
+//     streaming endpoint) gives DAP_ERROR.
+//   - DAP_SWO_Mode accepts 0 (off) and 1 (UART). 2 (Manchester) gives
+//     DAP_ERROR.
+//   - DAP_SWO_Baudrate replies the real baud rate of the receiver, and
+//     stores it. It replies 0, and stores 0, in mode off and for a baud
+//     rate out of range.
+//   - While the capture runs, DAP_SWO_Transport and DAP_SWO_Mode give
+//     DAP_ERROR, and DAP_SWO_Baudrate replies 0 and keeps the baud rate.
+//   - DAP_SWO_Control bit 0 starts or stops the capture. A start needs mode
+//     UART and a baud rate, else it gives DAP_ERROR. A start empties the
+//     buffer and clears the errors. A start while the capture runs, or a
+//     stop while it does not run, does nothing.
+//   - The trace status has the bits active (0x01), error (0x40: a framing
+//     or noise error) and overrun (0x80: data lost). Each read of the
+//     status clears the error bits (DapSwo::status()).
+//   - DAP_SWO_ExtendedStatus gives the status (bit 0) and the count
+//     (bit 1). Bit 2 (index and timestamp) is ignored: the capabilities do
+//     not include the test domain timer.
+//   - DAP_SWO_Data gives up to the requested count, and at most what fits
+//     in the response (packet size - 4). With a transport other than 1, it
+//     gives no data. The status comes after the read, so it includes an
+//     overflow that the read found.
+//   - DAP_Disconnect does not stop the capture. hostGone() stops it, and
+//     sets transport none, mode off and baud rate 0.
 //
 // DAP_QueueCommands packets wait. The next packet with another command
 // runs the queued packets and then itself, back to back. The responses of
@@ -153,6 +187,7 @@
 #include "protocol/TargetPower.h"
 #include "protocol/cmsisdap/DapJtag.h"
 #include "protocol/cmsisdap/DapSwd.h"
+#include "protocol/cmsisdap/DapSwo.h"
 #include "protocol/cmsisdap/DapUart.h"
 
 namespace boot {
@@ -184,6 +219,13 @@ inline constexpr uint8_t swdConfigure = 0x13;
 inline constexpr uint8_t jtagSequence = 0x14;
 inline constexpr uint8_t jtagConfigure = 0x15;
 inline constexpr uint8_t jtagIdcode = 0x16;
+inline constexpr uint8_t swoTransport = 0x17;
+inline constexpr uint8_t swoMode = 0x18;
+inline constexpr uint8_t swoBaudrate = 0x19;
+inline constexpr uint8_t swoControl = 0x1A;
+inline constexpr uint8_t swoStatus = 0x1B;
+inline constexpr uint8_t swoData = 0x1C;
+inline constexpr uint8_t swoExtendedStatus = 0x1E;
 inline constexpr uint8_t swdSequence = 0x1D;
 inline constexpr uint8_t uartTransport = 0x1F;
 inline constexpr uint8_t uartConfigure = 0x20;
@@ -222,6 +264,7 @@ inline constexpr uint8_t packetSize = 0xFF;
 namespace capability {
 inline constexpr uint16_t swd = 0x01;
 inline constexpr uint16_t jtag = 0x02;
+inline constexpr uint16_t swoUart = 0x04;
 inline constexpr uint16_t atomicCommands = 0x10;
 inline constexpr uint16_t uartPort = 0x80;
 inline constexpr uint16_t usbComPort = 0x100;
@@ -235,8 +278,9 @@ struct DeviceInfo {
    // The chip UID, as text
    const char *serialNumber{ nullptr };
    const char *firmwareVersion{ nullptr };
-   // The processor adds JTAG when it has a JTAG port, and the UART port
-   // and the USB COM port when it has a DapUart.
+   // The processor adds JTAG when it has a JTAG port, the UART port and
+   // the USB COM port when it has a DapUart, and SWO UART when it has a
+   // DapSwo.
    uint16_t capabilities{ capability::swd | capability::atomicCommands };
 };
 
@@ -405,6 +449,12 @@ class Processor final : private TransferAbort {
       vendor_ = &vendor;
    }
 
+   // Gives the DAP_SWO_* commands to `swo`, which must outlive the
+   // processor. Call it before the first packet.
+   void setSwo(DapSwo &swo) {
+      swo_ = &swo;
+   }
+
    // Number of transfers with an error on the wire. It wraps at 2^32: only
    // the difference between two values counts.
    [[nodiscard]] uint32_t errorCount() const {
@@ -454,6 +504,12 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool targetPower(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartCommand(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool swoCommand(uint8_t id, PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool swoData(PacketReader &in, PacketWriter &out);
+   // The trace status byte (swoStatus bits), and the count of bytes to
+   // read. Clears the error bits.
+   [[nodiscard]] uint8_t swoTraceStatus(uint32_t &count);
+   void swoReset();
 
    [[nodiscard]] uint8_t pinsIn() const;
    // Takes the target pins: false when the other processor owns them.
@@ -483,6 +539,7 @@ class Processor final : private TransferAbort {
    Bridge *bridge_;
    protocol::TargetPower *power_;
    VendorCommands *vendor_{ nullptr };
+   DapSwo *swo_{ nullptr };
    protocol::TargetPinOwner *pinOwner_{ nullptr };
    protocol::PinClient pinClient_{ protocol::PinClient::None };
 
@@ -494,6 +551,9 @@ class Processor final : private TransferAbort {
    uint32_t clockHz_{ defaultClockHz };
    uint32_t errorCount_{ 0 };
    std::size_t packetSize_{ fullSpeedPacketSize };
+   uint8_t swoTransport_{ swoTransport::none };
+   uint8_t swoMode_{ swoMode::off };
+   uint32_t swoBaud_{ 0 };
 
    // The request packets in order: the packet that runs, the
    // DAP_QueueCommands packets that wait, and the packets that submit()
