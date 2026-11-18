@@ -28,7 +28,9 @@
 // the low half period again after the call, so TDI and TMS have the full
 // setup time before the next rising edge. service() must not
 // start a USB_TO_XXX command (no re-entry into the dispatcher), and must
-// return within some microseconds.
+// return within some microseconds. Exception: the SWO Manchester decoder
+// (swo/SwoReceiver.h) decodes the edges of up to one millisecond, about
+// 0.5 ms of CPU time at its maximum bit rate.
 
 #include <cstdint>
 
