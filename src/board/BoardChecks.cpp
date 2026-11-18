@@ -33,3 +33,25 @@ static_assert(board::current.hseFrequency == 0 || HSE_VALUE == board::current.hs
 static_assert(board::FastPinOf<board::current.debug.tck>::mask != 0);
 static_assert(board::FastPinOf<board::current.debug.tmsOut>::mask != 0);
 static_assert(board::FastPinOf<board::current.debug.tmsIn>::mask != 0);
+
+// The SWO pin is the default RX pin of its USART: USART1 RX on PA10, USART2
+// RX on PA3, USART3 RX on PB11. The STM32F103 (RM0008 9.3.8), the STM32H5
+// (DS14539 table 16, AF7) and the CH32V307 (CH32FV2x_V3xRM table 10-16) have
+// the same pins. The receiver does not set a USART remap.
+namespace {
+constexpr bool isSwoRxPin(const board::Swo &swo) {
+   using board::Pin;
+   using board::Port;
+   switch(swo.usart) {
+   case 1:
+      return swo.rx == Pin{ Port::A, 10 };
+   case 2:
+      return swo.rx == Pin{ Port::A, 3 };
+   case 3:
+      return swo.rx == Pin{ Port::B, 11 };
+   default:
+      return false;
+   }
+}
+} // namespace
+static_assert(!board::current.swo || isSwoRxPin(*board::current.swo), "the SWO pin is not the RX pin of its USART");

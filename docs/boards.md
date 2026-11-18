@@ -399,6 +399,7 @@ These items are different:
 - `VTREF_SENSE` (PB0) shows half of the target voltage.
 - LEDs: state on PA10 (red), USB on PA9 (green). Both are active high. The blue LED (PC4) is not used yet.
 - The key (SW1) is on the `BOOT0` net. PB3 reads it, active high.
+- SWO: the TDO net also goes to PA3 (USART2 RX). The YD board needs a wire for this (see [YD-CH32V307VCT6 development board](#yd-ch32v307vct6-development-board)).
 
 The board layer does not know the direction pins and the power functions yet.
 Thus only the UART bridge reaches the target:
@@ -518,6 +519,7 @@ Pin 1 of the two headers is at the end with P4 and the USB2 connector. The nets 
 | TRST | PB9 | P3-5 |
 | RTCK | PA8 | P3-30 |
 | UART TX / RX (UART7) | PC2 / PC3 | P2-17 / P2-18 |
+| SWO (USART2 RX) | PA3 | P2-22, wire to PB14 (P3-44) |
 | Vref sense (3.3 V maximum) | PB0 | P2-29 |
 | State LED (`LED2`, green, active high) | PB4 | on the board |
 | USB LED (`LED1`, red, active high) | PA15 | on the board |
@@ -529,6 +531,13 @@ The remap pins of UART7 (PA6, PA7) are not used: on this board, they are also DO
 The board has the JTAG fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
 Connect TCK (PB13, P3-45) to PC10 (P3-22). Do not connect PC10 to the target.
 Without this link, JTAG fails at the speeds of the fast path (1125 kHz and more).
+
+The board definition has PA3 (USART2 RX) as the SWO input (issue [#5](https://github.com/OpenMUPP/OpenMUPP/issues/5)).
+PB14 (TDO) has no UART RX and no timer input capture, so it cannot receive SWO.
+Connect a wire from PB14 (P3-44) to PA3 (P2-22). This is the same pattern as the TCK link.
+On the board schematic V1.0, only the MCU and P2-22 connect to PA3.
+The wire does not change JTAG: PA3 is a floating input while the SWO receiver is off.
+While the receiver is on, PA3 has the internal pull-up, and PB14 stays a floating input.
 
 The board definition also has PB11 (USART3 RX) as the read-back pin of SRST, for debugWIRE.
 The AVR commands use it for debugWIRE (see [avr.md](avr.md#debugwire)).
