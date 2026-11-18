@@ -2,6 +2,7 @@
 
 #include "swo/SwoUart.h"
 
+#include <algorithm>
 #include <atomic>
 #include <peripherals/Dma.h>
 #include <peripherals/GpioPin.h>
@@ -37,6 +38,12 @@ hw::Usart usart() {
 
 constexpr board::Pin rxPin = board::current.swo->rx;
 
+// A request above the maximum (divider 16) gives the maximum, as in the
+// reference implementation (SWO_Baudrate_UART()).
+uint32_t limited(uint32_t clock, uint32_t baud) {
+   return std::min(baud, clock / 16);
+}
+
 } // namespace
 
 SwoUart *SwoUart::instance_ = nullptr;
@@ -65,7 +72,8 @@ void SwoUart::serviceDma() {
 }
 
 uint32_t SwoUart::realBaud(uint32_t baud) const {
-   return swo::realBaud(usart().getClockFrequency(), baud);
+   const uint32_t clock = usart().getClockFrequency();
+   return swo::realBaud(clock, limited(clock, baud));
 }
 
 uint32_t SwoUart::start(uint32_t baud) {
@@ -73,6 +81,7 @@ uint32_t SwoUart::start(uint32_t baud) {
    Rcc::enableUSART2Clock();
    Rcc::enableDMA1Clock();
    const hw::Usart port = usart();
+   baud = limited(port.getClockFrequency(), baud);
    const auto divider = usartDivider(port.getClockFrequency(), baud);
    if(!divider) {
       return 0;
@@ -115,6 +124,21 @@ uint32_t SwoUart::start(uint32_t baud) {
    static_cast<void>(port.getData());
    port.enable();
    active_ = true;
+   return swo::realBaud(port.getClockFrequency(), baud);
+}
+
+uint32_t SwoUart::setBaud(uint32_t baud) {
+   const hw::Usart port = usart();
+   baud = limited(port.getClockFrequency(), baud);
+   const auto divider = usartDivider(port.getClockFrequency(), baud);
+   if(!active_ || !divider) {
+      return 0;
+   }
+   // The DMA keeps its position. A byte on the line during the change can
+   // give a framing error.
+   port.disable();
+   port.setBRR(*divider);
+   port.enable();
    return swo::realBaud(port.getClockFrequency(), baud);
 }
 
@@ -164,12 +188,8 @@ std::size_t SwoUart::read(art::span<uint8_t> data) {
 SwoUart::Status SwoUart::status() {
    sampleErrors();
    const uint32_t pending = ring_.available(written());
-   const Status result{ active_, overrun_ || pending > bufferSize, framingError_, pending > bufferSize ? 0 : pending };
-   // An overflow stays in the ring until the next read(), so the next
-   // status() reports it again.
-   overrun_ = false;
-   framingError_ = false;
-   return result;
+   overrun_ = overrun_ || pending > bufferSize;
+   return { active_, overrun_, framingError_, pending > bufferSize ? 0 : pending };
 }
 
 } // namespace swo

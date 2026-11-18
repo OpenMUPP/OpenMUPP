@@ -59,20 +59,27 @@ class DapSwo {
 
    // The size of the trace buffer (DAP_Info 0xFD)
    [[nodiscard]] virtual uint32_t capacity() const = 0;
-   // The baud rate that start() gives for a request. 0: out of range.
+   // The baud rate that start() gives for a request. A request above the
+   // maximum gives the maximum, as in the reference implementation. 0: out
+   // of range.
    [[nodiscard]] virtual uint32_t realBaud(uint32_t baud) const = 0;
    // Starts the capture with an empty buffer and no errors. Returns the
    // real baud rate. 0: out of range, and the receiver is off.
    virtual uint32_t start(uint32_t baud) = 0;
+   // Changes the baud rate of a running capture. The buffer and the errors
+   // stay. Returns the real baud rate. 0: out of range, or the capture does
+   // not run; the baud rate then stays.
+   virtual uint32_t setBaud(uint32_t baud) = 0;
    // Stops the capture. The bytes in the buffer stay readable.
    virtual void stop() = 0;
    // True while the capture runs. Clears nothing.
    [[nodiscard]] virtual bool active() const = 0;
    // Takes up to data.size() received bytes and returns the count.
    [[nodiscard]] virtual std::size_t read(art::span<uint8_t> data) = 0;
-   // The status. Clears the error flags: each flag tells of the errors
-   // since the last status() or start().
+   // The status. Each error flag tells of the errors since the last
+   // clearErrors() or start().
    [[nodiscard]] virtual Status status() = 0;
+   virtual void clearErrors() = 0;
 
    protected:
    ~DapSwo() = default;

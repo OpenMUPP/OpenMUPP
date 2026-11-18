@@ -43,9 +43,9 @@ static_assert(switchRequestCode != dap::msOs20VendorCode);
 static_assert(dap::outEndpoint == versaloonOutEndpoint);
 #if defined(__riscv)
 // The USBHS packet pool at high speed: the double-buffered DAP OUT endpoint,
-// the DAP IN endpoint and the CDC-ACM endpoints.
-static_assert(3 * dap::highSpeedPacketSize + cdcNotificationPacketSize + 2 * dap::highSpeedPacketSize +
-              (dap::hasHid ? 2 * dap::hidReportSize : 0) <=
+// the DAP IN endpoint, the SWO trace endpoint and the CDC-ACM endpoints.
+static_assert(3 * dap::highSpeedPacketSize + (dap::hasSwo ? dap::highSpeedPacketSize : 0) + cdcNotificationPacketSize +
+              2 * dap::highSpeedPacketSize + (dap::hasHid ? 2 * dap::hidReportSize : 0) <=
               hw::UsbDevice::PacketMemorySize);
 #endif
 #endif
@@ -269,6 +269,14 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
       events_.addCommandEndpoints(dap::outEndpoint, dap::inEndpoint);
 #if defined(MUPP_CMSIS_DAP_HID)
       events_.addCommandEndpoints(dap::hidOutEndpoint, dap::hidInEndpoint);
+#endif
+#if defined(MUPP_CMSIS_DAP_SWO)
+      // An acknowledge of the SWO trace endpoint must not hold the abort and
+      // the serial port events. The next trace packet then goes out during
+      // the command: only DAP_SWO_Data reads the trace buffer in a command,
+      // with transport 1, and no DAP_SWO_* command runs the background
+      // service.
+      events_.addCommandEndpoints(dap::outEndpoint, dap::swoEndpoint);
 #endif
       static_cast<void>(device_.addFunction(dap_));
 #if defined(MUPP_CMSIS_DAP_HID)

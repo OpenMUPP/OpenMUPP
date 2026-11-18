@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The USB event queue with the serial-only mode of UsbStack::pollSerial().
 
+#include "usb/CmsisDapDescriptors.h"
 #include "usb/SerialEventQueue.h"
 
 #include <doctest/doctest.h>
@@ -148,4 +149,20 @@ TEST_CASE("SerialEventQueue: without command endpoints, the serial-only mode sto
    queue.setSerialOnly(true);
    CHECK(popAll(queue).empty());
    CHECK(queue.size() == 2);
+}
+
+TEST_CASE("SerialEventQueue: the SWO trace endpoint as a command endpoint, as with MUPP_CMSIS_DAP_SWO") {
+   Queue queue;
+   queue.addCommandEndpoints(0x03, 0x82);
+   queue.addCommandEndpoints(0x03, usb::dap::swoEndpoint);
+   // A trace acknowledge at the front does not hold DAP_TransferAbort and the serial port events.
+   REQUIRE(queue.try_push(event(EventType::InComplete, usb::dap::swoEndpoint)));
+   REQUIRE(queue.try_push(event(EventType::Out, 0x03)));
+   REQUIRE(queue.try_push(event(EventType::Out, usb::cdcDataOutEndpoint)));
+   queue.setSerialOnly(true);
+   const auto events = popAll(queue);
+   REQUIRE(events.size() == 3);
+   CHECK(events[0].endpoint == usb::dap::swoEndpoint);
+   CHECK(events[1].endpoint == 0x03);
+   CHECK(events[2].endpoint == usb::cdcDataOutEndpoint);
 }

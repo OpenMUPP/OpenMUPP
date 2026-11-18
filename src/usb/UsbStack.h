@@ -146,7 +146,8 @@ class UsbStack {
 
    // Delivers the serial port events at the front of the queue, and no
    // other events. In the CMSIS-DAP personality, also the packet events of
-   // the CMSIS-DAP endpoints (usb/SerialEventQueue.h). Call it during a
+   // the CMSIS-DAP endpoints, the SWO trace endpoint included
+   // (usb/SerialEventQueue.h). Call it during a
    // command (see protocol/Background.h), not in the main loop. The
    // WCH-Link personality has no serial port: the call delivers no event.
    void pollSerial();

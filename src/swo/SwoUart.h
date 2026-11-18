@@ -14,7 +14,8 @@
 //   the ring. They only count, so the CPU gets no interrupt for each byte.
 //   The count is correct while an interrupt comes less than 2 KB late
 //   (2.3 ms at 9 Mbaud).
-// - The error flags tell of the errors since the last status() or start().
+// - The error flags tell of the errors since the last clearErrors() or
+//   start().
 //   The receiver reads the USART status at each read() and status(): an
 //   overrun (ORE) or a framing or noise error (FE, NE) sets a flag. An
 //   overflow of the ring also sets the overrun flag.
@@ -44,7 +45,8 @@ class SwoUart final : public cmsisdap::DapSwo {
       return bufferSize;
    }
    // The baud rate that start() gives for a request, without a start. 0:
-   // out of range (2198 baud to 9 Mbaud at 144 MHz).
+   // out of range (below 2198 baud at 144 MHz). A request above the
+   // maximum (9 Mbaud) gives the maximum.
    [[nodiscard]] uint32_t realBaud(uint32_t baud) const override;
 
    // Starts the receiver (8N1) at the divider nearest to baud. It empties
@@ -52,6 +54,7 @@ class SwoUart final : public cmsisdap::DapSwo {
    // Returns the real baud rate. 0: out of range, and the receiver is off.
    uint32_t start(uint32_t baud) override;
    // Turns the receiver off. The bytes in the ring stay readable.
+   uint32_t setBaud(uint32_t baud) override;
    void stop() override;
    [[nodiscard]] bool active() const override {
       return active_;
@@ -62,8 +65,12 @@ class SwoUart final : public cmsisdap::DapSwo {
    // is set.
    [[nodiscard]] std::size_t read(art::span<uint8_t> data) override;
    // count is at most bufferSize. It is 0 after an overflow: the next
-   // read() empties the ring. Clears the error flags.
+   // read() empties the ring.
    [[nodiscard]] Status status() override;
+   void clearErrors() override {
+      overrun_ = false;
+      framingError_ = false;
+   }
 
    private:
    static void dmaInterruptEntry();

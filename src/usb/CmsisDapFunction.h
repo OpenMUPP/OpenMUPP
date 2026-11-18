@@ -39,6 +39,14 @@
 //
 // A DAP_QueueCommands packet in the last free slot runs the queue in the
 // processor, so queued packets alone never hold the OUT endpoint.
+//
+// withSwo (bulk only): the interface has the SWO trace endpoint (bulk IN
+// 0x86, usb/CmsisDapDescriptors.h). poll() sends the trace data of
+// DAP_SWO_Transport 2 (cmsisdap::Processor::readSwoStream()) on it, one
+// packet of up to wMaxPacketSize bytes at a time, and the acknowledge of a
+// packet sends the next one at once. A packet that the controller drops
+// (halt clear, SET_INTERFACE) goes out again. A bus reset or deconfigure
+// drops the packet on its way.
 
 #include <array>
 #include <cstdint>
@@ -51,10 +59,11 @@
 
 namespace usb {
 
-template <typename Base>
+template <typename Base, bool withSwo = false>
 class DapFunction final : public Base {
    public:
    static constexpr bool isHid = std::is_base_of_v<art::usb::HidFunction, Base>;
+   static_assert(!withSwo || !isHid, "The SWO trace endpoint is on the CMSIS-DAP v2 interface");
 
    static_assert(dap::packetSize == cmsisdap::Processor::fullSpeedPacketSize, "The USB packet carries one DAP packet");
    static_assert(dap::highSpeedPacketSize >= cmsisdap::Processor::maxPacketSize, "A DAP packet fits a USB packet");
@@ -95,9 +104,23 @@ class DapFunction final : public Base {
    void dataPathClosed() override;
    void suspended() override;
    void resumed() override;
+   void otherInPacketSent(uint8_t endpointAddress) override;
+   void otherInPacketsDropped(uint8_t endpointAddress) override;
 
    private:
    struct NoReport {};
+   // The packet on the SWO trace endpoint
+   struct SwoPacket {
+      std::array<uint8_t, dap::highSpeedPacketSize> data{};
+      // The bytes that the host did not acknowledge yet; 0: no packet
+      uint16_t length{ 0 };
+      // The controller has the packet
+      bool inFlight{ false };
+   };
+
+   // Sends the next packet of trace data, or the dropped packet again, if
+   // the SWO trace endpoint is free.
+   void sendSwo();
 
    // Starts the IN transfer of the oldest response, if the IN endpoint is
    // free. A response that cannot be sent (not configured) is dropped.
@@ -111,12 +134,14 @@ class DapFunction final : public Base {
    uint32_t commandCount_{ 0 };
    // HID: the response on its way, padded to the report size
    [[no_unique_address]] std::conditional_t<isHid, std::array<uint8_t, dap::hidReportSize>, NoReport> report_{};
+   [[no_unique_address]] std::conditional_t<withSwo, SwoPacket, NoReport> swo_{};
 };
 
-using CmsisDapFunction = DapFunction<art::usb::VendorBulkFunction>;
+using CmsisDapFunction = DapFunction<art::usb::VendorBulkFunction, dap::hasSwo>;
 using CmsisDapHidFunction = DapFunction<art::usb::HidFunction>;
 
-extern template class DapFunction<art::usb::VendorBulkFunction>;
+extern template class DapFunction<art::usb::VendorBulkFunction, false>;
+extern template class DapFunction<art::usb::VendorBulkFunction, true>;
 extern template class DapFunction<art::usb::HidFunction>;
 
 } // namespace usb

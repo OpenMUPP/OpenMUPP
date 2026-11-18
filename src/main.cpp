@@ -41,7 +41,7 @@
 #include "protocol/cmsisdap/RvBridge.h"
 #include "protocol/cmsisdap/RvDtmTap.h"
 #endif
-#if defined(CH32V30x_D8C)
+#if defined(MUPP_CMSIS_DAP_SWO)
 #include "swo/SwoUart.h"
 #endif
 #if defined(MUPP_CMSIS_DAP_AVR)
@@ -301,10 +301,10 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   nullptr,
 #endif
                                   &targetPower };
-#if defined(CH32V30x_D8C)
-// The SWO receiver of the DAP_SWO_* commands, on the bulk interface only.
-// Only the CH32V307 boards have it; swo/SwoUartV30x.cpp checks that the
-// board has the SWO pin.
+#if defined(MUPP_CMSIS_DAP_SWO)
+// The SWO receiver of the DAP_SWO_* commands and of the SWO trace endpoint,
+// on the bulk interface only. Only the CH32V307 boards have it;
+// swo/SwoUartV30x.cpp checks that the board has the SWO pin.
 swo::SwoUart dapSwo;
 #endif
 // The owner of the target pins (protocol/TargetPinOwner.h), for the HID
@@ -368,8 +368,9 @@ void setDapSerialNumber() {
 // The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
 void startDap() {
    setDapSerialNumber();
-#if defined(CH32V30x_D8C)
-   dapProcessor.setSwo(dapSwo);
+#if defined(MUPP_CMSIS_DAP_SWO)
+   // The bulk interface has the SWO trace endpoint (usb/CmsisDapDescriptors.h).
+   dapProcessor.setSwo(dapSwo, true);
 #endif
    if constexpr(!board::current.debugOutputs) {
       // No DAP command can take the pins: DAP_Connect gives port 0, and

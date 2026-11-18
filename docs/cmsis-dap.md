@@ -47,7 +47,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
   Else the next scan has an extra TCK edge or a missing TCK edge.
   The idle level is high on the boards with the SPI fast path (the Mini and the STM32H5 boards), and low on the ST-Link/V2-1 and the mini clone.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
-- SWO only on the CH32V307 boards, in UART (NRZ) mode, through `DAP_SWO_Data`. No Manchester mode and no SWO streaming endpoint yet. See [SWO commands](#swo-commands).
+- SWO only on the CH32V307 boards, in UART (NRZ) mode, through `DAP_SWO_Data` or the SWO trace endpoint. No Manchester mode. See [SWO commands](#swo-commands).
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
 - A `MUPP_DEBUG_CDC` build has no UART bridge and no `DAP_UART_*` commands.
 - On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
@@ -127,7 +127,7 @@ It uses these objects:
 - A `Platform` for the microsecond time, the delay and the LEDs.
 - A `DeviceInfo` with the strings and the capabilities of `DAP_Info`.
 - A `DapUart` (`DapUart.h`, on target `uart::DapUartChannel`) for the `DAP_UART_*` commands. It is optional.
-- A `DapSwo` (`DapSwo.h`, on target `swo::SwoUart`) for the `DAP_SWO_*` commands. It is optional. `setSwo()` gives it to the processor.
+- A `DapSwo` (`DapSwo.h`, on target `swo::SwoUart`) for the `DAP_SWO_*` commands. It is optional. `setSwo()` gives it to the processor, and tells it if the transport has the SWO trace endpoint.
 
 ## Transport
 
@@ -359,9 +359,9 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 | `0x14` | `DAP_JTAG_Sequence` | TDI bits with one TMS level, and the TDO bits on request. Replies an error when JTAG is not connected. |
 | `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
 | `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
-| `0x17` | `DAP_SWO_Transport` | `0` none, `1` `DAP_SWO_Data`. `2` (streaming endpoint) replies an error. See [SWO commands](#swo-commands). |
-| `0x18` | `DAP_SWO_Mode` | `0` off, `1` UART. `2` (Manchester) replies an error. |
-| `0x19` | `DAP_SWO_Baudrate` | The response has the real baud rate of the USART divider, or 0. |
+| `0x17` | `DAP_SWO_Transport` | `0` none, `1` `DAP_SWO_Data`, `2` SWO trace endpoint. See [SWO commands](#swo-commands). |
+| `0x18` | `DAP_SWO_Mode` | `0` off, `1` UART. `2` (Manchester) replies an error and sets mode off. Stops the capture. |
+| `0x19` | `DAP_SWO_Baudrate` | The response has the real baud rate of the USART divider, or 0. Above 9 Mbaud: 9 Mbaud. |
 | `0x1A` | `DAP_SWO_Control` | Bit 0: start or stop the capture. |
 | `0x1B` | `DAP_SWO_Status` | The trace status and the number of bytes in the trace buffer. |
 | `0x1C` | `DAP_SWO_Data` | The trace status and up to packet size - 4 bytes of trace data. |
@@ -382,7 +382,7 @@ An unknown command replies `ID_DAP_Invalid` (`0xFF`).
 The status of a command is `DAP_OK` (`0x00`) or `DAP_ERROR` (`0xFF`), as in the specification.
 Each "replies an error" in the table means the status `0xFF`.
 `DAP_Connect` is the exception: it replies port `0` for a failure.
-The capabilities in `DAP_Info` show SWD, JTAG, SWO UART, atomic commands, the UART port and the USB COM port.
+The capabilities in `DAP_Info` show SWD, JTAG, SWO UART, atomic commands, SWO streaming trace, the UART port and the USB COM port.
 `DAP_Info` also gives the size of the UART receive buffer (`0xFB`) and transmit buffer (`0xFC`), and the size of the SWO trace buffer (`0xFD`).
 A processor without a `DapUart` does not show the UART, and the `DAP_UART_*` commands then reply `ID_DAP_Invalid`.
 A processor without a `DapSwo` does not show SWO, and the `DAP_SWO_*` commands then reply `ID_DAP_Invalid`.
@@ -574,6 +574,7 @@ Only the boards with an SWO pin in the board definition have them: the YD-CH32V3
 On these boards, the TDO net also goes to PA3 (USART2 RX). See [boards.md](boards.md).
 The other boards report no SWO in `DAP_Info`, and the commands reply `ID_DAP_Invalid`.
 Only the v2 interface has the commands. The Versaloon personality has no SWO.
+The CMake build sets `MUPP_CMSIS_DAP_SWO` for the CH32V307 images with the CMSIS-DAP personality.
 
 The receiver is `swo::SwoUart` (`src/swo/SwoUart.h`):
 
@@ -583,34 +584,56 @@ The receiver is `swo::SwoUart` (`src/swo/SwoUart.h`):
 
 Use this sequence to start a capture:
 
-1. `DAP_SWO_Transport` `1` (`DAP_SWO_Data`).
+1. `DAP_SWO_Transport` `1` (`DAP_SWO_Data`) or `2` (SWO trace endpoint).
 2. `DAP_SWO_Mode` `1` (UART).
 3. `DAP_SWO_Baudrate` with the baud rate of the target. The response has the real baud rate, for example 6857143 for 7 Mbaud.
 4. `DAP_SWO_Control` `1`.
 
-Then read the data with `DAP_SWO_Data`, and stop the capture with `DAP_SWO_Control` `0`.
+Then read the data with `DAP_SWO_Data` (transport `1`) or from the SWO trace endpoint (transport `2`).
+Stop the capture with `DAP_SWO_Control` `0`.
 
 Rules:
 
-- `DAP_SWO_Transport` `2` (the SWO streaming endpoint) replies an error. The firmware does not have this endpoint yet.
-- `DAP_SWO_Mode` `2` (Manchester) replies an error.
-- `DAP_SWO_Baudrate` replies 0 in mode off, and for a baud rate out of range. The processor stores the reply, so a start after a reply of 0 fails.
-- While the capture runs, `DAP_SWO_Transport` and `DAP_SWO_Mode` reply an error. `DAP_SWO_Baudrate` replies 0 and keeps the baud rate.
+- The commands follow the reference implementation of Arm (`SWO.c` of CMSIS-DAP).
+- While the capture runs, `DAP_SWO_Transport` replies an error.
+- `DAP_SWO_Mode` stops the capture and clears the baud rate. Thus send `DAP_SWO_Baudrate` after `DAP_SWO_Mode`.
+  `DAP_SWO_Mode` `2` (Manchester) replies an error and sets mode off.
+- `DAP_SWO_Baudrate` replies the real baud rate and stores it. A baud rate above 9 Mbaud gives 9 Mbaud.
+  It replies 0 in mode off, and for a baud rate below 2198 baud. It then stores 0 and stops the capture.
+- While the capture runs, `DAP_SWO_Baudrate` changes the baud rate at once. The capture goes on, and the trace buffer stays.
 - A start needs mode UART and a baud rate. Else `DAP_SWO_Control` replies an error.
 - A start empties the trace buffer and clears the errors. A start while the capture runs does nothing.
 - After a stop, the bytes in the trace buffer stay readable.
 - The trace status has these bits: bit 0 capture active, bit 6 error (a framing or noise error), bit 7 overrun (data lost).
   "Data lost" includes an overflow of the trace buffer and an overrun of the USART.
-- Each error bit shows the errors since the last read of the status or the last start. `DAP_SWO_Status`, `DAP_SWO_ExtendedStatus` and `DAP_SWO_Data` read the status.
+- The receiver does not pause on a full trace buffer, so bit 1 (capture paused) is always 0.
+  An overflow discards the data in the trace buffer, and sets the overrun bit.
+- Each error bit shows the errors since the last read of the status or the last start.
+  `DAP_SWO_Status`, `DAP_SWO_Data`, and `DAP_SWO_ExtendedStatus` with bit 0 read the status. A read of only the count does not clear the error bits.
 - After an overflow, the count is 0, and the next `DAP_SWO_Data` empties the trace buffer.
 - `DAP_SWO_Data` gives the bytes that fit in the response: up to 60 bytes at full speed, and up to 508 bytes at high speed.
-  It reads the status after the data, so the status includes an overflow that the read found.
-  With a transport other than `1`, it gives no data.
+  It reads the status before the data. With a transport other than `1`, it gives no data.
+- With transport `2`, the SWO trace endpoint sends the data (see [SWO trace endpoint](#swo-trace-endpoint)). The status commands work as with transport `1`.
 - `DAP_SWO_ExtendedStatus` gives only the fields that the request asks for. Bit 2 (index and timestamp) is ignored, because the capabilities do not include the test domain timer.
 - `DAP_Disconnect` does not stop the capture.
 - When the host goes away (USB reset or unconfigure), the capture stops. The transport becomes none, the mode off and the baud rate 0.
 
 The hardware test of the SWO commands is not done yet.
+
+### SWO trace endpoint
+
+CMSIS-DAP v2 defines the SWO trace endpoint: an optional third endpoint of the CMSIS-DAP v2 interface, bulk IN.
+The CH32V307 images have it as endpoint `0x86`, with 64-byte packets at full speed and 512-byte packets at high speed.
+The other images do not have it, and `DAP_Info` then does not report SWO streaming trace.
+
+- With `DAP_SWO_Transport` `2`, `CmsisDapFunction` sends the trace data on the endpoint, also after a stop of the capture.
+- It sends the bytes that are in the trace buffer, up to one packet (`wMaxPacketSize`). When the host acknowledges a packet, the next packet goes out at once.
+  Thus a packet can be short. The host reads with a large buffer and a timeout.
+- `CmsisDapFunction` checks for new data in each main loop iteration, also between two commands. The main loop sleeps for at most 1 ms (one SysTick).
+- The serial service also delivers the acknowledge of the endpoint during a long command (see [Serial port during long commands](usb-device.md#serial-port-during-long-commands)). Thus the trace continues during the command, and an acknowledge does not block `DAP_TransferAbort` and the serial port events.
+- When the host clears a halt of the endpoint, the packet on its way goes out again.
+- A bus reset or `SET_CONFIGURATION 0` drops the packet on its way. The capture stops, and the transport becomes none.
+- The libArT `VendorBulkFunction` gives the events of the third endpoint to `CmsisDapFunction` (`otherInPacketSent()`, `otherInPacketsDropped()`).
 
 ## SWD engine rules
 
@@ -1353,6 +1376,8 @@ They also run the `DAP_UART_*` commands and `DAP_Info` through the processor.
 `tests/TestDapSwo.cpp` runs the `DAP_SWO_*` commands and `DAP_Info` through the processor, on a fake SWO receiver with the baud rates of the CH32V307 USART2.
 The tests cover the transport, the mode, the baud rate, the start and the stop, the status bits and their clear, the data limits of the packet sizes, `DAP_ExecuteCommands`, and the host that goes away.
 `tests/TestSwoRing.cpp` checks the trace buffer and the baud rate calculation of the receiver.
+The last tests of `tests/TestDapSwo.cpp` run the SWO trace endpoint through `CmsisDapFunction` on the fake USB controller, at full speed and high speed: the packets, transport `1` against `2`, the halt clear and the bus reset.
+`tests/TestCmsisDapDescriptors.cpp` checks the SWO trace endpoint in the configuration descriptor.
 
 `tests/TestDapTargetPower.cpp` runs `ID_DAP_Vendor2` through the processor, on the fake power switch and voltage sense of `tests/FakePower.h`.
 The tests cover off, on and read, each protection, a board without a switch or a sense, an unknown op, the host that goes away, and a response that does not fit.

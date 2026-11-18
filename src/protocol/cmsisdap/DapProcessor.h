@@ -131,31 +131,39 @@
 //   A Tx Count that is more than the request has gives ID_DAP_Invalid.
 // - The DAP_SWO_* commands run on the DapSwo object (DapSwo.h, setSwo()).
 //   Without one, they reply ID_DAP_Invalid, and DAP_Info reports no SWO.
-//   With one, DAP_Info reports SWO UART and the buffer size. The processor
-//   keeps the transport, the mode and the baud rate:
-//   - DAP_SWO_Transport accepts 0 (none) and 1 (DAP_SWO_Data). 2 (the
-//     streaming endpoint) gives DAP_ERROR.
-//   - DAP_SWO_Mode accepts 0 (off) and 1 (UART). 2 (Manchester) gives
-//     DAP_ERROR.
+//   With one, DAP_Info reports SWO UART and the buffer size, and SWO
+//   streaming trace when the transport has the SWO trace endpoint. The
+//   processor keeps the transport, the mode and the baud rate:
+//   - DAP_SWO_Transport accepts 0 (none), 1 (DAP_SWO_Data), and 2 (the
+//     SWO trace endpoint) only with streaming. While the capture runs, it
+//     gives DAP_ERROR. With transport 2, the transport takes the data with
+//     readSwoStream().
+//   - DAP_SWO_Mode stops the capture, and clears the baud rate. It accepts
+//     0 (off) and 1 (UART). Another mode (2, Manchester) gives DAP_ERROR
+//     and sets mode off.
 //   - DAP_SWO_Baudrate replies the real baud rate of the receiver, and
-//     stores it. It replies 0, and stores 0, in mode off and for a baud
-//     rate out of range.
-//   - While the capture runs, DAP_SWO_Transport and DAP_SWO_Mode give
-//     DAP_ERROR, and DAP_SWO_Baudrate replies 0 and keeps the baud rate.
+//     stores it. A baud rate above the maximum gives the maximum. While the
+//     capture runs, the new baud rate applies at once and the capture goes
+//     on. In mode off, or for a baud rate below the minimum, it replies 0,
+//     stores 0 and stops the capture.
 //   - DAP_SWO_Control bit 0 starts or stops the capture. A start needs mode
 //     UART and a baud rate, else it gives DAP_ERROR. A start empties the
 //     buffer and clears the errors. A start while the capture runs, or a
 //     stop while it does not run, does nothing.
 //   - The trace status has the bits active (0x01), error (0x40: a framing
-//     or noise error) and overrun (0x80: data lost). Each read of the
-//     status clears the error bits (DapSwo::status()).
+//     or noise error) and overrun (0x80: data lost). The receiver does not
+//     pause on a full buffer, so the paused bit (0x02) is never set. Each
+//     read of the status clears the error bits: DAP_SWO_Status,
+//     DAP_SWO_Data, and DAP_SWO_ExtendedStatus with bit 0. A read of only
+//     the count clears nothing.
 //   - DAP_SWO_ExtendedStatus gives the status (bit 0) and the count
 //     (bit 1). Bit 2 (index and timestamp) is ignored: the capabilities do
 //     not include the test domain timer.
 //   - DAP_SWO_Data gives up to the requested count, and at most what fits
 //     in the response (packet size - 4). With a transport other than 1, it
-//     gives no data. The status comes after the read, so it includes an
-//     overflow that the read found.
+//     gives no data. The status is read before the data, as in the
+//     reference implementation.
+//   The commands follow the reference implementation (CMSIS-DAP SWO.c).
 //   - DAP_Disconnect does not stop the capture. hostGone() stops it, and
 //     sets transport none, mode off and baud rate 0.
 //
@@ -265,6 +273,7 @@ namespace capability {
 inline constexpr uint16_t swd = 0x01;
 inline constexpr uint16_t jtag = 0x02;
 inline constexpr uint16_t swoUart = 0x04;
+inline constexpr uint16_t swoStreaming = 0x40;
 inline constexpr uint16_t atomicCommands = 0x10;
 inline constexpr uint16_t uartPort = 0x80;
 inline constexpr uint16_t usbComPort = 0x100;
@@ -279,8 +288,8 @@ struct DeviceInfo {
    const char *serialNumber{ nullptr };
    const char *firmwareVersion{ nullptr };
    // The processor adds JTAG when it has a JTAG port, the UART port and
-   // the USB COM port when it has a DapUart, and SWO UART when it has a
-   // DapSwo.
+   // the USB COM port when it has a DapUart, and SWO UART (and SWO
+   // streaming trace) when it has a DapSwo.
    uint16_t capabilities{ capability::swd | capability::atomicCommands };
 };
 
@@ -450,9 +459,17 @@ class Processor final : private TransferAbort {
    }
 
    // Gives the DAP_SWO_* commands to `swo`, which must outlive the
-   // processor. Call it before the first packet.
-   void setSwo(DapSwo &swo) {
+   // processor. streaming: the transport has the SWO trace endpoint and
+   // calls readSwoStream(). Call it before the first packet.
+   void setSwo(DapSwo &swo, bool streaming = false) {
       swo_ = &swo;
+      swoStreaming_ = streaming;
+   }
+
+   // The trace data for the SWO trace endpoint: up to data.size() bytes,
+   // only with DAP_SWO_Transport 2. Returns the count.
+   [[nodiscard]] std::size_t readSwoStream(art::span<uint8_t> data) {
+      return swoTransport_ == swoTransport::streaming ? swo_->read(data) : 0;
    }
 
    // Number of transfers with an error on the wire. It wraps at 2^32: only
@@ -506,9 +523,8 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool swoCommand(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool swoData(PacketReader &in, PacketWriter &out);
-   // The trace status byte (swoStatus bits), and the count of bytes to
-   // read. Clears the error bits.
-   [[nodiscard]] uint8_t swoTraceStatus(uint32_t &count);
+   // The trace status byte (swoStatus bits). Clears the error bits.
+   [[nodiscard]] uint8_t swoTraceStatus();
    void swoReset();
 
    [[nodiscard]] uint8_t pinsIn() const;
@@ -540,6 +556,7 @@ class Processor final : private TransferAbort {
    protocol::TargetPower *power_;
    VendorCommands *vendor_{ nullptr };
    DapSwo *swo_{ nullptr };
+   bool swoStreaming_{ false };
    protocol::TargetPinOwner *pinOwner_{ nullptr };
    protocol::PinClient pinClient_{ protocol::PinClient::None };
 
