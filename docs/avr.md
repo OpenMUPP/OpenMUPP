@@ -6,9 +6,10 @@ Tools that use the Microchip EDBG protocol, for example avrdude, find the probe 
 avrdude can also program a chip over debugWIRE, and Bloom with avr-gdb can debug it.
 debugWIRE passed a hardware test on an ATtiny85 at 8 MHz and at 1 MHz (see [debugWIRE hardware test](#debugwire-hardware-test)).
 avrdude can also program the classic AVR chips with a JTAG port, for example the ATmega32U4 and the ATmega2560 (see [JTAG](#jtag)).
-JTAG programming passed a hardware test on an ATmega32U4 (see [JTAG hardware test](#jtag-hardware-test)). The firmware does not have JTAG debug yet.
+JTAG programming passed a hardware test on an ATmega32U4 (see [JTAG hardware test](#jtag-hardware-test)).
+Bloom with avr-gdb can debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom)). JTAG debug has no hardware test yet.
 The probe does not have the other AVR interfaces (UPDI, PDI, TPI).
-[AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol, for a later JTAG debug function.
+[AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol.
 
 ## Build
 
@@ -219,7 +220,7 @@ It also reads the signature, the calibration bytes and the signature row.
 JTAG has a chip erase. avrdude erases the chip before it writes the flash.
 The probe needs this erase before a flash write.
 With `-D`, or with a flash read before the write in the same command, avrdude does not erase. Then give `-e`.
-The firmware has JTAG programming only. JTAG debug with Bloom is not available yet.
+Bloom with avr-gdb can also debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom)).
 
 ### JTAG wiring
 
@@ -247,7 +248,9 @@ The same rules as for ISP apply: 3.3 V targets only, the target has its own supp
   Then program JTAGEN over ISP first, for example `avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m32u4 -P usb -B 125kHz -U hfuse:w:0x98:m`.
 - JTAG uses four pins of the chip (port F on the ATmega32U4). The program cannot use these pins as I/O while JTAGEN is programmed.
 - The JTD bit in MCUCR turns the JTAG port off while the program runs. The probe does not drive RESET, so it cannot connect to a chip whose program sets JTD. Use ISP for such a chip.
-- OCDEN (bit 7 of the high fuse) enables the on-chip debug system. JTAG programming does not need it. Keep OCDEN unprogrammed: it increases the power consumption in sleep modes.
+- OCDEN (bit 7 of the high fuse) enables the on-chip debug (OCD) system. JTAG programming does not need it, but JTAG debug needs it.
+  Keep OCDEN unprogrammed when you do not debug: it increases the power consumption in sleep modes.
+  Bloom can set OCDEN at the start of a debug session and clear it at the end (see [JTAG debug with Bloom](#jtag-debug-with-bloom)).
 - Do not change JTAGEN to 1 over JTAG, because the JTAG port then stops after the session. Use ISP to program it again.
 
 ### avrdude over JTAG
@@ -288,6 +291,41 @@ Each new host connection starts at 200 kHz again.
 - Below 1125 kHz, the probe uses the bit-bang engine at the requested rate.
 - From 1125 kHz, the probe uses the JTAG fast path (SPI and DMA, see [boards.md](boards.md#yd-ch32v307vct6-development-board)). The fast path needs the link from PB13 to PC10. Without the link, JTAG fails at 1125 kHz and more.
 - TCK is never faster than the request.
+
+### JTAG debug with Bloom
+
+Bloom with avr-gdb can halt, run and step the core, and read and write the registers, the SRAM, the I/O registers and the EEPROM.
+It can also read the flash and use the hardware breakpoints of the OCD.
+Bloom loads a program into the flash in the JTAG programming mode. Each load erases the full flash.
+JTAG debug has no hardware test yet.
+
+Use the [medbg build](#the-medbg-build). Bloom accepts JTAG on this tool class.
+This `bloom.yaml` is for an ATmega32U4 over JTAG, in the format of Bloom 2.1:
+
+```yaml
+environments:
+  default:
+    shutdown_post_debug_session: true
+    tool:
+      name: "xplained_mini"
+    target:
+      name: "atmega32u4"
+      physical_interface: "jtag"
+      hardware_breakpoints: true
+      manage_ocden_fuse_bit: true
+    server:
+      name: "avr_gdb_rsp"
+      ip_address: "127.0.0.1"
+      port: 1442
+```
+
+- With `manage_ocden_fuse_bit: true`, Bloom programs OCDEN at the start of the session and clears it at the end.
+  The probe writes the fuse in the JTAG programming mode. This mode resets the core.
+- Without OCDEN, the debug commands fail with code `0x50`. Bloom then shows "check OCDEN fuse bit".
+- The OCD has three hardware breakpoints for the host. Bloom keeps one of them for its step function. Thus avr-gdb has two breakpoints.
+- The probe does not have software breakpoints yet. A software breakpoint fails.
+- The debug clock (TCK) is 200 kHz, because Bloom sends this fixed value. This is correct for a target clock of 1 MHz or more.
+- At the end of the session, the probe removes the breakpoints, and the program runs.
 
 ## Low-clock targets
 
