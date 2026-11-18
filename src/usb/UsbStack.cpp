@@ -43,9 +43,9 @@ static_assert(switchRequestCode != dap::msOs20VendorCode);
 static_assert(dap::outEndpoint == versaloonOutEndpoint);
 #if defined(__riscv)
 // The USBHS packet pool at high speed: the double-buffered DAP OUT endpoint,
-// the DAP IN endpoint and the CDC-ACM endpoints.
-static_assert(3 * dap::highSpeedPacketSize + cdcNotificationPacketSize + 2 * dap::highSpeedPacketSize +
-              (dap::hasHid ? 2 * dap::hidReportSize : 0) <=
+// the DAP IN endpoint, the SWO trace endpoint and the CDC-ACM endpoints.
+static_assert(3 * dap::highSpeedPacketSize + (dap::hasSwo ? dap::highSpeedPacketSize : 0) + cdcNotificationPacketSize +
+              2 * dap::highSpeedPacketSize + (dap::hasHid ? 2 * dap::hidReportSize : 0) <=
               hw::UsbDevice::PacketMemorySize);
 #endif
 #endif

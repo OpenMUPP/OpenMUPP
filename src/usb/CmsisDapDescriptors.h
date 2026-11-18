@@ -6,7 +6,10 @@
 // device with the CMSIS-DAP v2 interface and one CDC-ACM serial port.
 //
 //   Interface 0     vendor class 0xFF, bulk OUT 0x03, bulk IN 0x82, 64 bytes
-//                   (512 bytes at high speed).
+//                   (512 bytes at high speed). With MUPP_CMSIS_DAP_SWO
+//                   (CH32V307 only) a third endpoint: the SWO trace
+//                   endpoint, bulk IN 0x86, of the same size. CMSIS-DAP v2
+//                   tools find it as the third endpoint of the interface.
 //                   The interface string contains "CMSIS-DAP": the host
 //                   tools find a CMSIS-DAP v2 interface by that string.
 //   Interfaces 1-2  CDC-ACM with IAD, as in the Versaloon personality
@@ -79,6 +82,14 @@ inline constexpr uint16_t highSpeedPacketSize = 512;
 // of 125 us, 16 ms as at full speed.
 inline constexpr uint8_t cdcNotificationHighSpeedInterval = 8;
 
+// The SWO trace endpoint of the CMSIS-DAP v2 interface (MUPP_CMSIS_DAP_SWO)
+#if defined(MUPP_CMSIS_DAP_SWO)
+inline constexpr bool hasSwo = true;
+#else
+inline constexpr bool hasSwo = false;
+#endif
+inline constexpr uint8_t swoEndpoint = 0x86;
+
 // The CMSIS-DAP v1 interface (MUPP_CMSIS_DAP_HID)
 #if defined(MUPP_CMSIS_DAP_HID)
 inline constexpr bool hasHid = true;
@@ -93,9 +104,12 @@ inline constexpr uint16_t hidReportSize = 64;
 inline constexpr uint8_t hidInterval = 1;
 inline constexpr auto hidReportDescriptor = desc::vendorReportDescriptor<hidReportSize>();
 // The highest endpoint number plus 1, with and without the HID interface
+// and the SWO trace endpoint
 inline constexpr uint8_t hidEndpointCount = (hidInEndpoint & 0x0F) + 1;
 static_assert((hidOutEndpoint & 0x0F) == (hidInEndpoint & 0x0F) && (hidInEndpoint & 0x0F) == endpointCount);
-inline constexpr uint8_t endpointCountOfImage = hasHid ? hidEndpointCount : endpointCount;
+inline constexpr uint8_t swoEndpointCount = (swoEndpoint & 0x0F) + 1;
+static_assert((swoEndpoint & 0x0F) == hidEndpointCount);
+inline constexpr uint8_t endpointCountOfImage = hasSwo ? swoEndpointCount : hasHid ? hidEndpointCount : endpointCount;
 
 // String descriptor indexes. Index 0 is the LANGID table.
 enum StringIndex : uint8_t {
@@ -114,11 +128,12 @@ inline constexpr unsigned packetMemorySize = 512;
 // OUT endpoint of the DAP interface, the IN endpoint, and the CDC-ACM
 // endpoints.
 // With the HID interface also its two report endpoints. CMake refuses the
-// HID interface on the STM32F1 (cmake/Personalities.cmake).
+// HID interface on the STM32F1 (cmake/Personalities.cmake), and gives the
+// SWO trace endpoint to the CH32V307 only (CMakeLists.txt).
 inline constexpr unsigned packetMemoryUsed = endpointCountOfImage * 8 + 2 * 64 + 2 * packetSize + packetSize +
                                              cdcNotificationPacketSize + 2 * cdcDataPacketSize +
-                                             (hasHid ? 2 * hidReportSize : 0);
-static_assert(hasHid || packetMemoryUsed <= packetMemorySize);
+                                             (hasHid ? 2 * hidReportSize : 0) + (hasSwo ? packetSize : 0);
+static_assert(hasHid || hasSwo || packetMemoryUsed <= packetMemorySize);
 
 // USB 2.01: a USB 2.0 device with a BOS descriptor
 inline constexpr uint16_t bcdUsb = 0x0201;
@@ -155,14 +170,28 @@ desc::interfaceDescriptor(desc::InterfaceFields{ hidInterface, 0, art::usb::hid:
                           desc::endpoint(hidInEndpoint, art::usb::EndpointType::Interrupt, hidReportSize, hidInterval),
                           desc::endpoint(hidOutEndpoint, art::usb::EndpointType::Interrupt, hidReportSize, hidInterval));
 
+// The CMSIS-DAP v2 interface, with the SWO trace endpoint when withSwo is
+// true
+template <bool withSwo>
+constexpr auto makeDapInterface(uint16_t bulkPacketSize) {
+   constexpr desc::InterfaceFields fields{ dapInterface, 0, desc::classcode::kVendorSpecific, 0, 0, stringInterface };
+   if constexpr(withSwo) {
+      return desc::interfaceDescriptor(fields, desc::endpoint(outEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
+                                       desc::endpoint(inEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
+                                       desc::endpoint(swoEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize));
+   } else {
+      return desc::interfaceDescriptor(fields, desc::endpoint(outEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
+                                       desc::endpoint(inEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize));
+   }
+}
+
 // The configuration at a bulk packet size and a notification bInterval,
-// with the HID interface when withHid is true.
-template <bool withHid = hasHid>
+// with the HID interface when withHid is true, and the SWO trace endpoint
+// when withSwo is true.
+template <bool withHid = hasHid, bool withSwo = hasSwo>
 constexpr auto makeConfiguration(uint16_t bulkPacketSize, uint8_t notificationInterval) {
    const auto interfaces =
-   desc::concat(desc::interfaceDescriptor(desc::InterfaceFields{ dapInterface, 0, desc::classcode::kVendorSpecific, 0, 0, stringInterface },
-                                          desc::endpoint(outEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize),
-                                          desc::endpoint(inEndpoint, art::usb::EndpointType::Bulk, bulkPacketSize)),
+   desc::concat(makeDapInterface<withSwo>(bulkPacketSize),
                 desc::interfaceAssociation(cdcControlInterface, 2, desc::classcode::kCdc, desc::cdc::kSubclassAcm, 0, stringSerialPort),
                 desc::interfaceDescriptor(desc::InterfaceFields{ cdcControlInterface, 0, desc::classcode::kCdc,
                                                                  desc::cdc::kSubclassAcm, 0, stringSerialPort },

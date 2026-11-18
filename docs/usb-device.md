@@ -76,6 +76,8 @@ The CMSIS-DAP personality is the default.
 
 The host tools find a CMSIS-DAP v2 interface by the vendor class and the text `CMSIS-DAP` in the interface string.
 Interface 0 is vendor-specific (`0xFF`) with bulk OUT `0x03` and bulk IN `0x82`, 64 bytes each.
+On the CH32V307 boards, interface 0 also has the SWO trace endpoint: bulk IN `0x86`, as the third endpoint (see [SWO trace endpoint](cmsis-dap.md#swo-trace-endpoint)).
+The CMSIS-DAP v2 tools find the SWO trace endpoint by its position.
 The interfaces 1 and 2 are the CDC-ACM serial port, as in the Versaloon personality.
 The endpoint numbers and sizes are the same as in the Versaloon personality.
 Thus the packet memory use does not change from the Versaloon personality.
@@ -89,7 +91,7 @@ It is after the other interfaces, so their numbers do not change.
 With `MUPP_AVR_USB_ID=medbg`, the HID interface is interface 0, CMSIS-DAP v2 is interface 1, and the serial port is interfaces 2 and 3 (see [avr.md](avr.md#bloom)).
 Windows and Linux bind their HID driver with no driver installation.
 It needs 6 endpoints and two more 64-byte buffers: 640 bytes in the STM32F1 count, more than its 512 bytes. Thus the STM32F1 boards do not have it (see [cmsis-dap.md](cmsis-dap.md#cmsis-dap-v1-hid)).
-The STM32H5 (2 KB packet memory) and the CH32V307 (4 KB USBHS packet pool, 2704 bytes used at high speed with HID) have room.
+The STM32H5 (2 KB packet memory) and the CH32V307 (4 KB USBHS packet pool, 3216 bytes used at high speed with HID and the SWO trace endpoint) have room.
 
 `usb::CmsisDapFunction` sends each OUT packet to the [CMSIS-DAP command processor](cmsis-dap.md).
 It sends each response as one IN packet.
@@ -117,8 +119,9 @@ The WCH-Link personality has no high-speed descriptors, so `UsbStack` limits the
   `DAP_Info` reports this value. The processor buffers have 512 bytes on the CH32V307 and 64 bytes on the STM32 boards.
 - The CDC-ACM serial port has an RX queue of 512 bytes, so that one high-speed packet fits.
   It sends 64-byte IN packets. At high speed these are short packets, so no zero-length packet follows.
-- The USBHS packet pool has 4096 bytes. The high-speed endpoints use 2576 bytes:
-  the double-buffered DAP OUT endpoint (1024), the DAP IN endpoint (512), the notification endpoint (16) and the CDC data endpoints (1024).
+- The USBHS packet pool has 4096 bytes. The high-speed endpoints use 3088 bytes:
+  the double-buffered DAP OUT endpoint (1024), the DAP IN endpoint (512), the SWO trace endpoint (512), the notification endpoint (16) and the CDC data endpoints (1024).
+  The HID interface adds 128 bytes (3216 bytes). `src/usb/UsbStack.cpp` checks the sum at compile time.
 
 Hardware test on the YD-CH32V307VCT6 (Linux, USB 3 port, target STM32F103ZET6 at 64 MHz):
 

@@ -208,6 +208,11 @@ if (CMAKE_CROSSCOMPILING)
     # Selects board::current (src/board/Board.h), e.g. MUPP_BOARD_MINI
     string(TOUPPER "${BOARD}" BOARD_UPPER)
     set(PROJECT_DEFINES MUPP_BOARD_${BOARD_UPPER} ${MUPP_PERSONALITY_DEFINES})
+    # SWO in the CMSIS-DAP personality (docs/cmsis-dap.md, "SWO commands"): CH32V30X only. The receiver uses
+    # USART2 and DMA1 (src/swo/SwoUartV30x.cpp), and the SWO trace endpoint needs room in the USBHS packet pool.
+    if (CH32_FAMILY STREQUAL "CH32V30X" AND "MUPP_WITH_CMSIS_DAP" IN_LIST MUPP_PERSONALITY_DEFINES)
+        list(APPEND PROJECT_DEFINES MUPP_CMSIS_DAP_SWO)
+    endif ()
     # An image has the sources of its personalities only: the CMSIS-DAP image
     # does not link the Versaloon command buffers (usb/VersaloonFunction.h).
     # The shared sources (BoardSwd, BoardJtag, BoardGpio) stay: -gc-sections

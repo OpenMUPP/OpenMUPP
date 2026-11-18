@@ -314,3 +314,26 @@ TEST_CASE("The MS OS 2.0 descriptor set gives WinUSB to interface 0 only") {
    // The null of the GUID and the null that ends the list
    CHECK(std::vector<uint8_t>(property + 128, property + 132) == std::vector<uint8_t>(4, 0));
 }
+
+TEST_CASE("With SWO, interface 0 has the SWO trace endpoint 0x86 as its third endpoint") {
+   for(const uint16_t size : { usb::dap::packetSize, usb::dap::highSpeedPacketSize }) {
+      CAPTURE(size);
+      const auto configuration = usb::dap::makeConfiguration<false, true>(size, usb::cdcNotificationInterval);
+      const auto entries = split(configuration);
+      const auto interfaces = ofType(entries, DescriptorType::Interface);
+      REQUIRE(interfaces.size() == 3);
+      CHECK(interfaces[0].bytes[4] == 3);
+
+      const auto endpoints = ofType(entries, DescriptorType::Endpoint);
+      REQUIRE(endpoints.size() == 6);
+      const auto low = static_cast<uint8_t>(size);
+      const auto high = static_cast<uint8_t>(size >> 8);
+      CHECK(endpoints[0].bytes == std::vector<uint8_t>{ 7, 0x05, 0x03, 0x02, low, high, 0 });
+      CHECK(endpoints[1].bytes == std::vector<uint8_t>{ 7, 0x05, 0x82, 0x02, low, high, 0 });
+      CHECK(endpoints[2].bytes == std::vector<uint8_t>{ 7, 0x05, usb::dap::swoEndpoint, 0x02, low, high, 0 });
+      CHECK(endpoints[2].offset == interfaces[0].offset + 9 + 2 * 7);
+      // The CDC-ACM interfaces follow.
+      CHECK(endpoints[3].offset > interfaces[1].offset);
+   }
+   CHECK(usb::dap::swoEndpointCount == 7);
+}
