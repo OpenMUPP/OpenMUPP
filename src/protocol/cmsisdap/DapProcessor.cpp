@@ -683,7 +683,7 @@ bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
          return false;
       }
       out.u8(id);
-      swoBaud_ = swoMode_ == swoMode::uart ? swo_->realBaud(baud) : 0;
+      swoBaud_ = swoMode_ != swoMode::off ? swo_->realBaud(swoMode_, baud) : 0;
       if(swoBaud_ == 0) {
          swo_->stop();
       } else if(swo_->active()) {
@@ -713,7 +713,8 @@ bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
          swo_->stop();
          ok = true;
       } else {
-         ok = swo_->active() || (swoMode_ == swoMode::uart && swoBaud_ != 0 && swo_->start(swoBaud_) != 0);
+         ok = swo_->active() ||
+              (swoMode_ != swoMode::off && swoBaud_ != 0 && port_ != Port::Jtag && swo_->start(swoMode_, swoBaud_) != 0);
       }
    } else if(id == command::swoTransport) {
       ok = !swo_->active() && (value == swoTransport::none || value == swoTransport::dataCommand ||
@@ -726,7 +727,7 @@ bool Processor::swoCommand(uint8_t id, PacketReader &in, PacketWriter &out) {
       // again. A mode that is not available sets mode off.
       swo_->stop();
       swoBaud_ = 0;
-      ok = value == swoMode::off || value == swoMode::uart;
+      ok = value == swoMode::off || swo_->hasMode(value);
       swoMode_ = ok ? value : swoMode::off;
    }
    out.u8(ok ? statusOk : statusError);
@@ -799,7 +800,12 @@ bool Processor::infoCommand(PacketReader &in, PacketWriter &out) {
          }
       }
       if(swo_ != nullptr) {
-         capabilities = static_cast<uint16_t>(capabilities | capability::swoUart);
+         if(swo_->hasMode(swoMode::uart)) {
+            capabilities = static_cast<uint16_t>(capabilities | capability::swoUart);
+         }
+         if(swo_->hasMode(swoMode::manchester)) {
+            capabilities = static_cast<uint16_t>(capabilities | capability::swoManchester);
+         }
          if(swoStreaming_) {
             capabilities = static_cast<uint16_t>(capabilities | capability::swoStreaming);
          }
@@ -884,6 +890,11 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
    applySettings();
    swd_.setAbort(*this);
    if(jtag) {
+      // SWO is for SWD. The Manchester capture of the CH32V307 also uses
+      // the DMA channel of the JTAG fast path (swo/SwoReceiver.h).
+      if(swo_ != nullptr) {
+         swo_->stop();
+      }
       setJtagClock();
       jtag_.port().init();
       // The TAP state and the IR are not known.

@@ -71,13 +71,19 @@ void SwoReceiver::serviceDma() {
    halves_ = halves_ + done;
 }
 
-uint32_t SwoReceiver::realBaud(uint32_t baud) const {
+uint32_t SwoReceiver::realBaud(uint8_t mode, uint32_t baud) const {
+   if(!hasMode(mode)) {
+      return 0;
+   }
    const uint32_t clock = usart().getClockFrequency();
    return swo::realBaud(clock, limited(clock, baud));
 }
 
-uint32_t SwoReceiver::start(uint32_t baud) {
+uint32_t SwoReceiver::start(uint8_t mode, uint32_t baud) {
    stop();
+   if(!hasMode(mode)) {
+      return 0;
+   }
    Rcc::enableUSART2Clock();
    Rcc::enableDMA1Clock();
    const hw::Usart port = usart();

@@ -617,7 +617,7 @@ Rules:
 - `DAP_SWO_Baudrate` replies the real baud rate and stores it. A baud rate above 9 Mbaud gives 9 Mbaud.
   It replies 0 in mode off, and for a baud rate below 2198 baud. It then stores 0 and stops the capture.
 - While the capture runs, `DAP_SWO_Baudrate` changes the baud rate at once. The capture goes on, and the trace buffer stays.
-- A start needs mode UART and a baud rate. Else `DAP_SWO_Control` replies an error.
+- A start needs a mode and a baud rate. Else `DAP_SWO_Control` replies an error.
 - A start empties the trace buffer and clears the errors. A start while the capture runs does nothing.
 - After a stop, the bytes in the trace buffer stay readable.
 - The trace status has these bits: bit 0 capture active, bit 6 error (a framing or noise error), bit 7 overrun (data lost).
@@ -632,6 +632,7 @@ Rules:
 - With transport `2`, the SWO trace endpoint sends the data (see [SWO trace endpoint](#swo-trace-endpoint)). The status commands work as with transport `1`.
 - `DAP_SWO_ExtendedStatus` gives only the fields that the request asks for. Bit 2 (index and timestamp) is ignored, because the capabilities do not include the test domain timer.
 - `DAP_Disconnect` does not stop the capture.
+- `DAP_Connect` to JTAG stops the capture, because SWO is an SWD function. While the JTAG port is connected, a start replies an error.
 - When the host goes away (USB reset or unconfigure), the capture stops. The transport becomes none, the mode off and the baud rate 0.
 
 The hardware test of the SWO commands is not done yet.

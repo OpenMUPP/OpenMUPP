@@ -44,15 +44,18 @@ class SwoReceiver final : public cmsisdap::DapSwo {
    [[nodiscard]] uint32_t capacity() const override {
       return bufferSize;
    }
+   [[nodiscard]] bool hasMode(uint8_t mode) const override {
+      return mode == cmsisdap::swoMode::uart;
+   }
    // The baud rate that start() gives for a request, without a start. 0:
    // out of range (below 2198 baud at 144 MHz). A request above the
    // maximum (9 Mbaud) gives the maximum.
-   [[nodiscard]] uint32_t realBaud(uint32_t baud) const override;
+   [[nodiscard]] uint32_t realBaud(uint8_t mode, uint32_t baud) const override;
 
    // Starts the receiver (8N1) at the divider nearest to baud. It empties
    // the ring and clears the error flags. A running receiver starts again.
    // Returns the real baud rate. 0: out of range, and the receiver is off.
-   uint32_t start(uint32_t baud) override;
+   uint32_t start(uint8_t mode, uint32_t baud) override;
    // Turns the receiver off. The bytes in the ring stay readable.
    uint32_t setBaud(uint32_t baud) override;
    void stop() override;
