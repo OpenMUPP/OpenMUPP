@@ -6,7 +6,7 @@ Tools that use the Microchip EDBG protocol, for example avrdude, find the probe 
 avrdude can also program a chip over debugWIRE, and Bloom with avr-gdb can debug it.
 debugWIRE passed a hardware test on an ATtiny85 at 8 MHz and at 1 MHz (see [debugWIRE hardware test](#debugwire-hardware-test)).
 avrdude can also program the classic AVR chips with a JTAG port, for example the ATmega32U4 and the ATmega2560 (see [JTAG](#jtag)).
-JTAG programming did not have a hardware test yet. The firmware does not have JTAG debug yet.
+JTAG programming passed a hardware test on an ATmega32U4 (see [JTAG hardware test](#jtag-hardware-test)). The firmware does not have JTAG debug yet.
 The probe does not have the other AVR interfaces (UPDI, PDI, TPI).
 [AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol, for a later JTAG debug function.
 
@@ -323,6 +323,30 @@ The test used a YD-CH32V307VCT6 board and a Seeeduino Lite (ATmega32U4) with a 3
 | Target at 1 MHz: EEPROM at `-B 16kHz` | Pass |
 
 A target at 128 kHz is not tested: the ATmega32U4 has no 128 kHz clock source.
+
+### JTAG hardware test
+
+The test used a YD-CH32V307VCT6 board and a Seeeduino Lite (ATmega32U4) with a 3.3 V supply.
+The tools were avrdude 8.3 and the entry `openmupp_jtag`.
+The target clock was the 16 MHz crystal (low fuse `0xFF`), and the internal 8 MHz RC oscillator with CKDIV8, 1 MHz (low fuse `0x62`).
+The JTAG fast path link (PB13 to PC10) was not connected.
+Before the test, ISP made a backup of all memories and programmed JTAGEN (high fuse `0x98`).
+After the test, JTAG set the low fuse to `0xFF` again at `-B 125kHz`.
+Then ISP wrote back the flash and the EEPROM from the backup, the high fuse `0xD8` and the lock bits `0xEF`.
+The extended fuse reads `0xFB`, not `0xCB` as in the backup. Only the unused bits 7..4 are different (see the table).
+
+| Test | Result |
+|---|---|
+| Read the IDCODE, signature, fuses, lock bits and calibration byte | Pass. IDCODE `0x4958703F`. The fuses and lock bits are the same as in the ISP backup, but with JTAGEN programmed (high fuse `0x98`). |
+| Read 32 KiB flash and 1 KiB EEPROM at 200 kHz (no `-B`) and at `-B 1MHz`. Compare with the ISP backup. | Pass. The flash read takes 8.3 s at 200 kHz and 3.0 s at 1 MHz. |
+| Erase, write and verify 32 KiB random flash data and 1 KiB random EEPROM data at `-B 1MHz`. Verify again in a new session. | Pass. The flash write takes 5.4 s, the EEPROM write 0.9 s. The lock bits read `0xFF` after the chip erase. |
+| Program OCDEN (high fuse `0x18`), read it back in a new session, then clear it (`0x98`) | Pass |
+| Write the extended fuse (`0xCF`, then `0xCB`) and read it back | Pass. avrdude writes the unused bits 7..4 as 1 (bit mask `0x0F`). Thus `0xCF` reads back as `0xFF`, and `0xCB` as `0xFB`. |
+| Target at 1 MHz: write and verify flash and EEPROM at `-B 125kHz` | Pass. The flash write takes 19.4 s, the flash read 12.3 s. |
+| Target at 1 MHz: read the signature and verify flash and EEPROM at `-B 1MHz` | Pass. This TCK is more than the datasheet limit (a quarter of the target clock). The chip has a margin, but do not rely on it. |
+| `-x jtagchain=0,0,0,0`, and `-x jtagchain=0,1,0,4` | Pass. The first value works. With the second value, avrdude stops with "initialization failed", as expected (see [avrdude over JTAG](#avrdude-over-jtag)). |
+
+The test did not use a TCK of 1125 kHz or more (the JTAG fast path).
 
 ### debugWIRE hardware test
 
