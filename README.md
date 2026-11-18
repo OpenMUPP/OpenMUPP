@@ -44,7 +44,7 @@ These targets are planned. None of them works yet.
 
 | Target | Protocols | State |
 |---|---|---|
-| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | The firmware has ISP programming for the YD-CH32V307VCT6 board (see [docs/avr.md](docs/avr.md)). ISP passed a hardware test on an ATmega32U4. debugWIRE programming and debug (avrdude `jtagice3_dw`, Bloom with avr-gdb) passed a hardware test on an ATtiny85. |
+| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | The firmware has ISP programming for the YD-CH32V307VCT6 board (see [docs/avr.md](docs/avr.md)). ISP passed a hardware test on an ATmega32U4. debugWIRE programming and debug (avrdude `jtagice3_dw`, Bloom with avr-gdb) passed a hardware test on an ATtiny85. JTAG programming of the megaAVR chips with a JTAG port (avrdude `jtagice3`) is in the firmware, without a hardware test yet. JTAG debug is planned. |
 | PIC | Programming. High-voltage programming uses the VPP supply of the board. | Planned. No design yet. |
 | STM8 | SWIM (single-wire debug and programming interface) | Planned. No design yet. |
 
@@ -332,7 +332,7 @@ The `test_*.py` files are the unit tests of the scripts. They need no hardware.
 - [docs/cmsis-dap.md](docs/cmsis-dap.md): the CMSIS-DAP personality and its command processor for SWD and JTAG.
 - [docs/clock-pacing.md](docs/clock-pacing.md): how the SWD, JTAG and RVSWD engines time their clock, with measurements on the wire.
 - [docs/firmware-update.md](docs/firmware-update.md): the bootloader, the firmware update and the flash layout.
-- [docs/avr.md](docs/avr.md): AVR programming: USB ID, Bloom, udev rule, wiring, avrdude commands and low-clock targets.
+- [docs/avr.md](docs/avr.md): AVR programming: USB ID, Bloom, udev rule, wiring, avrdude commands, debugWIRE, JTAG and low-clock targets.
 - [docs/wch-link.md](docs/wch-link.md): the WCH-Link personality: build, USB ID, target pins, udev rule, size, implementation and hardware test.
 - [docs/wch-link-protocol.md](docs/wch-link-protocol.md): the USB protocol and the wire frames of the WCH-LinkE, from captures ([docs/wch-link-captures/](docs/wch-link-captures/README.md)).
 - [docs/cmake.md](docs/cmake.md): the CMake options and the CMake presets.

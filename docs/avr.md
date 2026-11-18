@@ -5,8 +5,8 @@ ISP programming passed a hardware test with avrdude 8.3 on the YD-CH32V307VCT6 b
 Tools that use the Microchip EDBG protocol, for example avrdude, find the probe over USB.
 avrdude can also program a chip over debugWIRE, and Bloom with avr-gdb can debug it.
 debugWIRE passed a hardware test on an ATtiny85 at 8 MHz and at 1 MHz (see [debugWIRE hardware test](#debugwire-hardware-test)).
-The firmware also has JTAG programming of the classic AVR chips (EDBG variant mega, physical interface JTAG).
-JTAG programming did not have a hardware test yet, and the firmware does not have JTAG debug yet.
+avrdude can also program the classic AVR chips with a JTAG port, for example the ATmega32U4 and the ATmega2560 (see [JTAG](#jtag)).
+JTAG programming did not have a hardware test yet. The firmware does not have JTAG debug yet.
 The probe does not have the other AVR interfaces (UPDI, PDI, TPI).
 [AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol, for a later JTAG debug function.
 
@@ -210,6 +210,81 @@ Then program the DWEN fuse back to 1 over ISP, without a power cycle in between.
 avrdude does both steps itself. When ISP fails on a chip with DWEN, avrdude sends "disable debugWIRE" and then uses ISP:
 `avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p t85 -P usb -B 125kHz -U hfuse:w:0xDF:m`.
 For this step, avrdude sends no device parameters. The probe then accepts only "disable debugWIRE" and the end of the session.
+
+## JTAG
+
+The megaAVR chips with a JTAG port (for example ATmega16, ATmega32, ATmega32U4 and ATmega2560) can use JTAG programming.
+avrdude reads and writes the flash, the EEPROM, the fuses and the lock bits over JTAG.
+It also reads the signature, the calibration bytes and the signature row.
+JTAG has a chip erase. avrdude erases the chip before it writes the flash, unless you give `-D`.
+The firmware has JTAG programming only. JTAG debug with Bloom is not available yet.
+
+### JTAG wiring
+
+ISP and JTAG use the same probe pins, but different pins of the target.
+Connect one interface at a time.
+The same rules as for ISP apply: 3.3 V targets only, the target has its own supply, and the target GND connects to the probe GND (see [Wiring](#wiring)).
+
+| JTAG signal | Probe pin | Header pin | 10-pin AVR JTAG header of the target | Seeeduino Lite, Arduino Leonardo (ATmega32U4) |
+|---|---|---|---|---|
+| TCK | PB13 | P3-45 | 1 | A3 (PF4) |
+| TDO | PB14 | P3-44 | 3 | A1 (PF6) |
+| TMS | PC11 | P3-21 | 5 | A2 (PF5) |
+| TDI | PB15 | P3-43 | 9 | A0 (PF7) |
+| Target voltage sense | PB0 | P2-29 | 4 (VTref) | 3V3 or VCC |
+| GND | GND | any GND pin | 2, 10 | GND |
+
+- The probe does not use RESET for JTAG. In the programming mode, the JTAG instruction AVR_RESET holds the core in reset.
+- TCK, TDI and TDO are the ISP pins SCK, MOSI and MISO of the probe.
+- The JTAG fast path link (PB13 to PC10) is necessary only for a TCK above 1 MHz (see [JTAG clock](#jtag-clock)).
+
+### JTAGEN and OCDEN
+
+- JTAGEN (bit 6 of the high fuse, 0 = programmed) enables the JTAG port. A new ATmega32U4 has JTAGEN programmed (high fuse `0x99`).
+  The Arduino bootloader of the ATmega32U4 sets the high fuse to `0xD8`: JTAGEN is not programmed.
+  Then program JTAGEN over ISP first, for example `avrdude -C +etc/avrdude-openmupp.conf -c openmupp -p m32u4 -P usb -B 125kHz -U hfuse:w:0x98:m`.
+- JTAG uses four pins of the chip (port F on the ATmega32U4). The program cannot use these pins as I/O while JTAGEN is programmed.
+- The JTD bit in MCUCR turns the JTAG port off while the program runs. The probe does not drive RESET, so it cannot connect to a chip whose program sets JTD. Use ISP for such a chip.
+- OCDEN (bit 7 of the high fuse) enables the on-chip debug system. JTAG programming does not need it. Keep OCDEN unprogrammed: it increases the power consumption in sleep modes.
+- Do not change JTAGEN to 1 over JTAG, because the JTAG port then stops after the session. Use ISP to program it again.
+
+### avrdude over JTAG
+
+The entry `openmupp_jtag` of `etc/avrdude-openmupp.conf` has the type `jtagice3`, as `atmelice` and `jtag3` of avrdude.
+
+```sh
+# Read the signature of an ATmega32U4
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp_jtag -p m32u4 -P usb
+
+# Erase the chip, then write and verify the flash from an Intel HEX file
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp_jtag -p m32u4 -P usb -B 1MHz -U flash:w:firmware.hex:i
+
+# Read the fuses and the lock bits
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp_jtag -p m32u4 -P usb -U lfuse:r:-:h -U hfuse:r:-:h -U efuse:r:-:h -U lock:r:-:h
+
+# Write and verify the EEPROM
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp_jtag -p m32u4 -P usb -U eeprom:w:data.hex:i
+```
+
+- The probe has one JTAG device in the chain only. The avrdude option `-x jtagchain` accepts only `0,0,0,0`. Other values fail.
+- At the end of the session, the probe leaves the programming mode, and the program starts.
+- When avrdude cannot connect, it shows "JTAGEN fuse disabled?". Then check the wiring, the target supply and JTAGEN.
+
+### JTAG clock
+
+TCK must be less than a quarter of the clock of the target (datasheet).
+Without `-B`, TCK is 200 kHz. This value is correct for a target clock of 1 MHz or more.
+Each new host connection starts at 200 kHz again.
+
+| Target clock | Maximum TCK | Option |
+|---|---|---|
+| 16 MHz | 4 MHz | `-B 1MHz`. With the PB13 to PC10 link: `-B 4MHz` (the SPI gives 2.25 MHz). |
+| 8 MHz | 2 MHz | `-B 1MHz`. With the PB13 to PC10 link: `-B 2MHz` (the SPI gives 1.125 MHz). |
+| 1 MHz (factory setting of many chips) | 250 kHz | No `-B` (200 kHz), or `-B 125kHz` |
+
+- Up to 1 MHz, the probe uses the bit-bang engine at the requested rate.
+- Above 1 MHz, the probe uses the JTAG fast path (SPI and DMA, see [boards.md](boards.md)). The fast path needs the link from PB13 to PC10. Without the link, JTAG fails above 1 MHz.
+- TCK is never faster than the request.
 
 ## Low-clock targets
 

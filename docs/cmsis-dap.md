@@ -167,7 +167,7 @@ The STM32F1 boards do not have it: their USB packet memory is full.
 ## AVR commands
 
 The build option `MUPP_CMSIS_DAP_AVR` (default `OFF`) adds the AVR commands of the Microchip EDBG tools to the CMSIS-DAP v1 (HID) interface.
-avrdude (`jtagice3_isp`) and Bloom use these commands.
+avrdude (`jtagice3_isp`, `jtagice3_dw`, `jtagice3`) and Bloom use these commands.
 The option needs `MUPP_CMSIS_DAP_HID`.
 Only the CH32V307 boards have it, because the AVR ISP engine has no code for the other chips.
 The protocol is in "EDBG-based Tools Protocols" (Microchip DS50002630A), chapters 3.2.1 and 5.
@@ -206,26 +206,30 @@ SET and GET are `[command][0][context][address][bytes][data]`: a range of parame
 | `0x00` | Discovery | `QUERY`: the handlers (context `0x00`), the tool name (`0x80`) and the serial number (`0x81`). |
 | `0x01` | Housekeeping | Sign-on (`0x10`) and sign-off (`0x11`): OK. `GET` of context 0: the hardware version, the firmware major and minor version, and the build number (addresses 0-4). `GET` of context 1, address 0: the target voltage in mV, little-endian (Vref, PB0 on the CH32V307 boards). `SET` fails: the parameters are read-only. The firmware upgrade command (`0x50`) fails with code `0x10` (not supported), and the probe continues. |
 | `0x11` | AVR ISP | The STK500v2 commands of the ISP engine (`src/protocol/avr/IspScope.h`). |
-| `0x12` | AVR8 generic | debugWIRE programming and debug (`src/protocol/avr/Avr8Scope.h`). See [AVR8 generic scope](#avr8-generic-scope). avrdude also sets its parameters before ISP programming. |
+| `0x12` | AVR8 generic | debugWIRE programming and debug, and JTAG programming (`src/protocol/avr/Avr8Scope.h`). See [AVR8 generic scope](#avr8-generic-scope). avrdude also sets its parameters before ISP programming. |
 | `0x20` | EDBG control | `SET` and `GET` of the target power (context 0, address `0x10`, 1 byte): 0 off, 1 on. See [Target power](#target-power). The other parameters fail with code `0x01`. |
 
 Another handler fails with code `0x10`.
 A host that goes away (bus reset or deconfigure) loses its frame, its response, the AVR8 parameters and the breakpoints.
 `DAP_Disconnect` and USB suspend also drop the AVR8 parameters and the breakpoints. Thus each host connection starts without a device context.
-The end of a debugWIRE session (sign-off, "disable debugWIRE") drops the device context. Thus each session needs its own device context.
+The end of a debugWIRE or JTAG session (sign-off, "disable debugWIRE") drops the device context. Thus each session needs its own device context.
 
 ### AVR8 generic scope
 
-The AVR8 scope runs the debugWIRE (dW) target operations of `src/avr/DebugWireTarget.h`.
+The AVR8 scope runs the debugWIRE (dW) target operations of `src/avr/DebugWireTarget.h`, and the JTAG programming of `src/avr/AvrJtagTarget.h` (see [AVR8 scope on JTAG](#avr8-scope-on-jtag)).
+The probe has one scope for each interface. `Avr8Select` sends `SET` to both scopes, and the other commands to the active scope.
+Without an active scope, they go to the scope of the variant and the physical interface of the host.
 The host sends the device parameters, so the probe has no part database.
 Values are little-endian. Flash, SRAM and EEPROM addresses are byte addresses. The PC, `RUN_TO` and the break event use word addresses.
 
 | Context | Parameters |
 |---|---|
-| 0 | Address 0: variant (1 = debugWIRE). Address 1: function. |
-| 1 | Address 0: physical interface (5 = debugWIRE). |
+| 0 | Address 0: variant (1 = debugWIRE, 2 = mega for JTAG). Address 1: function (1 = programming, 2 = debugging). |
+| 1 | Address 0: physical interface (4 = JTAG, 5 = debugWIRE). Address `0x01`: JTAG daisy chain, 4 bytes. Only 0 is accepted, else code `0x39`. Address `0x20`: JTAG programming clock, address `0x21`: JTAG debug clock, kHz u16 each, 200 kHz by default. 0 kHz gives code `0x3B`. |
 | 2 | The device context, as `struct mega_device_desc` of avrdude: flash page size (`0x00`), flash size (`0x02`), boot start (`0x0A`), EEPROM size (`0x10`), DWDR (`0x18`), EEARH (`0x19`), EEARL (`0x1A`), EECR (`0x1B`), EEDR (`0x1C`), SPMCSR (`0x1D`). |
 | 3 | Address 0: 1 lets the timers of the target run while it is stopped. |
+
+The host can set the parameters in any order. Bloom sets the JTAG clock and the daisy chain before the variant.
 
 avrdude and Bloom send DWDR and the EEPROM registers as I/O addresses (`0x00`-`0x3F`), and SPMCSR as a data space address (I/O address + `0x20`).
 The probe converts SPMCSR to its I/O address.
@@ -282,19 +286,51 @@ While the target runs, each `AVR_EVT` checks the dW line one time.
 A bus reset, a USB suspend and `DAP_Disconnect` on the HID interface end the dW session.
 The probe stops the target, removes the software breakpoints from flash, lets the program run and releases the line.
 
+### AVR8 scope on JTAG
+
+avrdude (`type = "jtagice3"`) sends variant 2 (mega), function 1 (programming) and physical 4 (JTAG).
+The probe has JTAG programming only. The debug commands are not available yet.
+The device context has the flash page size (`0x00`, 2 to 256 bytes), the flash size (`0x02`, up to 256 KiB), the EEPROM size (`0x10`), the EEPROM page size (`0x12`), the OCD revision (`0x13`, 0 to 4) and the full-page bit stream flag (`0x15`).
+A value out of range gives code `0x33` at activate physical.
+
+| Command | Function |
+|---|---|
+| `0x10` Activate physical | The probe drives the pins at the programming clock and reads the IDCODE. DATA `[IDCODE u32]`. An IDCODE that is not from Atmel (bits 11..0 not `0x03F`) gives code `0x20`. The reset flag is not used. |
+| `0x11` Deactivate physical | The probe leaves the programming mode and releases the pins. |
+| `0x12` Get ID | DATA `[IDCODE u32]`, for example `3F 70 58 49` (an ATmega32U4: part number `0x9587`). |
+| `0x14` Detach | OK |
+| `0x15`, `0x16` Programming mode | The JTAG programming mode. The core is in reset in the programming mode. |
+| `0x20` Erase | `[mode][address u32]`: mode 0 is the chip erase. Other modes give code `0x39`. |
+| `0x21` Read memory, `0x23` Write memory | Programming mode only, else code `0x32`. |
+
+The debug commands (attach, reset, stop, run, run to, step, PC, breakpoints, masked read) and "disable debugWIRE" fail with code `0x90`.
+A JTAG scan that fails, or a write that does not end in time, gives code `0x13`.
+
+The memory types in the programming mode:
+
+- Flash page (`0xB0`): a write must have whole pages at a page address, else code `0x37`. A write needs a chip erase first. A read can have any address and length.
+- EEPROM page (`0xB1`): the probe writes each page that the data touches.
+- Fuses (`0xB2`): address 0 is the low fuse, 1 the high fuse, 2 the extended fuse.
+- Lock bits (`0xB3`): address 0.
+- Signature (`0xB4`) and calibration byte (`0xB5`), read only: the index 0 to `0xFF` of the signature row. avrdude reads the signature at index 0 to 2, and the even and odd bytes of its `sigrow` and `sernum` memories with these two types.
+
+A bus reset, a USB suspend and `DAP_Disconnect` on the HID interface end the JTAG session.
+The probe leaves the programming mode, releases the core from reset and releases the pins.
+
 ### Target pins
 
 The HID interface owns the target pins for the AVR commands, as for its DAP commands (see [CMSIS-DAP v1 (HID)](#cmsis-dap-v1-hid)).
 
 - `ENTER_PROGMODE` and activate physical take the pins. While the v2 interface owns them, they fail and change no pin.
-- ISP and debugWIRE use the same pins. `ENTER_PROGMODE` fails during a dW session, and activate physical fails with code `0x33` in the ISP programming mode.
+- ISP, debugWIRE and JTAG use the same pins. `ENTER_PROGMODE` of ISP fails during a dW or JTAG session, and activate physical fails with code `0x33` in the ISP programming mode.
 - `LEAVE_PROGMODE`, deactivate physical, disable debugWIRE, and a start command that fails, give the pins back. When `DAP_Connect` of the HID interface took the pins first (avrdude does this), `DAP_Disconnect` gives them back.
 - `DAP_Disconnect` on the HID interface, a USB suspend and a bus reset end the programming mode: RESET is released, and the target runs.
 
 ### avrdude
 
 avrdude finds the probe by its USB ID and needs `CMSIS-DAP` in the product string.
-Programmer entries with `type = "jtagice3_isp"` (ISP) or `type = "jtagice3_dw"` (debugWIRE, as `xplainedmini_dw`) and the USB ID of the probe work without a change in avrdude.
+Programmer entries with `type = "jtagice3_isp"` (ISP), `type = "jtagice3_dw"` (debugWIRE, as `xplainedmini_dw`) or `type = "jtagice3"` (JTAG, as `atmelice`) and the USB ID of the probe work without a change in avrdude.
+The JTAG entry needs `prog_modes = PM_JTAG` for `-x jtagchain`, and `extra_features = HAS_BITCLOCK_ADJ`, else `-B` gives a warning.
 The file `etc/avrdude-openmupp.conf` has these entries. See [avr.md](avr.md) for the wiring and the commands.
 avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 parameters, the ISP or AVR8 commands, the sign-off and `DAP_Disconnect`.
 
@@ -1269,6 +1305,7 @@ They also check the target pins between the two interfaces, the end of the progr
 `tests/TestEdbgDebugWire.cpp` runs the AVR8 scope through the HID function, on the dW engine with the mock ATmega328P of `tests/MockAvrDw.h`.
 The tests run the avrdude session (signature, flash, EEPROM) and a Bloom debug session (registers, SRAM, PC, run, stop, step, reset, hardware and software breakpoints, break events).
 They also check the device context, the pins between ISP and debugWIRE, a missing target, and a host that goes away.
+`tests/TestEdbgJtag.cpp` runs the avrdude and Bloom JTAG sessions on the mock ATmega32U4 of `tests/MockAvrJtag.h`: all memories, the parameters, the checks of the host fields, the pins and a host that goes away.
 
 ## Hardware test
 
