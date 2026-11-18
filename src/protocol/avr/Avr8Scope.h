@@ -124,8 +124,11 @@
 //        FLASH_PAGE 0xB0 (a write takes whole, aligned pages, after a chip
 //        erase), EEPROM_PAGE 0xB1, FUSES 0xB2 (0 low, 1 high, 2
 //        extended), LOCK_BITS 0xB3 (address 0), and read only SIGN_JTAG
-//        0xB4 (3 bytes) and OSCCAL 0xB5 (up to 4 bytes). A read can span
-//        pages.
+//        0xB4 and OSCCAL 0xB5. These two take the 8-bit index of the
+//        signature row (0 to 0xFF): SIGN_JTAG index n is row byte 2n,
+//        OSCCAL index n is row byte 2n + 1. avrdude reads the signature
+//        (SIGN_JTAG 0 to 2) and its sigrow, prodsig and sernum memories in
+//        this way. A read can span pages.
 //   DEACTIVATE_PHYSICAL: leaves the programming mode and releases the
 //        pins.
 //   DETACH: OK. The debug commands (ATTACH, RESET, STOP, RUN, RUN_TO,
@@ -1331,14 +1334,16 @@ class Avr8Scope final : public Avr8Handler {
          size = device.eepromBytes;
          break;
       case avr8::memory::fuses:
-      case avr8::memory::signature:
          size = 3;
          break;
       case avr8::memory::lockBits:
          size = 1;
          break;
+      case avr8::memory::signature:
       case avr8::memory::osccal:
-         size = 4;
+         // The 8-bit index of the signature row (avrdude reads sigrow,
+         // prodsig and sernum through it)
+         size = 0x100;
          break;
       default:
          return failed(avr8::failure::memoryType);

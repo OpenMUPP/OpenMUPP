@@ -192,6 +192,31 @@ TEST_CASE("EDBG JTAG: avrdude reads and writes all memories") {
    b.checkReleased();
 }
 
+// jtag3_read_byte(), mem_is_sigrow() and mem_is_in_sigrow(): one byte at a
+// time, SIGN_JTAG for the even and OSCCAL for the odd bytes, at the index
+// address / 2
+TEST_CASE("EDBG JTAG: avrdude reads the signature row and the serial number") {
+   Bench b;
+   b.avrdudeOpen();
+   REQUIRE(b.signOn() == data(idcodeBytes));
+   b.jtagProgmode();
+   SUBCASE("sigrow, prodsig: the calibration bytes 0 to 3") {
+      for(uint8_t index = 0; index < 4; ++index) {
+         CHECK(b.avr8(readMemory(memory::osccal, index, 1)) == data({ b.jtagAvr.sigrow[2u * index + 1u] }));
+      }
+      CHECK(b.avr8(readMemory(memory::osccal, 0, 4)) == data({ 0x5A, 0xA1, 0xA2, 0xA3 }));
+   }
+   SUBCASE("sernum: index 7 to 11") {
+      for(uint8_t at = 0x0E; at < 0x18; ++at) {
+         const uint8_t type = at % 2 == 0 ? memory::signature : memory::osccal;
+         CHECK(b.avr8(readMemory(type, at / 2u, 1)) == data({ b.jtagAvr.sigrow[at] }));
+      }
+      CHECK(b.avr8(readMemory(memory::signature, 7, 1)) == data({ 0x4E }));
+   }
+   CHECK(b.jtagAvr.unknownCommands.empty());
+   b.avrdudeClose();
+}
+
 TEST_CASE("EDBG JTAG: the full-page bit stream of the ATmega16 and ATmega32") {
    Bench b;
    b.jtagAvr.fullPageBitstream = true;
@@ -343,8 +368,8 @@ TEST_CASE("EDBG JTAG: the checks of the memory commands") {
    CHECK(b.avr8(writeMemory(memory::eepromPage, 0x3FE, { 1, 2, 3 })) == failed(0x38));
    CHECK(b.avr8(readMemory(memory::fuses, 2, 2)) == failed(0x38));
    CHECK(b.avr8(writeMemory(memory::lockBits, 1, { 0xFC })) == failed(0x38));
-   CHECK(b.avr8(readMemory(memory::signature, 3, 1)) == failed(0x38));
-   CHECK(b.avr8(readMemory(memory::osccal, 0, 5)) == failed(0x38));
+   CHECK(b.avr8(readMemory(memory::signature, 0x100, 1)) == failed(0x38));
+   CHECK(b.avr8(readMemory(memory::osccal, 0xFF, 2)) == failed(0x38));
    // No such memory type in the programming mode, read only
    CHECK(b.avr8(readMemory(memory::sram, 0x100, 1)) == failed(0x34));
    CHECK(b.avr8(readMemory(memory::spm, 0, 2)) == failed(0x34));
