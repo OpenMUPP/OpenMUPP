@@ -116,7 +116,7 @@ Use `probe-rs list` and then `probe-rs info`.
 | `DapUart.h` | The interface of the UART, as the `DAP_UART_*` commands need it. |
 | `src/uart/DapUartChannel.h` | The `DapUart` on the UART of the UART bridge, and the owner switch between the serial port and the DAP commands. |
 | `DapSwo.h` | The interface of the SWO receiver, as the `DAP_SWO_*` commands need it. |
-| `src/swo/SwoUart.h` | The `DapSwo` on USART2 and DMA1 channel 6 of the CH32V307. |
+| `src/swo/SwoReceiver.h` | The `DapSwo` on USART2 and DMA1 channel 6 of the CH32V307. |
 
 The processor has no CMSIS header and no hardware header.
 It uses these objects:
@@ -127,7 +127,7 @@ It uses these objects:
 - A `Platform` for the microsecond time, the delay and the LEDs.
 - A `DeviceInfo` with the strings and the capabilities of `DAP_Info`.
 - A `DapUart` (`DapUart.h`, on target `uart::DapUartChannel`) for the `DAP_UART_*` commands. It is optional.
-- A `DapSwo` (`DapSwo.h`, on target `swo::SwoUart`) for the `DAP_SWO_*` commands. It is optional. `setSwo()` gives it to the processor, and tells it if the transport has the SWO trace endpoint.
+- A `DapSwo` (`DapSwo.h`, on target `swo::SwoReceiver`) for the `DAP_SWO_*` commands. It is optional. `setSwo()` gives it to the processor, and tells it if the transport has the SWO trace endpoint.
 
 ## Transport
 
@@ -592,7 +592,7 @@ The other boards report no SWO in `DAP_Info`, and the commands reply `ID_DAP_Inv
 Only the v2 interface has the commands. The Versaloon personality has no SWO.
 The CMake build sets `MUPP_CMSIS_DAP_SWO` for the CH32V307 images with the CMSIS-DAP personality.
 
-The receiver is `swo::SwoUart` (`src/swo/SwoUart.h`):
+The receiver is `swo::SwoReceiver` (`src/swo/SwoReceiver.h`):
 
 - USART2 receives on PA3 (8N1, receiver only). A circular DMA on DMA1 channel 6 writes into a trace buffer of 4 KB.
 - The baud rate is 144 MHz / (16 × divider). The range is 2198 baud to 9 Mbaud.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "swo/SwoUart.h"
+#include "swo/SwoReceiver.h"
 
 #include <algorithm>
 #include <atomic>
@@ -46,15 +46,15 @@ uint32_t limited(uint32_t clock, uint32_t baud) {
 
 } // namespace
 
-SwoUart *SwoUart::instance_ = nullptr;
+SwoReceiver *SwoReceiver::instance_ = nullptr;
 
 // A direct entry, as in uart/UartPort.cpp: it saves only the registers that
 // the handler uses.
-[[gnu::interrupt, gnu::flatten]] void SwoUart::dmaInterruptEntry() {
+[[gnu::interrupt, gnu::flatten]] void SwoReceiver::dmaInterruptEntry() {
    instance_->serviceDma();
 }
 
-void SwoUart::serviceDma() {
+void SwoReceiver::serviceDma() {
    const Dma::Channel channel = dma();
    // Clear only the flag that is counted: a clear of both flags could drop
    // a flag that comes between the check and the clear. Two flags: the
@@ -71,12 +71,12 @@ void SwoUart::serviceDma() {
    halves_ = halves_ + done;
 }
 
-uint32_t SwoUart::realBaud(uint32_t baud) const {
+uint32_t SwoReceiver::realBaud(uint32_t baud) const {
    const uint32_t clock = usart().getClockFrequency();
    return swo::realBaud(clock, limited(clock, baud));
 }
 
-uint32_t SwoUart::start(uint32_t baud) {
+uint32_t SwoReceiver::start(uint32_t baud) {
    stop();
    Rcc::enableUSART2Clock();
    Rcc::enableDMA1Clock();
@@ -105,7 +105,7 @@ uint32_t SwoUart::start(uint32_t baud) {
    channel.clearGlobalInterruptFlag();
    channel.enableHalfTransferInterrupt();
    channel.enableTransferCompleteInterrupt();
-   Interrupt::connectHandler(dmaIrq, &SwoUart::dmaInterruptEntry);
+   Interrupt::connectHandler(dmaIrq, &SwoReceiver::dmaInterruptEntry);
    NVIC_SetPriority(dmaIrq, hardware::uartIrqPriority);
    NVIC_ClearPendingIRQ(dmaIrq);
    NVIC_EnableIRQ(dmaIrq);
@@ -127,7 +127,7 @@ uint32_t SwoUart::start(uint32_t baud) {
    return swo::realBaud(port.getClockFrequency(), baud);
 }
 
-uint32_t SwoUart::setBaud(uint32_t baud) {
+uint32_t SwoReceiver::setBaud(uint32_t baud) {
    const hw::Usart port = usart();
    baud = limited(port.getClockFrequency(), baud);
    const auto divider = usartDivider(port.getClockFrequency(), baud);
@@ -142,7 +142,7 @@ uint32_t SwoUart::setBaud(uint32_t baud) {
    return swo::realBaud(port.getClockFrequency(), baud);
 }
 
-void SwoUart::stop() {
+void SwoReceiver::stop() {
    if((RCC->APB1PCENR & RCC_USART2EN) != 0) {
       usart().disable();
    }
@@ -155,7 +155,7 @@ void SwoUart::stop() {
    }
 }
 
-uint32_t SwoUart::written() const {
+uint32_t SwoReceiver::written() const {
    uint32_t count = 0;
    {
       // halves_ and the counter from the same moment (see SwoRing::writeCount())
@@ -167,7 +167,7 @@ uint32_t SwoUart::written() const {
    return count;
 }
 
-void SwoUart::sampleErrors() {
+void SwoReceiver::sampleErrors() {
    if(!active_) {
       return;
    }
@@ -177,7 +177,7 @@ void SwoUart::sampleErrors() {
    framingError_ = framingError_ || (flags & (USART_STATR_FE | USART_STATR_NE)) != 0;
 }
 
-std::size_t SwoUart::read(art::span<uint8_t> data) {
+std::size_t SwoReceiver::read(art::span<uint8_t> data) {
    sampleErrors();
    bool lost = false;
    const std::size_t count = ring_.read([this] { return written(); }, data.data(), data.size(), lost);
@@ -185,7 +185,7 @@ std::size_t SwoUart::read(art::span<uint8_t> data) {
    return count;
 }
 
-SwoUart::Status SwoUart::status() {
+SwoReceiver::Status SwoReceiver::status() {
    sampleErrors();
    const uint32_t pending = ring_.available(written());
    overrun_ = overrun_ || pending > bufferSize;

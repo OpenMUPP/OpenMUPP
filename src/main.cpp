@@ -42,7 +42,7 @@
 #include "protocol/cmsisdap/RvDtmTap.h"
 #endif
 #if defined(MUPP_CMSIS_DAP_SWO)
-#include "swo/SwoUart.h"
+#include "swo/SwoReceiver.h"
 #endif
 #if defined(MUPP_CMSIS_DAP_AVR)
 #include "avr/AvrJtagTarget.h"
@@ -304,8 +304,8 @@ cmsisdap::Processor dapProcessor{ dapSwd,
 #if defined(MUPP_CMSIS_DAP_SWO)
 // The SWO receiver of the DAP_SWO_* commands and of the SWO trace endpoint,
 // on the bulk interface only. Only the CH32V307 boards have it;
-// swo/SwoUartV30x.cpp checks that the board has the SWO pin.
-swo::SwoUart dapSwo;
+// swo/SwoReceiverV30x.cpp checks that the board has the SWO pin.
+swo::SwoReceiver dapSwo;
 #endif
 // The owner of the target pins (protocol/TargetPinOwner.h), for the HID
 // interface and for a board without safe debug outputs.

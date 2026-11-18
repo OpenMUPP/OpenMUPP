@@ -33,13 +33,13 @@
 
 namespace swo {
 
-class SwoUart final : public cmsisdap::DapSwo {
+class SwoReceiver final : public cmsisdap::DapSwo {
    public:
    static constexpr std::size_t bufferSize = 4096;
 
-   SwoUart() = default;
-   SwoUart(const SwoUart &) = delete;
-   SwoUart &operator=(const SwoUart &) = delete;
+   SwoReceiver() = default;
+   SwoReceiver(const SwoReceiver &) = delete;
+   SwoReceiver &operator=(const SwoReceiver &) = delete;
 
    [[nodiscard]] uint32_t capacity() const override {
       return bufferSize;
@@ -74,7 +74,7 @@ class SwoUart final : public cmsisdap::DapSwo {
 
    private:
    static void dmaInterruptEntry();
-   static SwoUart *instance_;
+   static SwoReceiver *instance_;
 
    void serviceDma();
    [[nodiscard]] uint32_t written() const;

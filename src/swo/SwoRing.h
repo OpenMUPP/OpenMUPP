@@ -2,7 +2,7 @@
 
 #pragma once
 
-// The ring buffer of the SWO receiver (swo/SwoUart.h). No CMSIS
+// The ring buffer of the SWO receiver (swo/SwoReceiver.h). No CMSIS
 // dependency, so the host unit tests can check it.
 //
 // A circular DMA writes the received bytes into the buffer. The DMA counter

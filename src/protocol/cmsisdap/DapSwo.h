@@ -4,7 +4,7 @@
 
 // The SWO receiver as the CMSIS-DAP command processor (DapProcessor.h) sees
 // it: the receiver of the DAP_SWO_* commands of CMSIS-DAP v2.1, in UART
-// (NRZ) mode. Hardware-independent. swo/SwoUart.h gives the implementation
+// (NRZ) mode. Hardware-independent. swo/SwoReceiver.h gives the implementation
 // on the CH32V307. The processor keeps the transport, the mode and the baud
 // rate of the commands.
 

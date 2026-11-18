@@ -209,7 +209,7 @@ if (CMAKE_CROSSCOMPILING)
     string(TOUPPER "${BOARD}" BOARD_UPPER)
     set(PROJECT_DEFINES MUPP_BOARD_${BOARD_UPPER} ${MUPP_PERSONALITY_DEFINES})
     # SWO in the CMSIS-DAP personality (docs/cmsis-dap.md, "SWO commands"): CH32V30X only. The receiver uses
-    # USART2 and DMA1 (src/swo/SwoUartV30x.cpp), and the SWO trace endpoint needs room in the USBHS packet pool.
+    # USART2 and DMA1 (src/swo/SwoReceiverV30x.cpp), and the SWO trace endpoint needs room in the USBHS packet pool.
     if (CH32_FAMILY STREQUAL "CH32V30X" AND "MUPP_WITH_CMSIS_DAP" IN_LIST MUPP_PERSONALITY_DEFINES)
         list(APPEND PROJECT_DEFINES MUPP_CMSIS_DAP_SWO)
     endif ()
@@ -265,7 +265,7 @@ if (CMAKE_CROSSCOMPILING)
     endif ()
     if (NOT CH32_FAMILY STREQUAL "CH32V30X")
         list(APPEND _mupp_dropped_files "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp"
-                "src/board/BoardIspV30x\\.cpp" "src/board/BoardDebugWireV30x\\.cpp" "src/swo/SwoUartV30x\\.cpp")
+                "src/board/BoardIspV30x\\.cpp" "src/board/BoardDebugWireV30x\\.cpp" "src/swo/SwoReceiverV30x\\.cpp")
     endif ()
     foreach (_file ${_mupp_dropped_files})
         list(FILTER MUPP_FIRMWARE_SOURCES EXCLUDE REGEX "${_file}$")
