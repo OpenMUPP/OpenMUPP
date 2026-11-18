@@ -139,6 +139,8 @@ TEST_CASE("AvrJtagTap: DR scans of each length") {
                         Case{ ir::progEnable, 16 }, Case{ ir::ocdAccess, 21 }, Case{ ir::execute, 38 } }) {
       CAPTURE(c.bits);
       Bench b;
+      // The 38-bit instruction execute scan of OCD revision 4
+      b.target.ocdRevision = 4;
       const uint64_t mask = (uint64_t{ 1 } << c.bits) - 1u;
       b.target.capture[c.ir] = 0xA5C3'96F0'5A3Cu & mask;
       REQUIRE(b.tap.open(1000));
