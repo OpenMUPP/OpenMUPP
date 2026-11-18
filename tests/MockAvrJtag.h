@@ -45,7 +45,12 @@
 // - FORCE_BREAK (0x8) at Update-IR stops the running core: BSR bit 1.
 // - RUN (0x9) at Update-IR starts the stopped core at pc. With BCR bit 13
 //   it executes one step: pc + 1 (the mock does not execute the flash),
-//   BSR bit 7, and bit 13 clear.
+//   BSR bit 7, and bit 13 clear. After an EIJMP since the stop, the core
+//   starts at the PC field (revision 4) or the PC field - 1 (revision 3),
+//   modulo the flash words: the PC write of the reference debugger (Z =
+//   PC - 11 or PC - 5, then five instructions) then starts at the PC. This
+//   is a model of the reference offsets, not a hardware fact (open
+//   question 3).
 // - AVR_RESET (0xC): the core is in reset while the bit is 1, and starts
 //   at resetVector at the release. It stops there at once when reg 3 is
 //   a program breakpoint (mode 3) that matches resetVector, with reg 2 as
@@ -60,10 +65,11 @@
 // - The PC field (docs/avr-jtag-ocd.md, "Instruction execute"): pc + 1 at
 //   a stop, + 2 for each executed instruction (+ 1 on revision 3: an
 //   inference from the PC offset -5 of the scripts), Z + 1 after EIJMP.
+//   The field wraps at its bit count.
 //   The rules do not agree in one model (open question 3). Only EIJMP
 //   changes pc: pc = EIND:Z.
-// - The core: LDI, MOV, IN, OUT, LD and ST with X, Y or Z, EIJMP, SPM,
-//   BREAK, WDR and NOP. Other instructions are recorded in
+// - The core: LDI, MOV, IN, OUT, LD and ST with X, Y or Z, LPM Rd, Z,
+//   EIJMP, SPM, BREAK, WDR and NOP. Other instructions are recorded in
 //   unknownInstructions. The data space has r0 to r31 at 0x00, the I/O
 //   registers at 0x20 and the SRAM. A write to the I/O address
 //   ocdDataReg goes to the OCDR and sets reg D bit 4.
@@ -72,6 +78,10 @@
 //   write (0x05, AND as without an erase) and RWW enable (0x11). Other
 //   commands record SPM in unknownInstructions. SPMEN clears at once. The
 //   mock does not check the boot section.
+// - EEPROM: a write to EECR (I/O address eecrIo) with EERE loads EEDR from
+//   eeprom at EEARH:EEARL. EEPE while EEMPE is set writes EEDR to the
+//   EEPROM (eepromWrites), and EEPE stays set for eepeBusyReads reads of
+//   EECR. EERE and EEPE do not stay set otherwise.
 //
 // TDO is the bit 0 of the shift register in Shift-DR and Shift-IR. The
 // mock records the TAP state at each rising edge of TCK in Run-Test/Idle,
@@ -259,6 +269,15 @@ class MockAvrJtag final : public JtagTarget {
    uint32_t pcField{ 0 };
    uint32_t resetVector{ 0 };
    uint32_t stopDelay{ 0 };
+   // The EEPROM registers (I/O addresses of the ATmega32U4)
+   uint8_t eecrIo{ 0x1F };
+   uint8_t eedrIo{ 0x20 };
+   uint8_t eearlIo{ 0x21 };
+   uint8_t eearhIo{ 0x22 };
+   uint32_t eepeBusyReads{ 0 };
+   uint32_t eepromWrites{ 0 };
+   // The PC field at each RUN
+   std::vector<uint32_t> runFields;
    // r0 to r31, the I/O registers and the SRAM of the ATmega32U4
    std::vector<uint8_t> data = std::vector<uint8_t>(0x0B00, 0);
    std::vector<uint16_t> executed;
@@ -273,6 +292,7 @@ class MockAvrJtag final : public JtagTarget {
       pcField = at + 1;
       bsr = cause;
       hiddenStopReads_ = stopDelay;
+      jumped_ = false;
    }
 
    uint8_t &reg(uint8_t n) {
@@ -306,6 +326,11 @@ class MockAvrJtag final : public JtagTarget {
       if(ir == 0x8 && !stopped) {
          stop(pc, 1u << 1);
       } else if(ir == 0x9 && stopped) {
+         runFields.push_back(pcField);
+         if(jumped_) {
+            const auto words = static_cast<uint32_t>(flash.size() / 2);
+            pc = (pcField - (ocdRevision >= 4 ? 0u : 1u)) % words;
+         }
          if((ocdRegs[8] & (1u << 13)) != 0) {
             ocdRegs[8] = static_cast<uint16_t>(ocdRegs[8] & ~(1u << 13));
             stop(pc + 1, 1u << 7);
@@ -374,7 +399,11 @@ class MockAvrJtag final : public JtagTarget {
       execute(static_cast<uint16_t>(shift_ >> fieldBits()));
    }
 
-   [[nodiscard]] uint8_t load(uint16_t address) const {
+   [[nodiscard]] uint8_t load(uint16_t address) {
+      if(address == 0x20u + eecrIo && eepeBusy_ > 0) {
+         --eepeBusy_;
+         return static_cast<uint8_t>(data[address] | 0x02u);
+      }
       return address < data.size() ? data[address] : 0;
    }
 
@@ -382,9 +411,27 @@ class MockAvrJtag final : public JtagTarget {
       if(address == 0x20u + ocdDataReg) {
          ocdr = value;
          ocdrFull = true;
+      } else if(address == 0x20u + eecrIo) {
+         eecr(value);
       } else if(address < data.size()) {
          data[address] = value;
       }
+   }
+
+   void eecr(uint8_t value) {
+      const uint8_t io = 0x20;
+      const auto address =
+      static_cast<uint16_t>(eearhIo == eearlIo ? data[io + eearlIo] : data[io + eearhIo] << 8 | data[io + eearlIo]);
+      const bool armed = (data[io + eecrIo] & 0x04u) != 0;
+      if((value & 0x01u) != 0 && address < eeprom.size()) {
+         data[io + eedrIo] = eeprom[address];
+      }
+      if((value & 0x02u) != 0 && armed && address < eeprom.size()) {
+         eeprom[address] = data[io + eedrIo];
+         ++eepromWrites;
+         eepeBusy_ = eepeBusyReads;
+      }
+      data[io + eecrIo] = static_cast<uint8_t>(value & ~0x03u);
    }
 
    [[nodiscard]] uint16_t pointer(uint8_t low) const {
@@ -407,16 +454,19 @@ class MockAvrJtag final : public JtagTarget {
          reg(d) = load(pointer(ldst == 0x8000u ? 30 : ldst == 0x8008u ? 28 : 26));
       } else if(ldst == 0x8200u || ldst == 0x8208u || ldst == 0x920Cu) { // ST
          store(pointer(ldst == 0x8200u ? 30 : ldst == 0x8208u ? 28 : 26), reg(d));
+      } else if((op & 0xFE0Fu) == 0x9004u) { // LPM Rd, Z
+         reg(d) = z() < flash.size() ? flash[z()] : 0xFF;
       } else if(op == 0x9419u) { // EIJMP
          pc = static_cast<uint32_t>(load(0x20u + eind)) << 16 | z();
-         pcField = pc + 1;
+         pcField = static_cast<uint32_t>((pc + 1) & fieldMask());
+         jumped_ = true;
          return;
       } else if(op == 0x95E8u) { // SPM
          spm();
       } else if(op != 0x9598u && op != 0x95A8u && op != 0x0000u) { // BREAK, WDR, NOP
          unknownInstructions.push_back(op);
       }
-      pcField += ocdRevision >= 4 ? 2 : 1;
+      pcField = static_cast<uint32_t>((pcField + (ocdRevision >= 4 ? 2 : 1)) & fieldMask());
    }
 
    void spm() {
@@ -764,6 +814,8 @@ class MockAvrJtag final : public JtagTarget {
    uint8_t byte_{ 0 };
    uint64_t ocdResult_{ 0 };
    uint32_t hiddenStopReads_{ 0 };
+   uint32_t eepeBusy_{ 0 };
+   bool jumped_{ false };
    uint16_t flashRead_{ 0 };
    std::map<uint32_t, uint16_t> spmBuffer_;
 };
