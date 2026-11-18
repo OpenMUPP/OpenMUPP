@@ -27,6 +27,7 @@ The CMSIS-DAP personality is a CMSIS-DAP v2 probe:
 - It runs SWD and JTAG transfers, and `DAP_TransferAbort` during a transfer command.
 - It switches the 3.3 V target supply and reads the target voltage with `ID_DAP_Vendor2`, with the protections of the `POWER` block (see [cmsis-dap.md](cmsis-dap.md#target-power)).
 - It has no SWO. The `DAP_UART_*` commands can take the UART from the CDC-ACM serial port (see [cmsis-dap.md](cmsis-dap.md#uart-commands)).
+- With `MUPP_CMSIS_DAP_AVR` (CH32V307 boards), its HID interface has the AVR commands of the Microchip EDBG tools: ISP programming, debugWIRE programming and debug, and JTAG programming (see [avr.md](avr.md)).
 
 A multi image has more than one personality, for example Versaloon and CMSIS-DAP.
 A switch command or the key selects the next personality, and a flash page stores it.
@@ -48,4 +49,5 @@ Hardware test status:
 - The dual image `versaloon,cmsis-dap` on the WeAct STM32H523 core board passed the same test on Linux, with an STM32F103ZE target (see [boards.md](boards.md#hardware-test)).
   The key switch passed in both directions on this board.
   One earlier run had read errors on OpenOCD JTAG with the `vsllink` driver. Five later runs passed. The cause is not known.
+- AVR on the YD-CH32V307VCT6: ISP passed the test on an ATmega32U4, and debugWIRE on an ATtiny85 (see [avr.md](avr.md#hardware-test)). JTAG programming needs a test on the hardware.
 - Windows (also the driverless WinUSB binding), the key switch on the STM32F1 boards, and the WCH-Link personality of the multi image need a test on the hardware.
