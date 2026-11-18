@@ -52,6 +52,8 @@ inline constexpr uint8_t break2 = 0x2;
 inline constexpr uint8_t break3 = 0x3;
 // Probably address bits 23..16 of reg 0 to reg 3 (revision 4 only)
 inline constexpr uint8_t breakHigh0 = 0x4;
+inline constexpr uint8_t breakHigh2 = 0x6;
+inline constexpr uint8_t breakHigh3 = 0x7;
 inline constexpr uint8_t bcr = 0x8;
 inline constexpr uint8_t bsr = 0x9;
 // The last byte that the core wrote to OCD_DATAREG, in bits 15..8

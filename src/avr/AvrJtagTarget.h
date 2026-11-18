@@ -7,8 +7,9 @@
 // one JTAG port. Hardware-independent: the host unit tests run it on the
 // JTAG bit-bang engine with mock pins.
 //
-// Programming only: the OCD (debug mode) is not available yet, so the
-// target has no hardware breakpoints for the host.
+// The scope uses the programming only: the debug mode (debug()) has no
+// scope commands yet, so the target has no hardware breakpoints for the
+// host.
 //
 // The caller owns the target pins from open() to close(): the EDBG
 // transport takes them at ACTIVATE_PHYSICAL.
@@ -16,6 +17,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "avr/AvrJtagDebug.h"
+#include "avr/AvrJtagOcd.h"
 #include "avr/AvrJtagProg.h"
 #include "avr/AvrJtagTap.h"
 #include "protocol/JtagPort.h"
@@ -45,6 +48,7 @@ class AvrJtagTarget {
 
    void setDevice(const AvrJtagDevice &device) {
       device_ = device;
+      ocd_.setRevision(device.ocdRevision);
    }
    [[nodiscard]] const AvrJtagDevice &device() const {
       return device_;
@@ -81,9 +85,15 @@ class AvrJtagTarget {
       return prog_;
    }
 
+   [[nodiscard]] AvrJtagDebug &debug() {
+      return debug_;
+   }
+
    private:
    AvrJtagTap tap_;
    AvrJtagProg prog_{ tap_ };
+   AvrJtagOcd ocd_{ tap_ };
+   AvrJtagDebug debug_{ tap_, ocd_ };
    AvrJtagDevice device_{};
 };
 
