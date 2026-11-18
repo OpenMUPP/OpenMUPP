@@ -270,6 +270,14 @@ UsbStack::UsbStack(Personality active, const Functions &functions)
 #if defined(MUPP_CMSIS_DAP_HID)
       events_.addCommandEndpoints(dap::hidOutEndpoint, dap::hidInEndpoint);
 #endif
+#if defined(MUPP_CMSIS_DAP_SWO)
+      // An acknowledge of the SWO trace endpoint must not hold the abort and
+      // the serial port events. The next trace packet then goes out during
+      // the command: only DAP_SWO_Data reads the trace buffer in a command,
+      // with transport 1, and no DAP_SWO_* command runs the background
+      // service.
+      events_.addCommandEndpoints(dap::outEndpoint, dap::swoEndpoint);
+#endif
       static_cast<void>(device_.addFunction(dap_));
 #if defined(MUPP_CMSIS_DAP_HID)
       static_cast<void>(device_.addFunction(dapHid_));

@@ -29,7 +29,10 @@
 // InComplete events of these endpoints. DAP_TransferAbort can then reach
 // the processor during a command. With the HID interface, both CMSIS-DAP
 // interfaces are command endpoints: an event of one of them must not hold
-// the serial port events during a command of the other.
+// the serial port events during a command of the other. With
+// MUPP_CMSIS_DAP_SWO, the SWO trace endpoint (bulk IN 0x86) is a command
+// endpoint too: its acknowledge comes during a command while the trace
+// streams.
 
 #include <cstddef>
 #include <cstdint>

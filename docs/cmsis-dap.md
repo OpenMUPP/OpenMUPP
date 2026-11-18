@@ -630,6 +630,7 @@ The other images do not have it, and `DAP_Info` then does not report SWO streami
 - It sends the bytes that are in the trace buffer, up to one packet (`wMaxPacketSize`). When the host acknowledges a packet, the next packet goes out at once.
   Thus a packet can be short. The host reads with a large buffer and a timeout.
 - `CmsisDapFunction` checks for new data in each main loop iteration, also between two commands. The main loop sleeps for at most 1 ms (one SysTick).
+- The serial service also delivers the acknowledge of the endpoint during a long command (see [Serial port during long commands](usb-device.md#serial-port-during-long-commands)). Thus the trace continues during the command, and an acknowledge does not block `DAP_TransferAbort` and the serial port events.
 - When the host clears a halt of the endpoint, the packet on its way goes out again.
 - A bus reset or `SET_CONFIGURATION 0` drops the packet on its way. The capture stops, and the transport becomes none.
 - The libArT `VendorBulkFunction` gives the events of the third endpoint to `CmsisDapFunction` (`otherInPacketSent()`, `otherInPacketsDropped()`).
