@@ -34,8 +34,11 @@
 //   debugger. That a field that is not 0 reads a flash word is an
 //   inference (docs/avr-jtag-ocd.md). Field 0 executes the instruction, so
 //   word 0 is read with LPM.
-// - The EEPROM write sets EEMPE, then EEPE with injected instructions. That
-//   the 4-cycle limit of EEMPE holds for this is not tested.
+// - The EEPROM write sets EEMPE, then EEPE with two adjacent injected
+//   OUT instructions. That the 4-cycle limit of EEMPE holds for this is not
+//   tested, so each byte is read back after the write.
+// - A failed context read (NoOcd, Timeout) leaves no valid context: run,
+//   step, halt and the memory access then give NoContext until a reset.
 
 #include <array>
 #include <cstdint>
@@ -58,6 +61,12 @@ enum class JtagDebugStatus : uint8_t {
    TargetRunning,
    // The address range is out of the memory.
    OutOfRange,
+   // The context read after the last stop failed: run, step and memory
+   // access would write wrong registers to the target. A reset reads a new
+   // context.
+   NoContext,
+   // An EEPROM byte read back different after the write
+   VerifyFailed,
 };
 
 // The device values for the debug mode (EDBG device context). The register
@@ -188,7 +197,7 @@ class AvrJtagDebug {
          return status;
       }
       if(stopped_) {
-         return JtagDebugStatus::Ok;
+         return contextValid_ ? JtagDebugStatus::Ok : JtagDebugStatus::NoContext;
       }
       uint16_t value = 0;
       if(!ocd_.readRegister(jtagOcd::reg::bcr, value) || !writeBcr(static_cast<uint16_t>(keep(value) | jtagOcd::bcr::bit14)) ||
@@ -351,13 +360,28 @@ class AvrJtagDebug {
          return JtagDebugStatus::OutOfRange;
       }
       for(uint16_t i = 0; i < length; ++i) {
+         // Both values in registers first, so that the two OUT to EECR are
+         // adjacent, as in the datasheet code (EEPE within 4 cycles after
+         // EEMPE). r31 comes back at the write-back.
          if(!eepromAddress(static_cast<uint16_t>(address + i)) || !writeIo(device_.eedr, buffer[i]) ||
-            !writeIo(device_.eecr, jtagDebug::eecrMasterWrite) ||
-            !writeIo(device_.eecr, jtagDebug::eecrMasterWrite | jtagDebug::eecrWrite)) {
+            !execute(jtagDebug::ldi(16, jtagDebug::eecrMasterWrite)) ||
+            !execute(jtagDebug::ldi(31, static_cast<uint8_t>(jtagDebug::eecrMasterWrite | jtagDebug::eecrWrite))) ||
+            !execute(jtagDebug::out(device_.eecr, 16)) || !execute(jtagDebug::out(device_.eecr, 31))) {
             return JtagDebugStatus::NoOcd;
          }
          if(JtagDebugStatus status = waitEeprom(); status != JtagDebugStatus::Ok) {
             return status;
+         }
+         // Read back: a write that the hardware ignored leaves EEPE clear.
+         uint8_t value = 0;
+         if(!writeIo(device_.eecr, jtagDebug::eecrRead) || !execute(jtagDebug::in(16, device_.eedr))) {
+            return JtagDebugStatus::NoOcd;
+         }
+         if(JtagDebugStatus status = readOcdr(16, value); status != JtagDebugStatus::Ok) {
+            return status;
+         }
+         if(value != buffer[i]) {
+            return JtagDebugStatus::VerifyFailed;
          }
       }
       return JtagDebugStatus::Ok;
@@ -372,7 +396,10 @@ class AvrJtagDebug {
       if(JtagDebugStatus status = requireOcd(); status != JtagDebugStatus::Ok) {
          return status;
       }
-      return stopped_ ? JtagDebugStatus::Ok : JtagDebugStatus::TargetRunning;
+      if(!stopped_) {
+         return JtagDebugStatus::TargetRunning;
+      }
+      return contextValid_ ? JtagDebugStatus::Ok : JtagDebugStatus::NoContext;
    }
 
    [[nodiscard]] bool execute(uint16_t instruction, uint32_t *pcField = nullptr) {
@@ -414,8 +441,10 @@ class AvrJtagDebug {
    }
 
    // The core stopped: read the context.
+   // No retry on a failure: after IN r16, EIND a new read of r16 gets EIND.
    [[nodiscard]] JtagDebugStatus stopped() {
       stopped_ = true;
+      contextValid_ = false;
       // The PC field of the first scan after the stop is PC + 1.
       uint32_t field = 0;
       for(uint8_t r = 0; r < regs_.size(); ++r) {
@@ -427,7 +456,9 @@ class AvrJtagDebug {
       if(!execute(jtagDebug::in(16, jtagDebug::ioEind))) {
          return JtagDebugStatus::NoOcd;
       }
-      return readOcdr(16, eind_);
+      const JtagDebugStatus status = readOcdr(16, eind_);
+      contextValid_ = status == JtagDebugStatus::Ok;
+      return status;
    }
 
    [[nodiscard]] uint32_t fieldMask() const {
@@ -610,6 +641,7 @@ class AvrJtagDebug {
    uint16_t bcr_{ 0 };
    bool ocdAnswers_{ false };
    bool stopped_{ false };
+   bool contextValid_{ false };
 };
 
 } // namespace avr

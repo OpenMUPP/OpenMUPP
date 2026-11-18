@@ -81,7 +81,9 @@
 // - EEPROM: a write to EECR (I/O address eecrIo) with EERE loads EEDR from
 //   eeprom at EEARH:EEARL. EEPE while EEMPE is set writes EEDR to the
 //   EEPROM (eepromWrites), and EEPE stays set for eepeBusyReads reads of
-//   EECR. EERE and EEPE do not stay set otherwise.
+//   EECR. EERE and EEPE do not stay set otherwise. eepeIgnored: EEPE does
+//   nothing, as when EEMPE timed out.
+// - ocdrStuck: a write to the OCDR does not set reg D bit 4.
 //
 // TDO is the bit 0 of the shift register in Shift-DR and Shift-IR. The
 // mock records the TAP state at each rising edge of TCK in Run-Test/Idle,
@@ -276,6 +278,8 @@ class MockAvrJtag final : public JtagTarget {
    uint8_t eearhIo{ 0x22 };
    uint32_t eepeBusyReads{ 0 };
    uint32_t eepromWrites{ 0 };
+   bool eepeIgnored{ false };
+   bool ocdrStuck{ false };
    // The PC field at each RUN
    std::vector<uint32_t> runFields;
    // r0 to r31, the I/O registers and the SRAM of the ATmega32U4
@@ -410,7 +414,7 @@ class MockAvrJtag final : public JtagTarget {
    void store(uint16_t address, uint8_t value) {
       if(address == 0x20u + ocdDataReg) {
          ocdr = value;
-         ocdrFull = true;
+         ocdrFull = !ocdrStuck;
       } else if(address == 0x20u + eecrIo) {
          eecr(value);
       } else if(address < data.size()) {
@@ -426,7 +430,7 @@ class MockAvrJtag final : public JtagTarget {
       if((value & 0x01u) != 0 && address < eeprom.size()) {
          data[io + eedrIo] = eeprom[address];
       }
-      if((value & 0x02u) != 0 && armed && address < eeprom.size()) {
+      if((value & 0x02u) != 0 && armed && !eepeIgnored && address < eeprom.size()) {
          eeprom[address] = data[io + eedrIo];
          ++eepromWrites;
          eepeBusy_ = eepeBusyReads;

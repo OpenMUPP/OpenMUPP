@@ -495,3 +495,58 @@ TEST_CASE("AvrJtagDebug: EEPROM with a one-byte address register") {
    CHECK(b.target.executed.front() == d::ldi(16, 0x42));
    CHECK(b.debug.readEeprom(256, &value, 1) == JtagDebugStatus::OutOfRange);
 }
+
+TEST_CASE("AvrJtagDebug: a failed context read blocks run, step and halt until a reset") {
+   Bench b;
+   fillRegisters(b.target);
+   b.target.ocdrStuck = true;
+   CHECK(b.debug.attach() == JtagDebugStatus::Timeout);
+   CHECK(b.debug.isStopped());
+   b.target.ocdrStuck = false;
+   b.target.executed.clear();
+   const std::size_t irScans = b.target.irScans.size();
+   CHECK(b.debug.run() == JtagDebugStatus::NoContext);
+   CHECK(b.debug.step() == JtagDebugStatus::NoContext);
+   CHECK(b.debug.halt() == JtagDebugStatus::NoContext);
+   uint8_t value = 0;
+   CHECK(b.debug.readData(0, &value, 1) == JtagDebugStatus::NoContext);
+   CHECK(b.debug.readFlash(0x100, &value, 1) == JtagDebugStatus::NoContext);
+   // No write-back, no RUN
+   CHECK(b.target.executed.empty());
+   CHECK(std::find(b.target.irScans.begin() + static_cast<std::ptrdiff_t>(irScans), b.target.irScans.end(), ir::run) ==
+         b.target.irScans.end());
+   CHECK(b.target.stopped);
+
+   REQUIRE(b.debug.reset() == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.readData(5, &value, 1) == JtagDebugStatus::Ok);
+   CHECK(value == 0x45);
+   CHECK(b.debug.run() == JtagDebugStatus::Ok);
+}
+
+TEST_CASE("AvrJtagDebug: EEPROM write with adjacent OUTs and a read back") {
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   b.target.executed.clear();
+   const uint8_t value = 0x3C;
+   REQUIRE(b.debug.writeEeprom(0x10, &value, 1) == JtagDebugStatus::Ok);
+   namespace d = avr::jtagDebug;
+   const auto &e = b.target.executed;
+   const auto first = std::find(e.begin(), e.end(), d::out(0x1F, 16));
+   REQUIRE(first != e.end());
+   REQUIRE(first + 1 != e.end());
+   CHECK(*(first + 1) == d::out(0x1F, 31));
+   CHECK(*(first - 1) == d::ldi(31, 0x06));
+   CHECK(*(first - 2) == d::ldi(16, 0x04));
+
+   SUBCASE("the hardware ignores EEPE") {
+      b.target.eepeIgnored = true;
+      const uint8_t other = 0x99;
+      CHECK(b.debug.writeEeprom(0x11, &other, 1) == JtagDebugStatus::VerifyFailed);
+      CHECK(b.target.eeprom[0x11] != 0x99);
+   }
+   SUBCASE("r31 comes back at the write-back") {
+      fillRegisters(b.target);
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK(b.target.data[31] == 0x00);
+   }
+}
