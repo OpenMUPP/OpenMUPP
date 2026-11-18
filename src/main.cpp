@@ -41,6 +41,9 @@
 #include "protocol/cmsisdap/RvBridge.h"
 #include "protocol/cmsisdap/RvDtmTap.h"
 #endif
+#if defined(CH32V30x_D8C)
+#include "swo/SwoUart.h"
+#endif
 #if defined(MUPP_CMSIS_DAP_AVR)
 #include "avr/AvrJtagTarget.h"
 #include "board/BoardDebugWire.h"
@@ -298,6 +301,12 @@ cmsisdap::Processor dapProcessor{ dapSwd,
                                   nullptr,
 #endif
                                   &targetPower };
+#if defined(CH32V30x_D8C)
+// The SWO receiver of the DAP_SWO_* commands, on the bulk interface only.
+// Only the CH32V307 boards have it; swo/SwoUartV30x.cpp checks that the
+// board has the SWO pin.
+swo::SwoUart dapSwo;
+#endif
 // The owner of the target pins (protocol/TargetPinOwner.h), for the HID
 // interface and for a board without safe debug outputs.
 protocol::TargetPinOwner dapPinOwner;
@@ -359,6 +368,9 @@ void setDapSerialNumber() {
 // The CMSIS-DAP processor has no periodic work: UsbStack::poll() runs it.
 void startDap() {
    setDapSerialNumber();
+#if defined(CH32V30x_D8C)
+   dapProcessor.setSwo(dapSwo);
+#endif
    if constexpr(!board::current.debugOutputs) {
       // No DAP command can take the pins: DAP_Connect gives port 0, and
       // DAP_SWJ_Pins only reads.

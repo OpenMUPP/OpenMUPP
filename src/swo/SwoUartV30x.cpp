@@ -64,7 +64,7 @@ void SwoUart::serviceDma() {
    halves_ = halves_ + done;
 }
 
-uint32_t SwoUart::realBaud(uint32_t baud) {
+uint32_t SwoUart::realBaud(uint32_t baud) const {
    return swo::realBaud(usart().getClockFrequency(), baud);
 }
 
@@ -153,10 +153,10 @@ void SwoUart::sampleErrors() {
    framingError_ = framingError_ || (flags & (USART_STATR_FE | USART_STATR_NE)) != 0;
 }
 
-std::size_t SwoUart::read(uint8_t *out, std::size_t max) {
+std::size_t SwoUart::read(art::span<uint8_t> data) {
    sampleErrors();
    bool lost = false;
-   const std::size_t count = ring_.read([this] { return written(); }, out, max, lost);
+   const std::size_t count = ring_.read([this] { return written(); }, data.data(), data.size(), lost);
    overrun_ = overrun_ || lost;
    return count;
 }
@@ -164,8 +164,12 @@ std::size_t SwoUart::read(uint8_t *out, std::size_t max) {
 SwoUart::Status SwoUart::status() {
    sampleErrors();
    const uint32_t pending = ring_.available(written());
-   overrun_ = overrun_ || pending > bufferSize;
-   return { active_, overrun_, framingError_, pending > bufferSize ? 0 : pending };
+   const Status result{ active_, overrun_ || pending > bufferSize, framingError_, pending > bufferSize ? 0 : pending };
+   // An overflow stays in the ring until the next read(), so the next
+   // status() reports it again.
+   overrun_ = false;
+   framingError_ = false;
+   return result;
 }
 
 } // namespace swo
