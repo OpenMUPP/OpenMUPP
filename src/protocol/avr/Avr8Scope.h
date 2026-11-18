@@ -2,16 +2,21 @@
 
 #pragma once
 
-// The AVR8 generic scope of the EDBG protocol on debugWIRE ("EDBG-based
-// Tools Protocols", DS50002630A, chapter 7): the commands of avrdude
-// (jtagice3_dw) and Bloom. Hardware-independent: it runs on an
-// avr::DebugWireTarget (avr/DebugWireTarget.h), and the host unit tests use
-// the mock dW target. The target gives the traits of its physical
-// interface: avr8Variant and avr8Physical (the values that
+// The AVR8 generic scope of the EDBG protocol ("EDBG-based Tools
+// Protocols", DS50002630A, chapter 7) on debugWIRE and on JTAG: the
+// commands of avrdude (jtagice3_dw, jtagice3 JTAG) and Bloom.
+// Hardware-independent: it runs on an avr::DebugWireTarget
+// (avr/DebugWireTarget.h) or an avr::AvrJtagTarget (avr/AvrJtagTarget.h),
+// and the host unit tests use the mock targets. The target gives the traits
+// of its physical interface: avr8Variant and avr8Physical (the values that
 // ACTIVATE_PHYSICAL needs), hardwareBreaks (the host numbers 1 to
-// hardwareBreaks) and hasProgmode. The EDBG transport gives one command
+// hardwareBreaks) and hasProgmode. Avr8Select (below) puts the scope of
+// each target on one EDBG transport. The EDBG transport gives one command
 // payload and sends the response, and gives the AVR_EVT requests to
 // event().
+//
+// The commands below are for debugWIRE. JTAG (hasProgmode) is programming
+// only for now: see "JTAG" below.
 //
 // A command is [id][version 0][fields]. Values are LSB first. The
 // responses are OK [0x80][0], DATA [0x84][1][data][0], PC [0x83][0][pc
@@ -19,9 +24,14 @@
 // byte addresses. The PC, RUN_TO and the break event use word addresses.
 //
 //   0x01 SET, 0x02 GET [context][address][bytes][data]: the parameters.
-//        Context 0: variant, function. Context 1: physical interface.
-//        Context 2: the device context (below). Context 3 address 0: run
-//        the timers of the target while it is stopped.
+//        Context 0: variant, function. Context 1: address 0 the physical
+//        interface, 0x01 the JTAG daisy chain (4 bytes: SET of a value
+//        that is not 0 gives FAILED 0x39, one device only), 0x20 and 0x21
+//        the JTAG programming and debug clocks (kHz u16, 200 by default,
+//        0 gives FAILED 0x3B). Context 2: the device context (below).
+//        Context 3 address 0: run the timers of the target while it is
+//        stopped. The host can set them in any order (Bloom sets the
+//        clock and the daisy chain before the variant).
 //   0x10 ACTIVATE_PHYSICAL [reset]: needs the variant and the physical of
 //        the target (debugWIRE: 1 and 5), connects and stops the target
 //        (break).
@@ -96,6 +106,36 @@
 // [0x40][pc u32][cause][0x01][0x00], with cause 1 at a breakpoint. While
 // the target runs, each event() checks the line one time.
 //
+// JTAG (avrdude: variant 2, function 1, physical 4): the programming mode
+// of avr/AvrJtagProg.h. The device context: 0x00 flash page bytes u16 (2
+// to 256), 0x02 flash bytes u32 (up to 256 KiB), 0x10 EEPROM bytes u16,
+// 0x12 EEPROM page bytes, 0x13 OCD revision (0 to 4), 0x15 full-page bit
+// stream (not 0: the flash page goes in one PROG_PAGELOAD scan).
+//   ACTIVATE_PHYSICAL [reset]: drives the pins at the programming clock
+//        and reads the IDCODE. -> DATA [IDCODE u32]. No Atmel IDCODE (bits
+//        11..0 not 0x03F): FAILED 0x20. The reset flag is not used: the
+//        probe does not drive RESET, the programming mode resets the core
+//        with AVR_RESET.
+//   GET_ID -> DATA [IDCODE u32].
+//   ENTER_PROGMODE, LEAVE_PROGMODE: the JTAG programming mode. The core
+//        is in reset in the programming mode.
+//   ERASE [mode 0][address u32]: chip erase. Other modes: FAILED 0x39.
+//   READ_MEMORY, WRITE_MEMORY, programming mode only (else FAILED 0x32):
+//        FLASH_PAGE 0xB0 (a write takes whole, aligned pages, after a chip
+//        erase), EEPROM_PAGE 0xB1, FUSES 0xB2 (0 low, 1 high, 2
+//        extended), LOCK_BITS 0xB3 (address 0), and read only SIGN_JTAG
+//        0xB4 and OSCCAL 0xB5. These two take the 8-bit index of the
+//        signature row (0 to 0xFF): SIGN_JTAG index n is row byte 2n,
+//        OSCCAL index n is row byte 2n + 1. avrdude reads the signature
+//        (SIGN_JTAG 0 to 2) and its sigrow, prodsig and sernum memories in
+//        this way. A read can span pages.
+//   DEACTIVATE_PHYSICAL: leaves the programming mode and releases the
+//        pins.
+//   DETACH: OK. The debug commands (ATTACH, RESET, STOP, RUN, RUN_TO,
+//        STEP, PC, breakpoints, READ_MEMORY_MASKED) and DISABLE_DEBUGWIRE:
+//        FAILED 0x90.
+//   A failed JTAG scan or a write that does not end gives FAILED 0x13.
+//
 // All fields come from the host. The scope checks them before it touches
 // the target: a command that is too short gives FAILED 0x35, an address
 // outside the device 0x38, a flash write that is not page aligned 0x37, a
@@ -109,6 +149,7 @@
 
 #include <utils/compat/span.h>
 
+#include "avr/AvrJtagTarget.h"
 #include "avr/DebugWireTarget.h"
 
 namespace avr {
@@ -156,6 +197,8 @@ inline constexpr uint8_t failed = 0xA0;
 // The FAILED codes
 namespace failure {
 inline constexpr uint8_t debugWire = 0x10;
+inline constexpr uint8_t jtag = 0x13;
+inline constexpr uint8_t noDevice = 0x20;
 inline constexpr uint8_t notActivated = 0x31;
 inline constexpr uint8_t illegalState = 0x32;
 inline constexpr uint8_t invalidConfig = 0x33;
@@ -164,6 +207,8 @@ inline constexpr uint8_t length = 0x35;
 inline constexpr uint8_t badAddress = 0x36;
 inline constexpr uint8_t alignment = 0x37;
 inline constexpr uint8_t range = 0x38;
+inline constexpr uint8_t illegalValue = 0x39;
+inline constexpr uint8_t clockSpeed = 0x3B;
 inline constexpr uint8_t resources = 0x81;
 inline constexpr uint8_t notSupported = 0x90;
 inline constexpr uint8_t unknown = 0x91;
@@ -175,8 +220,19 @@ inline constexpr uint8_t eeprom = 0x22;
 inline constexpr uint8_t spm = 0xA0;
 inline constexpr uint8_t flashPage = 0xB0;
 inline constexpr uint8_t eepromPage = 0xB1;
+inline constexpr uint8_t fuses = 0xB2;
+inline constexpr uint8_t lockBits = 0xB3;
 inline constexpr uint8_t signature = 0xB4;
+inline constexpr uint8_t osccal = 0xB5;
 } // namespace memory
+
+// The JTAG addresses of the physical context (context 1)
+namespace physical {
+inline constexpr uint8_t daisyChain = 0x01;
+inline constexpr uint8_t clockProg = 0x20;
+inline constexpr uint8_t clockDebug = 0x21;
+inline constexpr uint16_t defaultClockKHz = 200;
+} // namespace physical
 
 // Parameters
 inline constexpr uint8_t eventBreak = 0x40;
@@ -186,6 +242,11 @@ inline constexpr std::size_t deviceBytes = 0x20;
 inline constexpr std::size_t maxSoftwareBreaks = 32;
 // The largest flash page of an AVR with debugWIRE is 128 bytes.
 inline constexpr std::size_t maxPageBytes = 128;
+// The classic AVR chips with JTAG: up to 256-byte pages and 256 KiB flash
+// (ATmega2560), OCD revision 4
+inline constexpr std::size_t maxJtagPageBytes = 256;
+inline constexpr uint32_t maxJtagFlashBytes = 0x40000;
+inline constexpr uint8_t maxOcdRevision = 4;
 inline constexpr uint16_t breakOpcode = 0x9598;
 
 } // namespace avr8
@@ -209,6 +270,9 @@ class Avr8Handler {
    virtual void forget() = 0;
    // True between a successful ACTIVATE_PHYSICAL and its end
    [[nodiscard]] virtual bool active() const = 0;
+   // True when the variant and the physical interface of the host are the
+   // ones of this scope
+   [[nodiscard]] virtual bool selected() const = 0;
 
    protected:
    ~Avr8Handler() = default;
@@ -216,10 +280,9 @@ class Avr8Handler {
 
 template <typename Target>
 class Avr8Scope final : public Avr8Handler {
-   // One stored hardware breakpoint, and ENTER_PROGMODE and LEAVE_PROGMODE
-   // without an action: a target with more needs more scope code.
-   static_assert(Target::hardwareBreaks == 1, "the scope stores one hardware breakpoint");
-   static_assert(!Target::hasProgmode, "the scope has no programming mode");
+   // One stored hardware breakpoint: a target with more needs more scope
+   // code.
+   static_assert(Target::hardwareBreaks <= 1, "the scope stores one hardware breakpoint");
 
    public:
    explicit Avr8Scope(Target &target)
@@ -239,6 +302,61 @@ class Avr8Scope final : public Avr8Handler {
    }
 
    std::size_t event(art::span<uint8_t> frame) override {
+      if constexpr(Target::hasProgmode) {
+         // No break events in the programming mode
+         static_cast<void>(frame);
+         return 0;
+      } else {
+         return debugWireEvent(frame);
+      }
+   }
+
+   void release() override {
+      if(!active_) {
+         return;
+      }
+      if constexpr(Target::hasProgmode) {
+         static_cast<void>(target_.close());
+      } else {
+         releaseDebugWire();
+      }
+      end();
+   }
+
+   void forget() override {
+      release();
+      config_ = {};
+      physical_ = {};
+      daisyChain_ = {};
+      clockProg_ = defaultClock;
+      clockDebug_ = defaultClock;
+      device_ = {};
+      options_ = {};
+      breakCount_ = 0;
+   }
+
+   [[nodiscard]] bool active() const override {
+      return active_;
+   }
+
+   [[nodiscard]] bool selected() const override {
+      return config_[0] == Target::avr8Variant && physical_[0] == Target::avr8Physical;
+   }
+
+   private:
+   enum class BreakState : uint8_t { Inserting, Active, Removing };
+   struct SoftwareBreak {
+      uint16_t word;
+      uint16_t original;
+      BreakState state;
+   };
+
+   static constexpr std::size_t headerBytes = 2;
+   static constexpr std::size_t memoryHeaderBytes = 11;
+   static constexpr std::array<uint8_t, 2> defaultClock{ { static_cast<uint8_t>(avr8::physical::defaultClockKHz),
+                                                           static_cast<uint8_t>(avr8::physical::defaultClockKHz >> 8) } };
+
+   std::size_t debugWireEvent(art::span<uint8_t> frame) {
       if(frame.size() < avr8::eventFrameBytes) {
          return 0;
       }
@@ -263,10 +381,7 @@ class Avr8Scope final : public Avr8Handler {
       return bytes.size();
    }
 
-   void release() override {
-      if(!active_) {
-         return;
-      }
+   void releaseDebugWire() {
       if(running_ && target_.poll() != DwStatus::Ok) {
          static_cast<void>(target_.stop());
       }
@@ -275,32 +390,7 @@ class Avr8Scope final : public Avr8Handler {
          static_cast<void>(commitBreaks());
       }
       static_cast<void>(target_.detach());
-      end();
    }
-
-   void forget() override {
-      release();
-      config_ = {};
-      physical_ = {};
-      device_ = {};
-      options_ = {};
-      breakCount_ = 0;
-   }
-
-   [[nodiscard]] bool active() const override {
-      return active_;
-   }
-
-   private:
-   enum class BreakState : uint8_t { Inserting, Active, Removing };
-   struct SoftwareBreak {
-      uint16_t word;
-      uint16_t original;
-      BreakState state;
-   };
-
-   static constexpr std::size_t headerBytes = 2;
-   static constexpr std::size_t memoryHeaderBytes = 11;
 
    [[nodiscard]] static uint32_t u32(art::span<const uint8_t> bytes, std::size_t at) {
       return bytes[at] | (uint32_t{ bytes[at + 1] } << 8) | (uint32_t{ bytes[at + 2] } << 16) | (uint32_t{ bytes[at + 3] } << 24);
@@ -355,6 +445,10 @@ class Avr8Scope final : public Avr8Handler {
       case cmd::detach:
          return active_ ? detach() : ok();
       case cmd::erase:
+         if(!Target::hasProgmode) {
+            return failed(avr8::failure::notSupported);
+         }
+         break;
       case cmd::crc:
       case cmd::pageErase:
          return failed(avr8::failure::notSupported);
@@ -364,6 +458,15 @@ class Avr8Scope final : public Avr8Handler {
       if(!active_) {
          return failed(avr8::failure::notActivated);
       }
+      if constexpr(Target::hasProgmode) {
+         return executeJtag(id);
+      } else {
+         return executeDebugWire(id);
+      }
+   }
+
+   std::size_t executeDebugWire(uint8_t id) {
+      namespace cmd = avr8::command;
       if(bare_ && id != cmd::disableDebugWire) {
          return failed(avr8::failure::invalidConfig);
       }
@@ -413,6 +516,99 @@ class Avr8Scope final : public Avr8Handler {
       }
    }
 
+   // The JTAG-only members are templates: the explicit instantiation of the
+   // debugWIRE scope (board/BoardDebugWireV30x.cpp) does not instantiate
+   // them.
+   template <typename T = Target>
+   std::size_t executeJtag(uint8_t id) {
+      namespace cmd = avr8::command;
+      switch(id) {
+      case cmd::getId: {
+         uint32_t idcode = 0;
+         return target_.readIdcode(idcode) ? idcodeData(idcode) : failed(avr8::failure::jtag);
+      }
+      case cmd::enterProgmode:
+      case cmd::leaveProgmode:
+         return progmode(id == cmd::enterProgmode);
+      case cmd::erase:
+         return chipErase();
+      case cmd::readMemory:
+         return readJtag();
+      case cmd::writeMemory:
+         return writeJtag();
+      // The debug mode (OCD) is not available yet.
+      case cmd::attach:
+      case cmd::disableDebugWire:
+      case cmd::readMemoryMasked:
+      case cmd::reset:
+      case cmd::stop:
+      case cmd::run:
+      case cmd::runTo:
+      case cmd::step:
+      case cmd::pcRead:
+      case cmd::pcWrite:
+      case cmd::hwBreakSet:
+      case cmd::hwBreakClear:
+      case cmd::swBreakSet:
+      case cmd::swBreakClear:
+      case cmd::swBreakClearAll:
+         return failed(avr8::failure::notSupported);
+      default:
+         return failed(avr8::failure::unknown);
+      }
+   }
+
+   // The JTAG table of the physical context (context 1) that holds
+   // address, and the address of its first byte. Address 0 is the physical
+   // interface.
+   art::span<uint8_t> physicalTable(uint8_t address, uint8_t &first) {
+      namespace phys = avr8::physical;
+      first = address;
+      switch(address) {
+      case 0:
+         return physical_;
+      case phys::clockProg:
+         return clockProg_;
+      case phys::clockDebug:
+         return clockDebug_;
+      default:
+         break;
+      }
+      if(address >= phys::daisyChain && address < phys::daisyChain + daisyChain_.size()) {
+         first = phys::daisyChain;
+         return daisyChain_;
+      }
+      return {};
+   }
+
+   // A SET of a JTAG parameter of the physical context: FAILED when the
+   // value is not valid. table and first from physicalTable().
+   std::optional<uint8_t>
+   checkPhysical(art::span<const uint8_t> table, uint8_t first, uint8_t address, art::span<const uint8_t> value) {
+      if(first == avr8::physical::daisyChain) {
+         // One device in the chain only
+         if(std::any_of(value.begin(), value.end(), [](uint8_t byte) { return byte != 0; })) {
+            return avr8::failure::illegalValue;
+         }
+         return std::nullopt;
+      }
+      if(first != avr8::physical::clockProg && first != avr8::physical::clockDebug) {
+         return std::nullopt;
+      }
+      std::array<uint8_t, 2> clock{ { table[0], table[1] } };
+      std::copy(value.begin(), value.end(), clock.begin() + (address - first));
+      const uint16_t kHz = u16(clock, 0);
+      if(kHz == 0) {
+         return avr8::failure::clockSpeed;
+      }
+      if constexpr(Target::hasProgmode) {
+         if(active_ && first == avr8::physical::clockProg && !target_.setSpeed(kHz)) {
+            return avr8::failure::clockSpeed;
+         }
+      }
+      return std::nullopt;
+   }
+
    // [cmd][version][context][address][bytes][data]
    std::size_t parameter(bool set) {
       constexpr std::size_t accessBytes = 5;
@@ -423,12 +619,14 @@ class Avr8Scope final : public Avr8Handler {
       const uint8_t address = request_[3];
       const uint8_t bytes = request_[4];
       art::span<uint8_t> table;
+      // The address of table[0]
+      uint8_t first = 0;
       switch(context) {
       case 0:
          table = config_;
          break;
       case 1:
-         table = physical_;
+         table = physicalTable(address, first);
          break;
       case 2:
          table = device_;
@@ -439,15 +637,22 @@ class Avr8Scope final : public Avr8Handler {
       default:
          break;
       }
-      if(bytes == 0 || std::size_t{ address } + bytes > table.size() || (set && request_.size() - accessBytes < bytes)) {
+      const std::size_t offset = address - first;
+      if(bytes == 0 || offset + bytes > table.size() || (set && request_.size() - accessBytes < bytes)) {
          return failed(avr8::failure::notSupported);
       }
       if(set) {
-         std::copy_n(request_.begin() + accessBytes, bytes, table.begin() + address);
+         const art::span<const uint8_t> value = request_.subspan(accessBytes, bytes);
+         if(context == 1) {
+            if(const auto failure = checkPhysical(table, first, address, value)) {
+               return failed(*failure);
+            }
+         }
+         std::copy(value.begin(), value.end(), table.begin() + offset);
          target_.setRunTimers(options_[0] != 0);
          return ok();
       }
-      std::copy_n(table.begin() + address, bytes, response_.begin() + 2);
+      std::copy_n(table.begin() + offset, bytes, response_.begin() + 2);
       return data(bytes);
    }
 
@@ -485,10 +690,60 @@ class Avr8Scope final : public Avr8Handler {
                        .eedr = d[0x1C] };
    }
 
+   // The JTAG device context. No value: a value out of range.
+   [[nodiscard]] std::optional<AvrJtagDevice> jtagDevice() const {
+      const art::span<const uint8_t> d(device_.data(), device_.size());
+      const uint16_t page = u16(d, 0x00);
+      const uint32_t flash = u32(d, 0x02);
+      const uint16_t eeprom = u16(d, 0x10);
+      const uint8_t eepromPage = d[0x12];
+      const auto powerOf2 = [](uint32_t value) { return value != 0 && (value & (value - 1u)) == 0; };
+      if(!powerOf2(page) || page < 2 || page > avr8::maxJtagPageBytes || flash < page ||
+         flash > avr8::maxJtagFlashBytes || flash % page != 0 || !powerOf2(eepromPage) || eeprom < eepromPage ||
+         eeprom % eepromPage != 0 || d[0x13] > avr8::maxOcdRevision) {
+         return std::nullopt;
+      }
+      return AvrJtagDevice{
+         .prog = { .flashPageBytes = page, .flashBytes = flash, .eepromPageBytes = eepromPage, .fullPageBitstream = d[0x15] != 0 },
+         .eepromBytes = eeprom,
+         .ocdRevision = d[0x13]
+      };
+   }
+
    std::size_t activate() {
       if(active_) {
          return ok();
       }
+      if constexpr(Target::hasProgmode) {
+         return activateJtag();
+      } else {
+         return activateDebugWire();
+      }
+   }
+
+   template <typename T = Target>
+   std::size_t activateJtag() {
+      const auto device = jtagDevice();
+      if(!selected() || !device) {
+         return failed(avr8::failure::invalidConfig);
+      }
+      target_.setDevice(*device);
+      // The debug clock comes with the debug mode.
+      if(!target_.open(u16(clockProg_, 0))) {
+         return failed(avr8::failure::jtag);
+      }
+      uint32_t idcode = 0;
+      if(!target_.readIdcode(idcode) || !tap::isAtmelIdcode(idcode)) {
+         static_cast<void>(target_.close());
+         return failed(avr8::failure::noDevice);
+      }
+      active_ = true;
+      running_ = false;
+      event_ = false;
+      return idcodeData(idcode);
+   }
+
+   std::size_t activateDebugWire() {
       const auto dw = device();
       // Without a device, the breakpoint table cannot go to flash.
       const bool bare = noDevice() && breakCount_ == 0;
@@ -516,17 +771,23 @@ class Avr8Scope final : public Avr8Handler {
       if(!active_) {
          return ok();
       }
-      DwStatus status = DwStatus::Ok;
-      if(target_.isStopped()) {
-         clearAllBreaks();
-         status = commitBreaks();
-         if(status == DwStatus::Ok) {
-            status = target_.reset();
+      if constexpr(Target::hasProgmode) {
+         const bool closed = target_.close();
+         end();
+         return closed ? ok() : failed(avr8::failure::jtag);
+      } else {
+         DwStatus status = DwStatus::Ok;
+         if(target_.isStopped()) {
+            clearAllBreaks();
+            status = commitBreaks();
+            if(status == DwStatus::Ok) {
+               status = target_.reset();
+            }
          }
+         const DwStatus detached = target_.detach();
+         end();
+         return result(status != DwStatus::Ok ? status : detached);
       }
-      const DwStatus detached = target_.detach();
-      end();
-      return result(status != DwStatus::Ok ? status : detached);
    }
 
    void end() {
@@ -562,6 +823,16 @@ class Avr8Scope final : public Avr8Handler {
    }
 
    std::size_t detach() {
+      if constexpr(Target::hasProgmode) {
+         // No debug mode yet: the core runs, or the programming mode holds
+         // it in reset.
+         return ok();
+      } else {
+         return detachDebugWire();
+      }
+   }
+
+   std::size_t detachDebugWire() {
       if(!target_.isStopped()) {
          return ok();
       }
@@ -1002,6 +1273,167 @@ class Avr8Scope final : public Avr8Handler {
       return target_.writeFlashPage(page, page_.data());
    }
 
+   // DATA [IDCODE u32]
+   std::size_t idcodeData(uint32_t idcode) {
+      for(std::size_t i = 0; i < 4; ++i) {
+         response_[2 + i] = static_cast<uint8_t>(idcode >> (8 * i));
+      }
+      return data(4);
+   }
+
+   template <typename T = Target>
+   std::size_t progmode(bool enter) {
+      AvrJtagProg &prog = target_.prog();
+      if(prog.programming() == enter) {
+         return ok();
+      }
+      return (enter ? prog.enter() : prog.leave()) ? ok() : failed(avr8::failure::jtag);
+   }
+
+   // [mode][address u32]: mode 0 is the chip erase.
+   template <typename T = Target>
+   std::size_t chipErase() {
+      if(request_.size() < headerBytes + 5) {
+         return failed(avr8::failure::length);
+      }
+      if(request_[2] != 0) {
+         return failed(avr8::failure::illegalValue);
+      }
+      AvrJtagProg &prog = target_.prog();
+      if(!prog.programming()) {
+         return failed(avr8::failure::illegalState);
+      }
+      return prog.chipErase() ? ok() : failed(avr8::failure::jtag);
+   }
+
+   // [type][address u32][length u32], in the programming mode
+   template <typename T = Target>
+   std::size_t readJtag() {
+      if(request_.size() < memoryHeaderBytes) {
+         return failed(avr8::failure::length);
+      }
+      const uint8_t type = request_[2];
+      const uint32_t address = u32(request_, 3);
+      const uint32_t length = u32(request_, 7);
+      if(length == 0 || length > response_.size() - 3) {
+         return failed(avr8::failure::length);
+      }
+      AvrJtagProg &prog = target_.prog();
+      if(!prog.programming()) {
+         return failed(avr8::failure::illegalState);
+      }
+      const AvrJtagDevice &device = target_.device();
+      const art::span<uint8_t> out = response_.subspan(2, length);
+      // The size of each memory type
+      uint32_t size = 0;
+      switch(type) {
+      case avr8::memory::flashPage:
+         size = device.prog.flashBytes;
+         break;
+      case avr8::memory::eepromPage:
+         size = device.eepromBytes;
+         break;
+      case avr8::memory::fuses:
+         size = 3;
+         break;
+      case avr8::memory::lockBits:
+         size = 1;
+         break;
+      case avr8::memory::signature:
+      case avr8::memory::osccal:
+         // The 8-bit index of the signature row (avrdude reads sigrow,
+         // prodsig and sernum through it)
+         size = 0x100;
+         break;
+      default:
+         return failed(avr8::failure::memoryType);
+      }
+      if(!inRange(address, length, size)) {
+         return failed(avr8::failure::range);
+      }
+      bool done = true;
+      switch(type) {
+      case avr8::memory::flashPage:
+         done = prog.readFlash(device.prog, address, out);
+         break;
+      case avr8::memory::eepromPage:
+         done = prog.readEeprom(static_cast<uint16_t>(address), out);
+         break;
+      case avr8::memory::lockBits:
+         done = prog.readLockBits(out[0]);
+         break;
+      default:
+         for(uint32_t i = 0; i < length && done; ++i) {
+            const auto at = static_cast<uint8_t>(address + i);
+            done = type == avr8::memory::fuses     ? prog.readFuse(static_cast<Fuse>(at), out[i]) :
+                   type == avr8::memory::signature ? prog.readSignature(at, out[i]) :
+                                                     prog.readCalibration(at, out[i]);
+         }
+         break;
+      }
+      return done ? data(length) : failed(avr8::failure::jtag);
+   }
+
+   // [type][address u32][length u32][async][data], in the programming mode
+   template <typename T = Target>
+   std::size_t writeJtag() {
+      constexpr std::size_t writeHeaderBytes = memoryHeaderBytes + 1;
+      if(request_.size() < writeHeaderBytes) {
+         return failed(avr8::failure::length);
+      }
+      const uint8_t type = request_[2];
+      const uint32_t address = u32(request_, 3);
+      const uint32_t length = u32(request_, 7);
+      if(length == 0 || request_.size() - writeHeaderBytes < length) {
+         return failed(avr8::failure::length);
+      }
+      AvrJtagProg &prog = target_.prog();
+      if(!prog.programming()) {
+         return failed(avr8::failure::illegalState);
+      }
+      const AvrJtagDevice &device = target_.device();
+      const art::span<const uint8_t> in = request_.subspan(writeHeaderBytes, length);
+      bool done = true;
+      switch(type) {
+      case avr8::memory::flashPage: {
+         const uint16_t pageBytes = device.prog.flashPageBytes;
+         if(!inRange(address, length, device.prog.flashBytes)) {
+            return failed(avr8::failure::range);
+         }
+         if(address % pageBytes != 0 || length % pageBytes != 0) {
+            return failed(avr8::failure::alignment);
+         }
+         for(uint32_t at = 0; at < length && done; at += pageBytes) {
+            done = prog.writeFlashPage(device.prog, address + at, in.subspan(at, pageBytes));
+         }
+         break;
+      }
+      case avr8::memory::eepromPage:
+         if(!inRange(address, length, device.eepromBytes)) {
+            return failed(avr8::failure::range);
+         }
+         done = prog.writeEeprom(device.prog, static_cast<uint16_t>(address), in);
+         break;
+      case avr8::memory::fuses:
+         if(!inRange(address, length, 3)) {
+            return failed(avr8::failure::range);
+         }
+         for(uint32_t i = 0; i < length && done; ++i) {
+            done = prog.writeFuse(static_cast<Fuse>(address + i), in[i]);
+         }
+         break;
+      case avr8::memory::lockBits:
+         if(!inRange(address, length, 1)) {
+            return failed(avr8::failure::range);
+         }
+         done = prog.writeLockBits(in[0]);
+         break;
+      default:
+         return failed(avr8::failure::memoryType);
+      }
+      return done ? ok() : failed(avr8::failure::jtag);
+   }
+
    static constexpr bool inRange(uint32_t address, uint32_t length, uint32_t size) {
       return address <= size && length <= size - address;
    }
@@ -1042,6 +1474,9 @@ class Avr8Scope final : public Avr8Handler {
    art::span<uint8_t> response_;
    std::array<uint8_t, 2> config_{};
    std::array<uint8_t, 1> physical_{};
+   std::array<uint8_t, 4> daisyChain_{};
+   std::array<uint8_t, 2> clockProg_{ defaultClock };
+   std::array<uint8_t, 2> clockDebug_{ defaultClock };
    std::array<uint8_t, avr8::deviceBytes> device_{};
    std::array<uint8_t, 1> options_{};
    bool active_{ false };
@@ -1059,6 +1494,67 @@ class Avr8Scope final : public Avr8Handler {
    std::array<SoftwareBreak, avr8::maxSoftwareBreaks> breaks_{};
    std::size_t breakCount_{ 0 };
    std::array<uint8_t, avr8::maxPageBytes> page_{};
+};
+
+// Two scopes on one EDBG transport, as the debugWIRE scope and the JTAG
+// scope. SET goes to both: the host can set the parameters before the
+// variant and the physical interface. The active scope gets the other
+// commands; without one, the scope that the host selected (else first)
+// gets them. Thus ACTIVATE_PHYSICAL goes to the scope of the variant and
+// the physical interface of the host.
+class Avr8Select final : public Avr8Handler {
+   public:
+   Avr8Select(Avr8Handler &first, Avr8Handler &second)
+      : first_(first)
+      , second_(second) {
+   }
+
+   std::size_t process(art::span<const uint8_t> request, art::span<uint8_t> response) override {
+      Avr8Handler &target = current();
+      if(!request.empty() && request[0] == avr8::command::set) {
+         // The response of the other scope is the same, except for a clock
+         // that only the active JTAG scope applies.
+         std::array<uint8_t, 4> ignored{};
+         static_cast<void>((&target == &first_ ? second_ : first_).process(request, ignored));
+      }
+      return target.process(request, response);
+   }
+
+   std::size_t event(art::span<uint8_t> frame) override {
+      return current().event(frame);
+   }
+
+   void release() override {
+      first_.release();
+      second_.release();
+   }
+
+   void forget() override {
+      first_.forget();
+      second_.forget();
+   }
+
+   [[nodiscard]] bool active() const override {
+      return first_.active() || second_.active();
+   }
+
+   [[nodiscard]] bool selected() const override {
+      return first_.selected() || second_.selected();
+   }
+
+   private:
+   Avr8Handler &current() {
+      if(first_.active()) {
+         return first_;
+      }
+      if(second_.active() || second_.selected()) {
+         return second_;
+      }
+      return first_;
+   }
+
+   Avr8Handler &first_;
+   Avr8Handler &second_;
 };
 
 } // namespace avr

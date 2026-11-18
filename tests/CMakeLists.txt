@@ -81,6 +81,7 @@ add_executable(mupp-tests
         TestAvrJtagProg.cpp
         TestEdbg.cpp
         TestEdbgDebugWire.cpp
+        TestEdbgJtag.cpp
         ../src/protocol/versaloon/CommandAssembler.cpp
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp

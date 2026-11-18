@@ -42,6 +42,7 @@
 #include "protocol/cmsisdap/RvDtmTap.h"
 #endif
 #if defined(MUPP_CMSIS_DAP_AVR)
+#include "avr/AvrJtagTarget.h"
 #include "board/BoardDebugWire.h"
 #include "board/BoardIsp.h"
 #include "protocol/avr/EdbgTransport.h"
@@ -318,16 +319,19 @@ cmsisdap::Processor dapHidProcessor{ dapSwd,  boardGpio, dapPlatform, dapInfo,  
 #endif
 #if defined(MUPP_CMSIS_DAP_AVR)
 // The AVR commands of avrdude and Bloom on the HID interface
-// (protocol/avr/EdbgTransport.h), with the ISP engine and the debugWIRE
-// engine on the target pins. The host sends the device parameters at the
-// start of each debugWIRE session.
+// (protocol/avr/EdbgTransport.h), with the ISP engine, the debugWIRE
+// engine and the JTAG port on the target pins. The host sends the device
+// parameters at the start of each debugWIRE or JTAG session.
 board::IspPins ispPins;
 board::BoardIsp ispEngine{ ispPins, &serialService };
 avr::IspScope<board::BoardIsp> ispScope{ ispEngine };
 board::DebugWirePins debugWirePins;
 board::BoardDebugWire debugWireEngine{ debugWirePins, &serialService };
 board::BoardDebugWireTarget debugWireTarget{ debugWireEngine, avr::DwDevice{} };
-avr::Avr8Scope<board::BoardDebugWireTarget> avr8Scope{ debugWireTarget };
+avr::Avr8Scope<board::BoardDebugWireTarget> debugWireScope{ debugWireTarget };
+avr::AvrJtagTarget avrJtagTarget{ boardJtag };
+avr::Avr8Scope<avr::AvrJtagTarget> avrJtagScope{ avrJtagTarget };
+avr::Avr8Select avr8Scope{ debugWireScope, avrJtagScope };
 const avr::ToolInfo edbgTool{
    .name = dapProduct,
    .serialNumber = dapSerialNumber.data(),

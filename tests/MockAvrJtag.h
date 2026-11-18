@@ -178,9 +178,11 @@ class MockAvrJtag final : public JtagTarget {
    // the EEPROM at a chip erase.
    std::array<uint8_t, 3> fuses{ 0x5E, 0x99, 0xF3 };
    uint8_t lockBits{ 0xFF };
-   std::array<uint8_t, 3> signature{ 0x1E, 0x95, 0x87 };
-   // The ATmega16 and ATmega32 have four calibration bytes.
-   std::array<uint8_t, 4> calibration{ 0x5A, 0xA1, 0xA2, 0xA3 };
+   // The signature row of avrdude (sigrow, prodsig): the signature byte n
+   // at 2n, the calibration byte n at 2n + 1, the serial number (sernum)
+   // at 0x0E to 0x17. The ATmega16 and ATmega32 have four calibration
+   // bytes.
+   std::array<uint8_t, 0x20> sigrow = makeSigrow();
    // Results that are not ready after each write strobe
    uint32_t busyPolls{ 3 };
    // The ready bit never comes.
@@ -193,6 +195,22 @@ class MockAvrJtag final : public JtagTarget {
    uint32_t eepromPageWrites{ 0 };
 
    private:
+   static std::array<uint8_t, 0x20> makeSigrow() {
+      std::array<uint8_t, 0x20> row{};
+      for(std::size_t i = 0; i < row.size(); ++i) {
+         row[i] = static_cast<uint8_t>(0x40 + i);
+      }
+      const std::array<uint8_t, 4> fixed{ 0x1E, 0x95, 0x87, 0xFF };
+      const std::array<uint8_t, 4> calibration{ 0x5A, 0xA1, 0xA2, 0xA3 };
+      for(std::size_t i = 0; i < 4; ++i) {
+         if(i < 3) {
+            row[2 * i] = fixed[i];
+         }
+         row[2 * i + 1] = calibration[i];
+      }
+      return row;
+   }
+
    static State next(State state, bool tms) {
       switch(state) {
       case State::Reset:
@@ -451,12 +469,9 @@ class MockAvrJtag final : public JtagTarget {
          readResult(high == 0x32 ? fuses[0] : high == 0x3E ? fuses[1] : high == 0x3A ? fuses[2] : lockBits);
          return;
       case Mode::SignatureRead:
-         if(high == 0x32) {
-            readResult(addressLow_ < 3 ? signature[addressLow_] : 0xFF);
-            return;
-         }
-         if(high == 0x36) {
-            readResult(addressLow_ < calibration.size() ? calibration[addressLow_] : 0xFF);
+         if(high == 0x32 || high == 0x36) {
+            const std::size_t at = 2u * addressLow_ + (high == 0x36 ? 1u : 0u);
+            readResult(at < sigrow.size() ? sigrow[at] : 0xFF);
             return;
          }
          break;

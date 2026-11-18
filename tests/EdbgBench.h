@@ -4,15 +4,20 @@
 
 // The CMSIS-DAP device with the HID interface and the EDBG transport of the
 // AVR commands (protocol/avr/EdbgTransport.h), as in src/main.cpp, for the
-// EDBG tests: a mock AVR on the ISP engine and a mock AVR with debugWIRE on
-// the dW engine. The host is the fake controller of libArT.
+// EDBG tests: a mock AVR on the ISP engine, a mock AVR with debugWIRE on
+// the dW engine and a mock AVR with JTAG on the JTAG bit-bang engine. The
+// host is the fake controller of libArT.
 
 #include "CmsisDapBench.h"
 #include "FakePower.h"
 #include "MockAvrDw.h"
+#include "MockAvrJtag.h"
 #include "MockDebugWireTarget.h"
 #include "MockIspTarget.h"
+#include "MockJtagPins.h"
+#include "avr/AvrJtagTarget.h"
 #include "avr/DebugWireTarget.h"
+#include "jtag/JtagBitBang.h"
 #include "protocol/avr/Avr8Scope.h"
 #include "protocol/avr/EdbgTransport.h"
 
@@ -30,6 +35,7 @@ using Bytes = std::vector<uint8_t>;
 using Engine = avr::IspEngine<mupptest::MockIspPins, mupptest::MockIspSpi>;
 using DwEngine = avr::DebugWireEngine<mupptest::MockDwPins>;
 using DwTarget = avr::DebugWireTarget<DwEngine>;
+using JtagPins = mupptest::MockJtagPins<false>;
 
 // The dW target: 16 MHz, dW at 125 kbaud
 inline constexpr uint32_t dwBitCycles = mupptest::MockDwPins::clockHz / (16'000'000 / 128);
@@ -71,7 +77,7 @@ class EdbgBench {
       , targetPower(power, delay)
       , bulkProcessor(swd, gpio, platform, info_, nullptr, nullptr, nullptr, nullptr, nullptr, &targetPower)
       , hidProcessor(swd, gpio, platform, info_)
-      , edbg(tool, scope, avr8Scope, hidProcessor, &targetPower, &owner)
+      , edbg(tool, scope, avr8Select, hidProcessor, &targetPower, &owner)
       , bulk(bulkProcessor)
       , hid(hidProcessor)
       , device_(controller_, descriptors_)
@@ -226,6 +232,12 @@ class EdbgBench {
    mupptest::MockAvrDw avr{ dwLine, mupptest::MockAvrDw::atmega328p };
    DwTarget dwTarget{ dwEngine, avr::DwDevice{} };
    avr::Avr8Scope<DwTarget> avr8Scope{ dwTarget };
+   mupptest::MockAvrJtag jtagAvr;
+   JtagPins jtagPins{ jtagAvr };
+   jtag::BitBangPort<JtagPins> jtagPort{ jtagPins };
+   avr::AvrJtagTarget jtagTarget{ jtagPort };
+   avr::Avr8Scope<avr::AvrJtagTarget> jtagScope{ jtagTarget };
+   avr::Avr8Select avr8Select{ avr8Scope, jtagScope };
    avr::ToolInfo tool{ .name = "OpenMUPP",
                        .serialNumber = "0123456789AB",
                        .hardwareVersion = 1,
