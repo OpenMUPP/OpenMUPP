@@ -9,10 +9,10 @@
 // - Capture-IR loads 0001. Test-Logic-Reset selects IDCODE.
 // - IDCODE (0x1): 32 bits, the idcode member.
 // - The other instructions have the DR length of docs/avr-jtag-ocd.md
-//   ("JTAG instructions") and the datasheet. Capture-DR loads the capture
-//   value of the instruction (by default 0, or the command result for
-//   PROG_COMMANDS). Unknown instructions select BYPASS (1 bit, Capture-DR
-//   loads 0).
+//   ("JTAG instructions") and the datasheet. Capture-DR loads the value in
+//   capture for the instruction, else the model value: the command result
+//   for PROG_COMMANDS, the OCD results below, or 0. Unknown instructions
+//   select BYPASS (1 bit, Capture-DR loads 0).
 // - Each Update-IR and Update-DR is recorded.
 //
 // The JTAG programming interface (datasheet, "Programming via the JTAG
@@ -31,6 +31,43 @@
 // - PROG_PAGELOAD (0x6) with fullPageBitstream: each 8 bits in Shift-DR go
 //   into the page buffer, low byte then high byte of each word, from the
 //   loaded address. Without it the DR is 8 bits and does nothing.
+//
+// The OCD (docs/avr-jtag-ocd.md), when ocden is true:
+//
+// - OCD register access (0xB, 21 bits): Update-DR runs the read or write,
+//   and the next Capture-DR loads its result: register << 16 | data for a
+//   read, the command itself for a write. Reg 0 to 3, BCR (8) and reg A, B,
+//   E, F keep the written value. Reg 4 to 7 keep the low byte on revision
+//   4, and are 0 on revision 3. Writes to the BSR (9), the OCDR (C) and reg
+//   D are ignored. A read of the OCDR clears reg D bit 4.
+// - Reg D: 0x000C while the core is stopped, else bit 0 = BCR bit 14. Bit
+//   4 while the OCDR holds a byte.
+// - FORCE_BREAK (0x8) at Update-IR stops the running core: BSR bit 1.
+// - RUN (0x9) at Update-IR starts the stopped core at pc. With BCR bit 13
+//   it executes one step: pc + 1 (the mock does not execute the flash),
+//   BSR bit 7, and bit 13 clear.
+// - AVR_RESET (0xC): the core is in reset while the bit is 1, and starts
+//   at resetVector at the release.
+// - Instruction execute (0xA, 38 bits on revision 4, 32 on revision 3):
+//   the instruction in the high 16 bits, the field below it. At Update-DR
+//   of the stopped core, a field of 0 executes the instruction, and any
+//   other field reads the flash word at that word address. Capture-DR
+//   loads the last flash word read above the PC field.
+// - The PC field (docs/avr-jtag-ocd.md, "Instruction execute"): pc + 1 at
+//   a stop, + 2 for each executed instruction (+ 1 on revision 3: an
+//   inference from the PC offset -5 of the scripts), Z + 1 after EIJMP.
+//   The rules do not agree in one model (open question 3). Only EIJMP
+//   changes pc: pc = EIND:Z.
+// - The core: LDI, MOV, IN, OUT, LD and ST with X, Y or Z, EIJMP, SPM,
+//   BREAK, WDR and NOP. Other instructions are recorded in
+//   unknownInstructions. The data space has r0 to r31 at 0x00, the I/O
+//   registers at 0x20 and the SRAM. A write to the I/O address
+//   ocdDataReg goes to the OCDR and sets reg D bit 4.
+// - SPM uses SPMCSR at the data address spmcsr and the byte address
+//   RAMPZ:Z: page erase (0x03), page buffer load of r1:r0 (0x01), page
+//   write (0x05, AND as without an erase) and RWW enable (0x11). Other
+//   commands record SPM in unknownInstructions. SPMEN clears at once. The
+//   mock does not check the boot section.
 //
 // TDO is the bit 0 of the shift register in Shift-DR and Shift-IR. The
 // mock records the TAP state at each rising edge of TCK in Run-Test/Idle,
@@ -80,7 +117,7 @@ class MockAvrJtag final : public JtagTarget {
    static constexpr uint8_t irCapture = 0x1;
 
    // The DR length of an instruction
-   static uint8_t drLength(uint8_t ir) {
+   [[nodiscard]] uint8_t drLength(uint8_t ir) const {
       switch(ir) {
       case 0x1: // IDCODE
          return 32;
@@ -91,8 +128,8 @@ class MockAvrJtag final : public JtagTarget {
       case 0x6: // PROG_PAGELOAD
       case 0x7: // PROG_PAGEREAD
          return 8;
-      case 0xA: // instruction execute, revision 4
-         return 38;
+      case 0xA: // instruction execute
+         return ocdRevision >= 4 ? 38 : 32;
       case 0xB: // OCD register access
          return 21;
       case 0xC: // AVR_RESET
@@ -120,8 +157,14 @@ class MockAvrJtag final : public JtagTarget {
             shift_ = idcode;
          } else if(const auto it = capture.find(ir); it != capture.end()) {
             shift_ = it->second;
+         } else if(ir == 0x5) {
+            shift_ = result_;
+         } else if(ir == 0xA) {
+            shift_ = (static_cast<uint64_t>(flashRead_) << fieldBits()) | (pcField & fieldMask());
+         } else if(ir == 0xB) {
+            shift_ = ocdResult_;
          } else {
-            shift_ = ir == 0x5 ? result_ : 0;
+            shift_ = 0;
          }
          pageLoadBits_ = 0;
          break;
@@ -145,6 +188,7 @@ class MockAvrJtag final : public JtagTarget {
       if(state == State::UpdateIr) {
          ir = static_cast<uint8_t>(shift_);
          irScans.push_back(ir);
+         updateIr();
       } else if(state == State::UpdateDr) {
          drScans.push_back({ ir, length_, shift_ });
          updateDr();
@@ -194,7 +238,195 @@ class MockAvrJtag final : public JtagTarget {
    uint32_t flashPageWrites{ 0 };
    uint32_t eepromPageWrites{ 0 };
 
+   // The OCD
+   bool ocden{ true };
+   uint8_t ocdRevision{ 3 };
+   // The I/O address OCD_DATAREG and the data address of SPMCSR
+   uint8_t ocdDataReg{ 0x31 };
+   uint16_t spmcsr{ 0x57 };
+   std::array<uint16_t, 16> ocdRegs{};
+   uint16_t bsr{ 0 };
+   uint8_t ocdr{ 0 };
+   bool ocdrFull{ false };
+   // The core: stopped in debug mode, its PC and the PC field (word
+   // addresses)
+   bool stopped{ false };
+   uint32_t pc{ 0 };
+   uint32_t pcField{ 0 };
+   uint32_t resetVector{ 0 };
+   // r0 to r31, the I/O registers and the SRAM of the ATmega32U4
+   std::vector<uint8_t> data = std::vector<uint8_t>(0x0B00, 0);
+   std::vector<uint16_t> executed;
+   std::vector<uint16_t> unknownInstructions;
+   uint32_t spmPageErases{ 0 };
+   uint32_t spmPageWrites{ 0 };
+
+   // Stops the core at word address at, as a breakpoint does.
+   void stop(uint32_t at, uint16_t cause) {
+      stopped = true;
+      pc = at;
+      pcField = at + 1;
+      bsr = cause;
+   }
+
+   uint8_t &reg(uint8_t n) {
+      return data.at(n);
+   }
+
+   [[nodiscard]] uint16_t z() const {
+      return static_cast<uint16_t>(data.at(31) << 8 | data.at(30));
+   }
+
    private:
+   static constexpr uint8_t eind = 0x3C;
+   static constexpr uint8_t rampz = 0x3B;
+
+   [[nodiscard]] uint8_t fieldBits() const {
+      return static_cast<uint8_t>(drLength(0xA) - 16u);
+   }
+
+   [[nodiscard]] uint64_t fieldMask() const {
+      return (uint64_t{ 1 } << fieldBits()) - 1u;
+   }
+
+   [[nodiscard]] uint16_t flashWordAt(uint32_t word) const {
+      return word * 2 + 1 < flash.size() ? static_cast<uint16_t>(flash[word * 2 + 1] << 8 | flash[word * 2]) : 0xFFFF;
+   }
+
+   void updateIr() {
+      if(!ocden || inReset) {
+         return;
+      }
+      if(ir == 0x8 && !stopped) {
+         stop(pc, 1u << 1);
+      } else if(ir == 0x9 && stopped) {
+         if((ocdRegs[8] & (1u << 13)) != 0) {
+            ocdRegs[8] = static_cast<uint16_t>(ocdRegs[8] & ~(1u << 13));
+            stop(pc + 1, 1u << 7);
+         } else {
+            stopped = false;
+         }
+      }
+   }
+
+   [[nodiscard]] uint16_t controlValue() const {
+      if(stopped) {
+         return static_cast<uint16_t>(0x000C | (ocdrFull ? 0x10 : 0));
+      }
+      return static_cast<uint16_t>(((ocdRegs[8] >> 14) & 1u) | (ocdrFull ? 0x10 : 0));
+   }
+
+   void ocdAccess() {
+      if(!ocden) {
+         ocdResult_ = 0;
+         return;
+      }
+      const auto n = static_cast<uint8_t>((shift_ >> 16) & 0xFu);
+      const auto value = static_cast<uint16_t>(shift_);
+      if((shift_ & (1u << 20)) != 0) {
+         ocdResult_ = shift_;
+         if(n >= 4 && n <= 7) {
+            ocdRegs[n] = ocdRevision >= 4 ? static_cast<uint16_t>(value & 0xFFu) : 0;
+         } else if(n != 9 && n != 0xC && n != 0xD) {
+            ocdRegs[n] = value;
+         }
+         return;
+      }
+      uint16_t result = ocdRegs[n];
+      if(n == 9) {
+         result = bsr;
+      } else if(n == 0xC) {
+         result = static_cast<uint16_t>(ocdr << 8);
+         ocdrFull = false;
+      } else if(n == 0xD) {
+         result = controlValue();
+      }
+      ocdResult_ = static_cast<uint64_t>(n) << 16 | result;
+   }
+
+   void instruction() {
+      if(!ocden || !stopped || inReset) {
+         return;
+      }
+      const auto field = static_cast<uint32_t>(shift_ & fieldMask());
+      if(field != 0) {
+         flashRead_ = flashWordAt(field);
+         return;
+      }
+      execute(static_cast<uint16_t>(shift_ >> fieldBits()));
+   }
+
+   [[nodiscard]] uint8_t load(uint16_t address) const {
+      return address < data.size() ? data[address] : 0;
+   }
+
+   void store(uint16_t address, uint8_t value) {
+      if(address == 0x20u + ocdDataReg) {
+         ocdr = value;
+         ocdrFull = true;
+      } else if(address < data.size()) {
+         data[address] = value;
+      }
+   }
+
+   [[nodiscard]] uint16_t pointer(uint8_t low) const {
+      return static_cast<uint16_t>(data.at(low + 1u) << 8 | data.at(low));
+   }
+
+   void execute(uint16_t op) {
+      executed.push_back(op);
+      const auto d = static_cast<uint8_t>((op >> 4) & 0x1Fu);
+      const auto io = static_cast<uint8_t>(((op >> 5) & 0x30u) | (op & 0x0Fu));
+      if((op & 0xF000u) == 0xE000u) { // LDI
+         reg(static_cast<uint8_t>(16 + (d & 0x0Fu))) = static_cast<uint8_t>(((op >> 4) & 0xF0u) | (op & 0x0Fu));
+      } else if((op & 0xFC00u) == 0x2C00u) { // MOV
+         reg(d) = reg(static_cast<uint8_t>(((op >> 5) & 0x10u) | (op & 0x0Fu)));
+      } else if((op & 0xF800u) == 0xB000u) { // IN
+         reg(d) = load(static_cast<uint16_t>(0x20u + io));
+      } else if((op & 0xF800u) == 0xB800u) { // OUT
+         store(static_cast<uint16_t>(0x20u + io), reg(d));
+      } else if(const uint16_t ldst = op & 0xFE0Fu; ldst == 0x8000u || ldst == 0x8008u || ldst == 0x900Cu) { // LD
+         reg(d) = load(pointer(ldst == 0x8000u ? 30 : ldst == 0x8008u ? 28 : 26));
+      } else if(ldst == 0x8200u || ldst == 0x8208u || ldst == 0x920Cu) { // ST
+         store(pointer(ldst == 0x8200u ? 30 : ldst == 0x8208u ? 28 : 26), reg(d));
+      } else if(op == 0x9419u) { // EIJMP
+         pc = static_cast<uint32_t>(load(0x20u + eind)) << 16 | z();
+         pcField = pc + 1;
+         return;
+      } else if(op == 0x95E8u) { // SPM
+         spm();
+      } else if(op != 0x9598u && op != 0x95A8u && op != 0x0000u) { // BREAK, WDR, NOP
+         unknownInstructions.push_back(op);
+      }
+      pcField += ocdRevision >= 4 ? 2 : 1;
+   }
+
+   void spm() {
+      const uint8_t command = load(spmcsr) & 0x1Fu;
+      const uint32_t address = static_cast<uint32_t>(load(0x20u + rampz)) << 16 | z();
+      const uint32_t page = address / flashPageBytes * flashPageBytes;
+      if(command == 0x03) {
+         ++spmPageErases;
+         if(page + flashPageBytes <= flash.size()) {
+            std::fill_n(flash.begin() + page, flashPageBytes, 0xFF);
+         }
+      } else if(command == 0x01) {
+         spmBuffer_[address / 2] = static_cast<uint16_t>(reg(1) << 8 | reg(0));
+      } else if(command == 0x05) {
+         ++spmPageWrites;
+         for(const auto &[word, value] : spmBuffer_) {
+            if(word * 2 / flashPageBytes * flashPageBytes == page && word * 2 + 1 < flash.size()) {
+               flash[word * 2] &= static_cast<uint8_t>(value);
+               flash[word * 2 + 1] &= static_cast<uint8_t>(value >> 8);
+            }
+         }
+         spmBuffer_.clear();
+      } else if(command != 0x11) {
+         unknownInstructions.push_back(0x95E8u);
+      }
+      store(spmcsr, static_cast<uint8_t>(load(spmcsr) & 0xE0u));
+   }
+
    static std::array<uint8_t, 0x20> makeSigrow() {
       std::array<uint8_t, 0x20> row{};
       for(std::size_t i = 0; i < row.size(); ++i) {
@@ -266,11 +498,24 @@ class MockAvrJtag final : public JtagTarget {
 
    void updateDr() {
       switch(ir) {
-      case 0xC:
+      case 0xC: {
+         const bool wasInReset = inReset;
          inReset = (shift_ & 1u) != 0;
-         if(!inReset) {
+         if(inReset) {
+            stopped = false;
+         } else {
             programming = false;
+            if(wasInReset) {
+               pc = resetVector;
+            }
          }
+         break;
+      }
+      case 0xA:
+         instruction();
+         break;
+      case 0xB:
+         ocdAccess();
          break;
       case 0x4:
          programming = inReset && shift_ == 0xA370;
@@ -496,6 +741,9 @@ class MockAvrJtag final : public JtagTarget {
    std::map<uint16_t, uint8_t> eepromBuffer_;
    uint32_t pageLoadBits_{ 0 };
    uint8_t byte_{ 0 };
+   uint64_t ocdResult_{ 0 };
+   uint16_t flashRead_{ 0 };
+   std::map<uint32_t, uint16_t> spmBuffer_;
 };
 
 } // namespace mupptest
