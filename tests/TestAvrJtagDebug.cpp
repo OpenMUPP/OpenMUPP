@@ -659,6 +659,85 @@ TEST_CASE("AvrJtagDebug: breakpoint numbers and addresses out of range") {
    CHECK(b.debug.setBreakpoint(1, 0x3FFF) == JtagDebugStatus::Ok);
 }
 
+TEST_CASE("AvrJtagDebug: data breakpoints in each mode") {
+   using Mode = avr::JtagDataMode;
+   struct Case {
+      uint8_t number;
+      Mode mode;
+      uint16_t bcrBits;
+      bool stopOnRead;
+      bool stopOnWrite;
+      uint16_t cause;
+   };
+   for(const Case c :
+       { Case{ 2, Mode::Read, 0x0140, true, false, bsr::break2 }, Case{ 2, Mode::Write, 0x0120, false, true, bsr::break2 },
+         Case{ 2, Mode::Access, 0x0100, true, true, bsr::break2 }, Case{ 3, Mode::Read, 0x0090, true, false, bsr::break3 },
+         Case{ 3, Mode::Write, 0x0088, false, true, bsr::break3 }, Case{ 3, Mode::Access, 0x0080, true, true, bsr::break3 } }) {
+      CAPTURE(c.number);
+      CAPTURE(static_cast<int>(c.mode));
+      for(const bool write : { false, true }) {
+         CAPTURE(write);
+         Bench b;
+         REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+         REQUIRE(b.debug.setDataBreakpoint(c.number, 0x0210, c.mode) == JtagDebugStatus::Ok);
+         b.writes();
+         REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+         CHECK(b.writes() == std::vector<uint32_t>{ 0x100000u | (uint32_t{ c.number } << 16) | 0x0210, 0x18C000u | c.bcrBits });
+
+         // Another address, and the program address 0x210, do not stop.
+         CHECK_FALSE(b.target.access(0x41, 0x0211, write));
+         CHECK_FALSE(b.target.reach(0x210));
+         // An LDS or STS (two words) at 0x40: the stop is after it.
+         const bool expected = write ? c.stopOnWrite : c.stopOnRead;
+         CHECK(b.target.access(0x42, 0x0210, write) == expected);
+         bool stopped = false;
+         REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+         CHECK(stopped == expected);
+         if(expected) {
+            CHECK(b.debug.pc() == 0x42);
+            CHECK(b.debug.breakStatus() == c.cause);
+         }
+      }
+   }
+}
+
+TEST_CASE("AvrJtagDebug: data breakpoint numbers") {
+   using Mode = avr::JtagDataMode;
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   // Reg 1 has no data mode.
+   CHECK(b.debug.setDataBreakpoint(1, 0x100, Mode::Read) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.setDataBreakpoint(4, 0x100, Mode::Read) == JtagDebugStatus::OutOfRange);
+   // First come, first served
+   REQUIRE(b.debug.setBreakpoint(2, 0x80) == JtagDebugStatus::Ok);
+   CHECK(b.debug.setDataBreakpoint(2, 0x100, Mode::Read) == JtagDebugStatus::InUse);
+   REQUIRE(b.debug.setDataBreakpoint(3, 0x100, Mode::Write) == JtagDebugStatus::Ok);
+   CHECK(b.debug.setDataBreakpoint(3, 0x101, Mode::Write) == JtagDebugStatus::InUse);
+   CHECK(b.debug.setBreakpoint(3, 0x80) == JtagDebugStatus::InUse);
+   // A program breakpoint replaces a program breakpoint, as before.
+   CHECK(b.debug.setBreakpoint(2, 0x90) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK(b.target.ocdRegs[8] == 0xC1E8);
+   CHECK(b.target.ocdRegs[2] == 0x90);
+   CHECK(b.target.ocdRegs[3] == 0x100);
+   // Cleared: the number is free for the other kind.
+   REQUIRE(b.debug.halt() == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.clearBreakpoint(3) == JtagDebugStatus::Ok);
+   CHECK(b.debug.setBreakpoint(3, 0x80) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.clearBreakpoint(2) == JtagDebugStatus::Ok);
+   CHECK(b.debug.setDataBreakpoint(2, 0x100, Mode::Access) == JtagDebugStatus::Ok);
+}
+
+TEST_CASE("AvrJtagDebug: a data breakpoint on revision 4 writes 0 to the high register") {
+   Bench b{ 4 };
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.setDataBreakpoint(3, 0x0210, avr::JtagDataMode::Write) == JtagDebugStatus::Ok);
+   b.writes();
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK(b.writes() == std::vector<uint32_t>{ 0x130210, 0x170000, 0x18C088 });
+   CHECK(b.target.access(0x101, 0x0210, true));
+}
+
 TEST_CASE("AvrJtagDebug: the BSR after a step and a reset") {
    Bench b;
    REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);

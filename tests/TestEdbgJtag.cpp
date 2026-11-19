@@ -183,6 +183,15 @@ struct Bench : EdbgBench {
       return avr8(command);
    }
 
+   // AVaRICE: type 2 (data), a data space address, mode 0 read, 1 write,
+   // 2 access
+   Bytes dataBreakSet(uint8_t number, uint32_t address, uint8_t mode) {
+      Bytes command{ avr8::command::hwBreakSet, 0x00, 0x02, number };
+      putU32(command, address);
+      command.push_back(mode);
+      return avr8(command);
+   }
+
    Bytes breakClear(uint8_t number) {
       return avr8({ avr8::command::hwBreakClear, 0x00, number });
    }
@@ -602,8 +611,12 @@ TEST_CASE("EDBG JTAG: Bloom checks of the debug commands") {
       CHECK(b.breakSet(0, 0x200) == failed(0x81));
       CHECK(b.breakSet(4, 0x200) == failed(0x81));
       CHECK(b.breakClear(4) == failed(0x81));
-      // Data breakpoints
-      CHECK(b.breakSet(1, 0x200, 2) == failed(0x90));
+      // Data breakpoints: not on number 1, no mask type
+      CHECK(b.breakSet(1, 0x200, 2) == failed(0x81));
+      CHECK(b.breakSet(2, 0x200, 3) == failed(0x90));
+      CHECK(b.dataBreakSet(2, 0x200, 3) == failed(0x39));
+      CHECK(b.dataBreakSet(2, 0x10000, 0) == failed(0x38));
+      CHECK(b.avr8({ avr8::command::hwBreakSet, 0x00, 0x02, 0x02, 0x00, 0x02, 0x00, 0x00 }) == failed(0x35));
       CHECK(b.breakSet(1, 0x201) == failed(0x38));
       CHECK(b.breakSet(1, 0x8000) == failed(0x38));
       CHECK(b.avr8({ avr8::command::hwBreakSet, 0x00, 0x01, 0x01, 0x00 }) == failed(0x35));
@@ -654,6 +667,61 @@ TEST_CASE("EDBG JTAG: Bloom checks of the debug commands") {
    }
    b.bloomClose();
    b.checkReleased();
+}
+
+TEST_CASE("EDBG JTAG: data breakpoints") {
+   struct Case {
+      uint8_t mode;
+      bool stopOnRead;
+      bool stopOnWrite;
+   };
+   // EDBG mode 0 read, 1 write, 2 access
+   for(const Case c : { Case{ 0, true, false }, Case{ 1, false, true }, Case{ 2, true, true } }) {
+      for(const uint8_t number : { uint8_t{ 2 }, uint8_t{ 3 } }) {
+         for(const bool write : { false, true }) {
+            CAPTURE(c.mode);
+            CAPTURE(number);
+            CAPTURE(write);
+            Bench b;
+            b.bloomOpen();
+            b.bloomAttach();
+            CHECK(b.dataBreakSet(number, 0x0210, c.mode) == ok);
+            CHECK(b.run() == ok);
+            CHECK_FALSE(b.jtagAvr.access(0x41, 0x0211, write));
+            CHECK(b.event().empty());
+            // An LDS or STS at word 0x40: the core stops after it.
+            const bool expected = write ? c.stopOnWrite : c.stopOnRead;
+            CHECK(b.jtagAvr.access(0x42, 0x0210, write) == expected);
+            if(expected) {
+               CHECK(b.event() == b.breakEvent(0x42, true));
+               CHECK(b.pcRead() == Bytes{ 0x83, 0x00, 0x42, 0x00, 0x00, 0x00 });
+            } else {
+               CHECK(b.event().empty());
+               CHECK(b.stop() == ok);
+               CHECK(b.event() == b.breakEvent(0x42, false));
+            }
+            b.bloomClose();
+            CHECK((b.jtagAvr.ocdRegs[8] & 0x0FF8) == 0);
+         }
+      }
+   }
+}
+
+TEST_CASE("EDBG JTAG: data and program breakpoints share numbers 2 and 3") {
+   Bench b;
+   b.bloomOpen();
+   b.bloomAttach();
+   CHECK(b.breakSet(2, 0x200) == ok);
+   CHECK(b.dataBreakSet(2, 0x0210, 1) == failed(0x81));
+   CHECK(b.dataBreakSet(3, 0x0210, 1) == ok);
+   CHECK(b.dataBreakSet(3, 0x0211, 1) == failed(0x81));
+   CHECK(b.breakSet(3, 0x300) == failed(0x81));
+   CHECK(b.breakClear(3) == ok);
+   CHECK(b.breakSet(3, 0x300) == ok);
+   // The program breakpoint at word 0x100 still stops the core.
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.reach(0x100));
+   CHECK(b.event() == b.breakEvent(0x100, true));
 }
 
 // Bloom manage_ocden_fuse_bit: ATTACH without OCDEN, then the fuse write
