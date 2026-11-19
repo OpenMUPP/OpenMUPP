@@ -113,7 +113,8 @@
 // 0x12 EEPROM page bytes, 0x13 OCD revision (0 to 4), 0x15 full-page bit
 // stream (not 0: the flash page goes in one PROG_PAGELOAD scan), 0x18
 // OCDR, 0x19 EEARH, 0x1A EEARL, 0x1B EECR, 0x1C EEDR (I/O addresses, up to
-// 0x3F, for the debug mode).
+// 0x3F, for the debug mode), 0x1D SPMCSR (a data space address, for the
+// flash page write of the software breakpoints).
 //   ACTIVATE_PHYSICAL [reset]: drives the pins at the programming clock
 //        and reads the IDCODE. -> DATA [IDCODE u32]. No Atmel IDCODE (bits
 //        11..0 not 0x03F): FAILED 0x20. The reset flag is not used: the
@@ -934,8 +935,9 @@ class Avr8Scope final : public Avr8Handler {
          return failure ? failed(*failure) : ok();
       }
       default:
-         // The flash write in the debug mode (SPM) comes with the software
-         // breakpoints.
+         // No host tool writes the flash with SPM in the debug mode (Bloom
+         // loads a program in the programming mode). The SPM page write is
+         // for the software breakpoints only.
          return failed(avr8::failure::memoryType);
       }
    }
@@ -1120,7 +1122,9 @@ class Avr8Scope final : public Avr8Handler {
          .eearh = d[0x19],
          .eearl = d[0x1A],
          .eecr = d[0x1B],
-         .eedr = d[0x1C]
+         .eedr = d[0x1C],
+         // Checked at the flash write: avrdude needs no SPMCSR.
+         .spmcsr = d[0x1D]
       };
    }
 
