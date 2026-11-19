@@ -818,6 +818,27 @@ TEST_CASE("AvrJtagDebug: data mask numbers") {
    CHECK(b.target.ocdRegs[8] == 0xC488);
 }
 
+TEST_CASE("AvrJtagDebug: a clear of the data breakpoint clears its mask") {
+   using Mode = avr::JtagDataMode;
+   for(const uint8_t data : { 2, 3 }) {
+      CAPTURE(data);
+      const auto mask = static_cast<uint8_t>(5 - data);
+      Bench b;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.setDataBreakpoint(data, 0x0110, Mode::Read) == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.setDataMask(mask, 0xFFFE) == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.clearBreakpoint(data) == JtagDebugStatus::Ok);
+      CHECK(b.debug.setBreakpoint(data, 0x8E) == JtagDebugStatus::Ok);
+      CHECK(b.debug.setBreakpoint(mask, 0x90) == JtagDebugStatus::Ok);
+   }
+   // A clear of an empty number keeps the mask for a later data breakpoint.
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.setDataMask(3, 0xFFFE) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.clearBreakpoint(2) == JtagDebugStatus::Ok);
+   CHECK(b.debug.setBreakpoint(2, 0x8E) == JtagDebugStatus::InUse);
+}
+
 TEST_CASE("AvrJtagDebug: a data mask on revision 4 writes 0 to the high registers") {
    Bench b{ 4 };
    REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);

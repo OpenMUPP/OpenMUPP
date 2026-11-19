@@ -168,7 +168,8 @@
 //        0x81), the address field is the mask (1 bits compare, bits 15..0
 //        used), the mode is ignored. It applies to the data breakpoint on
 //        the other number. A mask on a number in use, or next to a program
-//        breakpoint or a mask, gives FAILED 0x81. Other types: FAILED 0x90.
+//        breakpoint or a mask, gives FAILED 0x81. HW_BREAK_CLEAR of the
+//        data breakpoint also clears its mask. Other types: FAILED 0x90.
 //        They take effect at the next RUN or STEP. RUN_TO uses OCD reg 0.
 //   READ_MEMORY, READ_MEMORY_MASKED, WRITE_MEMORY in the debug mode (Bloom),
 //        with a stopped core: SRAM 0x20 (the data space; the OCDR reads as

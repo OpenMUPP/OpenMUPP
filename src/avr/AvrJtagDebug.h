@@ -87,7 +87,8 @@
 //   the probe writes the address to reg 3 and the mask to reg 2, for each
 //   order of the numbers. A 1 bit in the mask compares the address bit.
 //   A mask without a data breakpoint does nothing. The pair has no
-//   program breakpoint and no second mask: InUse.
+//   program breakpoint and no second mask: InUse. A clear of the data
+//   breakpoint also clears the mask (AVaRICE does not clear it, #118).
 // - After each stop the probe reads the BSR (the cause of the stop). The
 //   reference debugger does not read it.
 // - stepInstead() executes an instruction in place of the flash word at
@@ -378,6 +379,11 @@ class AvrJtagDebug {
    [[nodiscard]] JtagDebugStatus clearBreakpoint(uint8_t number) {
       if(number < 1 || number > hardwareBreaks) {
          return JtagDebugStatus::OutOfRange;
+      }
+      // AVaRICE clears only the data breakpoint of a range, not its mask
+      // (issue #118): the mask goes with its data breakpoint.
+      if(breaks_[number] && partner(number) != 0 && maskNumber() == partner(number)) {
+         breaks_[partner(number)].reset();
       }
       breaks_[number].reset();
       return JtagDebugStatus::Ok;

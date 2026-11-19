@@ -374,6 +374,7 @@ The mask is on number 2 or 3, and applies to the data breakpoint on the other nu
 A mask on a number in use, or next to a program breakpoint or a mask, gives code `0x81`.
 A program breakpoint next to a mask also gives code `0x81`.
 A mask without a data breakpoint has no effect.
+A clear of the data breakpoint also clears its mask. AVaRICE clears only the data breakpoint when gdb removes a range watchpoint.
 
 Numbers 2 and 3 hold a program breakpoint or a data breakpoint, first come, first served.
 A data breakpoint on a number in use gives code `0x81`.

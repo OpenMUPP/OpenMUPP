@@ -343,6 +343,12 @@ A data breakpoint with a mask stops on an address range, for example a 2-byte va
 AVaRICE sends this for a `watch`, `rwatch` or `awatch` on more than one byte (its "range BP").
 The data breakpoint is on number 2 and the mask on number 3, or the other way around.
 Thus a range uses both numbers 2 and 3.
+When gdb removes the range, AVaRICE clears only the data breakpoint, not the mask.
+Thus the probe clears the mask together with its data breakpoint.
+A later program breakpoint or data breakpoint on numbers 2 and 3 then works without the old mask.
+Limit: AVaRICE does not send the mask again for the same range in the same session.
+Thus a second `rwatch` on the same 2-byte variable stops only on an access to the first byte.
+Start a new AVaRICE session to watch the range again.
 The OCD has the mask only in register 2, for register 3.
 Thus the probe writes the address to register 3 and the mask to register 2.
 The mask mode on a data address is not tested on the hardware yet. The program address test passed (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
