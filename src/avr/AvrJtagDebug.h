@@ -743,6 +743,9 @@ class AvrJtagDebug {
    // (one step). Then the stop, BCR 0xC000, and SPMCSR until SPMEN is
    // clear.
    [[nodiscard]] JtagDebugStatus spm(uint8_t command, uint16_t z, const uint8_t *word = nullptr) {
+      // Each injected instruction after the EIJMP moves the PC by about 2
+      // words: the 10 instructions before SPM must stay in the last page
+      // (64 words at the smallest JTAG page). To check in the hardware test.
       const uint32_t boot = (device_.flashBytes - device_.flashPageBytes) / 2u;
       if(!loadZ(static_cast<uint16_t>(boot)) || !writeIo(jtagDebug::ioEind, static_cast<uint8_t>(boot >> 16)) ||
          !execute(jtagDebug::eijmp) || !loadZ(z)) {
