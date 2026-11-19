@@ -62,9 +62,15 @@
 //   11), reg 1 (bit 10), reg 2 (bit 8, not in mask mode), reg 3 (bit 7,
 //   with reg 2 as the mask in mask mode). The BSR gets the bits of all
 //   hits. Reg 4 to 7 compare with the word bits 23..16 (always 0 on
-//   revision 3). Data breakpoints are not modeled. A BREAK (0x9598) in
+//   revision 3). A BREAK (0x9598) in
 //   flash at word stops the core there with BSR bit 0, when no program
 //   breakpoint matched.
+// - Data breakpoints (mode 0 to 2 for reg 2 and reg 3): access(next,
+//   address, write) is an instruction of the running core that reads or
+//   writes address. A match stops the core at next, the word after the
+//   instruction (the PC is next also without a match). Mode 1 matches a write, mode 2 a read, mode 0 both (the
+//   write is open question 8 of docs/avr-jtag-ocd.md; the model follows
+//   the "probably" of that page).
 // - stopDelay: the reg D reads after a stop that still show 0x0000, as
 //   after FORCE_BREAK in the captures (70 ms).
 // - Instruction execute (0xA, 38 bits on revision 4, 32 on revision 3):
@@ -322,6 +328,32 @@ class MockAvrJtag final : public JtagTarget {
       breakAt(word);
       if(!stopped && flashWordAt(word) == 0x9598u) {
          stop(word, 1u << 0);
+      }
+      return stopped;
+   }
+
+   // The running core reads or writes the data space address, and then
+   // comes to word next. True: a data breakpoint stopped it.
+   bool access(uint32_t next, uint16_t address, bool write) {
+      if(stopped || inReset || !ocden) {
+         return false;
+      }
+      pc = next;
+      const uint16_t bcr = ocdRegs[8];
+      const bool maskMode = (bcr & (1u << 9)) != 0;
+      const auto hit = [&](uint8_t n, uint16_t enable, uint8_t shift, uint16_t mask) {
+         const unsigned mode = (bcr >> shift) & 3u;
+         return (bcr & enable) != 0 && mode != 3u && ((address ^ ocdRegs[n]) & mask) == 0 && (mode == 0u || (mode == 1u) == write);
+      };
+      uint16_t cause = 0;
+      if(!maskMode && hit(2, 1u << 8, 5, 0xFFFF)) {
+         cause |= 1u << 2;
+      }
+      if(hit(3, 1u << 7, 3, maskMode ? ocdRegs[2] : 0xFFFF)) {
+         cause |= 1u << 3;
+      }
+      if(cause != 0) {
+         stop(next, cause);
       }
       return stopped;
    }

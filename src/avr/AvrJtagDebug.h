@@ -68,6 +68,11 @@
 //   RUN_TO address that was not hit. On revision 4, reg 4 + n gets the
 //   word bits 23..16 of reg n (inference: only 0 and 0xFF were seen,
 //   docs/avr-jtag-ocd.md).
+// - Data breakpoints (data space addresses): numbers 2 and 3 only (reg 1
+//   has no data mode), with the OCD mode read (2), write (1) or access (0).
+//   A number keeps one breakpoint: a data breakpoint on a number in use,
+//   or a program breakpoint on a number with a data breakpoint, gives
+//   InUse. The core stops after the instruction that makes the access.
 // - After each stop the probe reads the BSR (the cause of the stop). The
 //   reference debugger does not read it.
 // - A failed context read (NoOcd, Timeout) leaves no valid context: run,
@@ -102,6 +107,17 @@ enum class JtagDebugStatus : uint8_t {
    NoContext,
    // An EEPROM byte or a flash page read back different after the write
    VerifyFailed,
+   // The breakpoint number holds another breakpoint.
+   InUse,
+};
+
+// The OCD modes of a data breakpoint (BCR mode of reg 2 and reg 3,
+// docs/avr-jtag-ocd.md). Access on a write is open question 8: the
+// hardware test showed only the stop on a read.
+enum class JtagDataMode : uint8_t {
+   Access = 0,
+   Write = 1,
+   Read = 2,
 };
 
 // The device values for the debug mode (EDBG device context). The register
@@ -284,7 +300,23 @@ class AvrJtagDebug {
       if(number < 1 || number > hardwareBreaks || word >= device_.flashBytes / 2u) {
          return JtagDebugStatus::OutOfRange;
       }
-      breaks_[number] = word;
+      if(breaks_[number] && breaks_[number]->mode != jtagOcd::bcr::modeProgram) {
+         return JtagDebugStatus::InUse;
+      }
+      breaks_[number] = Break{ word, jtagOcd::bcr::modeProgram };
+      return JtagDebugStatus::Ok;
+   }
+
+   // Sets data breakpoint number (2 or 3) at a data space address. It takes
+   // effect at the next run.
+   [[nodiscard]] JtagDebugStatus setDataBreakpoint(uint8_t number, uint16_t address, JtagDataMode mode) {
+      if(number < 2 || number > hardwareBreaks) {
+         return JtagDebugStatus::OutOfRange;
+      }
+      if(breaks_[number]) {
+         return JtagDebugStatus::InUse;
+      }
+      breaks_[number] = Break{ address, static_cast<uint8_t>(mode) };
       return JtagDebugStatus::Ok;
    }
 
@@ -310,7 +342,10 @@ class AvrJtagDebug {
       if(runTo && *runTo >= device_.flashBytes / 2u) {
          return JtagDebugStatus::OutOfRange;
       }
-      breaks_[0] = runTo;
+      breaks_[0].reset();
+      if(runTo) {
+         breaks_[0] = Break{ *runTo, jtagOcd::bcr::modeProgram };
+      }
       if(!writeBack() || !writeBreakpoints() || !ocd_.run()) {
          return JtagDebugStatus::NoOcd;
       }
@@ -624,26 +659,37 @@ class AvrJtagDebug {
       return (uint32_t{ 1 } << jtagOcd::fieldBits(ocd_.revision())) - 1u;
    }
 
+   // The BCR enable and mode bits of breakpoint n (reg 0 and reg 1 have
+   // no mode field)
+   [[nodiscard]] static uint16_t enableBits(uint8_t n, uint8_t mode) {
+      namespace bcr = jtagOcd::bcr;
+      switch(n) {
+      case 0:
+         return bcr::enable0;
+      case 1:
+         return bcr::enable1;
+      case 2:
+         return static_cast<uint16_t>(bcr::enable2 | (mode << bcr::mode2Shift));
+      default:
+         return static_cast<uint16_t>(bcr::enable3 | (mode << bcr::mode3Shift));
+      }
+   }
+
    // Reg n (and reg 4 + n on revision 4) for each breakpoint, then the BCR
    // enables. The BCR bits 11 to 3 come from the breakpoints only.
    [[nodiscard]] bool writeBreakpoints() {
-      static constexpr std::array<uint16_t, 4> enable{
-         jtagOcd::bcr::enable0, jtagOcd::bcr::enable1,
-         static_cast<uint16_t>(jtagOcd::bcr::enable2 | (jtagOcd::bcr::modeProgram << jtagOcd::bcr::mode2Shift)),
-         static_cast<uint16_t>(jtagOcd::bcr::enable3 | (jtagOcd::bcr::modeProgram << jtagOcd::bcr::mode3Shift))
-      };
       auto bcr = static_cast<uint16_t>(bcr_ & ~jtagDebug::breakBits);
       for(uint8_t n = 0; n < breaks_.size(); ++n) {
          if(!breaks_[n]) {
             continue;
          }
-         const uint32_t word = *breaks_[n];
+         const uint32_t word = breaks_[n]->address;
          if(!ocd_.writeRegister(n, static_cast<uint16_t>(word)) ||
             (ocd_.revision() >= 4 && !ocd_.writeRegister(static_cast<uint8_t>(jtagOcd::reg::breakHigh0 + n),
                                                          static_cast<uint16_t>((word >> 16) & 0xFFu)))) {
             return false;
          }
-         bcr = static_cast<uint16_t>(bcr | enable[n]);
+         bcr = static_cast<uint16_t>(bcr | enableBits(n, breaks_[n]->mode));
       }
       // Without a change no BCR write: the reference run sequence
       return bcr == bcr_ || writeBcr(bcr);
@@ -901,8 +947,14 @@ class AvrJtagDebug {
    uint8_t eind_{ 0 };
    uint16_t bcr_{ 0 };
    uint16_t breakStatus_{ 0 };
+   // A program breakpoint (word address, mode 3) or a data breakpoint (data
+   // space address, a JtagDataMode)
+   struct Break {
+      uint32_t address;
+      uint8_t mode;
+   };
    // Reg 0 (RUN_TO) to reg 3
-   std::array<std::optional<uint32_t>, 4> breaks_{};
+   std::array<std::optional<Break>, 4> breaks_{};
    bool ocdAnswers_{ false };
    bool stopped_{ false };
    bool contextValid_{ false };
