@@ -92,11 +92,14 @@
 //   reference debugger does not read it.
 // - stepInstead() executes an instruction in place of the flash word at
 //   the PC, as one step without a flash write (a software breakpoint,
-//   issue #115). RJMP, RCALL, JMP, CALL, LDS and STS: the probe does them
-//   on the context and the data space (the return address goes onto the
-//   stack, high byte at the lower address). Each other instruction that
-//   does not use the PC or the flash: injected after the write-back, then
-//   r0 to r31 and EIND are read again. Branches, skips, returns, indirect
+//   issue #115). RJMP, RCALL, JMP, CALL, LDS, STS, the branches (BRBS,
+//   BRBC), the skips (CPSE, SBRC, SBRS, SBIC, SBIS), RET and RETI: the
+//   probe does them on the context and the data space. A call puts the
+//   return address onto the stack (2 bytes, 3 above 128 KiB of flash, the
+//   high byte at the lowest address), RET and RETI take it back, RETI also
+//   sets SREG I. A skip skips 2 words over JMP, CALL, LDS and STS. Each
+//   other instruction that does not use the PC or the flash: injected
+//   after the write-back, then r0 to r31 and EIND are read again. Indirect
 //   jumps and calls, LPM, ELPM, SPM, SLEEP and BREAK: canStepInstead() is
 //   false. The data breakpoints do not see these steps. Only the injection
 //   of LDI, MOV, IN, OUT, LD, ST and SPM had a hardware test before.
@@ -198,6 +201,8 @@ inline constexpr uint16_t dataIo = 0x20;
 inline constexpr uint16_t dataSram = 0x60;
 // SPL (SPH at + 1)
 inline constexpr uint16_t dataSp = 0x5D;
+inline constexpr uint16_t dataSreg = 0x5F;
+inline constexpr uint8_t sregI = 0x80;
 inline constexpr uint8_t eecrRead = 0x01;
 inline constexpr uint8_t eecrWrite = 0x02;
 inline constexpr uint8_t eecrMasterWrite = 0x04;
@@ -427,9 +432,10 @@ class AvrJtagDebug {
    }
 
    // Executes instruction as one step in place of the flash word at the PC
-   // (see above). The word after it comes from the flash. As step(), but
+   // (see above). after: the word after it, when the flash does not hold it
+   // (a software breakpoint), else it comes from the flash. As step(), but
    // with no break event cause and no stop of the core.
-   [[nodiscard]] JtagDebugStatus stepInstead(uint16_t instruction) {
+   [[nodiscard]] JtagDebugStatus stepInstead(uint16_t instruction, std::optional<uint16_t> after = std::nullopt) {
       if(JtagDebugStatus status = ready(); status != JtagDebugStatus::Ok) {
          return status;
       }
@@ -440,15 +446,18 @@ class AvrJtagDebug {
       breaks_[0].reset();
       const uint32_t words = device_.flashBytes / 2u;
       uint32_t next = pc_ + 1u;
-      uint16_t second = 0;
-      if(kind == StepKind::Jmp || kind == StepKind::Call || kind == StepKind::Lds || kind == StepKind::Sts) {
+      uint16_t second = after.value_or(0);
+      if(!after && (twoWords(kind) || kind == StepKind::Skip)) {
          if(JtagDebugStatus status = readFlashWord((pc_ + 1u) % words, second); status != JtagDebugStatus::Ok) {
             return status;
          }
+      }
+      if(twoWords(kind)) {
          next = pc_ + 2u;
       }
-      // Rd of LDS, Rr of STS
+      // Rd of LDS, Rr of STS, SBRC and SBRS
       const auto r = static_cast<uint8_t>((instruction >> 4) & 0x1Fu);
+      const auto bit = static_cast<uint8_t>(1u << (instruction & 7u));
       // The 12-bit offset of RJMP and RCALL, sign-extended
       const uint32_t relative = pc_ + 1u + (static_cast<uint32_t>(instruction & 0x0FFFu) ^ 0x800u) - 0x800u;
       const uint32_t absolute = ((instruction & 0x01F0u) << 13u | (instruction & 1u) << 16u) | second;
@@ -476,6 +485,34 @@ class AvrJtagDebug {
          break;
       case StepKind::Sts:
          status = writeData(second, &regs_[r], 1);
+         break;
+      case StepKind::Branch: {
+         // BRBS (bit 10 clear) or BRBC, 7-bit offset
+         uint8_t sreg = 0;
+         status = readData(jtagDebug::dataSreg, &sreg, 1);
+         if(((sreg & bit) != 0) == ((instruction & 0x0400u) == 0)) {
+            next = pc_ + 1u + (((instruction >> 3u) & 0x7Fu) ^ 0x40u) - 0x40u;
+         }
+         break;
+      }
+      case StepKind::Skip: {
+         bool skip = false;
+         if((instruction & 0xFC00u) == 0x1000u) { // CPSE
+            skip = regs_[r] == regs_[((instruction >> 5u) & 0x10u) | (instruction & 0x0Fu)];
+         } else if((instruction & 0xFC00u) == 0xFC00u) { // SBRC, SBRS
+            skip = ((regs_[r] & bit) != 0) == ((instruction & 0x0200u) != 0);
+         } else { // SBIC, SBIS
+            uint8_t io = 0;
+            status = readData(static_cast<uint16_t>(jtagDebug::dataIo + ((instruction >> 3u) & 0x1Fu)), &io, 1);
+            skip = ((io & bit) != 0) == ((instruction & 0x0200u) != 0);
+         }
+         if(skip) {
+            next = pc_ + (twoWords(stepKind(second)) ? 3u : 2u);
+         }
+         break;
+      }
+      case StepKind::Ret:
+         status = pop(next, (instruction & 0x0010u) != 0);
          break;
       case StepKind::None:
          break;
@@ -698,7 +735,11 @@ class AvrJtagDebug {
 
    private:
    // How stepInstead() executes an instruction
-   enum class StepKind : uint8_t { Inject, Rjmp, Rcall, Jmp, Call, Lds, Sts, None };
+   enum class StepKind : uint8_t { Inject, Rjmp, Rcall, Jmp, Call, Lds, Sts, Branch, Skip, Ret, None };
+
+   [[nodiscard]] static constexpr bool twoWords(StepKind kind) {
+      return kind == StepKind::Jmp || kind == StepKind::Call || kind == StepKind::Lds || kind == StepKind::Sts;
+   }
 
    [[nodiscard]] static constexpr StepKind stepKind(uint16_t op) {
       if((op & 0xF000u) == 0xC000u) {
@@ -719,12 +760,19 @@ class AvrJtagDebug {
       if((op & 0xFE0Fu) == 0x9200u) {
          return StepKind::Sts;
       }
-      // BRBS, BRBC; SBRC, SBRS; CPSE; SBIC, SBIS; LPM and ELPM Rd, Z(+);
-      // IJMP, EIJMP, ICALL, EICALL; RET, RETI; SLEEP, BREAK; LPM, ELPM, SPM,
-      // SPM Z+
-      const bool usesPcOrFlash = (op & 0xF800u) == 0xF000u || (op & 0xFC00u) == 0xFC00u || (op & 0xFC00u) == 0x1000u ||
-                                 (op & 0xFD00u) == 0x9900u || (op & 0xFE0Cu) == 0x9004u || (op & 0xFEEFu) == 0x9409u ||
-                                 (op & 0xFFEFu) == 0x9508u || (op & 0xFFEFu) == 0x9588u || (op & 0xFFCFu) == 0x95C8u;
+      if((op & 0xF800u) == 0xF000u) { // BRBS, BRBC
+         return StepKind::Branch;
+      }
+      if((op & 0xFC00u) == 0xFC00u || (op & 0xFC00u) == 0x1000u || (op & 0xFD00u) == 0x9900u) { // SBRC, SBRS, CPSE, SBIC, SBIS
+         return StepKind::Skip;
+      }
+      if((op & 0xFFEFu) == 0x9508u) { // RET, RETI
+         return StepKind::Ret;
+      }
+      // LPM and ELPM Rd, Z(+); IJMP, EIJMP, ICALL, EICALL; SLEEP, BREAK;
+      // LPM, ELPM, SPM, SPM Z+
+      const bool usesPcOrFlash =
+      (op & 0xFE0Cu) == 0x9004u || (op & 0xFEEFu) == 0x9409u || (op & 0xFFEFu) == 0x9588u || (op & 0xFFCFu) == 0x95C8u;
       return usesPcOrFlash ? StepKind::None : StepKind::Inject;
    }
 
@@ -748,7 +796,7 @@ class AvrJtagDebug {
       if(JtagDebugStatus status = readData(jtagDebug::dataSp, sp.data(), 2); status != JtagDebugStatus::Ok) {
          return status;
       }
-      const uint8_t bytes = device_.flashBytes > 0x20000u ? 3 : 2;
+      const uint8_t bytes = returnBytes();
       std::array<uint8_t, 3> stack{};
       for(uint8_t i = 0; i < bytes; ++i) {
          // The low byte at SP, the high byte at the lowest address
@@ -761,6 +809,41 @@ class AvrJtagDebug {
       }
       sp = { static_cast<uint8_t>(newTop), static_cast<uint8_t>(newTop >> 8) };
       return writeData(jtagDebug::dataSp, sp.data(), 2);
+   }
+
+   // RET and RETI: ret = the return address from the stack (see push()).
+   // reti: SREG I is set.
+   [[nodiscard]] JtagDebugStatus pop(uint32_t &ret, bool reti) {
+      std::array<uint8_t, 2> sp{};
+      if(JtagDebugStatus status = readData(jtagDebug::dataSp, sp.data(), 2); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      const uint8_t bytes = returnBytes();
+      const auto top = static_cast<uint16_t>(sp[0] | sp[1] << 8u);
+      std::array<uint8_t, 3> stack{};
+      if(JtagDebugStatus status = readData(static_cast<uint16_t>(top + 1u), stack.data(), bytes); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      ret = 0;
+      for(uint8_t i = 0; i < bytes; ++i) {
+         ret = ret << 8u | stack[i];
+      }
+      const auto newTop = static_cast<uint16_t>(top + bytes);
+      sp = { static_cast<uint8_t>(newTop), static_cast<uint8_t>(newTop >> 8) };
+      if(JtagDebugStatus status = writeData(jtagDebug::dataSp, sp.data(), 2); status != JtagDebugStatus::Ok || !reti) {
+         return status;
+      }
+      uint8_t sreg = 0;
+      if(JtagDebugStatus status = readData(jtagDebug::dataSreg, &sreg, 1); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      sreg = static_cast<uint8_t>(sreg | jtagDebug::sregI);
+      return writeData(jtagDebug::dataSreg, &sreg, 1);
+   }
+
+   // The bytes of a return address: 3 above 128 KiB of flash (22-bit PC)
+   [[nodiscard]] uint8_t returnBytes() const {
+      return device_.flashBytes > 0x20000u ? 3 : 2;
    }
 
    static constexpr bool inRange(uint32_t address, uint32_t length, uint32_t size) {

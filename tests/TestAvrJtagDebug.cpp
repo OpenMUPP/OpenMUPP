@@ -1086,17 +1086,121 @@ TEST_CASE("AvrJtagDebug: flash page write failures") {
 
 TEST_CASE("AVR JTAG debug: the instructions that a step can execute in place of the flash word") {
    using avr::AvrJtagDebug;
-   // LDS, STS, JMP, CALL, RJMP, RCALL, LDI, ADIW, LDD, STD, PUSH, CLI, WDR
-   for(const uint16_t op :
-       { 0x9180, 0x9390, 0x940C, 0x940E, 0xCFED, 0xD000, 0xE38C, 0x9601, 0x8189, 0x839A, 0x930F, 0x94F8, 0x95A8 }) {
+   // LDS, STS, JMP, CALL, RJMP, RCALL, LDI, ADIW, LDD, STD, PUSH, CLI, WDR,
+   // BRCS, BRNE, SBRC, SBRS, CPSE, SBIC, SBIS, RET, RETI
+   for(const uint16_t op : { 0x9180, 0x9390, 0x940C, 0x940E, 0xCFED, 0xD000, 0xE38C, 0x9601, 0x8189, 0x839A, 0x930F,
+                             0x94F8, 0x95A8, 0xF3B0, 0xF7F1, 0xFC00, 0xFE00, 0x1000, 0x9900, 0x9B00, 0x9508, 0x9518 }) {
       CAPTURE(op);
       CHECK(AvrJtagDebug::canStepInstead(op));
    }
-   // BRCS, BRNE, SBRC, SBRS, CPSE, SBIC, SBIS, LPM r0 Z+, ELPM r0 Z, IJMP,
-   // EIJMP, ICALL, EICALL, RET, RETI, SLEEP, BREAK, LPM, ELPM, SPM, SPM Z+
-   for(const uint16_t op : { 0xF3B0, 0xF7F1, 0xFC00, 0xFE00, 0x1000, 0x9900, 0x9B00, 0x9005, 0x9006, 0x9409, 0x9419,
-                             0x9509, 0x9519, 0x9508, 0x9518, 0x9588, 0x9598, 0x95C8, 0x95D8, 0x95E8, 0x95F8 }) {
+   // LPM r0 Z+, ELPM r0 Z, IJMP, EIJMP, ICALL, EICALL, SLEEP, BREAK, LPM,
+   // ELPM, SPM, SPM Z+
+   for(const uint16_t op : { 0x9005, 0x9006, 0x9409, 0x9419, 0x9509, 0x9519, 0x9588, 0x9598, 0x95C8, 0x95D8, 0x95E8, 0x95F8 }) {
       CAPTURE(op);
       CHECK_FALSE(AvrJtagDebug::canStepInstead(op));
    }
+}
+
+namespace {
+
+void putWord(MockAvrJtag &target, uint32_t word, uint16_t value) {
+   target.flash[word * 2u] = static_cast<uint8_t>(value);
+   target.flash[word * 2u + 1u] = static_cast<uint8_t>(value >> 8);
+}
+
+} // namespace
+
+TEST_CASE("AvrJtagDebug: stepInstead of the branches, skips and returns") {
+   Bench b;
+   // SP = 0x0AFD
+   b.target.data[0x5D] = 0xFD;
+   b.target.data[0x5E] = 0x0A;
+   b.target.pc = 0x100;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   const auto stepTo = [&](uint16_t op, uint32_t next) {
+      REQUIRE(b.debug.stepInstead(op) == JtagDebugStatus::Ok);
+      CHECK(b.debug.pc() == next);
+      b.debug.setPc(0x100);
+   };
+   SUBCASE("BRNE: Z clear branches, Z set does not") {
+      b.target.data[dataSreg] = 0x00;
+      stepTo(0xF7F1, 0xFF); // BRNE .-2 words
+      b.target.data[dataSreg] = 0x02;
+      stepTo(0xF7F1, 0x101);
+   }
+   SUBCASE("BRCS: C set branches") {
+      b.target.data[dataSreg] = 0x01;
+      stepTo(0xF050, 0x10B); // BRCS .+10 words
+      b.target.data[dataSreg] = 0x00;
+      stepTo(0xF050, 0x101);
+   }
+   SUBCASE("SBRS and SBRC skip one word, or two over LDS") {
+      uint8_t value = 0x04;
+      REQUIRE(b.debug.writeData(24, &value, 1) == JtagDebugStatus::Ok);
+      putWord(b.target, 0x101, 0xE000); // LDI
+      stepTo(0xFF82, 0x102);            // SBRS r24, 2
+      stepTo(0xFD82, 0x101);            // SBRC r24, 2
+      putWord(b.target, 0x101, 0x9180); // LDS
+      stepTo(0xFF82, 0x103);
+      // A software breakpoint holds the next word: the original from the caller
+      putWord(b.target, 0x101, 0x9598);
+      REQUIRE(b.debug.stepInstead(0xFF82, uint16_t{ 0x9180 }) == JtagDebugStatus::Ok);
+      CHECK(b.debug.pc() == 0x103);
+   }
+   SUBCASE("CPSE") {
+      const uint8_t same[2] = { 7, 7 };
+      REQUIRE(b.debug.writeData(16, same, 2) == JtagDebugStatus::Ok);
+      putWord(b.target, 0x101, 0x0000);
+      stepTo(0x1301, 0x102); // CPSE r16, r17
+      const uint8_t other = 8;
+      REQUIRE(b.debug.writeData(17, &other, 1) == JtagDebugStatus::Ok);
+      stepTo(0x1301, 0x101);
+   }
+   SUBCASE("SBIS and SBIC") {
+      b.target.data[0x20 + 0x05] = 0x08;
+      putWord(b.target, 0x101, 0x0000);
+      stepTo(0x9B2B, 0x102); // SBIS 0x05, 3
+      stepTo(0x992B, 0x101); // SBIC 0x05, 3
+   }
+   SUBCASE("RET and RETI take the return address") {
+      b.target.data[0xAFE] = 0x12;
+      b.target.data[0xAFF] = 0x34;
+      b.target.data[dataSreg] = 0x00;
+      stepTo(0x9508, 0x1234);
+      CHECK(b.target.data[0x5D] == 0xFF);
+      CHECK(b.target.data[dataSreg] == 0x00);
+      b.target.data[0x5D] = 0xFD;
+      stepTo(0x9518, 0x1234);
+      CHECK(b.target.data[dataSreg] == 0x80);
+   }
+   CHECK(b.target.unknownInstructions.empty());
+}
+
+TEST_CASE("AvrJtagDebug: stepInstead of CALL and RET with a 3-byte PC (ATmega2560)") {
+   Bench b{ 4 };
+   b.target.flash.assign(262144, 0xFF);
+   b.debug.setDevice({ .flashBytes = 262144 });
+   b.target.data[0x5D] = 0xFF;
+   b.target.data[0x5E] = 0x0A;
+   b.target.pc = 0x1F000;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   // CALL 0x1ABCD: k16 = 1, k15..0 in the second word
+   putWord(b.target, 0x1F001, 0xABCD);
+   REQUIRE(b.debug.stepInstead(0x940F) == JtagDebugStatus::Ok);
+   CHECK(b.debug.pc() == 0x1ABCD);
+   // SP - 3, the return address 0x01F002 with the high byte at the lowest address
+   CHECK(b.target.data[0x5D] == 0xFC);
+   CHECK(b.target.data[0x5E] == 0x0A);
+   CHECK(b.target.data[0xAFD] == 0x01);
+   CHECK(b.target.data[0xAFE] == 0xF0);
+   CHECK(b.target.data[0xAFF] == 0x02);
+   REQUIRE(b.debug.stepInstead(0x9508) == JtagDebugStatus::Ok);
+   CHECK(b.debug.pc() == 0x1F002);
+   CHECK(b.target.data[0x5D] == 0xFF);
+   // JMP 0x1E000: k16 = 1
+   putWord(b.target, 0x1F003, 0xE000);
+   b.debug.setPc(0x1F002);
+   REQUIRE(b.debug.stepInstead(0x940D) == JtagDebugStatus::Ok);
+   CHECK(b.debug.pc() == 0x1E000);
+   CHECK(b.target.unknownInstructions.empty());
 }
