@@ -187,6 +187,15 @@ struct Bench : EdbgBench {
       return avr8({ avr8::command::hwBreakClear, 0x00, number });
    }
 
+   // SW_BREAK_SET or SW_BREAK_CLEAR with byte addresses
+   Bytes swBreak(bool set, const std::vector<uint32_t> &addresses) {
+      Bytes command{ set ? avr8::command::swBreakSet : avr8::command::swBreakClear, 0x00 };
+      for(const uint32_t address : addresses) {
+         putU32(command, address);
+      }
+      return avr8(command);
+   }
+
    uint16_t events{ 0 };
 
    // The session is over: the pins are free, the core runs.
@@ -598,8 +607,10 @@ TEST_CASE("EDBG JTAG: Bloom checks of the debug commands") {
       CHECK(b.breakSet(1, 0x201) == failed(0x38));
       CHECK(b.breakSet(1, 0x8000) == failed(0x38));
       CHECK(b.avr8({ avr8::command::hwBreakSet, 0x00, 0x01, 0x01, 0x00 }) == failed(0x35));
-      // Software breakpoints come later.
-      CHECK(b.avr8({ avr8::command::swBreakSet, 0x00, 0x00, 0x02, 0x00, 0x00 }) == failed(0x90));
+      // Software breakpoints: byte addresses in the flash
+      CHECK(b.swBreak(true, { 0x201 }) == failed(0x38));
+      CHECK(b.swBreak(true, { 0x8000 }) == failed(0x38));
+      CHECK(b.avr8({ avr8::command::swBreakSet, 0x00, 0x00, 0x02 }) == failed(0x35));
       CHECK(b.avr8({ avr8::command::swBreakClearAll, 0x00 }) == ok);
    }
    SUBCASE("PC and run to") {
@@ -747,4 +758,193 @@ TEST_CASE("EDBG JTAG: the host goes away in the debug mode") {
    CHECK((b.jtagAvr.ocdRegs[8] & 0x0FF8) == 0);
    CHECK_FALSE(b.jtagAvr.reach(0x100));
    b.checkReleased();
+}
+
+namespace {
+
+uint16_t flashWord(const mupptest::MockAvrJtag &avr, uint32_t word) {
+   return static_cast<uint16_t>(avr.flash[word * 2u] | avr.flash[word * 2u + 1u] << 8u);
+}
+
+} // namespace
+
+TEST_CASE("EDBG JTAG: software breakpoints") {
+   Bench b;
+   for(std::size_t i = 0; i < b.jtagAvr.flash.size(); ++i) {
+      b.jtagAvr.flash[i] = static_cast<uint8_t>(i * 5 + 3);
+   }
+   const std::vector<uint8_t> program = b.jtagAvr.flash;
+   b.bloomOpen();
+   b.bloomAttach();
+
+   // Words 0x100 and 0x102 are in one page, word 0x180 in another.
+   CHECK(b.swBreak(true, { 0x200, 0x204 }) == ok);
+   CHECK(b.swBreak(true, { 0x300 }) == ok);
+   // Nothing goes into flash before the run.
+   CHECK(b.jtagAvr.spmPageWrites == 0);
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.spmPageWrites == 2);
+   CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+   CHECK(flashWord(b.jtagAvr, 0x102) == 0x9598);
+   CHECK(flashWord(b.jtagAvr, 0x180) == 0x9598);
+   CHECK(flashWord(b.jtagAvr, 0x101) == (program[0x202] | program[0x203] << 8));
+
+   // The core stops at the BREAK: cause 1. A flash read gives the BREAK.
+   CHECK(b.jtagAvr.reach(0x100));
+   CHECK(b.event() == b.breakEvent(0x100, true));
+   CHECK(b.avr8(readMemory(memory::spm, 0x200, 2)) == data({ 0x98, 0x95 }));
+
+   // A step from the breakpoint: the original word for one step, then
+   // BREAK again (two page writes)
+   CHECK(b.step() == ok);
+   CHECK(b.event() == b.breakEvent(0x101, false));
+   CHECK(b.jtagAvr.spmPageWrites == 4);
+   CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+
+   // A run from a breakpoint steps over it first.
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.reach(0x102));
+   CHECK(b.event() == b.breakEvent(0x102, true));
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.spmPageWrites == 6);
+   CHECK(flashWord(b.jtagAvr, 0x102) == 0x9598);
+   CHECK_FALSE(b.jtagAvr.stopped);
+
+   // A clear writes the original word at the next run.
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+   CHECK(b.swBreak(false, { 0x300 }) == ok);
+   CHECK(flashWord(b.jtagAvr, 0x180) == 0x9598);
+   CHECK(b.run() == ok);
+   CHECK(flashWord(b.jtagAvr, 0x180) == (program[0x300] | program[0x301] << 8));
+   CHECK_FALSE(b.jtagAvr.reach(0x180));
+
+   // Hardware breakpoints work next to them.
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+   CHECK(b.breakSet(1, 0x80) == ok);
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.reach(0x40));
+   CHECK(b.event() == b.breakEvent(0x40, true));
+
+   // DETACH removes all of them: the flash is the program again.
+   b.bloomClose();
+   CHECK(b.jtagAvr.flash == program);
+   CHECK_FALSE(b.jtagAvr.stopped);
+   CHECK(b.jtagAvr.unknownInstructions.empty());
+   b.checkReleased();
+}
+
+TEST_CASE("EDBG JTAG: software breakpoint checks") {
+   Bench b;
+   b.bloomOpen();
+   SUBCASE("not attached") {
+      CHECK(b.swBreak(true, { 0x200 }) == failed(0x32));
+      CHECK(b.swBreak(false, { 0x200 }) == failed(0x32));
+      CHECK(b.avr8({ avr8::command::swBreakClearAll, 0x00 }) == ok);
+   }
+   SUBCASE("a set and a clear before the run: no flash write") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      CHECK(b.swBreak(false, { 0x200 }) == ok);
+      CHECK(b.run() == ok);
+      CHECK(b.jtagAvr.spmPageWrites == 0);
+   }
+   SUBCASE("SW_BREAK_CLEAR_ALL") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      CHECK(b.step() == ok);
+      CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+      CHECK(b.avr8({ avr8::command::swBreakClearAll, 0x00 }) == ok);
+      CHECK(b.step() == ok);
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+   }
+   SUBCASE("the step fails while the core runs") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      CHECK(b.run() == ok);
+      CHECK(b.step() == failed(0x32));
+   }
+   SUBCASE("a failed page write keeps the entry for the next commit") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      CHECK(b.run() == ok);
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+      CHECK(b.stop() == ok);
+      CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+      CHECK(b.swBreak(false, { 0x200 }) == ok);
+      // The boot lock bits stop SPM: the read back fails.
+      b.jtagAvr.spmLocked = true;
+      CHECK(b.run() == failed(0x13));
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+      b.jtagAvr.spmLocked = false;
+      CHECK(b.run() == ok);
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+      b.bloomClose();
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+   }
+   SUBCASE("a failed insert, then DETACH") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      b.jtagAvr.spmLocked = true;
+      CHECK(b.run() == failed(0x13));
+      b.jtagAvr.spmLocked = false;
+      b.bloomClose();
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+      CHECK(b.jtagAvr.spmPageWrites == 0);
+   }
+   SUBCASE("too many") {
+      b.bloomAttach();
+      for(uint32_t i = 0; i < avr8::maxSoftwareBreaks; ++i) {
+         REQUIRE(b.swBreak(true, { 0x400 + 2 * i }) == ok);
+      }
+      CHECK(b.swBreak(true, { 0x200 }) == failed(0x81));
+   }
+}
+
+TEST_CASE("EDBG JTAG: software breakpoints and a program load") {
+   Bench b;
+   b.bloomOpen();
+   b.bloomAttach();
+   CHECK(b.swBreak(true, { 0x200 }) == ok);
+   CHECK(b.run() == ok);
+   CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+   // ENTER_PROGMODE ends the debug mode: the BREAK goes out of flash.
+   CHECK(b.avr8({ avr8::command::enterProgmode, 0x00 }) == ok);
+   CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+   CHECK(b.avr8(eraseCommand()) == ok);
+   const Bytes page = pattern(128, 0x60);
+   CHECK(b.avr8(writeMemory(memory::flashPage, 0x200, page)) == ok);
+   CHECK(b.avr8({ avr8::command::leaveProgmode, 0x00 }) == ok);
+   CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
+   REQUIRE(b.avr8({ avr8::command::activatePhysical, 0x00, 0x00 }) == data(idcodeBytes));
+   b.bloomAttach();
+   // No old breakpoint comes back.
+   const uint32_t writes = b.jtagAvr.spmPageWrites;
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.spmPageWrites == writes);
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+   CHECK(b.avr8(readMemory(memory::spm, 0x200, 128)) == data(page));
+   b.bloomClose();
+   b.checkReleased();
+}
+
+TEST_CASE("EDBG JTAG: a software breakpoint above 64K words (ATmega2560)") {
+   Bench b;
+   b.jtagAvr.ocdRevision = 4;
+   b.jtagAvr.flashPageBytes = 256;
+   b.jtagAvr.flash.assign(0x40000, 0xFF);
+   b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
+   b.bloomAttach();
+   CHECK(b.swBreak(true, { 0x3E000 }) == ok);
+   CHECK(b.run() == ok);
+   CHECK(flashWord(b.jtagAvr, 0x1F000) == 0x9598);
+   CHECK(b.jtagAvr.reach(0x1F000));
+   CHECK(b.event() == b.breakEvent(0x1F000, true));
+   b.bloomClose();
+   CHECK(flashWord(b.jtagAvr, 0x1F000) == 0xFFFF);
 }

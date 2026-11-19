@@ -62,7 +62,9 @@
 //   11), reg 1 (bit 10), reg 2 (bit 8, not in mask mode), reg 3 (bit 7,
 //   with reg 2 as the mask in mask mode). The BSR gets the bits of all
 //   hits. Reg 4 to 7 compare with the word bits 23..16 (always 0 on
-//   revision 3). Data breakpoints are not modeled.
+//   revision 3). Data breakpoints are not modeled. A BREAK (0x9598) in
+//   flash at word stops the core there with BSR bit 0, when no program
+//   breakpoint matched.
 // - stopDelay: the reg D reads after a stop that still show 0x0000, as
 //   after FORCE_BREAK in the captures (70 ms).
 // - Instruction execute (0xA, 38 bits on revision 4, 32 on revision 3):
@@ -318,6 +320,9 @@ class MockAvrJtag final : public JtagTarget {
       }
       pc = word;
       breakAt(word);
+      if(!stopped && flashWordAt(word) == 0x9598u) {
+         stop(word, 1u << 0);
+      }
       return stopped;
    }
 

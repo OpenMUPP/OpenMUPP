@@ -321,12 +321,12 @@ environments:
       range_stepping: false
 ```
 
-- Set `range_stepping: false`. Bloom uses software breakpoints for range stepping, and the probe does not have them yet. Without this setting, `next` and `step` in avr-gdb fail with `E01`.
+- Set `range_stepping: false`. Bloom uses software breakpoints for range stepping. Each change of a software breakpoint writes a flash page, which wears the flash and takes time. Range stepping with the probe is not tested.
 - With `manage_ocden_fuse_bit: true`, Bloom programs OCDEN at the start of the session and clears it at the end.
   The probe writes the fuse in the JTAG programming mode. This mode resets the core.
 - Without OCDEN, the debug commands fail with code `0x50`. Bloom then shows "check OCDEN fuse bit".
 - The OCD has three hardware breakpoints for the host. Bloom keeps one of them for its step function. Thus avr-gdb has two breakpoints.
-- The probe does not have software breakpoints yet. A software breakpoint fails.
+- When no hardware breakpoint is free, Bloom uses software breakpoints. The probe writes the `BREAK` instruction into flash at the next run or step. Each change writes one flash page, and a run or step from a software breakpoint writes two pages. The flash has about 10 000 write cycles.
 - The debug clock (TCK) is 200 kHz, because Bloom sends this fixed value. This is correct for a target clock of 1 MHz or more.
   One single step takes about 140 ms at this clock. Thus a `next` over a long loop takes much time.
 - An EEPROM write takes about 35 ms for each byte, because the EEPROM write of a stopped core is slower than in the datasheet.
@@ -416,7 +416,7 @@ The test used more than one Bloom session. The EEPROM row and the two-breakpoint
 | No breakpoints, `continue`, then an interrupt (`SIGINT`) after 2 s | Pass. The core stops in the delay loop. `ticks` reads 79. |
 | OCDEN: Bloom programs it at the start of the session and clears it at the end | Pass. The high fuse reads `0x98` after the session. |
 
-Software breakpoints are not tested, because the probe does not have them.
+At the time of this test, the probe did not have software breakpoints. Software breakpoints are not tested on hardware.
 OCD revision 4 (for example the ATmega2560) is not tested.
 
 ### debugWIRE hardware test

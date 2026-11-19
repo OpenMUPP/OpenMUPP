@@ -303,17 +303,21 @@ A value out of range gives code `0x33` at activate physical.
 | `0x11` Deactivate physical | Detach, then the probe leaves the programming mode and releases the pins. The device context stays for the next activate physical, because Bloom sends it only one time. |
 | `0x12` Get ID | DATA `[IDCODE u32]`, for example `3F 70 58 49` (an ATmega32U4: part number `0x9587`). |
 | `0x13` Attach | The debug mode at the debug clock. Not in the programming mode (code `0x32`). When the OCD answers, the core stops and a break event comes, also with break 0 (Bloom waits for it). Without an OCD answer (OCDEN not programmed), attach gives OK, and each command that needs the OCD gives code `0x50`. A second attach is a stop. |
-| `0x14` Detach | The probe removes the hardware breakpoints, and a stopped core runs. |
-| `0x15`, `0x16` Programming mode | The JTAG programming mode. The core is in reset in the programming mode. Enter in the debug mode removes the hardware breakpoints and ends the debug mode. Bloom loads a program in this way, and then sends deactivate physical, activate physical and attach. |
+| `0x14` Detach | The probe removes the hardware breakpoints and the software breakpoints, and a stopped core runs. |
+| `0x15`, `0x16` Programming mode | The JTAG programming mode. The core is in reset in the programming mode. Enter in the debug mode removes the hardware breakpoints and the software breakpoints, and ends the debug mode. A chip erase removes all software breakpoints from the list of the probe. Bloom loads a program in this way, and then sends deactivate physical, activate physical and attach. |
 | `0x20` Erase | `[mode][address u32]`: mode 0 is the chip erase. Other modes give code `0x39`. |
 | `0x21` Read memory, `0x22` masked read, `0x23` Write memory | In the programming mode or in the debug mode, else code `0x32`. The masked read is for the debug mode only. |
 | `0x30` Reset, `0x31` Stop, `0x34` Step | Debug mode only, else code `0x32`. The core stops, and a break event comes. |
 | `0x32` Run, `0x33` Run to | Debug mode only. Run to uses OCD register 0 for one run. |
 | `0x35`, `0x36` PC read and write | Debug mode only. The PC can be above 16 bits (ATmega2560). |
 | `0x40`, `0x41` Hardware breakpoint | Debug mode only. Numbers 1 to 3 (OCD registers 1 to 3), else code `0x81`. Type 1 (program) only, else code `0x90`. The address is a byte address, as Bloom sends it. The probe writes the breakpoints at the next run or step. |
+| `0x43`, `0x44`, `0x45` Software breakpoints | Set and clear: debug mode only, else code `0x32`. Up to 32, byte addresses. |
 
-Software breakpoint set and clear (`0x43`, `0x44`) and "disable debugWIRE" fail with code `0x90`.
-"Clear all software breakpoints" (`0x45`) gives OK, because there are no software breakpoints. Bloom sends it before each flash load and at the end of the session.
+Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to or step, as on debugWIRE.
+The probe writes the flash page with `SPM` in the debug mode (see [avr-jtag-ocd.md](avr-jtag-ocd.md#flash-write-in-debug-mode)).
+To run or step from a software breakpoint, the probe writes the original word, steps, and writes `BREAK` again (two page writes).
+Bloom uses the hardware breakpoints first, and sends a software breakpoint only when no hardware breakpoint is free.
+"Disable debugWIRE" fails with code `0x90`.
 A JTAG scan that fails, a write that does not end in time, a core that does not stop in time, or a CPU context that the probe could not read gives code `0x13`.
 After a failed context read, run, step, PC and memory access fail until a reset.
 
