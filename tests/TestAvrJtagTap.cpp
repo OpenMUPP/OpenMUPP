@@ -202,6 +202,25 @@ TEST_CASE("AvrJtagTap: a long DR scan of whole bytes") {
    CHECK(b.target.drScans.size() == 1);
 }
 
+TEST_CASE("AvrJtagTap: idleCycles counts the TCK cycles in Run-Test/Idle") {
+   Bench b;
+   REQUIRE(b.tap.open(1000));
+   CHECK(b.tap.idleCycles() == 0);
+   uint64_t data = 0;
+   uint32_t idcode = 0;
+   const std::vector<uint8_t> page(4);
+   // Run-Test/Idle after the reset, Update-DR, Update-IR, Run-Test/Idle
+   REQUIRE(b.tap.scanDr(ir::ocdAccess, data, 21, avr::tap::End::Update));
+   REQUIRE(b.tap.scanIr(ir::run, nullptr, avr::tap::End::Update));
+   REQUIRE(b.tap.readIdcode(idcode));
+   REQUIRE(b.tap.setIr(ir::progPageLoad));
+   REQUIRE(b.tap.shiftDr(page));
+   REQUIRE(b.tap.reset());
+   REQUIRE(b.tap.readIdcode(idcode));
+   CHECK(b.tap.idleCycles() == 6);
+   CHECK(b.tap.idleCycles() == b.target.idleClocks);
+}
+
 TEST_CASE("AvrJtagTap: a failed shift forgets the IR") {
    FailingPort port;
    AvrJtagTap tap(port);

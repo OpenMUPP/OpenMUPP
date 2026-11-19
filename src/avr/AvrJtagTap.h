@@ -25,6 +25,9 @@
 //   act at Update-IR, so the OCD sends them again with the same IR.
 //   After reset() the IR is IDCODE (IEEE 1149.1). After a failed scan the
 //   IR is not known, and the next setIr() scans.
+// - idleCycles() counts the TCK cycles in Run-Test/Idle that the scans
+//   gave since the construction: AvrJtagDebug::attach() uses it to undo
+//   the PC moves on a core that was stopped before the attach.
 //
 // The caller owns the target pins (protocol/TargetPinOwner.h) from open()
 // to close(): the EDBG transport takes them at ACTIVATE_PHYSICAL.
@@ -134,6 +137,7 @@ class AvrJtagTap {
       start();
       put(0, 5, true);
       put(0, 1, false);
+      idle_ = true;
       ir_ = run() ? tap::ir::idcode : noIr;
       return ir_ != noIr;
    }
@@ -207,6 +211,7 @@ class AvrJtagTap {
             // Update-DR, Run-Test/Idle
             put(0, 1, true);
             put(0, 1, false);
+            idle_ = true;
          }
          if(!run()) {
             return false;
@@ -241,6 +246,13 @@ class AvrJtagTap {
 
    static constexpr uint8_t noIr = 0xFF;
 
+   // The TCK cycles in Run-Test/Idle since the construction. A scan that
+   // starts in Run-Test/Idle gives one. After a failed scan the TAP state
+   // is not known, and the count can be wrong until the next reset().
+   [[nodiscard]] uint32_t idleCycles() const {
+      return idleCycles_;
+   }
+
    private:
    // Select-DR-Scan to Shift-xR, the data, Exit1, Update, Run-Test/Idle
    static constexpr uint32_t maxScanBits = 4 + tap::maxDrBits + 2;
@@ -250,7 +262,12 @@ class AvrJtagTap {
    static constexpr std::size_t chunkBytes = tap::maxDrBits / 8;
    static_assert(chunkBytes * 8 + 2 <= maxScanBits);
 
+   // The first TCK cycle of each scan leaves Run-Test/Idle or Update-xR.
    void start() {
+      if(idle_) {
+         ++idleCycles_;
+         idle_ = false;
+      }
       bits_ = 0;
       tdi_.fill(0);
       tms_.fill(0);
@@ -279,6 +296,7 @@ class AvrJtagTap {
       put(0, 1, true);
       if(end == tap::End::Idle) {
          put(0, 1, false);
+         idle_ = true;
       }
       return first;
    }
@@ -311,6 +329,9 @@ class AvrJtagTap {
    std::array<uint8_t, scanBytes> tms_{};
    std::array<uint8_t, scanBytes> tdo_{};
    uint32_t bits_{ 0 };
+   // The TAP is in Run-Test/Idle: the next scan gives one TCK cycle in it.
+   bool idle_{ false };
+   uint32_t idleCycles_{ 0 };
 };
 
 } // namespace avr
