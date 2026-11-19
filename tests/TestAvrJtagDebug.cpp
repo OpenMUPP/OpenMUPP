@@ -81,6 +81,18 @@ TEST_CASE("AvrJtagDebug: attach halts the core with the reference sequence") {
    CHECK(b.target.ocdRegs[8] == 0xC000);
 }
 
+TEST_CASE("AvrJtagDebug: attach keeps the PC of a core that is already stopped") {
+   for(const uint8_t revision : { uint8_t{ 3 }, uint8_t{ 4 } }) {
+      CAPTURE(revision);
+      Bench b(revision);
+      b.target.stop(0x50, bsr::forceBreak);
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.pc() == 0x50);
+      REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+      CHECK(b.target.pc == 0x51);
+   }
+}
+
 TEST_CASE("AvrJtagDebug: halt keeps BCR bit 15 and the reg 3 mode, and clears bits 9 to 5") {
    Bench b;
    b.target.ocdRegs[8] = 0x83FF;

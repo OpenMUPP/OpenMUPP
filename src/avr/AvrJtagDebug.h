@@ -11,7 +11,11 @@
 // - attach(): TAP reset, IDCODE, then reg D. When the OCD does not answer
 //   (OCDEN not programmed), attach() still succeeds: Bloom
 //   (manage_ocden_fuse_bit) writes the fuse only after ATTACH. When the
-//   OCD answers, attach() halts the core.
+//   OCD answers, attach() halts the core. The TAP reset and IDCODE give
+//   TCK cycles in Run-Test/Idle: each moves the PC field of a stopped
+//   core by 2 (docs/avr-jtag-ocd.md, "Instruction execute"). When reg D
+//   shows a core that is already stopped, attach() removes these moves
+//   from the context PC. Cycles before attach() are not known and stay.
 // - Each OCD operation reads reg D first when the OCD did not answer
 //   before. No answer: NoOcd, which the scope sends as FAILED 0x50
 //   ("Device not under control - check OCDEN fuse bit" in Bloom).
@@ -239,6 +243,7 @@ class AvrJtagDebug {
    [[nodiscard]] JtagDebugStatus attach() {
       ocdAnswers_ = false;
       stopped_ = false;
+      const uint32_t idleBefore = tap_.idleCycles();
       uint32_t idcode = 0;
       if(!tap_.reset() || !tap_.readIdcode(idcode) || !tap::isAtmelIdcode(idcode)) {
          return JtagDebugStatus::NoTap;
@@ -248,7 +253,14 @@ class AvrJtagDebug {
          return JtagDebugStatus::Ok;
       }
       ocdAnswers_ = true;
-      return halt();
+      // A core that stops during attach() (a breakpoint) shows here as
+      // running: no correction for it.
+      const uint32_t moves = (control & jtagOcd::control::stopped) != 0 ? tap_.idleCycles() - idleBefore : 0;
+      const JtagDebugStatus status = halt();
+      if(status == JtagDebugStatus::Ok) {
+         pc_ = (pc_ - 2u * moves) & fieldMask();
+      }
+      return status;
    }
 
    // True when the OCD answered since attach()
