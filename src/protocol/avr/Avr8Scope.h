@@ -99,8 +99,10 @@
 // DETACH removes all of them. A read of flash gives the flash as it is (with BREAK), as the
 // EDBG tools do. A run or step from a software breakpoint writes the
 // original word, steps, and writes BREAK again: two page writes. Limit:
-// this wears the flash (some 10000 cycles per page). An injection of the
-// original instruction (as dw-link does) would avoid it.
+// this wears the flash (some 10000 cycles per page). On JTAG the OCD
+// executes most original instructions without a flash write
+// (AvrJtagDebug::stepInstead()). On debugWIRE an injection of the original
+// instruction (as dw-link does) would avoid it.
 //
 // Break events: event() gives one frame [0x0E][0][sequence u16][0x12]
 // [0x40][pc u32][cause][0x01][0x00], with cause 1 at a breakpoint. While
@@ -182,7 +184,10 @@
 //        breakpoint table: no BREAK is left in flash.
 //   SW_BREAK_SET, SW_BREAK_CLEAR: in the debug mode only (else FAILED
 //        0x32), as on debugWIRE. The page write uses SPM in the debug mode
-//        (AvrJtagDebug::writeFlashPage()). Bloom sends them only when no
+//        (AvrJtagDebug::writeFlashPage()). A run or step from a software
+//        breakpoint executes the original instruction with
+//        AvrJtagDebug::stepInstead() when it can (no page write, issue
+//        #115), else as on debugWIRE. Bloom sends them only when no
 //        hardware breakpoint is free. SW_BREAK_CLEAR_ALL: OK in each mode.
 //   DISABLE_DEBUGWIRE: FAILED 0x90.
 //   Break events: as on debugWIRE, with cause 1 when the BSR shows a
@@ -1723,12 +1728,20 @@ class Avr8Scope final : public Avr8Handler {
       }
    }
 
-   // At an active software breakpoint: the original word for one step,
-   // then BREAK again.
+   // At an active software breakpoint: one step of the original word. On
+   // JTAG the OCD executes it without a flash write when it can: AVaRICE
+   // waits 500 ms for the response, two page writes take some 1 s at
+   // 200 kHz (issue #115). Else the original word for one step, then
+   // BREAK again.
    Status stepOverBreak() {
       const SoftwareBreak *entry = findBreak(corePc(), BreakState::Active);
       if(entry == nullptr) {
          return Status::Ok;
+      }
+      if constexpr(Target::hasProgmode) {
+         if(AvrJtagDebug::canStepInstead(entry->original)) {
+            return target_.debug().stepInstead(entry->original);
+         }
       }
       const uint32_t page = pageOf(entry->word);
       uint8_t *at = &page_[entry->word * 2u - page];

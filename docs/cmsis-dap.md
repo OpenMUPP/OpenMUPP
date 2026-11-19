@@ -194,6 +194,7 @@ Then the next AVR command (`AVR_RSP`, `AVR_EVT` or `AVR_CMD`) runs the frame bef
 Thus the response is ready for the next `AVR_RSP`, and an event of the command comes after it.
 AVaRICE reads the `AVR_CMD` response for 200 ms only, but a `GO` with a software breakpoint can take some 400 ms at 200 kHz.
 AVaRICE reads the `AVR_RSP` response for 500 ms. Thus a `GO` that writes two flash pages at 200 kHz is still too slow for AVaRICE.
+After a late response, AVaRICE reads each later response one report too late, and the session stops (issue #115). Only a restart of AVaRICE repairs it.
 A long command holds the HID interface, as a long DAP command does.
 A `DAP_Disconnect`, USB suspend or bus reset drops a frame that did not run.
 
@@ -320,7 +321,12 @@ A value out of range gives code `0x33` at activate physical.
 
 Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to or step, as on debugWIRE.
 The probe writes the flash page with `SPM` in the debug mode (see [avr-jtag-ocd.md](avr-jtag-ocd.md#flash-write-in-debug-mode)).
-To run or step from a software breakpoint, the probe writes the original word, steps, and writes `BREAK` again (two page writes).
+To run or step from a software breakpoint, the OCD executes the original instruction in place of the `BREAK`, without a page write.
+The probe does `RJMP`, `RCALL`, `JMP`, `CALL`, `LDS` and `STS` itself on the CPU context and the data space.
+It injects each other instruction that does not use the PC or the flash.
+For a branch, a skip, a return, an indirect jump or call, `LPM`, `ELPM`, `SPM`, `SLEEP` and `BREAK`, the probe writes the original word, steps, and writes `BREAK` again (two page writes).
+AVaRICE waits 500 ms for the response, and two page writes take about 1 s at 200 kHz (issue #115).
+The data breakpoints do not stop on the memory access of an executed original instruction.
 Bloom uses the hardware breakpoints first, and sends a software breakpoint only when no hardware breakpoint is free.
 "Disable debugWIRE" fails with code `0x90`.
 A JTAG scan that fails, a write that does not end in time, a core that does not stop in time, or a CPU context that the probe could not read gives code `0x13`.

@@ -326,7 +326,7 @@ environments:
   The probe writes the fuse in the JTAG programming mode. This mode resets the core.
 - Without OCDEN, the debug commands fail with code `0x50`. Bloom then shows "check OCDEN fuse bit".
 - The OCD has three hardware breakpoints for the host. Bloom keeps one of them for its step function. Thus avr-gdb has two breakpoints.
-- When no hardware breakpoint is free, Bloom uses software breakpoints. The probe writes the `BREAK` instruction into flash at the next run or step. Each change writes one flash page, and a run or step from a software breakpoint writes two pages. The flash has about 10 000 write cycles.
+- When no hardware breakpoint is free, Bloom uses software breakpoints. The probe writes the `BREAK` instruction into flash at the next run or step. Each change writes one flash page. A run or step from a software breakpoint executes most original instructions without a page write, else it writes two pages (see [cmsis-dap.md](cmsis-dap.md#avr8-scope-on-jtag)). The flash has about 10 000 write cycles.
 - The debug clock (TCK) is 200 kHz, because Bloom sends this fixed value. This is correct for a target clock of 1 MHz or more.
   One single step takes about 140 ms at this clock. Thus a `next` over a long loop takes much time.
 - An EEPROM write takes about 35 ms for each byte, because the EEPROM write of a stopped core is slower than in the datasheet.

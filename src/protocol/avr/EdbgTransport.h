@@ -33,7 +33,8 @@
 // goes to the host first. AVaRICE reads it for 200 ms only, and a GO with a
 // software breakpoint can take 400 ms (issue #112). Limit: AVaRICE reads
 // the AVR_RSP response for 500 ms, so a GO that writes two flash pages at
-// 200 kHz is still too slow for it. A long command holds
+// 200 kHz is still too slow for it: AVaRICE then reads each later
+// response one report late (issue #115). A long command holds
 // the HID interface as a long DAP command does. releasePins() and
 // hostGone() drop a frame that did not run.
 //

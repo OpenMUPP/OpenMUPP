@@ -957,6 +957,11 @@ TEST_CASE("EDBG JTAG: software breakpoints") {
    for(std::size_t i = 0; i < b.jtagAvr.flash.size(); ++i) {
       b.jtagAvr.flash[i] = static_cast<uint8_t>(i * 5 + 3);
    }
+   // RET and BRNE: the OCD cannot execute them in place of the flash word.
+   b.jtagAvr.flash[0x200] = 0x08;
+   b.jtagAvr.flash[0x201] = 0x95;
+   b.jtagAvr.flash[0x204] = 0xF1;
+   b.jtagAvr.flash[0x205] = 0xF7;
    const std::vector<uint8_t> program = b.jtagAvr.flash;
    b.bloomOpen();
    b.bloomAttach();
@@ -1173,5 +1178,101 @@ TEST_CASE("EDBG JTAG: AVaRICE GO with a software breakpoint") {
    CHECK(b.jtagAvr.reach(0x8E));
    CHECK(b.event() == b.breakEvent(0x8E, true));
    b.bloomClose();
+   b.checkReleased();
+}
+
+namespace {
+
+void putFlashWord(mupptest::MockAvrJtag &avr, uint32_t word, uint16_t value) {
+   avr.flash[word * 2u] = static_cast<uint8_t>(value);
+   avr.flash[word * 2u + 1u] = static_cast<uint8_t>(value >> 8);
+}
+
+} // namespace
+
+// AVaRICE does not clear the software breakpoint before a step from it.
+// The OCD executes the original instruction without a page write: AVaRICE
+// waits 500 ms for the response, two page writes take some 1 s at 200 kHz
+// (issue #115).
+TEST_CASE("EDBG JTAG: a step from a software breakpoint without a page write") {
+   Bench b;
+   mupptest::MockAvrJtag &avr = b.jtagAvr;
+   // SP = 0x0AFF
+   avr.data[0x5D] = 0xFF;
+   avr.data[0x5E] = 0x0A;
+   b.bloomOpen();
+   b.bloomAttach();
+   const auto atBreak = [&](uint32_t word) {
+      REQUIRE(b.swBreak(true, { word * 2u }) == ok);
+      REQUIRE(b.run() == ok);
+      REQUIRE(avr.reach(word));
+      REQUIRE(b.event() == b.breakEvent(word, true));
+   };
+   const auto stepFrom = [&](uint32_t word, uint32_t next) {
+      const uint32_t writes = avr.spmPageWrites;
+      CHECK(b.step() == ok);
+      CHECK(b.event() == b.breakEvent(next, false));
+      CHECK(b.pcRead() == Bytes{ 0x83, 0x00, byte(next, 0), byte(next, 1), byte(next, 2), byte(next, 3) });
+      CHECK(avr.spmPageWrites == writes);
+      CHECK(flashWord(avr, word) == 0x9598);
+   };
+
+   SUBCASE("LDS (main.c:24 of the hardware test)") {
+      putFlashWord(avr, 0x8E, 0x9180); // LDS r24, 0x0110
+      putFlashWord(avr, 0x8F, 0x0110);
+      avr.data[0x110] = 0x5A;
+      atBreak(0x8E);
+      stepFrom(0x8E, 0x90);
+      CHECK(b.avr8(readMemory(memory::sram, 24, 1)) == data({ 0x5A }));
+   }
+   SUBCASE("STS") {
+      putFlashWord(avr, 0x8E, 0x9390); // STS 0x0111, r25
+      putFlashWord(avr, 0x8F, 0x0111);
+      atBreak(0x8E);
+      CHECK(b.avr8(writeMemory(memory::sram, 25, { 0xA5 })) == ok);
+      stepFrom(0x8E, 0x90);
+      CHECK(avr.data[0x111] == 0xA5);
+   }
+   SUBCASE("an injected instruction") {
+      putFlashWord(avr, 0x8E, 0xE38C); // LDI r24, 0x3C
+      atBreak(0x8E);
+      stepFrom(0x8E, 0x8F);
+      CHECK(b.avr8(readMemory(memory::sram, 24, 1)) == data({ 0x3C }));
+   }
+   SUBCASE("RJMP back") {
+      putFlashWord(avr, 0x97, 0xCFED); // RJMP .-38 (main.c:28, to 0x85)
+      atBreak(0x97);
+      stepFrom(0x97, 0x85);
+   }
+   SUBCASE("CALL pushes the return address") {
+      putFlashWord(avr, 0x85, 0x940E); // CALL 0xD4
+      putFlashWord(avr, 0x86, 0x006A);
+      atBreak(0x85);
+      stepFrom(0x85, 0x6A);
+      CHECK(b.avr8(readMemory(memory::sram, 0x5D, 2)) == data({ 0xFD, 0x0A }));
+      // The high byte at the lower address
+      CHECK(avr.data[0xAFE] == 0x00);
+      CHECK(avr.data[0xAFF] == 0x87);
+   }
+   SUBCASE("RCALL") {
+      putFlashWord(avr, 0x73, 0xD000); // RCALL .+0
+      atBreak(0x73);
+      stepFrom(0x73, 0x74);
+      CHECK(avr.data[0xAFE] == 0x00);
+      CHECK(avr.data[0xAFF] == 0x74);
+   }
+   SUBCASE("a run steps over it first, then the BREAK stops the next pass") {
+      putFlashWord(avr, 0x8E, 0x9180);
+      putFlashWord(avr, 0x8F, 0x0110);
+      atBreak(0x8E);
+      const uint32_t writes = avr.spmPageWrites;
+      CHECK(b.run() == ok);
+      CHECK(avr.spmPageWrites == writes);
+      CHECK_FALSE(avr.stopped);
+      CHECK(avr.reach(0x8E));
+      CHECK(b.event() == b.breakEvent(0x8E, true));
+   }
+   b.bloomClose();
+   CHECK(avr.unknownInstructions.empty());
    b.checkReleased();
 }
