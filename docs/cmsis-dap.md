@@ -307,8 +307,8 @@ A value out of range gives code `0x33` at activate physical.
 | `0x15`, `0x16` Programming mode | The JTAG programming mode. The core is in reset in the programming mode. Enter in the debug mode removes the hardware breakpoints and the software breakpoints, and ends the debug mode. A chip erase removes all software breakpoints from the list of the probe. Bloom loads a program in this way, and then sends deactivate physical, activate physical and attach. |
 | `0x20` Erase | `[mode][address u32]`: mode 0 is the chip erase. Other modes give code `0x39`. |
 | `0x21` Read memory, `0x22` masked read, `0x23` Write memory | In the programming mode or in the debug mode, else code `0x32`. The masked read is for the debug mode only. |
-| `0x30` Reset, `0x31` Stop, `0x34` Step | Debug mode only, else code `0x32`. The core stops, and a break event comes. |
-| `0x32` Run, `0x33` Run to | Debug mode only. Run to uses OCD register 0 for one run. |
+| `0x30` Reset, `0x31` Stop, `0x34` Step | Debug mode only. The core stops, and a break event comes. Without attach, the command starts the debug mode first, as attach does, but without the break event of attach. AVaRICE sends no attach. In the programming mode, the command gives code `0x32`. |
+| `0x32` Run, `0x33` Run to | Debug mode only. Without attach, the command starts the debug mode first, as reset does. Run to uses OCD register 0 for one run. |
 | `0x35`, `0x36` PC read and write | Debug mode only. The PC can be above 16 bits (ATmega2560). |
 | `0x40`, `0x41` Hardware breakpoint | Debug mode only. Numbers 1 to 3 (OCD registers 1 to 3), else code `0x81`. Type 1 (program): a byte address, as Bloom sends it. Type 2 (data): see [Data breakpoints](#data-breakpoints). Other types give code `0x90`. The probe writes the breakpoints at the next run or step. |
 | `0x43`, `0x44`, `0x45` Software breakpoints | Set and clear: debug mode only, else code `0x32`. Up to 32, byte addresses. |
