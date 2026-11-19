@@ -192,6 +192,15 @@ struct Bench : EdbgBench {
       return avr8(command);
    }
 
+   // AVaRICE range BP: type 3 (data mask), the mask in the address field,
+   // mode 0
+   Bytes maskSet(uint8_t number, uint32_t mask) {
+      Bytes command{ avr8::command::hwBreakSet, 0x00, 0x03, number };
+      putU32(command, mask);
+      command.push_back(0x00);
+      return avr8(command);
+   }
+
    Bytes breakClear(uint8_t number) {
       return avr8({ avr8::command::hwBreakClear, 0x00, number });
    }
@@ -689,9 +698,10 @@ TEST_CASE("EDBG JTAG: Bloom checks of the debug commands") {
       CHECK(b.breakSet(0, 0x200) == failed(0x81));
       CHECK(b.breakSet(4, 0x200) == failed(0x81));
       CHECK(b.breakClear(4) == failed(0x81));
-      // Data breakpoints: not on number 1, no mask type
+      // Data breakpoints and masks: not on number 1, no other types
       CHECK(b.breakSet(1, 0x200, 2) == failed(0x81));
-      CHECK(b.breakSet(2, 0x200, 3) == failed(0x90));
+      CHECK(b.maskSet(1, 0xFFFFFFFE) == failed(0x81));
+      CHECK(b.breakSet(2, 0x200, 4) == failed(0x90));
       CHECK(b.dataBreakSet(2, 0x200, 3) == failed(0x39));
       CHECK(b.dataBreakSet(2, 0x10000, 0) == failed(0x38));
       CHECK(b.avr8({ avr8::command::hwBreakSet, 0x00, 0x02, 0x02, 0x00, 0x02, 0x00, 0x00 }) == failed(0x35));
@@ -783,6 +793,34 @@ TEST_CASE("EDBG JTAG: data breakpoints") {
          }
       }
    }
+}
+
+// AVaRICE "rwatch" on a 2-byte variable: a data breakpoint on number 2 and
+// its mask on number 3 (issue #111)
+TEST_CASE("EDBG JTAG: a data breakpoint with a mask (AVaRICE range BP)") {
+   Bench b;
+   b.bloomOpen();
+   b.bloomAttach();
+   CHECK(b.dataBreakSet(2, 0x0110, 0) == ok);
+   CHECK(b.maskSet(3, 0xFFFFFFFE) == ok);
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.ocdRegs[3] == 0x0110);
+   CHECK(b.jtagAvr.ocdRegs[2] == 0xFFFE);
+   CHECK_FALSE(b.jtagAvr.access(0x41, 0x0112, false));
+   CHECK(b.event().empty());
+   // The second byte of the variable also stops the core.
+   CHECK(b.jtagAvr.access(0x42, 0x0111, false));
+   CHECK(b.event() == b.breakEvent(0x42, true));
+   // A program breakpoint cannot use the pair, the mask number is in use.
+   CHECK(b.breakSet(3, 0x300) == failed(0x81));
+   CHECK(b.maskSet(3, 0xFFFFFFFC) == failed(0x81));
+   CHECK(b.breakClear(3) == ok);
+   CHECK(b.breakClear(2) == ok);
+   CHECK(b.breakSet(2, 0x200) == ok);
+   CHECK(b.maskSet(3, 0xFFFFFFFE) == failed(0x81));
+   b.bloomClose();
+   CHECK((b.jtagAvr.ocdRegs[8] & 0x0FF8) == 0);
+   b.checkReleased();
 }
 
 TEST_CASE("EDBG JTAG: data and program breakpoints share numbers 2 and 3") {

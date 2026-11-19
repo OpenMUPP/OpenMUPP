@@ -161,9 +161,13 @@
 //        modes FAILED 0x39). DS50002630A gives only type 1 and mode 3; the
 //        data values are those of AVaRICE (jtag3bp.cc) and of the JTAGICE
 //        mkII CMND_SET_BREAK. A number that holds a data breakpoint, or a
-//        data breakpoint on a number in use, gives FAILED 0x81. Other
-//        types (3, the mask): FAILED 0x90. They take effect at the next
-//        RUN or STEP. RUN_TO uses OCD reg 0.
+//        data breakpoint on a number in use, gives FAILED 0x81. Type 3
+//        (data mask, AVaRICE range BP): numbers 2 and 3 only (1: FAILED
+//        0x81), the address field is the mask (1 bits compare, bits 15..0
+//        used), the mode is ignored. It applies to the data breakpoint on
+//        the other number. A mask on a number in use, or next to a program
+//        breakpoint, gives FAILED 0x81. Other types: FAILED 0x90. They
+//        take effect at the next RUN or STEP. RUN_TO uses OCD reg 0.
 //   READ_MEMORY, READ_MEMORY_MASKED, WRITE_MEMORY in the debug mode (Bloom),
 //        with a stopped core: SRAM 0x20 (the data space; the OCDR reads as
 //        0, a write skips it), EEPROM 0x22 and read only SPM 0xA0 (the
@@ -906,6 +910,7 @@ class Avr8Scope final : public Avr8Handler {
    std::size_t hardwareBreakJtag(bool set) {
       constexpr uint8_t programType = 1;
       constexpr uint8_t dataType = 2;
+      constexpr uint8_t maskType = 3;
       const std::size_t bytes = set ? headerBytes + 7 : headerBytes + 1;
       if(request_.size() < bytes) {
          return failed(avr8::failure::length);
@@ -921,6 +926,12 @@ class Avr8Scope final : public Avr8Handler {
       const uint32_t address = u32(request_, 4);
       if(request_[2] == dataType) {
          return dataBreakJtag(number, address, request_[8]);
+      }
+      if(request_[2] == maskType) {
+         // Reg 1 has no data mode. The data space is below 0x10000: the
+         // mask bits 31..16 do not matter.
+         return number == 1 ? failed(avr8::failure::resources) :
+                              result(debug.setDataMask(number, static_cast<uint16_t>(address)));
       }
       if(request_[2] != programType) {
          return failed(avr8::failure::notSupported);
