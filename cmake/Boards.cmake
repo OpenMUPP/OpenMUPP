@@ -25,8 +25,8 @@
 #             (docs/stlinkv2-mini-clone.md)
 #   weacth523 WeAct STM32H523 core board (STM32H523CC)
 #   ydch32v307
-#             YD-CH32V307VCT6 development board. Build only: the image is a
-#             stub (src/ch32v30x/), the port is not complete.
+#             YD-CH32V307VCT6 development board, the test board of the
+#             CH32V307 port.
 #   openmuppv1
 #             OpenMUPP v1 probe board (CH32V307RCT6). Only the UART bridge
 #             reaches the target (docs/boards.md). Not tested on hardware.

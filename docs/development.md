@@ -222,17 +222,15 @@ The jobs:
 - `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
   The limit of a multi image or an image with the RISC-V bridge is 8 KB smaller, because the last flash sector holds the stored personality and the bridge mode.
 - `build-weacth523-hid`: build of the dual image of the WeAct STM32H523 core board with the CMSIS-DAP v1 (HID) interface (`weacth523-dual-hid` preset), plus the size check. This job keeps no artifacts.
-- `build-ydch32v307`: build of the stub image of the YD-CH32V307VCT6 board with the `ydch32v307` preset and the RISC-V GCC, plus the size check.
-  The CH32V307 port is in progress, so this job keeps no artifacts.
-  The job reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`.
-- `build-ydch32v307-cmsis-dap`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap` preset, plus the size check.
+- `build-ydch32v307-cmsis-dap`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap` preset and the RISC-V GCC, plus the size check.
   This build finds CH32 build errors in the shared code. This job keeps no artifacts.
+  The CH32 jobs read the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`.
 - `build-ydch32v307-multi`: a `parallel:matrix` job for the multi images of the YD-CH32V307VCT6 board with the `ydch32v307-dual` and `ydch32v307-all` presets, plus the size check.
   The limit is the full zero-wait area, because the settings page is in the non-zero-wait area. These jobs keep no artifacts.
 - `build-ydch32v307-wch-link`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-wch-link` preset, plus the size check.
   It is the CH32 image that links the one-wire engine. This job keeps no artifacts.
-- `build-ydch32v307-avr`: a `parallel:matrix` job for the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap-avr`, `ydch32v307-cmsis-dap-avr-medbg` and `ydch32v307-all-avr` presets, plus the size check.
-  These images have the AVR commands on the HID interface (`MUPP_CMSIS_DAP_AVR`). These jobs keep no artifacts.
+- `build-ydch32v307-avr-medbg`: build of the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap-avr-medbg` preset, plus the size check.
+  This image has the USB ID of the Atmel Xplained Mini (`MUPP_AVR_USB_ID=medbg`). This job keeps no artifacts.
 - `build-openmuppv1-cmsis-dap`: build of the firmware image of the OpenMUPP v1 probe board with the `openmuppv1-cmsis-dap` preset, plus the size check.
   It builds the UART7 remap (PA6, PA7). This job keeps no artifacts.
 
@@ -244,7 +242,6 @@ On a tag, all build jobs run.
 The CI cache keeps the FetchContent sources in `build/_deps` between pipelines.
 `build-mini`, `build-weacth523` and `run-unit-tests` update the cache, and the other jobs only read it.
 `build-weacth523` has its own cache key, because the STM32H5 needs other CMSIS packages.
-`build-ydch32v307` uses no cache, because its build fetches nothing.
 In CI, CMake checks each cached source against the declared tag, and fetches it again when the tag changes.
 Outside CI, CMake uses a source in `build/_deps` as it is, and does not check the tag.
 After you change the tag of a dependency, remove `build/_deps/<name>-src`.

@@ -15,15 +15,14 @@ These options select the board, the personality and the debug features:
 | `MUPP_PERSONALITIES` | empty (`cmsis-dap`) | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `1209:0001` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
 | `MUPP_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `MUPP_PERSONALITIES`. Empty: `cmsis-dap` when the image has it, else the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
 | `MUPP_WCH_LINK_WCH_USB_ID` | `OFF` | Only when `MUPP_PERSONALITIES` has `wch-link`: use the USB ID `1a86:8010` of WCH in the WCH-Link personality, so that `wlink` and `minichlink` find the probe. For personal use only: do not publish this image (see [wch-link.md](wch-link.md#usb-id)). |
-| `MUPP_CMSIS_DAP_HID` | `OFF` | Add the CMSIS-DAP v1 (HID) interface to the CMSIS-DAP personality, next to the v2 interface (see [cmsis-dap.md](cmsis-dap.md#cmsis-dap-v1-hid)). The AVR support needs it. It needs `cmsis-dap` in `MUPP_PERSONALITIES`. The STM32F1 boards refuse it: their USB packet memory has no room for two more endpoints. |
-| `MUPP_CMSIS_DAP_AVR` | `OFF` | Add the AVR commands of the Microchip EDBG tools (avrdude, Bloom) to the CMSIS-DAP v1 (HID) interface (see [cmsis-dap.md](cmsis-dap.md#avr-commands)). It needs `MUPP_CMSIS_DAP_HID`. Only the CH32V307 boards accept it: the AVR ISP engine has no code for the other chips. |
+| `MUPP_CMSIS_DAP_HID` | `ON` on the CH32V307 boards, else `OFF` | Add the CMSIS-DAP v1 (HID) interface to the CMSIS-DAP personality, next to the v2 interface (see [cmsis-dap.md](cmsis-dap.md#cmsis-dap-v1-hid)). The AVR support needs it. An image without `cmsis-dap` ignores the option. The STM32F1 boards refuse it: their USB packet memory has no room for two more endpoints. On the CH32V307 boards, `OFF` also needs `MUPP_CMSIS_DAP_AVR=OFF`. A build directory with `OFF` in its cache keeps `OFF`: use `--fresh` or `-DMUPP_CMSIS_DAP_HID=ON`. |
+| `MUPP_CMSIS_DAP_AVR` | `ON` on the CH32V307 boards, else `OFF` | Add the AVR commands of the Microchip EDBG tools (avrdude, Bloom) to the CMSIS-DAP v1 (HID) interface (see [cmsis-dap.md](cmsis-dap.md#avr-commands)). It needs `MUPP_CMSIS_DAP_HID`. An image without `cmsis-dap` ignores the option. Only the CH32V307 boards accept it: the AVR ISP engine has no code for the other chips. A build directory with `OFF` in its cache keeps `OFF`: use `--fresh` or `-DMUPP_CMSIS_DAP_AVR=ON`. |
 | `MUPP_AVR_USB_ID` | `own` | USB ID of an image with `MUPP_CMSIS_DAP_AVR`. `own` is `1209:0001`. `medbg` is the ID of the Atmel Xplained Mini (`03eb:2145`) with the HID interface at number 0, so that Bloom finds the probe (see [avr.md](avr.md#bloom)). Personal use only. `medbg` needs the `cmsis-dap` personality alone. |
 | `MUPP_CMSIS_DAP_RV_BRIDGE` | `ON` | Add the RISC-V bridge to the CMSIS-DAP personality, also in a multi image. The JTAG port can then be an emulated RISC-V DTM on the WCH debug wire. In the auto mode, the probe finds the target at `DAP_Connect`. The vendor command `ID_DAP_Vendor1` sets the mode and can store it (see [cmsis-dap.md](cmsis-dap.md#risc-v-dtm-bridge)). The stored mode needs the settings page, so an image with the bridge has 1 KB (STM32F103) or 8 KB (STM32H5) less flash. On the CH32V307, the page is outside the flash of the image. An image without `cmsis-dap` ignores the option. A build directory with `OFF` in its cache keeps `OFF`: use `--fresh` or `-DMUPP_CMSIS_DAP_RV_BRIDGE=ON`. On the STM32H5 boards, only the OpenOCD rates of the bridge are measured (WeAct STM32H523, see [cmsis-dap.md](cmsis-dap.md#ch32v006-rates-on-the-weact-stm32h523)). |
 | `CMAKE_BUILD_TYPE` | `Release` | `Release` or `Debug`. |
 | `MUPP_LTO` | `ON` in a `Release` build, else `OFF` | Link-time optimisation (LTO) of the firmware and of the libraries. The images are about 13 % smaller. The option sets `CMAKE_INTERPROCEDURAL_OPTIMIZATION`. CMake then makes the libraries with `gcc-ar` and `gcc-ranlib`, because `ar` and `ranlib` give no symbol index for LTO objects. |
 | `MUPP_DEBUG_SWD` | `ON` in a `Debug` build, else `OFF` | Keep SWD of the dongle MCU on. The board has no LEDs on the SWD pins (see [boards.md](boards.md#board-definitions)). Not allowed in a `Release` build. |
 | `MUPP_DEBUG_CDC` | `ON` in a `Debug` build, else `OFF` | Send the debug log to the serial port, instead of the UART bridge (see [debug-log.md](debug-log.md)). Not allowed in a `Release` build, and not allowed when `wch-link` is the only personality. In a multi image, the log is silent while the WCH-Link personality is active. |
-| `MUPP_CH32_STUB_IMAGE` | `ON` | CH32 boards only. `ON`: the build makes the stub image (board start-up and state LED). `OFF`: the build makes the firmware image, with all personalities and the RISC-V bridge. |
 | `MUPP_STRICT_SIZE` | `OFF` (CI: `ON`) | What the build does when an image does not fit its flash limit (see [Images that do not fit](#images-that-do-not-fit)). `OFF`: the build skips the image with a warning and continues. `ON`: the build stops with an error. |
 | `MUPP_SKIP_IMAGES` | empty | Application images to leave out of the build: a list of `standalone`, `app-8k` and `app-32k`, separated by `,` or `;`, for example `app-8k,app-32k`. Without `app-8k`, the build makes no `with-bootloader` image. |
 | `GCC_TOOLCHAIN_PREFIX` | `/usr` | Install directory of the GNU toolchain: the Arm GNU Toolchain, or the RISC-V GCC for a CH32 board. |
@@ -127,15 +126,13 @@ The default is `/usr`.
 | `weacth523-dual-hid` | WeAct STM32H523 core board | `cmsis-dap,wch-link` with `MUPP_CMSIS_DAP_HID` (tag `-dap+wch-hid`). CI builds it, with no artifacts. | Release |
 | `weacth523-wch-link` | WeAct STM32H523 core board | `wch-link` | Release |
 | `weacth523` | WeAct STM32H523 core board | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
-| `ydch32v307` | YD-CH32V307VCT6 development board | none: the stub image of the CH32V307 port (board start-up and state LED) | Release |
-| `ydch32v307-cmsis-dap` | YD-CH32V307VCT6 development board | `cmsis-dap`, with `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image, not the stub | Release |
-| `ydch32v307-dual` | YD-CH32V307VCT6 development board | `cmsis-dap,wch-link` (tag `-dap+wch`), with `MUPP_CH32_STUB_IMAGE=OFF` | Release |
-| `ydch32v307-all` | YD-CH32V307VCT6 development board | `cmsis-dap,wch-link,versaloon` (tag `-dap+vsl+wch`), with `MUPP_CH32_STUB_IMAGE=OFF` | Release |
-| `ydch32v307-wch-link` | YD-CH32V307VCT6 development board | `wch-link`, with `MUPP_CH32_STUB_IMAGE=OFF`: the firmware image with the one-wire engine | Release |
-| `ydch32v307-cmsis-dap-avr` | YD-CH32V307VCT6 development board | as `ydch32v307-cmsis-dap`, with `MUPP_CMSIS_DAP_HID` and `MUPP_CMSIS_DAP_AVR` (tag `-cmsis-dap-hid-avr`) | Release |
-| `ydch32v307-cmsis-dap-avr-medbg` | YD-CH32V307VCT6 development board | as `ydch32v307-cmsis-dap-avr`, with `MUPP_AVR_USB_ID=medbg` (tag `-cmsis-dap-hid-avr-medbg`) | Release |
-| `ydch32v307-all-avr` | YD-CH32V307VCT6 development board | as `ydch32v307-all`, with `MUPP_CMSIS_DAP_HID` and `MUPP_CMSIS_DAP_AVR` (tag `-dap+vsl+wch-hid-avr`) | Release |
-| `openmuppv1-cmsis-dap` | OpenMUPP v1 probe board | `cmsis-dap`, with `MUPP_CH32_STUB_IMAGE=OFF` | Release |
+| `ydch32v307` | YD-CH32V307VCT6 development board | none (`cmsis-dap`, the same image as the `-cmsis-dap` preset) | Release |
+| `ydch32v307-cmsis-dap` | YD-CH32V307VCT6 development board | `cmsis-dap`, with `MUPP_CMSIS_DAP_HID` and `MUPP_CMSIS_DAP_AVR` by default (tag `-cmsis-dap-hid-avr`) | Release |
+| `ydch32v307-dual` | YD-CH32V307VCT6 development board | `cmsis-dap,wch-link` (tag `-dap+wch-hid-avr`) | Release |
+| `ydch32v307-all` | YD-CH32V307VCT6 development board | `cmsis-dap,wch-link,versaloon` (tag `-dap+vsl+wch-hid-avr`) | Release |
+| `ydch32v307-wch-link` | YD-CH32V307VCT6 development board | `wch-link`: the image with the one-wire engine | Release |
+| `ydch32v307-cmsis-dap-avr-medbg` | YD-CH32V307VCT6 development board | as `ydch32v307-cmsis-dap`, with `MUPP_AVR_USB_ID=medbg` (tag `-cmsis-dap-hid-avr-medbg`) | Release |
+| `openmuppv1-cmsis-dap` | OpenMUPP v1 probe board | `cmsis-dap`, with `MUPP_CMSIS_DAP_HID` and `MUPP_CMSIS_DAP_AVR` by default (tag `-cmsis-dap-hid-avr`) | Release |
 | `host-tests` | Host | - | Debug |
 
 The firmware presets all set `CMAKE_EXPORT_COMPILE_COMMANDS`.
@@ -150,7 +147,7 @@ The `-cmsis-dap-wch-link` presets do not exist: use the `-dual` presets.
 For a dual image with `versaloon,cmsis-dap`, add `-DMUPP_PERSONALITIES=versaloon,cmsis-dap` to a preset.
 The `host-tests` preset has no toolchain file.
 It has a build preset that builds the `mupp-tests` and `mupp-medbg-tests` targets, and a test preset that runs `ctest` with `--output-on-failure`.
-CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, `mini-cmsis-dap-no-rv-bridge`, `ydch32v307`, the `ydch32v307-` presets and `openmuppv1-cmsis-dap`.
+CI builds the `-cmsis-dap`, `-dual` and `-debug` presets, `mini-cmsis-dap-no-rv-bridge`, the `ydch32v307-` presets and `openmuppv1-cmsis-dap`.
 The other presets are for local builds only.
 CI uses these presets (see [Continuous integration](development.md#continuous-integration)).
 

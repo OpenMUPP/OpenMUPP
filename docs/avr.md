@@ -17,7 +17,7 @@ The probe does not have the other AVR interfaces (UPDI, PDI, TPI).
 Use an image with the build option `MUPP_CMSIS_DAP_AVR`.
 This option needs `MUPP_CMSIS_DAP_HID`.
 Only the CH32V307 boards have the option (see [cmake.md](cmake.md)).
-The presets `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` set both options.
+On these boards, both options are `ON` by default: each image with `cmsis-dap` has the AVR commands.
 The protocol is in [cmsis-dap.md](cmsis-dap.md#avr-commands).
 
 ## USB ID
@@ -66,7 +66,7 @@ environments:
 Then connect avr-gdb with `target remote 127.0.0.1:1442`.
 Set `disable_debug_wire_pre_disconnect` to `true` to turn debugWIRE off at the end of the session (see [Back to ISP](#back-to-isp)).
 
-Use the preset `ydch32v307-cmsis-dap-avr-medbg`, or set `-DMUPP_AVR_USB_ID=medbg` with the options of the preset `ydch32v307-cmsis-dap-avr`.
+Use the preset `ydch32v307-cmsis-dap-avr-medbg`, or set `-DMUPP_AVR_USB_ID=medbg` with the options of the preset `ydch32v307-cmsis-dap`.
 The option needs `MUPP_CMSIS_DAP_AVR` and the `cmsis-dap` personality alone.
 The image name has `-medbg` at the end of its tag.
 
