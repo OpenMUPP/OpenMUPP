@@ -823,6 +823,36 @@ TEST_CASE("EDBG JTAG: a data breakpoint with a mask (AVaRICE range BP)") {
    b.checkReleased();
 }
 
+// AVaRICE after "rwatch ticks", "delete", "awatch counter", "delete", then
+// "break" on two lines: it clears only number 2, never the mask on number 3
+// (issue #118)
+TEST_CASE("EDBG JTAG: a clear of a range data breakpoint also clears its mask") {
+   Bench b;
+   b.bloomOpen();
+   b.bloomAttach();
+   CHECK(b.dataBreakSet(2, 0x0110, 0) == ok);
+   CHECK(b.maskSet(3, 0xFFFFFFFE) == ok);
+   CHECK(b.breakClear(2) == ok);
+   // The new data breakpoint has no old mask (BCR bit 9): one address only.
+   CHECK(b.dataBreakSet(2, 0x0112, 2) == ok);
+   CHECK(b.run() == ok);
+   CHECK((b.jtagAvr.ocdRegs[8] & 0x0200) == 0);
+   CHECK(b.jtagAvr.ocdRegs[2] == 0x0112);
+   CHECK_FALSE(b.jtagAvr.access(0x41, 0x0113, true));
+   CHECK(b.event().empty());
+   CHECK(b.stop() == ok);
+   CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+   CHECK(b.breakClear(2) == ok);
+   CHECK(b.breakSet(1, 0xD4) == ok);
+   // 0E 00 59 00 12 40 00 01 02 1C 01 00 00 03 gave FAILED 0x81.
+   CHECK(b.breakSet(2, 0x011C) == ok);
+   CHECK(b.run() == ok);
+   CHECK(b.jtagAvr.reach(0x8E));
+   CHECK(b.event() == b.breakEvent(0x8E, true));
+   b.bloomClose();
+   b.checkReleased();
+}
+
 TEST_CASE("EDBG JTAG: data and program breakpoints share numbers 2 and 3") {
    Bench b;
    b.bloomOpen();
