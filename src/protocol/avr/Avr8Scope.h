@@ -142,7 +142,8 @@
 //        it). Without an OCD answer (OCDEN not programmed) ATTACH is OK,
 //        and each command that needs the OCD gives FAILED 0x50 (Bloom:
 //        "check OCDEN fuse bit"). A second ATTACH is a STOP.
-//   DETACH: the hardware breakpoints are removed, a stopped core runs.
+//   DETACH: the hardware and software breakpoints are removed, a stopped
+//        core runs.
 //   STOP, RESET, RUN, RUN_TO [word address u32], STEP, PC_READ, PC_WRITE
 //        (word addresses), in the debug mode only (else FAILED 0x32): as on
 //        debugWIRE. The PC can be above 16 bits (ATmega2560).
@@ -158,12 +159,16 @@
 //        running core: the probe enters the programming mode, reads or
 //        writes the fuses, leaves it and attaches again. The core is reset
 //        then, and no break event comes.
-//   ENTER_PROGMODE in the debug mode: the hardware breakpoints are
-//        removed and the debug mode ends (Bloom loads a program in this way
-//        and then sends DEACTIVATE_PHYSICAL, ACTIVATE_PHYSICAL, ATTACH).
-//   SW_BREAK_SET, SW_BREAK_CLEAR and DISABLE_DEBUGWIRE: FAILED 0x90.
-//   SW_BREAK_CLEAR_ALL: OK, there are no software breakpoints (Bloom
-//        sends it before each flash load and at the end of the session).
+//   ENTER_PROGMODE in the debug mode: the hardware and software
+//        breakpoints are removed and the debug mode ends (Bloom loads a
+//        program in this way and then sends DEACTIVATE_PHYSICAL,
+//        ACTIVATE_PHYSICAL, ATTACH). A chip erase empties the software
+//        breakpoint table: no BREAK is left in flash.
+//   SW_BREAK_SET, SW_BREAK_CLEAR: in the debug mode only (else FAILED
+//        0x32), as on debugWIRE. The page write uses SPM in the debug mode
+//        (AvrJtagDebug::writeFlashPage()). Bloom sends them only when no
+//        hardware breakpoint is free. SW_BREAK_CLEAR_ALL: OK in each mode.
+//   DISABLE_DEBUGWIRE: FAILED 0x90.
 //   Break events: as on debugWIRE, with cause 1 when the BSR shows a
 //        program breakpoint or a BREAK instruction. While the core runs,
 //        each event() reads OCD reg D one time.
@@ -622,10 +627,9 @@ class Avr8Scope final : public Avr8Handler {
       case cmd::attach:
          return attachJtag();
       case cmd::disableDebugWire:
-      case cmd::swBreakSet:
-      case cmd::swBreakClear:
          return failed(avr8::failure::notSupported);
       case cmd::swBreakClearAll:
+         clearAllBreaks();
          return ok();
       default:
          break;
@@ -641,6 +645,8 @@ class Avr8Scope final : public Avr8Handler {
          case cmd::pcWrite:
          case cmd::hwBreakSet:
          case cmd::hwBreakClear:
+         case cmd::swBreakSet:
+         case cmd::swBreakClear:
             return failed(avr8::failure::illegalState);
          default:
             return failed(avr8::failure::unknown);
@@ -660,7 +666,7 @@ class Avr8Scope final : public Avr8Handler {
          }
          return runJtag(u32(request_, headerBytes));
       case cmd::step:
-         return afterCommand(debug.step());
+         return afterCommand(stepJtag());
       case cmd::pcRead:
          return debug.hasContext() ? pcData(debug.pc()) : failed(failureOf(contextFailure()));
       case cmd::pcWrite:
@@ -668,9 +674,23 @@ class Avr8Scope final : public Avr8Handler {
       case cmd::hwBreakSet:
       case cmd::hwBreakClear:
          return hardwareBreakJtag(id == cmd::hwBreakSet);
+      case cmd::swBreakSet:
+      case cmd::swBreakClear:
+         return softwareBreaks(id == cmd::swBreakSet);
       default:
          return failed(avr8::failure::unknown);
       }
+   }
+
+   // STEP: the breakpoint changes go into flash first. At an active
+   // software breakpoint the step executes the original word.
+   template <typename T = Target>
+   JtagDebugStatus stepJtag() {
+      JtagDebugStatus status = commitBreaks();
+      if(status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      return findBreak(corePc(), BreakState::Active) != nullptr ? stepOverBreak() : target_.debug().step();
    }
 
    // The status of a stopped core without a valid context, or of a
@@ -757,6 +777,8 @@ class Avr8Scope final : public Avr8Handler {
       }
       AvrJtagDebug &debug = target_.debug();
       clearHardwareBreaks();
+      // The program runs without the debugger: no BREAK may stay in flash.
+      clearAllBreaks();
       attached_ = false;
       running_ = false;
       event_ = false;
@@ -769,6 +791,9 @@ class Avr8Scope final : public Avr8Handler {
       // let the run write the BCR without breakpoints. halt() of a stopped
       // core sends no scan.
       JtagDebugStatus status = debug.halt();
+      if(status == JtagDebugStatus::Ok) {
+         status = commitBreaks();
+      }
       if(status == JtagDebugStatus::Ok) {
          status = debug.run();
       }
@@ -792,7 +817,13 @@ class Avr8Scope final : public Avr8Handler {
 
    template <typename T = Target>
    std::size_t runJtag(std::optional<uint32_t> word) {
-      const JtagDebugStatus status = target_.debug().run(word);
+      JtagDebugStatus status = commitBreaks();
+      if(status == JtagDebugStatus::Ok) {
+         status = stepOverBreak();
+      }
+      if(status == JtagDebugStatus::Ok) {
+         status = target_.debug().run(word);
+      }
       if(status != JtagDebugStatus::Ok) {
          return failed(failureOf(status));
       }
@@ -1782,7 +1813,12 @@ class Avr8Scope final : public Avr8Handler {
       if(!prog.programming()) {
          return failed(avr8::failure::illegalState);
       }
-      return prog.chipErase() ? ok() : failed(avr8::failure::jtag);
+      if(!prog.chipErase()) {
+         return failed(avr8::failure::jtag);
+      }
+      // No BREAK is left in flash.
+      breakCount_ = 0;
+      return ok();
    }
 
    // [type][address u32][length u32], in the programming mode
