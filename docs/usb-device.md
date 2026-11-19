@@ -632,6 +632,7 @@ Thus TDI and TMS change a full half period before the next rising edge, as for a
 For SWD, each bit waits a full half period after the SWDIO write, so SWDIO also keeps its setup time.
 The duty cycle of that one clock period changes.
 The service takes some microseconds in each millisecond, so a shift gets a little slower.
+With an SWO Manchester capture at 500 kbit/s, the service can take about 0.5 ms in each millisecond (see step 1). A shift can then take up to about two times as long.
 The time of the service on the target is not measured yet.
 
 Limits:

@@ -110,7 +110,8 @@
 // one-wire reset, at most once per backgroundIntervalMs
 // (protocol/Background.h). The interrupts are on then. The engine runs
 // in a command, inside UsbStack::poll(): the service must not start a
-// command, and must return within some microseconds.
+// command, and must return within some microseconds (except for the SWO
+// Manchester decoder, see protocol/Background.h).
 
 #include <bit>
 #include <cstdint>

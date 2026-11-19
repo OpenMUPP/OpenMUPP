@@ -30,8 +30,11 @@
 // at least each millisecond.
 //
 // Tolerance: an edge in the middle of a bit is valid from 0.75 to 1.25 bit
-// times after the previous middle. So the bit rate of the target can be
-// about 20 % away from the bit rate of DAP_SWO_Baudrate.
+// times after the previous middle. So the bit time of the target can be
+// from about 15 % shorter to 25 % longer than the bit time of
+// DAP_SWO_Baudrate, less the jitter. Shorter is the smaller limit: a start
+// bit after the shortest gap (1.5 bit times after the last middle) must
+// come after the window of a middle (1.25 nominal bit times).
 
 #include <array>
 #include <cstddef>
