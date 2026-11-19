@@ -750,6 +750,84 @@ TEST_CASE("AvrJtagDebug: a data breakpoint on revision 4 writes 0 to the high re
    CHECK(b.target.access(0x101, 0x0210, true));
 }
 
+TEST_CASE("AvrJtagDebug: a data breakpoint with a mask (range)") {
+   using Mode = avr::JtagDataMode;
+   // AVaRICE puts the data breakpoint on number 2 and the mask on number 3.
+   // The OCD has the mask in reg 2 only: reg 3 gets the address.
+   for(const bool maskFirst : { false, true }) {
+      CAPTURE(maskFirst);
+      Bench b;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      if(maskFirst) {
+         REQUIRE(b.debug.setDataMask(3, 0xFFFE) == JtagDebugStatus::Ok);
+      }
+      REQUIRE(b.debug.setDataBreakpoint(2, 0x0110, Mode::Read) == JtagDebugStatus::Ok);
+      if(!maskFirst) {
+         REQUIRE(b.debug.setDataMask(3, 0xFFFE) == JtagDebugStatus::Ok);
+      }
+      b.writes();
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      // Reg 3 = 0x110, reg 2 = 0xFFFE, BCR: mask mode, reg 3 enable, mode 2
+      CHECK(b.writes() == std::vector<uint32_t>{ 0x130110, 0x12FFFE, 0x18C290 });
+      CHECK_FALSE(b.target.access(0x41, 0x0112, false));
+      CHECK_FALSE(b.target.access(0x41, 0x0111, true));
+      CHECK(b.target.access(0x42, 0x0111, false));
+      bool stopped = false;
+      REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+      CHECK(stopped);
+      CHECK(b.debug.breakStatus() == bsr::break3);
+   }
+}
+
+TEST_CASE("AvrJtagDebug: data mask numbers") {
+   using Mode = avr::JtagDataMode;
+   Bench b;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   CHECK(b.debug.setDataMask(1, 0xFFFE) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.setDataMask(4, 0xFFFE) == JtagDebugStatus::OutOfRange);
+   // No mask next to a program breakpoint, and no program breakpoint next
+   // to a mask
+   REQUIRE(b.debug.setBreakpoint(2, 0x80) == JtagDebugStatus::Ok);
+   CHECK(b.debug.setDataMask(3, 0xFFFE) == JtagDebugStatus::InUse);
+   REQUIRE(b.debug.clearBreakpoint(2) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.setDataMask(2, 0xFFF0) == JtagDebugStatus::Ok);
+   CHECK(b.debug.setDataMask(2, 0xFFF0) == JtagDebugStatus::InUse);
+   // No second mask on the other number
+   CHECK(b.debug.setDataMask(3, 0xFFFE) == JtagDebugStatus::InUse);
+   CHECK(b.debug.setBreakpoint(2, 0x80) == JtagDebugStatus::InUse);
+   CHECK(b.debug.setBreakpoint(3, 0x80) == JtagDebugStatus::InUse);
+   CHECK(b.debug.setBreakpoint(1, 0x80) == JtagDebugStatus::Ok);
+   // A mask without a data breakpoint: no mask mode, reg 2 not written
+   b.writes();
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK(b.writes() == std::vector<uint32_t>{ 0x110080, 0x18C400 });
+   REQUIRE(b.debug.halt() == JtagDebugStatus::Ok);
+   // Mask on number 2, data breakpoint on number 3, write mode
+   REQUIRE(b.debug.setDataBreakpoint(3, 0x0200, Mode::Write) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK(b.target.ocdRegs[8] == 0xC688);
+   CHECK(b.target.ocdRegs[2] == 0xFFF0);
+   CHECK(b.target.ocdRegs[3] == 0x0200);
+   CHECK(b.target.access(0x42, 0x020F, true));
+   bool stopped = false;
+   REQUIRE(b.debug.status(stopped) == JtagDebugStatus::Ok);
+   REQUIRE(stopped);
+   // Cleared: no mask mode at the next run
+   REQUIRE(b.debug.clearBreakpoint(2) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK(b.target.ocdRegs[8] == 0xC488);
+}
+
+TEST_CASE("AvrJtagDebug: a data mask on revision 4 writes 0 to the high registers") {
+   Bench b{ 4 };
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.setDataBreakpoint(2, 0x0210, avr::JtagDataMode::Access) == JtagDebugStatus::Ok);
+   REQUIRE(b.debug.setDataMask(3, 0xFFFC) == JtagDebugStatus::Ok);
+   b.writes();
+   REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+   CHECK(b.writes() == std::vector<uint32_t>{ 0x130210, 0x170000, 0x12FFFC, 0x160000, 0x18C280 });
+}
+
 TEST_CASE("AvrJtagDebug: the BSR after a step and a reset") {
    Bench b;
    REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);

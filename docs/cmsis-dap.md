@@ -310,7 +310,7 @@ A value out of range gives code `0x33` at activate physical.
 | `0x30` Reset, `0x31` Stop, `0x34` Step | Debug mode only. The core stops, and a break event comes. Without attach, the command starts the debug mode first, as attach does, but without the break event of attach. AVaRICE sends no attach. In the programming mode, the command gives code `0x32`. |
 | `0x32` Run, `0x33` Run to | Debug mode only. Without attach, the command starts the debug mode first, as reset does. Run to uses OCD register 0 for one run. |
 | `0x35`, `0x36` PC read and write | Debug mode only. The PC can be above 16 bits (ATmega2560). |
-| `0x40`, `0x41` Hardware breakpoint | Debug mode only. Numbers 1 to 3 (OCD registers 1 to 3), else code `0x81`. Type 1 (program): a byte address, as Bloom sends it. Type 2 (data): see [Data breakpoints](#data-breakpoints). Other types give code `0x90`. The probe writes the breakpoints at the next run or step. |
+| `0x40`, `0x41` Hardware breakpoint | Debug mode only. Numbers 1 to 3 (OCD registers 1 to 3), else code `0x81`. Type 1 (program): a byte address, as Bloom sends it. Type 2 (data) and type 3 (data mask): see [Data breakpoints](#data-breakpoints). Other types give code `0x90`. The probe writes the breakpoints at the next run or step. |
 | `0x43`, `0x44`, `0x45` Software breakpoints | Set and clear: debug mode only, else code `0x32`. Up to 32, byte addresses. |
 
 Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to or step, as on debugWIRE.
@@ -356,7 +356,12 @@ Accesses through the register file and `IN` or `OUT` on I/O registers are not te
 
 The probe writes OCD mode 2 for read, 1 for write and 0 for access (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
 The core stops after the instruction that makes the access. The break event has cause 1.
-Mask breakpoints (type 3, an address range) give code `0x90`.
+A data mask has type 3 (AVaRICE "range BP"). The address field is the mask: a 1 bit compares the address bit.
+The probe uses mask bits 15..0 and ignores the mode.
+The mask is on number 2 or 3, and applies to the data breakpoint on the other number. Number 1 gives code `0x81`.
+A mask on a number in use, or next to a program breakpoint or a mask, gives code `0x81`.
+A program breakpoint next to a mask also gives code `0x81`.
+A mask without a data breakpoint has no effect.
 
 Numbers 2 and 3 hold a program breakpoint or a data breakpoint, first come, first served.
 A data breakpoint on a number in use gives code `0x81`.

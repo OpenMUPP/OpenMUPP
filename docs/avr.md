@@ -334,12 +334,18 @@ environments:
 
 ### JTAG data breakpoints
 
-The probe has data breakpoints on JTAG: a stop on a read, a write or an access (read or write) of one data space address.
-Bloom does not send them, so avr-gdb watchpoints do not use them.
+The probe has data breakpoints on JTAG: a stop on a read, a write or an access (read or write) of one data space address or of an address range.
+Bloom does not send them. AVaRICE sends them for avr-gdb watchpoints.
 Other host tools can send them with the EDBG commands (see [cmsis-dap.md](cmsis-dap.md#data-breakpoints)).
 They use the hardware breakpoint numbers 2 and 3. Thus a data breakpoint and the program breakpoints share these two numbers.
 The core stops after the instruction that makes the access.
-Only one address for each breakpoint is possible. Address ranges (the mask mode of the OCD) are not available.
+A data breakpoint with a mask stops on an address range, for example a 2-byte variable.
+AVaRICE sends this for a `watch`, `rwatch` or `awatch` on more than one byte (its "range BP").
+The data breakpoint is on number 2 and the mask on number 3, or the other way around.
+Thus a range uses both numbers 2 and 3.
+The OCD has the mask only in register 2, for register 3.
+Thus the probe writes the address to register 3 and the mask to register 2.
+The mask mode on a data address is not tested on the hardware yet. The program address test passed (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
 
 `tools/avr_data_break_test.py` tests the data breakpoints on the hardware.
 Load a test program that reads and writes a known SRAM address, and program OCDEN.
