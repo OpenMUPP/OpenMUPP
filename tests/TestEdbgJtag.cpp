@@ -1132,3 +1132,46 @@ TEST_CASE("EDBG JTAG: a software breakpoint above 64K words (ATmega2560)") {
    b.bloomClose();
    CHECK(flashWord(b.jtagAvr, 0x1F000) == 0xFFFF);
 }
+
+// AVaRICE reads the AVR_CMD acknowledge for 200 ms only. The GO with a
+// software breakpoint writes a flash page (some 80000 TCK cycles, 400 ms at
+// 200 kHz), thus the acknowledge comes before the frame runs (issue #112).
+TEST_CASE("EDBG JTAG: AVaRICE GO with a software breakpoint") {
+   Bench b;
+   b.bloomOpen();
+   b.bloomAttach();
+   CHECK(b.swBreak(true, { 0x11c }) == ok);
+   const Bytes go{
+      avr::edbg::sof,     0x00, static_cast<uint8_t>(b.sequence), static_cast<uint8_t>(b.sequence >> 8), handler::avr8,
+      avr8::command::run, 0x00
+   };
+   b.sendFrame(go);
+   // The acknowledge is out, the GO did not run yet.
+   CHECK(b.jtagAvr.spmPageWrites == 0);
+   CHECK(b.jtagAvr.stopped);
+   SUBCASE("AVR_RSP runs the frame") {
+   }
+   SUBCASE("AVR_EVT runs the frame first: no event of the old stop") {
+      CHECK(b.event().empty());
+      CHECK(b.jtagAvr.spmPageWrites == 1);
+   }
+   SUBCASE("DAP_Disconnect drops the frame (the last subcase: it ends the test)") {
+      CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
+      CHECK_FALSE(b.receiveFrame().has_value());
+      CHECK(b.jtagAvr.spmPageWrites == 0);
+      b.checkReleased();
+      return;
+   }
+   const auto response = b.receiveFrame();
+   REQUIRE(response.has_value());
+   CHECK(*response == Bytes{ avr::edbg::sof, go[2], go[3], handler::avr8, 0x80, 0x00 });
+   ++b.sequence;
+   CHECK(b.jtagAvr.spmPageWrites == 1);
+   CHECK(flashWord(b.jtagAvr, 0x8E) == 0x9598);
+   CHECK_FALSE(b.jtagAvr.stopped);
+   // The break event comes after the response.
+   CHECK(b.jtagAvr.reach(0x8E));
+   CHECK(b.event() == b.breakEvent(0x8E, true));
+   b.bloomClose();
+   b.checkReleased();
+}

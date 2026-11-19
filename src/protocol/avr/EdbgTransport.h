@@ -11,7 +11,7 @@
 //
 // AVR_CMD [0x80][fragment m<<4|n][size u16 MSB first][data] -> [0x80][code]
 //   carries fragment m of n of one command frame. Code 0x00: more
-//   fragments to come, 0x01: the frame is complete and ran. A fragment 1
+//   fragments to come, 0x01: the frame is complete. A fragment 1
 //   starts a new frame: it drops a frame that is not complete and a
 //   response that the host did not read. These fragments get code 0xFF and
 //   drop the frame: m or n is 0, m > n, m is not the next fragment, n is not
@@ -28,9 +28,14 @@
 // response frame [0x0E][sequence u16][handler][payload]. The sequence is
 // LSB first, and the response has the sequence of the command. A frame
 // shorter than 5 bytes, or with another SOF or version, gets no response.
-// The commands run at once, when their last fragment comes, in the main
-// loop: a long ISP command holds the HID interface as a long DAP command
-// does.
+// A complete frame runs in the main loop at the next vendor command
+// (AVR_CMD, AVR_RSP or AVR_EVT), before that command: the AVR_CMD response
+// goes to the host first. AVaRICE reads it for 200 ms only, and a GO with a
+// software breakpoint can take 400 ms (issue #112). Limit: AVaRICE reads
+// the AVR_RSP response for 500 ms, so a GO that writes two flash pages at
+// 200 kHz is still too slow for it. A long command holds
+// the HID interface as a long DAP command does. releasePins() and
+// hostGone() drop a frame that did not run.
 //
 // The responses of the scopes, except AVR ISP, are OK [0x80][0], LIST
 // [0x81][0][data], DATA [0x84][1][data][status 0] and FAILED
@@ -180,6 +185,8 @@ class EdbgTransport final : public cmsisdap::VendorCommands {
    // The fragment count of the frame, and the next fragment (0: none)
    uint8_t fragments_{ 0 };
    uint8_t nextFragment_{ 0 };
+   // The frame is complete and runs at the next vendor command.
+   bool framePending_{ false };
 
    std::array<uint8_t, maxFrameBytes> response_{};
    std::size_t responseLength_{ 0 };

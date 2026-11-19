@@ -176,6 +176,12 @@ EdbgTransport::EdbgTransport(const ToolInfo &info,
 }
 
 std::size_t EdbgTransport::command(uint8_t id, art::span<const uint8_t> fields, art::span<uint8_t> response) {
+   // The frame of the last AVR_CMD runs now, after its acknowledge went to
+   // the host (AVaRICE reads it for 200 ms only, issue #112).
+   if(framePending_) {
+      runFrame();
+      dropFrame();
+   }
    switch(id) {
    case edbg::avrCmd:
       return avrCommand(fields, response);
@@ -220,8 +226,8 @@ std::size_t EdbgTransport::avrCommand(art::span<const uint8_t> fields, art::span
       response[1] = edbg::fragmentMore;
       return 2;
    }
-   runFrame();
-   dropFrame();
+   // The next vendor command runs the frame.
+   framePending_ = true;
    response[1] = edbg::fragmentDone;
    return 2;
 }
@@ -272,6 +278,7 @@ void EdbgTransport::releaseIdlePins() {
 }
 
 void EdbgTransport::dropFrame() {
+   framePending_ = false;
    frameLength_ = 0;
    fragments_ = 0;
    nextFragment_ = 0;
@@ -438,6 +445,10 @@ void EdbgTransport::edbgControl(art::span<const uint8_t> payload, Writer &out) {
 }
 
 void EdbgTransport::releasePins() {
+   // A frame that did not run yet must not take the pins again.
+   if(framePending_) {
+      dropFrame();
+   }
    isp_.release();
    // The next host connection can be another tool on another chip: a device
    // context that stays would attach with its DWDR (issue #69).
