@@ -41,6 +41,9 @@
 //   the instruction, so word 0 goes as the flash size in words: the
 //   address wraps at the flash size (hardware test, ATmega32U4). An
 //   injected LPM does not work: on revision 3 it reads its own opcode.
+//   A word address that does not fit the field (on revision 3: word
+//   0x10000 and above, and word 0 of such a flash) gives OutOfRange, also
+//   for a flash page write that the read back cannot verify.
 // - The EEPROM write sets EEMPE, then EEPE with two adjacent injected
 //   OUT instructions. That the 4-cycle limit of EEMPE holds for this is not
 //   tested, so each byte is read back after the write.
@@ -539,7 +542,8 @@ class AvrJtagDebug {
       // SPMCSR goes through LD Z and ST Y: any data address above the
       // registers (0x68 on the ATmega64 and ATmega128). 0: not sent.
       if(pageBytes < 2 || address % pageBytes != 0 || !inRange(address, pageBytes, device_.flashBytes) ||
-         device_.spmcsr < jtagDebug::dataIo) {
+         device_.spmcsr < jtagDebug::dataIo || flashReadField(address / 2u) == 0 ||
+         flashReadField((address + pageBytes) / 2u - 1u) == 0) {
          return JtagDebugStatus::OutOfRange;
       }
       const bool far = device_.flashBytes > 0x10000u;
@@ -855,12 +859,18 @@ class AvrJtagDebug {
       return JtagDebugStatus::Timeout;
    }
 
+   // The field that reads word: word 0 as the flash size (see above). 0
+   // when the field cannot hold it.
+   [[nodiscard]] uint32_t flashReadField(uint32_t word) const {
+      const uint32_t address = word == 0 ? device_.flashBytes / 2u : word;
+      return address <= fieldMask() ? address : 0;
+   }
+
    // Two IR 0xA scans: the word address, then the PC field. The second
-   // scan returns the word. Word 0 as the flash size (see above).
+   // scan returns the word.
    [[nodiscard]] JtagDebugStatus readFlashWord(uint32_t word, uint16_t &value) {
-      const uint32_t address = (word == 0 ? device_.flashBytes / 2u : word) & fieldMask();
+      const uint32_t address = flashReadField(word);
       if(address == 0) {
-         // A flash of 2^fieldBits words: no alias for word 0
          return JtagDebugStatus::OutOfRange;
       }
       uint16_t instruction = jtagDebug::flashReadFill;
