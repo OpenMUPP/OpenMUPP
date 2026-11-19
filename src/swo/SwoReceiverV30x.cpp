@@ -15,6 +15,7 @@
 #include "Hardware.h"
 #include "board/Board.h"
 #include "board/BoardPins.h"
+#include "board/SharedDmaChannel.h"
 
 // CH32FV2x_V3xRM chapters 15 (general-purpose timers), 21 (USART), and
 // tables 11-2 and 11-3 (DMA requests).
@@ -240,7 +241,10 @@ uint32_t SwoReceiver::startUart(uint32_t baud) {
 
 uint32_t SwoReceiver::startManchester(uint32_t baud) {
    const auto timing = manchesterTimingFor(baud);
-   if(!timing) {
+   // DMA2 channel 2 is the TMS channel of the JTAG fast path: no capture
+   // while a JTAG user has it, and JTAG stops the capture
+   // (board/SharedDmaChannel.h).
+   if(!timing || !board::dma2Channel2.takeForCapture(&SwoReceiver::releaseForJtag)) {
       return 0;
    }
    Rcc::detail::enableClock(RCC->APB1PCENR, RCC_TIM5EN);
@@ -340,7 +344,12 @@ void SwoReceiver::stop() {
    active_ = false;
 }
 
+void SwoReceiver::releaseForJtag() {
+   instance_->stop();
+}
+
 void SwoReceiver::stopManchester() {
+   board::dma2Channel2.releaseFromCapture();
    // The reset stops the DMA requests of TIM5 on DMA2 channel 2.
    Rcc::detail::resetPeripheral(RCC->APB1PRSTR, tim5Reset);
    RCC->APB1PCENR &= ~RCC_TIM5EN;

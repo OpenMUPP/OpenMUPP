@@ -675,12 +675,16 @@ The maximum bit rate is 500 kbit/s. The CPU time of the decoder sets this limit:
 - At 500 kbit/s, the worst case is 1 million edges each second. This takes about 40 % to 55 % of the CPU time.
   At 1 Mbit/s, the worst case takes all of the CPU time, and the USB transport stops. Thus the firmware limits the bit rate to 500 kbit/s.
 - Each edge buffer holds 1024 edges: at least 2 ms of trace at 500 kbit/s. When the main loop stops for a longer time, the decoder loses edges and sets the overrun bit.
+- During a command, the serial service runs only between two SWD transfers or sequence bytes. Below an SWD clock of about 25 kHz, one transfer takes longer than 2 ms. Thus a slow SWD clock and a high SWO bit rate can lose trace data (the overrun bit is set).
 - The CPU time is high only while the target sends trace data. The idle line has no edges.
 
 Shared resources:
 
-- DMA2 channel 2 is also the TMS channel of the JTAG fast path. Thus `DAP_Connect` to JTAG stops the capture, and a start with the JTAG port replies an error.
-  A stop puts back the channel without the circular mode and without interrupts, because the JTAG fast path does not set them.
+- DMA2 channel 2 is also the TMS channel of the JTAG fast path. `src/board/SharedDmaChannel.h` keeps the two users apart:
+  - Each setup of the JTAG port (`JtagSpi::init()`) stops the capture. All users of the JTAG port do this setup: the v2 and HID processors, the RISC-V bridge and the AVR JTAG target.
+  - While a JTAG user has the channel (from `JtagSpi::init()` to `JtagSpi::fini()`), a start of the capture fails, and `DAP_SWO_Control` replies an error.
+  - Also, `DAP_Connect` to JTAG on the v2 interface stops the capture, because SWO is an SWD function.
+- A stop puts back the channel without the circular mode and without interrupts, because the JTAG fast path does not set them.
 - A stop resets TIM5, so the timer sends no more DMA requests on DMA2 channel 2.
 - The one-wire engine (DMA2 channels 10 and 11), the UART bridge (DMA2 channels 8 and 9) and the UART mode (DMA1 channel 6) use other channels.
 - TIM2_CH4 on DMA1 channel 7 is not used: the SWIM plan uses TIM2_CH2 on PA1, which shares DMA1 channel 7.

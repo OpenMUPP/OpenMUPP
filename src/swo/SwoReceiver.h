@@ -29,10 +29,11 @@
 //   circular DMA writes the 16-bit capture times into a ring of 1024
 //   edges. Their HT and TC interrupts count the halves, as in UART mode.
 // - DMA2 channel 2 is also the TMS channel of the JTAG fast path
-//   (board/BoardJtagFastV30x.cpp). The processor stops the capture at
-//   DAP_Connect to JTAG (protocol/cmsisdap/DapProcessor.h), and stop()
-//   clears the circular mode and the interrupts of the channel, which the
-//   JTAG setup does not clear. TIM5 is on APB1: the Vref measurement does
+//   (board/BoardJtagFastV30x.cpp). board/SharedDmaChannel.h keeps the two
+//   apart: each JTAG setup (all processors, the AVR JTAG target) stops the
+//   capture, and a start gives 0 while JTAG has the channel. stop() clears
+//   the circular mode and the interrupts of the channel, which the JTAG
+//   setup does not clear. TIM5 is on APB1: the Vref measurement does
 //   not change its clock.
 // - The decoder runs in poll(), in the main loop and in the serial service
 //   of a long command, and before each read() and status(). Each call
@@ -116,6 +117,8 @@ class SwoReceiver final : public cmsisdap::DapSwo {
    static void dmaInterruptEntry();
    static void risingInterruptEntry();
    static void fallingInterruptEntry();
+   // Stops the capture when the JTAG fast path takes DMA2 channel 2
+   static void releaseForJtag();
    static SwoReceiver *instance_;
 
    uint32_t startUart(uint32_t baud);
