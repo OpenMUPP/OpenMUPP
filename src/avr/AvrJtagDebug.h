@@ -90,6 +90,16 @@
 //   program breakpoint and no second mask: InUse.
 // - After each stop the probe reads the BSR (the cause of the stop). The
 //   reference debugger does not read it.
+// - stepInstead() executes an instruction in place of the flash word at
+//   the PC, as one step without a flash write (a software breakpoint,
+//   issue #115). RJMP, RCALL, JMP, CALL, LDS and STS: the probe does them
+//   on the context and the data space (the return address goes onto the
+//   stack, high byte at the lower address). Each other instruction that
+//   does not use the PC or the flash: injected after the write-back, then
+//   r0 to r31 and EIND are read again. Branches, skips, returns, indirect
+//   jumps and calls, LPM, ELPM, SPM, SLEEP and BREAK: canStepInstead() is
+//   false. The data breakpoints do not see these steps. Only the injection
+//   of LDI, MOV, IN, OUT, LD, ST and SPM had a hardware test before.
 // - A failed context read (NoOcd, Timeout) leaves no valid context: run,
 //   step, halt and the memory access then give NoContext until a reset.
 
@@ -186,6 +196,8 @@ inline constexpr uint8_t ioRampz = 0x3B;
 inline constexpr uint8_t ioSreg = 0x3F;
 inline constexpr uint16_t dataIo = 0x20;
 inline constexpr uint16_t dataSram = 0x60;
+// SPL (SPH at + 1)
+inline constexpr uint16_t dataSp = 0x5D;
 inline constexpr uint8_t eecrRead = 0x01;
 inline constexpr uint8_t eecrWrite = 0x02;
 inline constexpr uint8_t eecrMasterWrite = 0x04;
@@ -409,6 +421,73 @@ class AvrJtagDebug {
       return afterStop();
    }
 
+   // True when stepInstead() can execute instruction (see above)
+   [[nodiscard]] static constexpr bool canStepInstead(uint16_t instruction) {
+      return stepKind(instruction) != StepKind::None;
+   }
+
+   // Executes instruction as one step in place of the flash word at the PC
+   // (see above). The word after it comes from the flash. As step(), but
+   // with no break event cause and no stop of the core.
+   [[nodiscard]] JtagDebugStatus stepInstead(uint16_t instruction) {
+      if(JtagDebugStatus status = ready(); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      const StepKind kind = stepKind(instruction);
+      if(kind == StepKind::None) {
+         return JtagDebugStatus::OutOfRange;
+      }
+      breaks_[0].reset();
+      const uint32_t words = device_.flashBytes / 2u;
+      uint32_t next = pc_ + 1u;
+      uint16_t second = 0;
+      if(kind == StepKind::Jmp || kind == StepKind::Call || kind == StepKind::Lds || kind == StepKind::Sts) {
+         if(JtagDebugStatus status = readFlashWord((pc_ + 1u) % words, second); status != JtagDebugStatus::Ok) {
+            return status;
+         }
+         next = pc_ + 2u;
+      }
+      // Rd of LDS, Rr of STS
+      const auto r = static_cast<uint8_t>((instruction >> 4) & 0x1Fu);
+      // The 12-bit offset of RJMP and RCALL, sign-extended
+      const uint32_t relative = pc_ + 1u + (static_cast<uint32_t>(instruction & 0x0FFFu) ^ 0x800u) - 0x800u;
+      const uint32_t absolute = ((instruction & 0x01F0u) << 13u | (instruction & 1u) << 16u) | second;
+      JtagDebugStatus status = JtagDebugStatus::Ok;
+      switch(kind) {
+      case StepKind::Inject:
+         status = inject(instruction);
+         break;
+      case StepKind::Rjmp:
+         next = relative;
+         break;
+      case StepKind::Rcall:
+         status = push(next);
+         next = relative;
+         break;
+      case StepKind::Jmp:
+         next = absolute;
+         break;
+      case StepKind::Call:
+         status = push(next);
+         next = absolute;
+         break;
+      case StepKind::Lds:
+         status = readData(second, &regs_[r], 1);
+         break;
+      case StepKind::Sts:
+         status = writeData(second, &regs_[r], 1);
+         break;
+      case StepKind::None:
+         break;
+      }
+      if(status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      pc_ = next % words;
+      breakStatus_ = 0;
+      return JtagDebugStatus::Ok;
+   }
+
    // Reads reg D one time. stopped gets bit 2. A new stop (a breakpoint)
    // gets the "after each stop" sequence.
    [[nodiscard]] JtagDebugStatus status(bool &stopped) {
@@ -618,6 +697,72 @@ class AvrJtagDebug {
    }
 
    private:
+   // How stepInstead() executes an instruction
+   enum class StepKind : uint8_t { Inject, Rjmp, Rcall, Jmp, Call, Lds, Sts, None };
+
+   [[nodiscard]] static constexpr StepKind stepKind(uint16_t op) {
+      if((op & 0xF000u) == 0xC000u) {
+         return StepKind::Rjmp;
+      }
+      if((op & 0xF000u) == 0xD000u) {
+         return StepKind::Rcall;
+      }
+      if((op & 0xFE0Eu) == 0x940Cu) {
+         return StepKind::Jmp;
+      }
+      if((op & 0xFE0Eu) == 0x940Eu) {
+         return StepKind::Call;
+      }
+      if((op & 0xFE0Fu) == 0x9000u) {
+         return StepKind::Lds;
+      }
+      if((op & 0xFE0Fu) == 0x9200u) {
+         return StepKind::Sts;
+      }
+      // BRBS, BRBC; SBRC, SBRS; CPSE; SBIC, SBIS; LPM and ELPM Rd, Z(+);
+      // IJMP, EIJMP, ICALL, EICALL; RET, RETI; SLEEP, BREAK; LPM, ELPM, SPM,
+      // SPM Z+
+      const bool usesPcOrFlash = (op & 0xF800u) == 0xF000u || (op & 0xFC00u) == 0xFC00u || (op & 0xFC00u) == 0x1000u ||
+                                 (op & 0xFD00u) == 0x9900u || (op & 0xFE0Cu) == 0x9004u || (op & 0xFEEFu) == 0x9409u ||
+                                 (op & 0xFFEFu) == 0x9508u || (op & 0xFFEFu) == 0x9588u || (op & 0xFFCFu) == 0x95C8u;
+      return usesPcOrFlash ? StepKind::None : StepKind::Inject;
+   }
+
+   // The core executes instruction with the registers of the context, then
+   // the context gets the new registers. A failed read leaves no valid
+   // context.
+   [[nodiscard]] JtagDebugStatus inject(uint16_t instruction) {
+      if(!writeBack() || !execute(instruction)) {
+         return JtagDebugStatus::NoOcd;
+      }
+      contextValid_ = false;
+      const JtagDebugStatus status = readRegisters(nullptr);
+      contextValid_ = status == JtagDebugStatus::Ok;
+      return status;
+   }
+
+   // The return address of a call goes onto the stack: 2 bytes, 3 above
+   // 128 KiB of flash. SP is at the data address 0x5D (SPL) and 0x5E.
+   [[nodiscard]] JtagDebugStatus push(uint32_t ret) {
+      std::array<uint8_t, 2> sp{};
+      if(JtagDebugStatus status = readData(jtagDebug::dataSp, sp.data(), 2); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      const uint8_t bytes = device_.flashBytes > 0x20000u ? 3 : 2;
+      std::array<uint8_t, 3> stack{};
+      for(uint8_t i = 0; i < bytes; ++i) {
+         // The low byte at SP, the high byte at the lowest address
+         stack[bytes - 1u - i] = static_cast<uint8_t>(ret >> (8u * i));
+      }
+      const auto top = static_cast<uint16_t>(sp[0] | sp[1] << 8u);
+      const auto newTop = static_cast<uint16_t>(top - bytes);
+      if(JtagDebugStatus status = writeData(static_cast<uint16_t>(newTop + 1u), stack.data(), bytes); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      sp = { static_cast<uint8_t>(newTop), static_cast<uint8_t>(newTop >> 8) };
+      return writeData(jtagDebug::dataSp, sp.data(), 2);
+   }
+
    static constexpr bool inRange(uint32_t address, uint32_t length, uint32_t size) {
       return address <= size && length <= size - address;
    }
@@ -680,18 +825,24 @@ class AvrJtagDebug {
       }
       // The PC field of the first scan after the stop is PC + 1.
       uint32_t field = 0;
+      const JtagDebugStatus status = readRegisters(&field);
+      pc_ = (field - 1u) & fieldMask();
+      contextValid_ = status == JtagDebugStatus::Ok;
+      return status;
+   }
+
+   // r0 to r31 and EIND from the target. field: the PC field of the first
+   // scan.
+   [[nodiscard]] JtagDebugStatus readRegisters(uint32_t *field) {
       for(uint8_t r = 0; r < regs_.size(); ++r) {
-         if(JtagDebugStatus status = readOcdr(r, regs_[r], r == 0 ? &field : nullptr); status != JtagDebugStatus::Ok) {
+         if(JtagDebugStatus status = readOcdr(r, regs_[r], r == 0 ? field : nullptr); status != JtagDebugStatus::Ok) {
             return status;
          }
       }
-      pc_ = (field - 1u) & fieldMask();
       if(!execute(jtagDebug::in(16, jtagDebug::ioEind))) {
          return JtagDebugStatus::NoOcd;
       }
-      const JtagDebugStatus status = readOcdr(16, eind_);
-      contextValid_ = status == JtagDebugStatus::Ok;
-      return status;
+      return readOcdr(16, eind_);
    }
 
    [[nodiscard]] uint32_t fieldMask() const {

@@ -1083,3 +1083,20 @@ TEST_CASE("AvrJtagDebug: flash page write failures") {
       CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::NoOcd);
    }
 }
+
+TEST_CASE("AVR JTAG debug: the instructions that a step can execute in place of the flash word") {
+   using avr::AvrJtagDebug;
+   // LDS, STS, JMP, CALL, RJMP, RCALL, LDI, ADIW, LDD, STD, PUSH, CLI, WDR
+   for(const uint16_t op :
+       { 0x9180, 0x9390, 0x940C, 0x940E, 0xCFED, 0xD000, 0xE38C, 0x9601, 0x8189, 0x839A, 0x930F, 0x94F8, 0x95A8 }) {
+      CAPTURE(op);
+      CHECK(AvrJtagDebug::canStepInstead(op));
+   }
+   // BRCS, BRNE, SBRC, SBRS, CPSE, SBIC, SBIS, LPM r0 Z+, ELPM r0 Z, IJMP,
+   // EIJMP, ICALL, EICALL, RET, RETI, SLEEP, BREAK, LPM, ELPM, SPM, SPM Z+
+   for(const uint16_t op : { 0xF3B0, 0xF7F1, 0xFC00, 0xFE00, 0x1000, 0x9900, 0x9B00, 0x9005, 0x9006, 0x9409, 0x9419,
+                             0x9509, 0x9519, 0x9508, 0x9518, 0x9588, 0x9598, 0x95C8, 0x95D8, 0x95E8, 0x95F8 }) {
+      CAPTURE(op);
+      CHECK_FALSE(AvrJtagDebug::canStepInstead(op));
+   }
+}
