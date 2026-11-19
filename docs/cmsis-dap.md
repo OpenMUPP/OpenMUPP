@@ -322,10 +322,11 @@ A value out of range gives code `0x33` at activate physical.
 Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to or step, as on debugWIRE.
 The probe writes the flash page with `SPM` in the debug mode (see [avr-jtag-ocd.md](avr-jtag-ocd.md#flash-write-in-debug-mode)).
 To run or step from a software breakpoint, the OCD executes the original instruction in place of the `BREAK`, without a page write.
-The probe does `RJMP`, `RCALL`, `JMP`, `CALL`, `LDS` and `STS` itself on the CPU context and the data space.
+The probe does these instructions itself on the CPU context and the data space: `RJMP`, `RCALL`, `JMP`, `CALL`, `LDS`, `STS`, the branches (`BRBS`, `BRBC`), the skips (`CPSE`, `SBRC`, `SBRS`, `SBIC`, `SBIS`), `RET` and `RETI`.
 It injects each other instruction that does not use the PC or the flash.
-For a branch, a skip, a return, an indirect jump or call, `LPM`, `ELPM`, `SPM`, `SLEEP` and `BREAK`, the probe writes the original word, steps, and writes `BREAK` again (two page writes).
+For an indirect jump or call, `LPM`, `ELPM`, `SPM`, `SLEEP` and `BREAK`, the probe writes the original word, steps, and writes `BREAK` again (two page writes).
 AVaRICE waits 500 ms for the response, and two page writes take about 1 s at 200 kHz (issue #115).
+Thus a step or run from a software breakpoint on one of these instructions still stops the AVaRICE session.
 The data breakpoints do not stop on the memory access of an executed original instruction.
 Bloom uses the hardware breakpoints first, and sends a software breakpoint only when no hardware breakpoint is free.
 "Disable debugWIRE" fails with code `0x90`.

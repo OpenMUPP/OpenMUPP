@@ -1739,8 +1739,13 @@ class Avr8Scope final : public Avr8Handler {
          return Status::Ok;
       }
       if constexpr(Target::hasProgmode) {
+         // Limit: IJMP, ICALL, LPM, ELPM, SPM and SLEEP still take the two
+         // page writes, which are too slow for AVaRICE.
          if(AvrJtagDebug::canStepInstead(entry->original)) {
-            return target_.debug().stepInstead(entry->original);
+            // The flash holds BREAK at a breakpoint on the next word.
+            const SoftwareBreak *after = findBreak(entry->word + 1u, BreakState::Active);
+            return target_.debug().stepInstead(entry->original,
+                                               after != nullptr ? std::optional<uint16_t>(after->original) : std::nullopt);
          }
       }
       const uint32_t page = pageOf(entry->word);

@@ -957,11 +957,11 @@ TEST_CASE("EDBG JTAG: software breakpoints") {
    for(std::size_t i = 0; i < b.jtagAvr.flash.size(); ++i) {
       b.jtagAvr.flash[i] = static_cast<uint8_t>(i * 5 + 3);
    }
-   // RET and BRNE: the OCD cannot execute them in place of the flash word.
-   b.jtagAvr.flash[0x200] = 0x08;
+   // LPM and IJMP: the OCD cannot execute them in place of the flash word.
+   b.jtagAvr.flash[0x200] = 0xC8;
    b.jtagAvr.flash[0x201] = 0x95;
-   b.jtagAvr.flash[0x204] = 0xF1;
-   b.jtagAvr.flash[0x205] = 0xF7;
+   b.jtagAvr.flash[0x204] = 0x09;
+   b.jtagAvr.flash[0x205] = 0x94;
    const std::vector<uint8_t> program = b.jtagAvr.flash;
    b.bloomOpen();
    b.bloomAttach();
@@ -1260,6 +1260,25 @@ TEST_CASE("EDBG JTAG: a step from a software breakpoint without a page write") {
       stepFrom(0x73, 0x74);
       CHECK(avr.data[0xAFE] == 0x00);
       CHECK(avr.data[0xAFF] == 0x74);
+   }
+   SUBCASE("SBRS skips LDS, which has a software breakpoint too") {
+      putFlashWord(avr, 0x8D, 0xFF82); // SBRS r24, 2
+      putFlashWord(avr, 0x8E, 0x9180); // LDS r24, 0x0110
+      putFlashWord(avr, 0x8F, 0x0110);
+      REQUIRE(b.swBreak(true, { 0x11C }) == ok);
+      atBreak(0x8D);
+      CHECK(flashWord(avr, 0x8E) == 0x9598);
+      CHECK(b.avr8(writeMemory(memory::sram, 24, { 0x04 })) == ok);
+      stepFrom(0x8D, 0x90);
+   }
+   SUBCASE("RET at the end of a function") {
+      putFlashWord(avr, 0x6E, 0x9508);
+      avr.data[0x5D] = 0xFD;
+      avr.data[0xAFE] = 0x00;
+      avr.data[0xAFF] = 0x87;
+      atBreak(0x6E);
+      stepFrom(0x6E, 0x87);
+      CHECK(b.avr8(readMemory(memory::sram, 0x5D, 2)) == data({ 0xFF, 0x0A }));
    }
    SUBCASE("a run steps over it first, then the BREAK stops the next pass") {
       putFlashWord(avr, 0x8E, 0x9180);
