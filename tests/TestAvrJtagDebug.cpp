@@ -707,3 +707,151 @@ TEST_CASE("AvrJtagDebug: a step after a cleared breakpoint has no stale enable")
       CHECK(writes[2] == 0x18A400);
    }
 }
+
+namespace {
+
+constexpr uint16_t dataRampz = 0x5B;
+constexpr uint16_t dataSreg = 0x5F;
+constexpr uint16_t dataSpmcsr = 0x57;
+
+std::vector<uint8_t> flashPattern(std::size_t bytes, uint8_t seed) {
+   std::vector<uint8_t> page(bytes);
+   for(std::size_t i = 0; i < bytes; ++i) {
+      page[i] = static_cast<uint8_t>(seed + i * 3);
+   }
+   return page;
+}
+
+std::size_t count(const std::vector<uint16_t> &ops, uint16_t op) {
+   return static_cast<std::size_t>(std::count(ops.begin(), ops.end(), op));
+}
+
+} // namespace
+
+TEST_CASE("AvrJtagDebug: flash page write with SPM") {
+   namespace d = avr::jtagDebug;
+   for(const uint8_t revision : { uint8_t{ 3 }, uint8_t{ 4 } }) {
+      CAPTURE(revision);
+      Bench b{ revision };
+      std::fill(b.target.flash.begin(), b.target.flash.end(), 0x5A);
+      // The smallest boot section of the ATmega32U4: 256 words
+      b.target.bootStartWords = 0x3F00;
+      b.target.spmBusyReads = 5;
+      fillRegisters(b.target);
+      const auto pattern = registers(b.target);
+      b.target.data[dataSreg] = 0x35;
+      b.target.data[dataSpmcsr] = 0x80;
+      b.target.data[dataRampz] = 0x77;
+      b.target.pc = 0x123;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      b.target.executed.clear();
+      b.target.irScans.clear();
+      b.writes();
+
+      const auto page = flashPattern(128, 0x10);
+      REQUIRE(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::Ok);
+      CHECK(std::equal(page.begin(), page.end(), b.target.flash.begin() + 0x100));
+      CHECK(b.target.flash[0xFF] == 0x5A);
+      CHECK(b.target.flash[0x180] == 0x5A);
+      CHECK(b.target.spmPageErases == 1);
+      CHECK(b.target.spmPageWrites == 1);
+      CHECK(b.target.unknownInstructions.empty());
+
+      // Erase, RWW enable, 64 page buffer loads, write, RWW enable: each
+      // SPM is one step after an EIJMP to the last page (word 0x3FC0).
+      constexpr std::size_t spms = 2 + 64 + 2;
+      CHECK(count(b.target.executed, d::spm) == spms);
+      CHECK(count(b.target.executed, d::eijmp) == spms);
+      CHECK(static_cast<std::size_t>(std::count(b.target.irScans.begin(), b.target.irScans.end(), ir::run)) == spms);
+      const auto writes = b.writes();
+      CHECK(static_cast<std::size_t>(std::count(writes.begin(), writes.end(), 0x18A000u)) == spms);
+      CHECK(writes.back() == 0x18C000);
+      const auto &e = b.target.executed;
+      const auto firstSpm = std::find(e.begin(), e.end(), d::spm);
+      REQUIRE(firstSpm - e.begin() >= 4);
+      CHECK(std::vector<uint16_t>(firstSpm - 4, firstSpm + 1) ==
+            std::vector<uint16_t>{ d::ldi(16, 0x03), d::ldi(29, 0x00), d::ldi(28, 0x57), d::stY(16), d::spm });
+      const auto firstJump = std::find(e.begin(), e.end(), d::eijmp);
+      REQUIRE(firstJump - e.begin() >= 4);
+      CHECK(std::vector<uint16_t>(firstJump - 4, firstJump) ==
+            std::vector<uint16_t>{ d::ldi(31, 0x3F), d::ldi(30, 0xC0), d::ldi(16, 0x00), d::out(0x3C, 16) });
+
+      // The state comes back: SREG, SPMCSR without the command bits,
+      // RAMPZ not touched below 64 KB, then the registers at the run.
+      CHECK(b.target.data[dataSreg] == 0x35);
+      CHECK(b.target.data[dataSpmcsr] == 0x80);
+      CHECK(b.target.data[dataRampz] == 0x77);
+      CHECK(count(e, d::out(0x3B, 16)) == 0);
+      CHECK(b.debug.pc() == 0x123);
+      std::vector<uint8_t> read(128);
+      REQUIRE(b.debug.readFlash(0x100, read.data(), 128) == JtagDebugStatus::Ok);
+      CHECK(read == page);
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK(registers(b.target) == pattern);
+      CHECK(b.target.pc == 0x123);
+   }
+}
+
+TEST_CASE("AvrJtagDebug: flash page write above 64 KB with RAMPZ") {
+   Bench b{ 4 };
+   b.target.flash.assign(262144, 0xFF);
+   b.target.flashPageBytes = 256;
+   b.target.data[dataRampz] = 0x01;
+   b.debug.setDevice({ .flashBytes = 262144, .flashPageBytes = 256 });
+   b.target.pc = 0x1F000;
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   const auto page = flashPattern(256, 0x21);
+   REQUIRE(b.debug.writeFlashPage(0x20100, page.data()) == JtagDebugStatus::Ok);
+   CHECK(std::equal(page.begin(), page.end(), b.target.flash.begin() + 0x20100));
+   CHECK(b.target.flash[0x0100] == 0xFF);
+   CHECK(b.target.data[dataRampz] == 0x01);
+   namespace d = avr::jtagDebug;
+   CHECK(count(b.target.executed, d::ldi(16, 0x02)) >= 1);
+   // The last page: word 0x1FF80, EIND 1
+   CHECK(count(b.target.executed, d::ldi(31, 0xFF)) >= 1);
+   CHECK(count(b.target.executed, d::ldi(30, 0x80)) >= 1);
+   CHECK(b.target.unknownInstructions.empty());
+   REQUIRE(b.debug.step() == JtagDebugStatus::Ok);
+   CHECK(b.target.pc == 0x1F001);
+}
+
+TEST_CASE("AvrJtagDebug: flash page write failures") {
+   Bench b;
+   const auto page = flashPattern(128, 0x40);
+   SUBCASE("the core runs") {
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::TargetRunning);
+   }
+   SUBCASE("range, alignment and SPMCSR") {
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.writeFlashPage(0x140, page.data()) == JtagDebugStatus::OutOfRange);
+      CHECK(b.debug.writeFlashPage(32768, page.data()) == JtagDebugStatus::OutOfRange);
+      b.debug.setDevice({ .spmcsr = 0 });
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::OutOfRange);
+      CHECK(b.target.spmPageErases == 0);
+   }
+   SUBCASE("the boot lock bits stop SPM") {
+      b.target.spmLocked = true;
+      b.target.data[dataSreg] = 0x35;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::VerifyFailed);
+      CHECK(b.target.flash[0x100] == 0xFF);
+      CHECK(b.target.data[dataSreg] == 0x35);
+   }
+   SUBCASE("SPMEN does not clear") {
+      b.target.spmBusyReads = 1000000;
+      b.target.data[dataSreg] = 0x35;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::Timeout);
+      CHECK(b.target.spmPageErases == 1);
+      CHECK(b.target.spmPageWrites == 0);
+      // The state comes back also after the failure.
+      CHECK(b.target.data[dataSreg] == 0x35);
+   }
+   SUBCASE("no OCD") {
+      b.target.ocden = false;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::NoOcd);
+   }
+}

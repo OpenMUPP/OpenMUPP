@@ -40,6 +40,23 @@
 // - The EEPROM write sets EEMPE, then EEPE with two adjacent injected
 //   OUT instructions. That the 4-cycle limit of EEMPE holds for this is not
 //   tested, so each byte is read back after the write.
+// - The flash page write (writeFlashPage(), for the software breakpoints)
+//   uses the SPM sequence of the reference debugger (docs/avr-jtag-ocd.md,
+//   "Flash write in debug mode"): save SPMCSR and SREG (and RAMPZ above
+//   64 KB), then for each SPM an EIJMP into the boot section, the SPMCSR
+//   command with ST Y, and the SPM as a single step (BCR 0xA000, RUN).
+//   Page erase, RWW enable, one page buffer load for each word, page
+//   write, RWW enable. Then restore SPMCSR (without its command bits),
+//   SREG, RAMPZ and EIND, and read the page back. Differences from the
+//   reference debugger: the probe polls SPMCSR after each SPM until SPMEN
+//   is clear, it writes RAMPZ only for a flash above 64 KB (bits 17..16
+//   of the page address), and the boot section address is the start of
+//   the last flash page. This page is in the boot section for all BOOTSZ
+//   fuses; the boot start of the device context is not (avrdude sends the
+//   start of the last 4 pages, which is below the smallest boot section
+//   of the ATmega16). The read back finds a page that SPM did not write,
+//   for example when the boot lock bits stop SPM. r0, r1, r28 and r29 also
+//   change on the target: the write-back restores them.
 // - Hardware breakpoints (program addresses, word addresses): the host
 //   numbers 1 to 3 use reg 1, reg 2 and reg 3 (mode 3), reg 0 (one-shot)
 //   is the RUN_TO address. The probe keeps them and writes them before
@@ -81,7 +98,7 @@ enum class JtagDebugStatus : uint8_t {
    // access would write wrong registers to the target. A reset reads a new
    // context.
    NoContext,
-   // An EEPROM byte read back different after the write
+   // An EEPROM byte or a flash page read back different after the write
    VerifyFailed,
 };
 
@@ -89,6 +106,9 @@ enum class JtagDebugStatus : uint8_t {
 // addresses are I/O addresses. Defaults: ATmega32U4.
 struct JtagDebugDevice {
    uint32_t flashBytes{ 32768 };
+   uint16_t flashPageBytes{ 128 };
+   // A data space address (I/O + 0x20)
+   uint8_t spmcsr{ 0x57 };
    uint16_t eepromBytes{ 1024 };
    uint8_t ocdr{ 0x31 };
    // EEARH equal to EEARL: the EEPROM address register has one byte.
@@ -129,11 +149,25 @@ inline constexpr uint32_t eepromTimeoutMs = 100;
 inline constexpr uint32_t eepromPollCycles = 2 * (3 + 32 + 2) + 2 * readScanCycles;
 
 inline constexpr uint8_t ioEind = 0x3C;
+inline constexpr uint8_t ioRampz = 0x3B;
+inline constexpr uint8_t ioSreg = 0x3F;
 inline constexpr uint16_t dataIo = 0x20;
 inline constexpr uint16_t dataSram = 0x60;
 inline constexpr uint8_t eecrRead = 0x01;
 inline constexpr uint8_t eecrWrite = 0x02;
 inline constexpr uint8_t eecrMasterWrite = 0x04;
+
+// The SPMCSR commands (datasheet): SPMEN alone is a page buffer load.
+inline constexpr uint8_t spmEnable = 0x01;
+inline constexpr uint8_t spmPageErase = 0x03;
+inline constexpr uint8_t spmPageWrite = 0x05;
+inline constexpr uint8_t spmRwwEnable = 0x11;
+inline constexpr uint8_t spmCommandBits = 0x1F;
+// The single step of an SPM in the reference sequence
+inline constexpr uint16_t spmStep = jtagOcd::bcr::bit15 | jtagOcd::bcr::step;
+static_assert(spmStep == 0xA000);
+// Longer than tWD_FLASH (4.5 ms) of the datasheets
+inline constexpr uint32_t spmTimeoutMs = 100;
 
 // The injected AVR instructions
 constexpr uint16_t ldi(uint8_t d, uint8_t k) {
@@ -155,7 +189,12 @@ constexpr uint16_t ldZ(uint8_t d) {
 constexpr uint16_t stZ(uint8_t r) {
    return static_cast<uint16_t>(0x8200u | ((r & 0x1Fu) << 4));
 }
+// ST Y, Rr
+constexpr uint16_t stY(uint8_t r) {
+   return static_cast<uint16_t>(0x8208u | ((r & 0x1Fu) << 4));
+}
 inline constexpr uint16_t eijmp = 0x9419;
+inline constexpr uint16_t spm = 0x95E8;
 inline constexpr uint16_t wdr = 0x95A8;
 // The instruction bits of the flash read scans
 inline constexpr uint16_t flashReadFill = 0xFFFF;
@@ -163,6 +202,7 @@ inline constexpr uint16_t flashReadFill = 0xFFFF;
 static_assert(ldi(31, 0x02) == 0xE0F2);
 static_assert(out(0x31, 16) == 0xBF01);
 static_assert(mov(5, 16) == 0x2E50);
+static_assert(stY(16) == 0x8308);
 
 } // namespace jtagDebug
 
@@ -440,6 +480,60 @@ class AvrJtagDebug {
       return JtagDebugStatus::Ok;
    }
 
+   // Writes one flash page at a page-aligned byte address with SPM (see
+   // above). The page has device.flashPageBytes bytes.
+   [[nodiscard]] JtagDebugStatus writeFlashPage(uint32_t address, const uint8_t *page) {
+      if(JtagDebugStatus status = ready(); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      const uint16_t pageBytes = device_.flashPageBytes;
+      if(pageBytes < 2 || address % pageBytes != 0 || !inRange(address, pageBytes, device_.flashBytes) ||
+         device_.spmcsr < jtagDebug::dataIo || device_.spmcsr >= jtagDebug::dataSram) {
+         return JtagDebugStatus::OutOfRange;
+      }
+      const bool far = device_.flashBytes > 0x10000u;
+      uint8_t spmcsr = 0;
+      uint8_t sreg = 0;
+      uint8_t rampz = 0;
+      if(!loadZ(device_.spmcsr) || !execute(jtagDebug::ldZ(16))) {
+         return JtagDebugStatus::NoOcd;
+      }
+      if(JtagDebugStatus status = readOcdr(16, spmcsr); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      if(JtagDebugStatus status = readIo(jtagDebug::ioSreg, sreg); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      if(far) {
+         if(JtagDebugStatus status = readIo(jtagDebug::ioRampz, rampz); status != JtagDebugStatus::Ok) {
+            return status;
+         }
+      }
+      JtagDebugStatus status = programPage(address, page, far);
+      // The restore also after a failure: the program must not run with a
+      // changed SREG or RAMPZ.
+      const bool restored =
+      (!far || writeIo(jtagDebug::ioRampz, rampz)) && writeIo(jtagDebug::ioSreg, sreg) && loadZ(device_.spmcsr) &&
+      execute(jtagDebug::ldi(16, static_cast<uint8_t>(spmcsr & ~jtagDebug::spmCommandBits))) &&
+      execute(jtagDebug::stZ(16)) && writeIo(jtagDebug::ioEind, eind_) && commit() == JtagDebugStatus::Ok;
+      if(status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      if(!restored) {
+         return JtagDebugStatus::NoOcd;
+      }
+      for(uint16_t i = 0; i < pageBytes; i += 2) {
+         uint16_t word = 0;
+         if(status = readFlashWord((address + i) / 2u, word); status != JtagDebugStatus::Ok) {
+            return status;
+         }
+         if(word != static_cast<uint16_t>(page[i] | page[i + 1u] << 8u)) {
+            return JtagDebugStatus::VerifyFailed;
+         }
+      }
+      return JtagDebugStatus::Ok;
+   }
+
    private:
    static constexpr bool inRange(uint32_t address, uint32_t length, uint32_t size) {
       return address <= size && length <= size - address;
@@ -609,6 +703,81 @@ class AvrJtagDebug {
          return JtagDebugStatus::NoOcd;
       }
       return write ? JtagDebugStatus::Ok : readOcdr(16, value);
+   }
+
+   // IN r16, io, then the OCDR
+   [[nodiscard]] JtagDebugStatus readIo(uint8_t io, uint8_t &value) {
+      if(!execute(jtagDebug::in(16, io))) {
+         return JtagDebugStatus::NoOcd;
+      }
+      return readOcdr(16, value);
+   }
+
+   // The SPM steps of writeFlashPage(). RAMPZ:Z is the byte address.
+   [[nodiscard]] JtagDebugStatus programPage(uint32_t address, const uint8_t *page, bool far) {
+      if(far && !writeIo(jtagDebug::ioRampz, static_cast<uint8_t>(address >> 16))) {
+         return JtagDebugStatus::NoOcd;
+      }
+      const auto z = static_cast<uint16_t>(address);
+      JtagDebugStatus status = spm(jtagDebug::spmPageErase, z);
+      if(status == JtagDebugStatus::Ok) {
+         status = spm(jtagDebug::spmRwwEnable, z);
+      }
+      for(uint16_t i = 0; i < device_.flashPageBytes && status == JtagDebugStatus::Ok; i += 2) {
+         status = spm(jtagDebug::spmEnable, static_cast<uint16_t>(z + i), page + i);
+      }
+      if(status == JtagDebugStatus::Ok) {
+         status = spm(jtagDebug::spmPageWrite, z);
+      }
+      if(status == JtagDebugStatus::Ok) {
+         status = spm(jtagDebug::spmRwwEnable, z);
+      }
+      return status;
+   }
+
+   // One SPM with command at Z = z, r1:r0 = word (a page buffer load), in
+   // the reference order: EIJMP into the boot section, Z, r0 and r1,
+   // BCR 0xC000, the command to SPMCSR with ST Y, BCR 0xA000, SPM and RUN
+   // (one step). Then the stop, BCR 0xC000, and SPMCSR until SPMEN is
+   // clear.
+   [[nodiscard]] JtagDebugStatus spm(uint8_t command, uint16_t z, const uint8_t *word = nullptr) {
+      const uint32_t boot = (device_.flashBytes - device_.flashPageBytes) / 2u;
+      if(!loadZ(static_cast<uint16_t>(boot)) || !writeIo(jtagDebug::ioEind, static_cast<uint8_t>(boot >> 16)) ||
+         !execute(jtagDebug::eijmp) || !loadZ(z)) {
+         return JtagDebugStatus::NoOcd;
+      }
+      if(word != nullptr && (!execute(jtagDebug::ldi(16, word[0])) || !execute(jtagDebug::mov(0, 16)) ||
+                             !execute(jtagDebug::ldi(16, word[1])) || !execute(jtagDebug::mov(1, 16)))) {
+         return JtagDebugStatus::NoOcd;
+      }
+      if(!writeBcr(jtagDebug::idle) || !execute(jtagDebug::ldi(16, command)) || !execute(jtagDebug::ldi(29, 0)) ||
+         !execute(jtagDebug::ldi(28, device_.spmcsr)) || !execute(jtagDebug::stY(16)) ||
+         !writeBcr(jtagDebug::spmStep) || !execute(jtagDebug::spm) || !ocd_.run()) {
+         return JtagDebugStatus::NoOcd;
+      }
+      if(JtagDebugStatus status = waitStop(); status != JtagDebugStatus::Ok) {
+         // The core can run now, in the boot section.
+         stopped_ = false;
+         return status;
+      }
+      if(!writeBcr(jtagDebug::idle) || !loadZ(device_.spmcsr)) {
+         return JtagDebugStatus::NoOcd;
+      }
+      // The same poll cost as the EEPROM: two instructions, two reads
+      const uint32_t polls = jtagDebug::spmTimeoutMs * tap_.kHz() / jtagDebug::eepromPollCycles + 1u;
+      for(uint32_t i = 0; i < polls; ++i) {
+         uint8_t value = 0;
+         if(!execute(jtagDebug::ldZ(16))) {
+            return JtagDebugStatus::NoOcd;
+         }
+         if(JtagDebugStatus status = readOcdr(16, value); status != JtagDebugStatus::Ok) {
+            return status;
+         }
+         if((value & jtagDebug::spmEnable) == 0) {
+            return JtagDebugStatus::Ok;
+         }
+      }
+      return JtagDebugStatus::Timeout;
    }
 
    // Two IR 0xA scans: the word address, then the PC field. The second
