@@ -866,6 +866,34 @@ TEST_CASE("EDBG JTAG: software breakpoint checks") {
       CHECK(b.run() == ok);
       CHECK(b.step() == failed(0x32));
    }
+   SUBCASE("a failed page write keeps the entry for the next commit") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      CHECK(b.run() == ok);
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+      CHECK(b.stop() == ok);
+      CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+      CHECK(b.swBreak(false, { 0x200 }) == ok);
+      // The boot lock bits stop SPM: the read back fails.
+      b.jtagAvr.spmLocked = true;
+      CHECK(b.run() == failed(0x13));
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+      b.jtagAvr.spmLocked = false;
+      CHECK(b.run() == ok);
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+      b.bloomClose();
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+   }
+   SUBCASE("a failed insert, then DETACH") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      b.jtagAvr.spmLocked = true;
+      CHECK(b.run() == failed(0x13));
+      b.jtagAvr.spmLocked = false;
+      b.bloomClose();
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+      CHECK(b.jtagAvr.spmPageWrites == 0);
+   }
    SUBCASE("too many") {
       b.bloomAttach();
       for(uint32_t i = 0; i < avr8::maxSoftwareBreaks; ++i) {

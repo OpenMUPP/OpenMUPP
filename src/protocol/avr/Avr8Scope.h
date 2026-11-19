@@ -1596,23 +1596,35 @@ class Avr8Scope final : public Avr8Handler {
          if(Status status = readPage(page); status != Status::Ok) {
             return status;
          }
-         for(std::size_t i = breakCount_; i > 0; --i) {
-            SoftwareBreak &entry = breaks_[i - 1];
+         // The table changes only after the write: after a failed write
+         // the next commit tries again, and no BREAK stays in flash without
+         // an entry.
+         for(std::size_t i = 0; i < breakCount_; ++i) {
+            SoftwareBreak &entry = breaks_[i];
             if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
                continue;
             }
             uint8_t *at = &page_[entry.word * 2u - page];
             if(entry.state == BreakState::Inserting) {
                entry.original = static_cast<uint16_t>(at[0] | (at[1] << 8));
-               entry.state = BreakState::Active;
                putWord(at, avr8::breakOpcode);
             } else {
                putWord(at, entry.original);
-               removeBreak(&entry);
             }
          }
          if(Status status = writePageBuffer(page); status != Status::Ok) {
             return status;
+         }
+         for(std::size_t i = breakCount_; i > 0; --i) {
+            SoftwareBreak &entry = breaks_[i - 1];
+            if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
+               continue;
+            }
+            if(entry.state == BreakState::Inserting) {
+               entry.state = BreakState::Active;
+            } else {
+               removeBreak(&entry);
+            }
          }
       }
    }
