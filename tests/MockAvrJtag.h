@@ -47,7 +47,8 @@
 // - FORCE_BREAK (0x8) at Update-IR stops the running core: BSR bit 1.
 // - RUN (0x9) at Update-IR starts the stopped core at pc. With BCR bit 13
 //   it executes one step: pc + 1 (the mock does not execute the flash),
-//   BSR bit 7, and bit 13 clear. After an EIJMP since the stop, the core
+//   BSR bit 7, and bit 13 clear. With stepRuns, the step does not stop:
+//   the core runs. After an EIJMP since the stop, the core
 //   starts at the PC field, modulo the flash words: the PC write of the
 //   reference debugger (Z = PC - 11, then five instructions) then starts
 //   at the PC (hardware test on revision 3).
@@ -83,10 +84,12 @@
 //   registers at 0x20 and the SRAM. A write to the I/O address
 //   ocdDataReg goes to the OCDR and sets reg D bit 4.
 // - SPM uses SPMCSR at the data address spmcsr and the byte address
-//   RAMPZ:Z: page erase (0x03), page buffer load of r1:r0 (0x01), page
-//   write (0x05, AND as without an erase) and RWW enable (0x11). Other
-//   commands record SPM in unknownInstructions. SPMEN clears at once. The
-//   mock does not check the boot section.
+//   RAMPZ:Z modulo the flash size: page erase (0x03), page buffer load of
+//   r1:r0 (0x01), page write (0x05, AND as without an erase) and RWW
+//   enable (0x11). Other commands record SPM in unknownInstructions.
+//   SPMEN clears at once, but after a page erase or write it shows in the
+//   next spmBusyReads reads of SPMCSR. SPM does nothing at a pc below bootStartWords (the pc of the
+//   last EIJMP or stop), or with spmLocked (the boot lock bits).
 // - EEPROM: a write to EECR (I/O address eecrIo) with EERE loads EEDR from
 //   eeprom at EEARH:EEARL. EEPE while EEMPE is set writes EEDR to the
 //   EEPROM (eepromWrites), and EEPE stays set for eepeBusyReads reads of
@@ -302,6 +305,10 @@ class MockAvrJtag final : public JtagTarget {
    std::vector<uint16_t> unknownInstructions;
    uint32_t spmPageErases{ 0 };
    uint32_t spmPageWrites{ 0 };
+   uint32_t spmBusyReads{ 0 };
+   uint32_t bootStartWords{ 0 };
+   bool spmLocked{ false };
+   bool stepRuns{ false };
 
    // The running core comes to word: it stops there when a program
    // breakpoint matches. True: it stopped.
@@ -360,7 +367,7 @@ class MockAvrJtag final : public JtagTarget {
             const auto words = static_cast<uint32_t>(flash.size() / 2);
             pc = pcField % words;
          }
-         if((ocdRegs[8] & (1u << 13)) != 0) {
+         if((ocdRegs[8] & (1u << 13)) != 0 && !stepRuns) {
             ocdRegs[8] = static_cast<uint16_t>(ocdRegs[8] & ~(1u << 13));
             stop(pc + 1, 1u << 7);
          } else {
@@ -474,6 +481,10 @@ class MockAvrJtag final : public JtagTarget {
          --eepeBusy_;
          return static_cast<uint8_t>(data[address] | 0x02u);
       }
+      if(address == spmcsr && spmBusy_ > 0) {
+         --spmBusy_;
+         return static_cast<uint8_t>(data[address] | 0x01u);
+      }
       return address < data.size() ? data[address] : 0;
    }
 
@@ -544,11 +555,17 @@ class MockAvrJtag final : public JtagTarget {
    }
 
    void spm() {
-      const uint8_t command = load(spmcsr) & 0x1Fu;
-      const uint32_t address = static_cast<uint32_t>(load(0x20u + rampz)) << 16 | z();
+      const uint8_t command = data[spmcsr] & 0x1Fu;
+      data[spmcsr] = static_cast<uint8_t>(data[spmcsr] & 0xE0u);
+      if(spmLocked || pc < bootStartWords) {
+         return;
+      }
+      // The address bits above the flash size have no effect.
+      const uint32_t address = (static_cast<uint32_t>(load(0x20u + rampz)) << 16 | z()) % static_cast<uint32_t>(flash.size());
       const uint32_t page = address / flashPageBytes * flashPageBytes;
       if(command == 0x03) {
          ++spmPageErases;
+         spmBusy_ = spmBusyReads;
          if(page + flashPageBytes <= flash.size()) {
             std::fill_n(flash.begin() + page, flashPageBytes, 0xFF);
          }
@@ -556,6 +573,7 @@ class MockAvrJtag final : public JtagTarget {
          spmBuffer_[address / 2] = static_cast<uint16_t>(reg(1) << 8 | reg(0));
       } else if(command == 0x05) {
          ++spmPageWrites;
+         spmBusy_ = spmBusyReads;
          for(const auto &[word, value] : spmBuffer_) {
             if(word * 2 / flashPageBytes * flashPageBytes == page && word * 2 + 1 < flash.size()) {
                flash[word * 2] &= static_cast<uint8_t>(value);
@@ -566,7 +584,6 @@ class MockAvrJtag final : public JtagTarget {
       } else if(command != 0x11) {
          unknownInstructions.push_back(0x95E8u);
       }
-      store(spmcsr, static_cast<uint8_t>(load(spmcsr) & 0xE0u));
    }
 
    static std::array<uint8_t, 0x20> makeSigrow() {
@@ -896,6 +913,7 @@ class MockAvrJtag final : public JtagTarget {
    // rising edge in Run-Test/Idle
    std::optional<uint16_t> loaded_;
    uint32_t eepeBusy_{ 0 };
+   uint32_t spmBusy_{ 0 };
    bool jumped_{ false };
    uint16_t flashRead_{ 0 };
    std::map<uint32_t, uint16_t> spmBuffer_;

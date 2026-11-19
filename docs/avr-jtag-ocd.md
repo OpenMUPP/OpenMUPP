@@ -321,6 +321,16 @@ At the end of the erase, the sequence wrote RAMPZ = `0x0C` (141.8070 s), not the
 The boot lock bits must allow `SPM` in the boot section.
 `SPM` uses RAMPZ:Z as the byte address (datasheet). The capture writes only one page below 64 KB, so the RAMPZ value for a higher page is from the datasheet, not from a capture.
 
+The probe uses this sequence only for the software breakpoints (`AvrJtagDebug::writeFlashPage`). It has these differences from the reference debugger:
+
+- After each `SPM`, it polls SPMCSR until SPMEN is clear.
+- The `EIJMP` goes to the start of the last flash page. This page is in the boot section for all BOOTSZ values. The boot start of the device context is not always in the boot section: avrdude sends the start of the last 4 pages, and on the ATmega16 this address is below the smallest boot section.
+- It writes RAMPZ only for a flash of more than 64 KB. The restore writes the saved value, not `0x0C`.
+- The restore writes SPMCSR without its command bits (4..0).
+- After the restore, it reads the page back. A different page gives an error, for example when the boot lock bits stop `SPM`.
+
+The probe sequence has host tests only. No hardware test confirms it yet.
+
 ## Open questions
 
 1. The meaning of BCR bits 15 and 14, and of reg D bits 3 and 0.

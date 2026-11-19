@@ -37,6 +37,8 @@ struct AvrJtagDevice {
    uint8_t eearl{ 0x21 };
    uint8_t eecr{ 0x1F };
    uint8_t eedr{ 0x20 };
+   // A data space address, for the flash write in the debug mode
+   uint8_t spmcsr{ 0x57 };
 };
 
 class AvrJtagTarget {
@@ -56,6 +58,8 @@ class AvrJtagTarget {
       device_ = device;
       ocd_.setRevision(device.ocdRevision);
       debug_.setDevice({ .flashBytes = device.prog.flashBytes,
+                         .flashPageBytes = device.prog.flashPageBytes,
+                         .spmcsr = device.spmcsr,
                          .eepromBytes = device.eepromBytes,
                          .ocdr = device.ocdr,
                          .eearh = device.eearh,

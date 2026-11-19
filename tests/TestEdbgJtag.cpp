@@ -300,6 +300,7 @@ TEST_CASE("EDBG JTAG: the full-page bit stream of the ATmega16 and ATmega32") {
    CHECK(b.avr8(readMemory(memory::flashPage, 0x200, 128)) == data(page));
    CHECK(b.jtagTarget.device().prog.fullPageBitstream);
    CHECK(b.jtagTarget.device().ocdRevision == 2);
+   CHECK(b.jtagTarget.device().spmcsr == 0x57);
    b.avrdudeClose();
 }
 
