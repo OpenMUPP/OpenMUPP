@@ -181,6 +181,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <type_traits>
 
 #include <utils/compat/span.h>
 
@@ -382,7 +383,7 @@ class Avr8Scope final : public Avr8Handler {
    private:
    enum class BreakState : uint8_t { Inserting, Active, Removing };
    struct SoftwareBreak {
-      uint16_t word;
+      uint32_t word;
       uint16_t original;
       BreakState state;
    };
@@ -1422,12 +1423,12 @@ class Avr8Scope final : public Avr8Handler {
       }
       for(std::size_t at = headerBytes; at < request_.size(); at += 4) {
          const uint32_t address = u32(request_, at);
-         if(address >= target_.device().flashBytes || address % 2 != 0) {
+         if(address >= flashBytes() || address % 2 != 0) {
             return failed(avr8::failure::range);
          }
       }
       for(std::size_t at = headerBytes; at < request_.size(); at += 4) {
-         const auto word = static_cast<uint16_t>(u32(request_, at) / 2u);
+         const uint32_t word = u32(request_, at) / 2u;
          if(!set) {
             clearBreak(word);
          } else if(!setBreak(word)) {
@@ -1437,7 +1438,7 @@ class Avr8Scope final : public Avr8Handler {
       return ok();
    }
 
-   [[nodiscard]] SoftwareBreak *findBreak(uint16_t word, std::optional<BreakState> state = std::nullopt) {
+   [[nodiscard]] SoftwareBreak *findBreak(uint32_t word, std::optional<BreakState> state = std::nullopt) {
       for(std::size_t i = 0; i < breakCount_; ++i) {
          if(breaks_[i].word == word && (!state || breaks_[i].state == *state)) {
             return &breaks_[i];
@@ -1451,7 +1452,7 @@ class Avr8Scope final : public Avr8Handler {
       breaks_[index] = breaks_[--breakCount_];
    }
 
-   bool setBreak(uint16_t word) {
+   bool setBreak(uint32_t word) {
       if(SoftwareBreak *entry = findBreak(word); entry != nullptr) {
          if(entry->state == BreakState::Removing) {
             entry->state = BreakState::Active;
@@ -1465,7 +1466,7 @@ class Avr8Scope final : public Avr8Handler {
       return true;
    }
 
-   void clearBreak(uint16_t word) {
+   void clearBreak(uint32_t word) {
       SoftwareBreak *entry = findBreak(word);
       if(entry == nullptr) {
          return;
@@ -1483,8 +1484,63 @@ class Avr8Scope final : public Avr8Handler {
       }
    }
 
-   [[nodiscard]] uint32_t pageOf(uint16_t word) const {
-      return (uint32_t{ word } * 2u) & ~(uint32_t{ target_.device().flashPageBytes } - 1u);
+   [[nodiscard]] uint32_t pageOf(uint32_t word) const {
+      return (word * 2u) & ~(uint32_t{ flashPageBytes() } - 1u);
+   }
+
+   // The flash and step operations of the software breakpoints, on the
+   // target of the scope. The JTAG debug mode needs a stopped core with a
+   // context.
+   using Status = std::conditional_t<Target::hasProgmode, JtagDebugStatus, DwStatus>;
+
+   [[nodiscard]] uint16_t flashPageBytes() const {
+      if constexpr(Target::hasProgmode) {
+         return target_.device().prog.flashPageBytes;
+      } else {
+         return target_.device().flashPageBytes;
+      }
+   }
+
+   [[nodiscard]] uint32_t flashBytes() const {
+      if constexpr(Target::hasProgmode) {
+         return target_.device().prog.flashBytes;
+      } else {
+         return target_.device().flashBytes;
+      }
+   }
+
+   [[nodiscard]] uint32_t corePc() const {
+      if constexpr(Target::hasProgmode) {
+         return target_.debug().pc();
+      } else {
+         return target_.pc();
+      }
+   }
+
+   // page_ = the flash page at the byte address page
+   [[nodiscard]] Status readPage(uint32_t page) {
+      if constexpr(Target::hasProgmode) {
+         return target_.debug().readFlash(page, page_.data(), flashPageBytes());
+      } else {
+         return target_.readFlash(page, page_.data(), flashPageBytes());
+      }
+   }
+
+   // The flash page at the byte address page = page_
+   [[nodiscard]] Status writePageBuffer(uint32_t page) {
+      if constexpr(Target::hasProgmode) {
+         return target_.debug().writeFlashPage(page, page_.data());
+      } else {
+         return target_.writeFlashPage(page, page_.data());
+      }
+   }
+
+   [[nodiscard]] Status stepCore() {
+      if constexpr(Target::hasProgmode) {
+         return target_.debug().step();
+      } else {
+         return target_.step();
+      }
    }
 
    static void putWord(uint8_t *at, uint16_t value) {
@@ -1494,7 +1550,7 @@ class Avr8Scope final : public Avr8Handler {
 
    // Writes the changes of the breakpoint table into flash, one page
    // write for each page with a change.
-   DwStatus commitBreaks() {
+   Status commitBreaks() {
       for(;;) {
          const SoftwareBreak *pending = nullptr;
          for(std::size_t i = 0; i < breakCount_ && pending == nullptr; ++i) {
@@ -1503,11 +1559,10 @@ class Avr8Scope final : public Avr8Handler {
             }
          }
          if(pending == nullptr) {
-            return DwStatus::Ok;
+            return Status::Ok;
          }
          const uint32_t page = pageOf(pending->word);
-         const uint16_t pageBytes = target_.device().flashPageBytes;
-         if(DwStatus status = target_.readFlash(page, page_.data(), pageBytes); status != DwStatus::Ok) {
+         if(Status status = readPage(page); status != Status::Ok) {
             return status;
          }
          for(std::size_t i = breakCount_; i > 0; --i) {
@@ -1525,7 +1580,7 @@ class Avr8Scope final : public Avr8Handler {
                removeBreak(&entry);
             }
          }
-         if(DwStatus status = target_.writeFlashPage(page, page_.data()); status != DwStatus::Ok) {
+         if(Status status = writePageBuffer(page); status != Status::Ok) {
             return status;
          }
       }
@@ -1533,24 +1588,24 @@ class Avr8Scope final : public Avr8Handler {
 
    // At an active software breakpoint: the original word for one step,
    // then BREAK again.
-   DwStatus stepOverBreak() {
-      const SoftwareBreak *entry = findBreak(target_.pc(), BreakState::Active);
+   Status stepOverBreak() {
+      const SoftwareBreak *entry = findBreak(corePc(), BreakState::Active);
       if(entry == nullptr) {
-         return DwStatus::Ok;
+         return Status::Ok;
       }
       const uint32_t page = pageOf(entry->word);
       uint8_t *at = &page_[entry->word * 2u - page];
-      if(DwStatus status = target_.readFlash(page, page_.data(), target_.device().flashPageBytes); status != DwStatus::Ok) {
+      if(Status status = readPage(page); status != Status::Ok) {
          return status;
       }
       putWord(at, entry->original);
-      if(DwStatus status = target_.writeFlashPage(page, page_.data()); status != DwStatus::Ok) {
+      if(Status status = writePageBuffer(page); status != Status::Ok) {
          return status;
       }
-      const DwStatus stepped = target_.step();
+      const Status stepped = stepCore();
       putWord(at, avr8::breakOpcode);
-      const DwStatus written = target_.writeFlashPage(page, page_.data());
-      return stepped != DwStatus::Ok ? stepped : written;
+      const Status written = writePageBuffer(page);
+      return stepped != Status::Ok ? stepped : written;
    }
 
    // [type][address u32][length u32]
@@ -1939,7 +1994,7 @@ class Avr8Scope final : public Avr8Handler {
    uint16_t runBreak_{ 0xFFFF };
    std::array<SoftwareBreak, avr8::maxSoftwareBreaks> breaks_{};
    std::size_t breakCount_{ 0 };
-   std::array<uint8_t, avr8::maxPageBytes> page_{};
+   std::array<uint8_t, Target::hasProgmode ? avr8::maxJtagPageBytes : avr8::maxPageBytes> page_{};
 };
 
 // Two scopes on one EDBG transport, as the debugWIRE scope and the JTAG
