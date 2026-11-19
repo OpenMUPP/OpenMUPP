@@ -236,15 +236,14 @@ build-ydch32v307-wch-link:
     VARIANT: -wch-link
   artifacts: null
 
-# YD-CH32V307VCT6: the AVR commands on the HID interface
-# (MUPP_CMSIS_DAP_AVR), with one and with all personalities. Build and size
-# check only, no artifacts.
-build-ydch32v307-avr:
+# YD-CH32V307VCT6: the AVR commands with the USB ID of the Xplained Mini
+# (MUPP_AVR_USB_ID=medbg). The other CH32 images have the AVR commands by
+# default. Build and size check only, no artifacts.
+build-ydch32v307-avr-medbg:
   extends: .build-board-template
-  parallel:
-    matrix:
-      - BOARD: ydch32v307
-        VARIANT: [-cmsis-dap-avr, -cmsis-dap-avr-medbg, -all-avr]
+  variables:
+    BOARD: ydch32v307
+    VARIANT: -cmsis-dap-avr-medbg
   artifacts: null
 
 # OpenMUPP v1 probe board (CH32V307RCT6): the firmware image with the

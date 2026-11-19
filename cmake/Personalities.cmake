@@ -77,9 +77,10 @@ endfunction()
 #   MUPP_CMSIS_DAP_RV_BRIDGE  the RISC-V bridge of the CMSIS-DAP personality.
 #                             Not defined: ON. Ignored without cmsis-dap.
 #   MUPP_CMSIS_DAP_HID        the CMSIS-DAP v1 (HID) interface of the
-#                             CMSIS-DAP personality. Needs cmsis-dap.
+#                             CMSIS-DAP personality. Ignored without cmsis-dap.
 #   MUPP_CMSIS_DAP_AVR        the AVR commands (EDBG) on the HID interface.
-#                             Needs MUPP_CMSIS_DAP_HID.
+#                             Needs MUPP_CMSIS_DAP_HID. Ignored without
+#                             cmsis-dap.
 #   MUPP_AVR_USB_ID           own (default) or medbg, the ID 03eb:2145 of the
 #                             Xplained Mini. medbg needs MUPP_CMSIS_DAP_AVR and
 #                             the cmsis-dap personality alone.
@@ -158,15 +159,14 @@ function(mupp_resolve_personalities)
     elseif (NOT _bridge)
         set(_bridge_off_tag "-no-rv-bridge")
     endif ()
-    if (MUPP_CMSIS_DAP_HID AND NOT "cmsis-dap" IN_LIST _personalities)
-        message(FATAL_ERROR "MUPP_CMSIS_DAP_HID needs cmsis-dap in MUPP_PERSONALITIES.")
-    endif ()
-    if (MUPP_CMSIS_DAP_HID)
+    # HID and AVR are ON by default on the CH32V30x, also in an image without
+    # cmsis-dap: such an image ignores them, as it ignores the bridge.
+    if (MUPP_CMSIS_DAP_HID AND "cmsis-dap" IN_LIST _personalities)
         set(_hid ON)
     else ()
         set(_hid OFF)
     endif ()
-    if (MUPP_CMSIS_DAP_AVR AND NOT _hid)
+    if (MUPP_CMSIS_DAP_AVR AND NOT _hid AND "cmsis-dap" IN_LIST _personalities)
         message(FATAL_ERROR "MUPP_CMSIS_DAP_AVR needs MUPP_CMSIS_DAP_HID=ON: the AVR commands use the HID interface.")
     endif ()
     if (NOT "${MUPP_AVR_USB_ID}" MATCHES "^(own|medbg|)$")
@@ -181,7 +181,7 @@ function(mupp_resolve_personalities)
             message(FATAL_ERROR "MUPP_AVR_USB_ID=medbg needs MUPP_PERSONALITIES=cmsis-dap alone.")
         endif ()
     endif ()
-    if (MUPP_CMSIS_DAP_AVR)
+    if (MUPP_CMSIS_DAP_AVR AND _hid)
         set(_avr ON)
     else ()
         set(_avr OFF)

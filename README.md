@@ -139,7 +139,7 @@ The presets `ydch32v307`, `ydch32v307-cmsis-dap`, `ydch32v307-dual` and `ydch32v
 `ydch32v307-all` has all personalities.
 The preset `ydch32v307-wch-link` builds the firmware image with the WCH-Link personality.
 The preset `openmuppv1-cmsis-dap` builds the firmware image of the OpenMUPP v1 probe board with the CMSIS-DAP personality.
-The presets `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` add the AVR commands on the CMSIS-DAP v1 (HID) interface (`MUPP_CMSIS_DAP_AVR`, see [docs/cmsis-dap.md](docs/cmsis-dap.md#avr-commands)).
+On the CH32V307 boards, each image with `cmsis-dap` has the CMSIS-DAP v1 (HID) interface and the AVR commands by default (`MUPP_CMSIS_DAP_HID`, `MUPP_CMSIS_DAP_AVR`, see [docs/cmsis-dap.md](docs/cmsis-dap.md#avr-commands)).
 The preset `ydch32v307-cmsis-dap-avr-medbg` also gives the probe the USB ID of the Atmel Xplained Mini and puts the HID interface at number 0, so that Bloom finds it (personal use only, see [docs/avr.md](docs/avr.md#bloom)).
 It reads the toolchain directory from `RISCV_GCC_TOOLCHAIN_PREFIX`, for example `export RISCV_GCC_TOOLCHAIN_PREFIX=/opt/xpack-riscv-none-elf-gcc-15.2.0-1`.
 `cmake --list-presets` shows all presets.

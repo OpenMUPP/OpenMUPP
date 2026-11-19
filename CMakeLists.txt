@@ -118,16 +118,23 @@ option(MUPP_WCH_LINK_WCH_USB_ID "Use the USB ID of WCH (1a86:8010) in the wch-li
 # cmsis-dap ignores the option.
 option(MUPP_CMSIS_DAP_RV_BRIDGE "Add the RISC-V DTM bridge to the cmsis-dap personality" ON)
 
+# HID and AVR are ON by default on the CH32V30x boards, OFF on the others
+if (CH32_FAMILY STREQUAL "CH32V30X")
+    set(_mupp_hid_avr_default ON)
+else ()
+    set(_mupp_hid_avr_default OFF)
+endif ()
+
 # The CMSIS-DAP v1 (HID) interface of the CMSIS-DAP personality
 # (docs/cmsis-dap.md, "CMSIS-DAP v1 (HID)"), next to the v2 interface. The
 # AVR support needs it. Not on the STM32F1 boards: their USB packet memory
-# has no room for two more endpoints.
-option(MUPP_CMSIS_DAP_HID "Add the CMSIS-DAP v1 (HID) interface to the cmsis-dap personality" OFF)
+# has no room for two more endpoints. An image without cmsis-dap ignores it.
+option(MUPP_CMSIS_DAP_HID "Add the CMSIS-DAP v1 (HID) interface to the cmsis-dap personality" ${_mupp_hid_avr_default})
 
 # The AVR commands of the EDBG tools (avrdude, Bloom) on the HID interface
 # (docs/cmsis-dap.md, "AVR commands"). It needs MUPP_CMSIS_DAP_HID and a chip
 # with the AVR ISP engine code: only the CH32V307.
-option(MUPP_CMSIS_DAP_AVR "Add the AVR commands (EDBG) to the CMSIS-DAP v1 (HID) interface" OFF)
+option(MUPP_CMSIS_DAP_AVR "Add the AVR commands (EDBG) to the CMSIS-DAP v1 (HID) interface" ${_mupp_hid_avr_default})
 
 # The USB ID of an image with the AVR commands. "own" is the ID of the
 # project. "medbg" is the ID of the Atmel Xplained Mini (03eb:2145) and puts the
