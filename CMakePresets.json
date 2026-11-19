@@ -427,7 +427,7 @@
     },
     {
       "name": "ydch32v307",
-      "displayName": "YD-CH32V307VCT6 (stub image)",
+      "displayName": "YD-CH32V307VCT6, CMSIS-DAP (default personality)",
       "inherits": [
         "board-ydch32v307"
       ]
@@ -438,13 +438,7 @@
       "inherits": [
         "board-ydch32v307",
         "personalities-cmsis-dap"
-      ],
-      "cacheVariables": {
-        "MUPP_CH32_STUB_IMAGE": {
-          "type": "BOOL",
-          "value": "OFF"
-        }
-      }
+      ]
     },
     {
       "name": "ydch32v307-dual",
@@ -452,13 +446,7 @@
       "inherits": [
         "board-ydch32v307",
         "personalities-dual"
-      ],
-      "cacheVariables": {
-        "MUPP_CH32_STUB_IMAGE": {
-          "type": "BOOL",
-          "value": "OFF"
-        }
-      }
+      ]
     },
     {
       "name": "ydch32v307-all",
@@ -466,13 +454,7 @@
       "inherits": [
         "board-ydch32v307",
         "personalities-all"
-      ],
-      "cacheVariables": {
-        "MUPP_CH32_STUB_IMAGE": {
-          "type": "BOOL",
-          "value": "OFF"
-        }
-      }
+      ]
     },
     {
       "name": "ydch32v307-wch-link",
@@ -480,13 +462,7 @@
       "inherits": [
         "board-ydch32v307",
         "personalities-wch-link"
-      ],
-      "cacheVariables": {
-        "MUPP_CH32_STUB_IMAGE": {
-          "type": "BOOL",
-          "value": "OFF"
-        }
-      }
+      ]
     },
     {
       "name": "ydch32v307-cmsis-dap-avr",
@@ -520,13 +496,7 @@
       "inherits": [
         "board-openmuppv1",
         "personalities-cmsis-dap"
-      ],
-      "cacheVariables": {
-        "MUPP_CH32_STUB_IMAGE": {
-          "type": "BOOL",
-          "value": "OFF"
-        }
-      }
+      ]
     },
     {
       "name": "host-tests",

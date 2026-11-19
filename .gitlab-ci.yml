@@ -205,17 +205,7 @@ build-mini-cmsis-dap-no-rv-bridge:
     PROTOCOL_TAG: -cmsis-dap-no-rv-bridge
   artifacts: null
 
-# YD-CH32V307VCT6 (CH32V307, RISC-V): the stub image of the CH32V307 port,
-# with ch32v00x-system. Build and size check only, no artifacts. No cache:
-# the stub build fetches nothing with FetchContent.
-build-ydch32v307:
-  extends: .build-board-template
-  cache: []
-  variables:
-    BOARD: ydch32v307
-  artifacts: null
-
-# YD-CH32V307VCT6: the firmware image (MUPP_CH32_STUB_IMAGE=OFF) with the
+# YD-CH32V307VCT6 (CH32V307, RISC-V): the firmware image with the
 # CMSIS-DAP personality and the RISC-V bridge. It finds CH32 build
 # errors in the shared code. Build and size check only, no artifacts.
 build-ydch32v307-cmsis-dap:

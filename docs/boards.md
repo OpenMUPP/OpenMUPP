@@ -457,16 +457,11 @@ Limit the DAC setting to the maximum VPP of each target family.
 The board `ydch32v307` is the YD-CH32V307VCT6 development board V1.0.
 It has a CH32V307VCT6 (LQFP100), an 8 MHz crystal and a 32.768 kHz crystal.
 It is the test board for the port of the firmware to the CH32V307.
-The port is in progress.
-The image of this board is a stub. It runs the board start-up of the firmware (see [Start-up and LEDs](#start-up-and-leds)):
-the clock (144 MHz from the crystal), the 1 ms SysTick and the safe state of the board pins.
-Then it flashes the state LED (`LED2`, PB4) for 50 ms once per second.
-If the crystal or the PLL does not start, the clock stays on HSI and the LED flashes fast (the clock fault pattern).
-The image does not have USB and the probe engines yet.
+The board start-up of the firmware (see [Start-up and LEDs](#start-up-and-leds)) sets the clock (144 MHz from the crystal), the 1 ms SysTick and the safe state of the board pins.
+If the crystal or the PLL does not start, the clock stays on HSI and the state LED (`LED2`, PB4) flashes fast (the clock fault pattern).
 
-The option `MUPP_CH32_STUB_IMAGE=OFF` builds the firmware instead of the stub.
 The firmware image can have all personalities and the RISC-V bridge.
-The presets `ydch32v307-cmsis-dap`, `ydch32v307-dual`, `ydch32v307-all`, `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` set this option.
+The presets `ydch32v307`, `ydch32v307-cmsis-dap`, `ydch32v307-dual`, `ydch32v307-all`, `ydch32v307-cmsis-dap-avr` and `ydch32v307-all-avr` build it.
 A multi image or an image with the RISC-V bridge keeps the stored personality and the bridge mode in the last 256-byte page of the 480 KB flash, at `0x08077F00` (see [Multi image](usb-device.md#multi-image)).
 This page is in the non-zero-wait area of the flash. The image links into the zero-wait area (256 KB in the default memory split), so the page takes no flash from the image.
 An erased half-word of the CH32V307 flash reads `0xE339`, not `0xFFFF`. The driver maps it to an erased slot.

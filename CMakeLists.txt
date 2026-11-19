@@ -137,15 +137,6 @@ option(MUPP_CMSIS_DAP_AVR "Add the AVR commands (EDBG) to the CMSIS-DAP v1 (HID)
 set(MUPP_AVR_USB_ID "own" CACHE STRING "USB ID of an image with the AVR commands: own or medbg (personal use only)")
 set_property(CACHE MUPP_AVR_USB_ID PROPERTY STRINGS own medbg)
 
-# A CH32 board builds the stub image of the CH32V307 port and stops here
-# (cmake/Ch32StubImage.cmake), until the port is complete. OFF builds the
-# normal firmware image for the CH32 board.
-option(MUPP_CH32_STUB_IMAGE "Build the stub image for a CH32 board instead of the firmware" ON)
-if (CMAKE_CROSSCOMPILING AND MUPP_MCU_VENDOR STREQUAL "CH32" AND MUPP_CH32_STUB_IMAGE)
-    include(Ch32StubImage)
-    return()
-endif ()
-
 # Set compile/link variables before creating art-build-config so the interface
 # target captures them correctly.  These settings are cross-compile only; the
 # native (test) build leaves the variables unset.
@@ -218,8 +209,6 @@ if (CMAKE_CROSSCOMPILING)
     # The shared sources (BoardSwd, BoardJtag, BoardGpio) stay: -gc-sections
     # drops what an image does not use.
     set(MUPP_FIRMWARE_SOURCES ${PROJECT_SOURCES})
-    # src/ch32v30x/ is the stub image of the CH32 boards (cmake/Ch32StubImage.cmake)
-    list(FILTER MUPP_FIRMWARE_SOURCES EXCLUDE REGEX "/src/ch32v30x/")
     set(_mupp_dropped_files ${MUPP_PERSONALITY_DROPPED_SOURCES})
     # The settings page: the stored personality of a multi image and the
     # stored mode of the RISC-V bridge. Only in a multi image and in an image
