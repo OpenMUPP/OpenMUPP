@@ -56,7 +56,9 @@
 //   start of the last 4 pages, which is below the smallest boot section
 //   of the ATmega16). The read back finds a page that SPM did not write,
 //   for example when the boot lock bits stop SPM. r0, r1, r28 and r29 also
-//   change on the target: the write-back restores them.
+//   change on the target: the write-back restores them. An SPM step that
+//   does not stop gets a FORCE_BREAK, then the restore and Timeout. When
+//   the core also does not stop then, the probe sends nothing more.
 // - Hardware breakpoints (program addresses, word addresses): the host
 //   numbers 1 to 3 use reg 1, reg 2 and reg 3 (mode 3), reg 0 (one-shot)
 //   is the RUN_TO address. The probe keeps them and writes them before
@@ -512,6 +514,11 @@ class AvrJtagDebug {
          }
       }
       JtagDebugStatus status = programPage(address, page, far);
+      if(!stopped_) {
+         // An SPM step did not stop, also not after FORCE_BREAK: no
+         // instruction can go to the core.
+         return status;
+      }
       // The restore also after a failure: the program must not run with a
       // changed SREG or RAMPZ.
       const bool restored =
@@ -761,9 +768,14 @@ class AvrJtagDebug {
          return JtagDebugStatus::NoOcd;
       }
       if(JtagDebugStatus status = waitStop(); status != JtagDebugStatus::Ok) {
-         // The core can run now, in the boot section.
-         stopped_ = false;
-         return status;
+         // The core can run in the boot section now: stop it, keep the
+         // cached context (the write-back restores it), and give the
+         // failure after the restore.
+         if(!ocd_.forceBreak() || waitStop() != JtagDebugStatus::Ok || !writeBcr(jtagDebug::idle)) {
+            stopped_ = false;
+            return status;
+         }
+         return JtagDebugStatus::Timeout;
       }
       if(!writeBcr(jtagDebug::idle) || !loadZ(device_.spmcsr)) {
          return JtagDebugStatus::NoOcd;

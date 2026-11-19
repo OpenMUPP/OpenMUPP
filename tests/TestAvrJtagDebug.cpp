@@ -856,6 +856,33 @@ TEST_CASE("AvrJtagDebug: flash page write failures") {
       CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::Ok);
       CHECK(std::equal(page.begin(), page.end(), b.target.flash.begin() + 0x100));
    }
+   SUBCASE("an SPM step that does not stop: FORCE_BREAK and the restore") {
+      fillRegisters(b.target);
+      const auto pattern = registers(b.target);
+      b.target.data[dataSreg] = 0x35;
+      b.target.pc = 0x123;
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      b.target.stepRuns = true;
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::Timeout);
+      CHECK(b.target.stopped);
+      CHECK(b.debug.isStopped());
+      CHECK(b.target.data[dataSreg] == 0x35);
+      CHECK(b.target.spmPageWrites == 0);
+      b.target.stepRuns = false;
+      REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
+      CHECK(registers(b.target) == pattern);
+      CHECK(b.target.pc == 0x123);
+   }
+   SUBCASE("an SPM step that does not stop, also not after FORCE_BREAK") {
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      b.target.stepRuns = true;
+      b.target.stopDelay = 100'000;
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::Timeout);
+      CHECK_FALSE(b.debug.isStopped());
+      b.target.executed.clear();
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::TargetRunning);
+      CHECK(b.target.executed.empty());
+   }
    SUBCASE("no OCD") {
       b.target.ocden = false;
       REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);

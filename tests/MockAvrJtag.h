@@ -47,7 +47,8 @@
 // - FORCE_BREAK (0x8) at Update-IR stops the running core: BSR bit 1.
 // - RUN (0x9) at Update-IR starts the stopped core at pc. With BCR bit 13
 //   it executes one step: pc + 1 (the mock does not execute the flash),
-//   BSR bit 7, and bit 13 clear. After an EIJMP since the stop, the core
+//   BSR bit 7, and bit 13 clear. With stepRuns, the step does not stop:
+//   the core runs. After an EIJMP since the stop, the core
 //   starts at the PC field, modulo the flash words: the PC write of the
 //   reference debugger (Z = PC - 11, then five instructions) then starts
 //   at the PC (hardware test on revision 3).
@@ -307,6 +308,7 @@ class MockAvrJtag final : public JtagTarget {
    uint32_t spmBusyReads{ 0 };
    uint32_t bootStartWords{ 0 };
    bool spmLocked{ false };
+   bool stepRuns{ false };
 
    // The running core comes to word: it stops there when a program
    // breakpoint matches. True: it stopped.
@@ -365,7 +367,7 @@ class MockAvrJtag final : public JtagTarget {
             const auto words = static_cast<uint32_t>(flash.size() / 2);
             pc = pcField % words;
          }
-         if((ocdRegs[8] & (1u << 13)) != 0) {
+         if((ocdRegs[8] & (1u << 13)) != 0 && !stepRuns) {
             ocdRegs[8] = static_cast<uint16_t>(ocdRegs[8] & ~(1u << 13));
             stop(pc + 1, 1u << 7);
          } else {
