@@ -160,8 +160,9 @@
 //   ENTER_PROGMODE in the debug mode: the hardware breakpoints are
 //        removed and the debug mode ends (Bloom loads a program in this way
 //        and then sends DEACTIVATE_PHYSICAL, ACTIVATE_PHYSICAL, ATTACH).
-//   SW_BREAK_SET, SW_BREAK_CLEAR, SW_BREAK_CLEAR_ALL and DISABLE_DEBUGWIRE:
-//        FAILED 0x90.
+//   SW_BREAK_SET, SW_BREAK_CLEAR and DISABLE_DEBUGWIRE: FAILED 0x90.
+//   SW_BREAK_CLEAR_ALL: OK, there are no software breakpoints (Bloom
+//        sends it before each flash load and at the end of the session).
 //   Break events: as on debugWIRE, with cause 1 when the BSR shows a
 //        program breakpoint or a BREAK instruction. While the core runs,
 //        each event() reads OCD reg D one time.
@@ -621,8 +622,9 @@ class Avr8Scope final : public Avr8Handler {
       case cmd::disableDebugWire:
       case cmd::swBreakSet:
       case cmd::swBreakClear:
-      case cmd::swBreakClearAll:
          return failed(avr8::failure::notSupported);
+      case cmd::swBreakClearAll:
+         return ok();
       default:
          break;
       }

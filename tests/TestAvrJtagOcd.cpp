@@ -63,6 +63,15 @@ struct Bench {
       target.ocdRevision = revision;
       ocd.setRevision(revision);
       REQUIRE(tap.open(1000));
+      // Out of Run-Test/Idle, as after the attach of the probe: an idle
+      // TCK cycle moves the PC of a stopped core.
+      REQUIRE(tap.scanIr(ir::idcode, nullptr, avr::tap::End::Update));
+   }
+
+   // A scan that executes the instruction of the last execute()
+   void flush() {
+      uint16_t value = 0;
+      REQUIRE(ocd.readRegister(reg::bsr, value));
    }
 
    // The OCD scans after the open
@@ -110,8 +119,8 @@ TEST_CASE("AvrJtagOcd: a register read is two scans of the same read") {
    CHECK(value == 0xC000);
    CHECK(b.ocdScans() == std::vector<MockAvrJtag::DrScan>{
                          { ir::ocdAccess, 21, 0x18C000 }, { ir::ocdAccess, 21, 0x080000 }, { ir::ocdAccess, 21, 0x080000 } });
-   // One IR scan for all three
-   CHECK(b.target.irScans == std::vector<uint8_t>{ ir::ocdAccess });
+   // One IR scan for all three, after the IDCODE scan of the bench
+   CHECK(b.target.irScans == std::vector<uint8_t>{ ir::idcode, ir::ocdAccess });
 }
 
 TEST_CASE("AvrJtagOcd: register numbers out of range") {
@@ -237,7 +246,7 @@ TEST_CASE("AvrJtagOcd: the PC field") {
    for(const uint8_t revision : { uint8_t{ 3 }, uint8_t{ 4 } }) {
       CAPTURE(revision);
       Bench b(revision);
-      const uint32_t step = revision >= 4 ? 2 : 1;
+      const uint32_t step = 2;
       b.target.stop(0xCC, bsr::break1);
       uint32_t field = 0;
       REQUIRE(b.ocd.execute(ldi(16, 0x00), &field));
@@ -298,9 +307,11 @@ TEST_CASE("AvrJtagOcd: the mock core reads and writes registers and memory") {
    REQUIRE(b.ocd.execute(ldi(29, 0x02)));
    REQUIRE(b.ocd.execute(ldi(28, 0x00)));
    REQUIRE(b.ocd.execute(stY(16)));
+   b.flush();
    CHECK(b.target.data[0x0200] == 0x42);
 
    REQUIRE(b.ocd.execute(0xFFFF));
+   b.flush();
    CHECK(b.target.unknownInstructions == std::vector<uint16_t>{ 0xFFFF });
 }
 
@@ -311,6 +322,7 @@ TEST_CASE("AvrJtagOcd: the mock core writes a flash page with SPM") {
       REQUIRE(b.ocd.execute(ldi(16, command)));
       REQUIRE(b.ocd.execute(stY(16)));
       REQUIRE(b.ocd.execute(spm));
+      b.flush();
       CHECK((b.target.data[b.target.spmcsr] & 0x01u) == 0);
    };
    std::fill(b.target.flash.begin() + 0x100, b.target.flash.begin() + 0x180, 0x00);

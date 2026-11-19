@@ -312,7 +312,8 @@ A value out of range gives code `0x33` at activate physical.
 | `0x35`, `0x36` PC read and write | Debug mode only. The PC can be above 16 bits (ATmega2560). |
 | `0x40`, `0x41` Hardware breakpoint | Debug mode only. Numbers 1 to 3 (OCD registers 1 to 3), else code `0x81`. Type 1 (program) only, else code `0x90`. The address is a byte address, as Bloom sends it. The probe writes the breakpoints at the next run or step. |
 
-Software breakpoints (`0x43`, `0x44`, `0x45`) and "disable debugWIRE" fail with code `0x90`.
+Software breakpoint set and clear (`0x43`, `0x44`) and "disable debugWIRE" fail with code `0x90`.
+"Clear all software breakpoints" (`0x45`) gives OK, because there are no software breakpoints. Bloom sends it before each flash load and at the end of the session.
 A JTAG scan that fails, a write that does not end in time, a core that does not stop in time, or a CPU context that the probe could not read gives code `0x13`.
 After a failed context read, run, step, PC and memory access fail until a reset.
 

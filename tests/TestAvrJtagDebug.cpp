@@ -283,8 +283,8 @@ TEST_CASE("AvrJtagDebug: the write-back before a step, in the reference order") 
       CHECK(b.target.pc == 0xCA);
       CHECK(b.debug.pc() == 0xCA);
       CHECK(b.target.bsr == bsr::step);
-      // The PC field at RUN: Z + 1 + 10 (revision 4), Z + 1 + 5 (revision 3)
-      CHECK(b.target.runFields.back() == (revision >= 4 ? 0xC9u : 0xCAu));
+      // The PC field at RUN: Z + 1 + 10, also on revision 3
+      CHECK(b.target.runFields.back() == 0xC9u);
 
       // r0 to r15 with LDI r16 and MOV, r16 to r31 with LDI
       namespace d = avr::jtagDebug;
@@ -295,7 +295,7 @@ TEST_CASE("AvrJtagDebug: the write-back before a step, in the reference order") 
       CHECK(b.target.executed[10] == d::ldi(16, 0xA5));
       CHECK(b.target.executed[32] == d::ldi(16, 0x50));
       CHECK(b.target.executed[47] == d::ldi(31, 0x5F));
-      const uint16_t z = revision >= 4 ? 0xC9 - 11 : 0xC9 - 5;
+      const uint16_t z = 0xC9 - 11;
       const std::vector<uint16_t> pcWrite{ d::ldi(31, 0),    d::ldi(30, static_cast<uint8_t>(z)),
                                            d::wdr,           d::ldi(16, 0),
                                            d::out(0x3C, 16), d::eijmp,
@@ -437,10 +437,12 @@ TEST_CASE("AvrJtagDebug: flash read") {
          // The second scan sends the PC field.
          CHECK((scans[1].data & ((uint64_t{ 1 } << field) - 1)) == b.target.pcField);
       }
-      SUBCASE("word 0 with LPM, odd address and length") {
+      SUBCASE("word 0 as the flash size, odd address and length") {
          std::vector<uint8_t> read(5);
+         b.target.executed.clear();
          REQUIRE(b.debug.readFlash(0, read.data(), 5) == JtagDebugStatus::Ok);
          CHECK(read == std::vector<uint8_t>(b.target.flash.begin(), b.target.flash.begin() + 5));
+         CHECK(b.target.executed.empty());
          std::vector<uint8_t> odd(3);
          REQUIRE(b.debug.readFlash(0x101, odd.data(), 3) == JtagDebugStatus::Ok);
          CHECK(odd == std::vector<uint8_t>(b.target.flash.begin() + 0x101, b.target.flash.begin() + 0x104));

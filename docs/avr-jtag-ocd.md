@@ -87,6 +87,9 @@ IR `0xB` selects a 21-bit DR:
 A write is one scan with bit 20 set.
 A read is two scans. The first scan sends the register number with bit 20 clear. The second scan returns `register << 16 | data`.
 In the second scan, the reference debugger sends the same read again, or a read of reg 0 (`in=0x000000`). It never sends a write in that scan.
+After a read of reg C (OCDR), the second scan must read reg 0, as in `GetCoreRegs_JTAG`.
+A second read of reg C stays pending, and it takes the next byte that the core writes to the OCDR.
+Then reg D bit 4 does not come for that byte (hardware test on the ATmega32U4).
 Each scan returns the result of the scan before it. After a write, the next scan returns the write command (example: `out=0x1100CC` at 138.5879 s).
 
 While the core runs, reg D reads `0x0001` in the MPLAB X captures, where BCR bit 14 is set. In the experiments, BCR was 0, and all registers read 0 while the core ran, reg D too (`m2560-ocd-experiments.txt`).
@@ -178,7 +181,7 @@ The debugger reads and writes the CPU state with instructions that the stopped c
 
 | OCD revision | DR length | Layout |
 |---|---|---|
-| 3 | 32 | The instruction in bits 31..16 (from the debugger scripts, no test) |
+| 3 | 32 | The instruction in bits 31..16. Bits 15..0: the PC field, with the same rules as bits 21..0 on revision 4 (hardware test on the ATmega32U4). |
 | 4 | 38 | The instruction in bits 37..22. Bits 21..0: see below. |
 
 Example on revision 4: the scan `0x383C800000` executes `LDI r31, 0x02` (opcode `0xE0F2`) (`m2560-mplab-session-jtag.txt`, 138.6136 s).
@@ -189,7 +192,17 @@ On revision 4, bits 21..0 of TDO return a PC value ("PC field" below):
 - Each injected instruction adds 2 to the PC field.
 - After an `EIJMP`, the PC field is Z + 1.
 
-These three rules describe the captures, but they do not agree with each other in one model. Thus the formula for the PC is open (see [Open questions](#open-questions)).
+The hardware test on the ATmega32U4 (revision 3) gave the model behind these rules:
+
+- The core executes the injected instruction in Run-Test/Idle, not at Update-DR. The reference debugger ends each instruction scan in Run-Test/Idle, and the next scan leaves it. This gives one TCK cycle in Run-Test/Idle. The decoder of the captures counts 0 idle cycles for this path.
+- All other scans of the reference debugger stay in Update-DR or Update-IR, and the next scan starts there.
+- Each TCK cycle in Run-Test/Idle of the stopped core moves the PC: the PC field adds 2. A scan that does not execute an instruction also adds 2 when it passes Run-Test/Idle.
+- Without a TCK cycle in Run-Test/Idle, the core executes nothing, and the PC field does not change.
+- After the PC write of the reference debugger, the core starts at the PC field.
+
+Thus the probe must not clock in Run-Test/Idle, except for the one cycle after each instruction scan.
+The probe always reads the PC and the registers in this way. Each other scan of the probe then gives a wrong PC.
+The test was on revision 3. The revision 4 captures agree with this model.
 
 ### Read a flash word
 
@@ -198,10 +211,12 @@ On revision 4, the reference debugger reads the flash with two IR `0xA` scans fo
 1. Bits 21..0 = word address. Bits 37..22 hold the word of the read before, with its two low bits clear (example: `0x4094` after `0x4097`). The meaning of these bits is open.
 2. Bits 37..22 = `0xFFFF`, bits 21..0 = the current PC field (`in=0x3FFFC00106` at 141.7179 s). The scan returns the flash word in bits 37..22.
 
-The data agree with a rule, which is an inference.
-The rule: each IR `0xA` scan with bits 21..0 not 0 reads the flash word at that address, and the next scan returns it.
+The rule: each IR `0xA` scan with a field that is not 0 reads the flash word at that address, and the next scan returns it.
 Example: the second scan of a PC read sends the PC field `0xCD` (138.8809 s), and the next scan returns `0x70EF`, the word at `0xCD`.
-A second scan with bits 21..0 = 0 was not tested.
+The hardware test on the ATmega32U4 confirms the rule on revision 3. These scans stay in Update-DR.
+The address wraps at the flash size: on the ATmega32U4 (16K words), the field `0x4000` reads word 0, and `0x4001` reads word 1.
+A field of 0 executes the instruction. Thus the probe reads word 0 with the flash size in words as the field.
+An injected `LPM` cannot read the flash on revision 3: it loads a byte of its own opcode (`0x04` from `LPM r16, Z`, `0x9104`).
 
 Example: address `0xCC` returns `0x2FE8` (`mov r30, r24`), and address `0xCD` returns `0x70EF` (`andi r30, 0x0F`). Both are correct for the test program.
 These scans do not move the PC: the PC field stays `0x106`.
@@ -229,8 +244,7 @@ Thus the order is important. Before each run or step, the reference debugger wri
 On revision 4, the reference debugger loads Z with the target PC minus 11. Example: Z = `0x00BE` for the PC `0xC9` (the `SetPC_JTAG` parameter was `0xC9`).
 The five instructions of step 3 (`LDI r31`, `LDI r30`, `LDI r16`, `OUT 0x3C`, `LDI r16`) come after the jump.
 With the PC field rules above, they add 10 to Z + 1.
-On revision 3, the script subtracts 5, not 11 (from the script, no test).
-The probe must use the same offset, or execute the jump last.
+The ATmega32U4 scripts subtract 5 on revision 3. This value is wrong for the sequence above: the hardware test shows Z + 1 + 10 on revision 3 too. Thus the probe uses PC minus 11 on both revisions.
 
 ## Debug operations
 
@@ -311,9 +325,9 @@ The boot lock bits must allow `SPM` in the boot section.
 
 1. The meaning of BCR bits 15 and 14, and of reg D bits 3 and 0.
 2. BSR bit 6.
-3. The formula for the PC field of the 38-bit scan. The rules "PC + 1 at a stop", "+2 for each injected instruction" and "Z + 1 after `EIJMP`" do not agree in one model.
+3. Answered by the hardware test on the ATmega32U4: the PC field moves with each TCK cycle in Run-Test/Idle (see [Instruction execute](#instruction-execute-ir-0xa)).
 4. The two low bits of the instruction field in the first scan of a flash read.
-5. OCD revision 3: no test yet. The ATmega32U4 is the planned test target.
+5. Answered for the ATmega32U4: OCD revision 3 has the 32-bit instruction scan with the PC field in bits 15..0, and the rules of revision 4.
 6. The values that MPLAB X gives to its last script of the flash write (for example `0x35`, the saved SREG value), and the write of RAMPZ = `0x0C`.
 7. The fastest TCK for the OCD. MPLAB X used 200 kHz. avrdude used about 450 kHz for JTAG programming. The datasheet limit for JTAG is a TCK below 1/4 of the CPU clock.
 8. Mode 0 for a data write: not tested.
