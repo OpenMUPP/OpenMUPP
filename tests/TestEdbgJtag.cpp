@@ -599,7 +599,7 @@ TEST_CASE("EDBG JTAG: Bloom checks of the debug commands") {
       CHECK(b.avr8({ avr8::command::hwBreakSet, 0x00, 0x01, 0x01, 0x00 }) == failed(0x35));
       // Software breakpoints come later.
       CHECK(b.avr8({ avr8::command::swBreakSet, 0x00, 0x00, 0x02, 0x00, 0x00 }) == failed(0x90));
-      CHECK(b.avr8({ avr8::command::swBreakClearAll, 0x00 }) == failed(0x90));
+      CHECK(b.avr8({ avr8::command::swBreakClearAll, 0x00 }) == ok);
    }
    SUBCASE("PC and run to") {
       CHECK(b.avr8({ avr8::command::pcWrite, 0x00, 0x00, 0x40, 0x00, 0x00 }) == failed(0x38));
@@ -691,6 +691,7 @@ TEST_CASE("EDBG JTAG: Bloom loads a program") {
    CHECK(b.run() == ok);
    CHECK(b.jtagAvr.reach(0x100));
    CHECK(b.event() == b.breakEvent(0x100, true));
+   CHECK(b.avr8({ avr8::command::swBreakClearAll, 0x00 }) == ok);
    CHECK(b.breakClear(1) == ok);
    CHECK(b.avr8({ avr8::command::enterProgmode, 0x00 }) == ok);
    CHECK(b.jtagAvr.programming);
