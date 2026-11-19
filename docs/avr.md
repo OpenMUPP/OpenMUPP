@@ -347,6 +347,8 @@ For each mode, the script resets the core, sets the data breakpoint and runs the
 It then shows the PC and the cause of the break event.
 A mode passes when a break event with cause 1 comes in the time limit.
 The PC is the word after the instruction that makes the access. Compare it with the disassembly of the test program.
+The C start-up code writes the variables in `.data` and `.bss` after each reset. Thus the first write or access stop can be in the start-up code.
+To prevent this, put the test variable in `.noinit`.
 
 ```sh
 # All modes, breakpoint number 2, on the data address 0x0100

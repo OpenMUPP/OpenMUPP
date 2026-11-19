@@ -345,7 +345,8 @@ The probe removes the hardware breakpoints, lets a stopped core run, leaves the 
 #### Data breakpoints
 
 `HW_BREAK_SET` is `[0x40][version][type][number][address u32][mode]`.
-A data breakpoint has type 2. It stops the core on an access to one address in the data space (registers, I/O and SRAM).
+A data breakpoint has type 2. It stops the core when an instruction reads or writes one data space address, for example `LDS`, `STS`, `LD` or `ST` on SRAM.
+Accesses through the register file and `IN` or `OUT` on I/O registers are not tested.
 
 | Field | Value |
 |---|---|
@@ -364,7 +365,7 @@ A program breakpoint on a number with a program breakpoint replaces it, as befor
 Clear the number first to change the type.
 
 The EDBG protocol specification (DS50002630A, Table 7-31) gives only type 1 and mode 3 (program).
-The type 2 and mode values come from AVaRICE (`src/jtag3bp.cc`, the JTAGICE3 and EDBG driver).
+The type 2 and mode values come from [AVaRICE](https://github.com/avrdudes/avarice) at commit `6ca2ef5` (`src/jtag3bp.cc`, the JTAGICE3 and EDBG driver).
 They are the same as the values of `CMND_SET_BREAK` of the JTAGICE mkII (AVaRICE `src/jtag2bp.cc`).
 No host tool that we know sends data breakpoints over EDBG to this probe today.
 `tools/avr_data_break_test.py` sends them for the hardware test (see [avr.md](avr.md#jtag-data-breakpoints)).
