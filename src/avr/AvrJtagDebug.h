@@ -81,6 +81,13 @@
 //   A number keeps one breakpoint: a data breakpoint on a number in use,
 //   or a program breakpoint on a number with a data breakpoint, gives
 //   InUse. The core stops after the instruction that makes the access.
+// - A data mask (an address range, AVaRICE "range BP"): on number 2 or 3,
+//   for the data breakpoint on the other number. The OCD has the mask
+//   only in reg 2 for reg 3 (BCR mask mode, docs/avr-jtag-ocd.md). Thus
+//   the probe writes the address to reg 3 and the mask to reg 2, for each
+//   order of the numbers. A 1 bit in the mask compares the address bit.
+//   A mask without a data breakpoint does nothing. The pair has no
+//   program breakpoint: InUse.
 // - After each stop the probe reads the BSR (the cause of the stop). The
 //   reference debugger does not read it.
 // - A failed context read (NoOcd, Timeout) leaves no valid context: run,
@@ -316,7 +323,8 @@ class AvrJtagDebug {
       if(number < 1 || number > hardwareBreaks || word >= device_.flashBytes / 2u) {
          return JtagDebugStatus::OutOfRange;
       }
-      if(breaks_[number] && breaks_[number]->mode != jtagOcd::bcr::modeProgram) {
+      if((breaks_[number] && breaks_[number]->mode != jtagOcd::bcr::modeProgram) ||
+         (partner(number) != 0 && maskNumber() == partner(number))) {
          return JtagDebugStatus::InUse;
       }
       breaks_[number] = Break{ word, jtagOcd::bcr::modeProgram };
@@ -333,6 +341,20 @@ class AvrJtagDebug {
          return JtagDebugStatus::InUse;
       }
       breaks_[number] = Break{ address, static_cast<uint8_t>(mode) };
+      return JtagDebugStatus::Ok;
+   }
+
+   // Sets a data mask on number 2 or 3 for the data breakpoint on the
+   // other number. It takes effect at the next run.
+   [[nodiscard]] JtagDebugStatus setDataMask(uint8_t number, uint16_t mask) {
+      if(number < 2 || number > hardwareBreaks) {
+         return JtagDebugStatus::OutOfRange;
+      }
+      const std::optional<Break> &other = breaks_[partner(number)];
+      if(breaks_[number] || (other && other->mode == jtagOcd::bcr::modeProgram)) {
+         return JtagDebugStatus::InUse;
+      }
+      breaks_[number] = Break{ mask, maskEntry };
       return JtagDebugStatus::Ok;
    }
 
@@ -692,18 +714,46 @@ class AvrJtagDebug {
       }
    }
 
+   // The number (2 or 3) that holds the data mask, else 0
+   [[nodiscard]] uint8_t maskNumber() const {
+      for(uint8_t n = 2; n <= hardwareBreaks; ++n) {
+         if(breaks_[n] && breaks_[n]->mode == maskEntry) {
+            return n;
+         }
+      }
+      return 0;
+   }
+
+   // The other number of the pair 2 and 3 (else 0)
+   [[nodiscard]] static uint8_t partner(uint8_t number) {
+      return number == 2 || number == 3 ? static_cast<uint8_t>(5 - number) : 0;
+   }
+
+   // Reg n, and reg 4 + n (bits 23..16) on revision 4
+   [[nodiscard]] bool writeAddress(uint8_t n, uint32_t value) {
+      return ocd_.writeRegister(n, static_cast<uint16_t>(value)) &&
+             (ocd_.revision() < 4 || ocd_.writeRegister(static_cast<uint8_t>(jtagOcd::reg::breakHigh0 + n),
+                                                        static_cast<uint16_t>((value >> 16) & 0xFFu)));
+   }
+
    // Reg n (and reg 4 + n on revision 4) for each breakpoint, then the BCR
-   // enables. The BCR bits 11 to 3 come from the breakpoints only.
+   // enables. The BCR bits 11 to 3 come from the breakpoints only. A data
+   // breakpoint with a mask: reg 3, the mask in reg 2 and the mask mode.
    [[nodiscard]] bool writeBreakpoints() {
       auto bcr = static_cast<uint16_t>(bcr_ & ~jtagDebug::breakBits);
+      const uint8_t maskAt = maskNumber();
       for(uint8_t n = 0; n < breaks_.size(); ++n) {
-         if(!breaks_[n]) {
+         if(!breaks_[n] || (maskAt != 0 && n == maskAt)) {
             continue;
          }
-         const uint32_t word = breaks_[n]->address;
-         if(!ocd_.writeRegister(n, static_cast<uint16_t>(word)) ||
-            (ocd_.revision() >= 4 && !ocd_.writeRegister(static_cast<uint8_t>(jtagOcd::reg::breakHigh0 + n),
-                                                         static_cast<uint16_t>((word >> 16) & 0xFFu)))) {
+         if(maskAt != 0 && n == partner(maskAt)) {
+            if(!writeAddress(3, breaks_[n]->address) || !writeAddress(2, breaks_[maskAt]->address)) {
+               return false;
+            }
+            bcr = static_cast<uint16_t>(bcr | jtagOcd::bcr::maskMode | enableBits(3, breaks_[n]->mode));
+            continue;
+         }
+         if(!writeAddress(n, breaks_[n]->address)) {
             return false;
          }
          bcr = static_cast<uint16_t>(bcr | enableBits(n, breaks_[n]->mode));
@@ -970,8 +1020,9 @@ class AvrJtagDebug {
    uint8_t eind_{ 0 };
    uint16_t bcr_{ 0 };
    uint16_t breakStatus_{ 0 };
-   // A program breakpoint (word address, mode 3) or a data breakpoint (data
-   // space address, a JtagDataMode)
+   // A program breakpoint (word address, mode 3), a data breakpoint (data
+   // space address, a JtagDataMode) or a data mask (the mask, maskEntry)
+   static constexpr uint8_t maskEntry = 4;
    struct Break {
       uint32_t address;
       uint8_t mode;
