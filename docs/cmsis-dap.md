@@ -184,13 +184,18 @@ Each fragment has the field `m << 4 | n`: fragment `m` of `n`, with `n` 15 or le
 
 | ID | Command | Request | Response |
 |---|---|---|---|
-| `0x80` | `AVR_CMD` | `[0x80][fragment][size u16][data]` | `[0x80][code]`: `0x00` more fragments to come, `0x01` the frame is complete and ran, `0xFF` the fragment is rejected. |
+| `0x80` | `AVR_CMD` | `[0x80][fragment][size u16][data]` | `[0x80][code]`: `0x00` more fragments to come, `0x01` the frame is complete, `0xFF` the fragment is rejected. |
 | `0x81` | `AVR_RSP` | `[0x81]` | `[0x81][fragment][size u16][data]`, 60 bytes of data in each fragment. Fragment `0x00` and size 0: no response. |
 | `0x82` | `AVR_EVT` | `[0x82]` | `[0x82][size u16][event frame]`. Size 0: no event. The AVR8 scope gives break events (see [AVR8 generic scope](#avr8-generic-scope)). |
 
 The sizes are big-endian.
-The probe runs a command when its last fragment comes, so the response is ready for the next `AVR_RSP`.
-A long ISP command holds the HID interface, as a long DAP command does.
+The probe sends the `AVR_CMD` response of the last fragment first.
+Then the next AVR command (`AVR_RSP`, `AVR_EVT` or `AVR_CMD`) runs the frame before it gives its own response.
+Thus the response is ready for the next `AVR_RSP`, and an event of the command comes after it.
+AVaRICE reads the `AVR_CMD` response for 200 ms only, but a `GO` with a software breakpoint can take some 400 ms at 200 kHz.
+AVaRICE reads the `AVR_RSP` response for 500 ms. Thus a `GO` that writes two flash pages at 200 kHz is still too slow for AVaRICE.
+A long command holds the HID interface, as a long DAP command does.
+A `DAP_Disconnect`, USB suspend or bus reset drops a frame that did not run.
 
 All fields come from the host, and the probe checks them:
 
