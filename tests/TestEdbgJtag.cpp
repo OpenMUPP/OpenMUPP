@@ -669,8 +669,6 @@ TEST_CASE("EDBG JTAG: Bloom checks of the debug commands") {
    b.checkReleased();
 }
 
-// Bloom manage_ocden_fuse_bit: ATTACH without OCDEN, then the fuse write
-// with FUSES outside the programming mode
 TEST_CASE("EDBG JTAG: data breakpoints") {
    struct Case {
       uint8_t mode;
@@ -726,6 +724,8 @@ TEST_CASE("EDBG JTAG: data and program breakpoints share numbers 2 and 3") {
    CHECK(b.event() == b.breakEvent(0x100, true));
 }
 
+// Bloom manage_ocden_fuse_bit: ATTACH without OCDEN, then the fuse write
+// with FUSES outside the programming mode
 TEST_CASE("EDBG JTAG: Bloom programs OCDEN in the debug mode") {
    Bench b;
    b.jtagAvr.ocden = false;
