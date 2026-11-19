@@ -41,9 +41,10 @@
 //   the instruction, so word 0 goes as the flash size in words: the
 //   address wraps at the flash size (hardware test, ATmega32U4). An
 //   injected LPM does not work: on revision 3 it reads its own opcode.
-//   A word address that does not fit the field (on revision 3: word
-//   0x10000 and above, and word 0 of such a flash) gives OutOfRange, also
-//   for a flash page write that the read back cannot verify.
+//   A word address that does not fit the field (below revision 4: word
+//   0x10000 and above, and word 0 of a flash of 0x10000 words or more)
+//   gives OutOfRange, also for a flash page write that the read back
+//   cannot verify.
 // - The EEPROM write sets EEMPE, then EEPE with two adjacent injected
 //   OUT instructions. That the 4-cycle limit of EEMPE holds for this is not
 //   tested, so each byte is read back after the write.
