@@ -883,6 +883,31 @@ TEST_CASE("AvrJtagDebug: flash page write with SPM") {
    }
 }
 
+TEST_CASE("AvrJtagDebug: revision 3 reads no flash word above the 16-bit field") {
+   Bench b{ 3 };
+   // 0x18000 words: word 0 goes as 0x18000, which the field cannot hold.
+   b.target.flash.assign(196608, 0xFF);
+   b.target.flash[0x1FFFE] = 0x34;
+   b.target.flash[0x1FFFF] = 0x12;
+   b.target.flashPageBytes = 256;
+   b.debug.setDevice({ .flashBytes = 196608, .flashPageBytes = 256 });
+   REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+   std::vector<uint8_t> read(2);
+   REQUIRE(b.debug.readFlash(0x1FFFE, read.data(), 2) == JtagDebugStatus::Ok);
+   CHECK(read == std::vector<uint8_t>{ 0x34, 0x12 });
+   CHECK(b.debug.readFlash(0x1FFFE, read.data(), 4) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.readFlash(0x20000, read.data(), 2) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.readFlash(0x20002, read.data(), 2) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.readFlash(0, read.data(), 2) == JtagDebugStatus::OutOfRange);
+   const auto page = flashPattern(256, 0x21);
+   b.target.executed.clear();
+   CHECK(b.debug.writeFlashPage(0x20100, page.data()) == JtagDebugStatus::OutOfRange);
+   CHECK(b.debug.writeFlashPage(0, page.data()) == JtagDebugStatus::OutOfRange);
+   CHECK(b.target.executed.empty());
+   REQUIRE(b.debug.writeFlashPage(0x1FF00, page.data()) == JtagDebugStatus::Ok);
+   CHECK(std::equal(page.begin(), page.end(), b.target.flash.begin() + 0x1FF00));
+}
+
 TEST_CASE("AvrJtagDebug: flash page write above 64 KB with RAMPZ") {
    Bench b{ 4 };
    b.target.flash.assign(262144, 0xFF);
