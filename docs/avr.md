@@ -325,6 +325,7 @@ environments:
 - The OCD has three hardware breakpoints for the host. Bloom keeps one of them for its step function. Thus avr-gdb has two breakpoints.
 - The probe does not have software breakpoints yet. A software breakpoint fails.
 - The debug clock (TCK) is 200 kHz, because Bloom sends this fixed value. This is correct for a target clock of 1 MHz or more.
+- An EEPROM write takes about 35 ms for each byte, because the EEPROM write of a stopped core is slower than in the datasheet.
 - At the end of the session, the probe removes the breakpoints, and the program runs.
 
 ## Low-clock targets

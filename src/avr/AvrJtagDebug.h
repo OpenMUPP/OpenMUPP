@@ -119,8 +119,9 @@ constexpr uint32_t pcOffset(uint8_t revision) {
    return revision >= 4 ? 11u : 5u;
 }
 
-// Longer than the 3.4 ms of an EEPROM write in the datasheets
-inline constexpr uint32_t eepromTimeoutMs = 20;
+// An EEPROM write of a stopped core took 34 ms on the ATmega32U4
+// (hardware test), not the 3.4 ms of the datasheet.
+inline constexpr uint32_t eepromTimeoutMs = 100;
 // TCK cycles of one EEPE poll, at least: two instruction scans and two
 // register reads
 inline constexpr uint32_t eepromPollCycles = 2 * (3 + 32 + 2) + 2 * readScanCycles;
