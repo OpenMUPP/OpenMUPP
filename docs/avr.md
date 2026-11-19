@@ -332,6 +332,32 @@ environments:
 - An EEPROM write takes about 35 ms for each byte, because the EEPROM write of a stopped core is slower than in the datasheet.
 - At the end of the session, the probe removes the breakpoints, and the program runs.
 
+### JTAG data breakpoints
+
+The probe has data breakpoints on JTAG: a stop on a read, a write or an access (read or write) of one data space address.
+Bloom does not send them, so avr-gdb watchpoints do not use them.
+Other host tools can send them with the EDBG commands (see [cmsis-dap.md](cmsis-dap.md#data-breakpoints)).
+They use the hardware breakpoint numbers 2 and 3. Thus a data breakpoint and the program breakpoints share these two numbers.
+The core stops after the instruction that makes the access.
+Only one address for each breakpoint is possible. Address ranges (the mask mode of the OCD) are not available.
+
+`tools/avr_data_break_test.py` tests the data breakpoints on the hardware.
+Load a test program that reads and writes a known SRAM address, and program OCDEN.
+For each mode, the script resets the core, sets the data breakpoint and runs the core.
+It then shows the PC and the cause of the break event.
+A mode passes when a break event with cause 1 comes in the time limit.
+The PC is the word after the instruction that makes the access. Compare it with the disassembly of the test program.
+
+```sh
+# All modes, breakpoint number 2, on the data address 0x0100
+python3 tools/avr_data_break_test.py --address 0x0100
+# Write mode only, breakpoint number 3, with the medbg build
+python3 tools/avr_data_break_test.py --medbg --address 0x0100 --modes write --number 3
+```
+
+The script sends the device context of the ATmega32U4. For another device, change `device_context()` in the script.
+The access mode on a write is not tested on the hardware yet (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
+
 ## Low-clock targets
 
 The ISP clock (SCK) must be less than a quarter of the clock of the target.
