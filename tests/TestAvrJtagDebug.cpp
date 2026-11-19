@@ -849,6 +849,13 @@ TEST_CASE("AvrJtagDebug: flash page write failures") {
       // The state comes back also after the failure.
       CHECK(b.target.data[dataSreg] == 0x35);
    }
+   SUBCASE("SPMCSR above the I/O registers: ATmega64 and ATmega128") {
+      b.target.spmcsr = 0x68;
+      b.debug.setDevice({ .spmcsr = 0x68 });
+      REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+      CHECK(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::Ok);
+      CHECK(std::equal(page.begin(), page.end(), b.target.flash.begin() + 0x100));
+   }
    SUBCASE("no OCD") {
       b.target.ocden = false;
       REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);

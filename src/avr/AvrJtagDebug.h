@@ -487,8 +487,10 @@ class AvrJtagDebug {
          return status;
       }
       const uint16_t pageBytes = device_.flashPageBytes;
+      // SPMCSR goes through LD Z and ST Y: any data address above the
+      // registers (0x68 on the ATmega64 and ATmega128). 0: not sent.
       if(pageBytes < 2 || address % pageBytes != 0 || !inRange(address, pageBytes, device_.flashBytes) ||
-         device_.spmcsr < jtagDebug::dataIo || device_.spmcsr >= jtagDebug::dataSram) {
+         device_.spmcsr < jtagDebug::dataIo) {
          return JtagDebugStatus::OutOfRange;
       }
       const bool far = device_.flashBytes > 0x10000u;
