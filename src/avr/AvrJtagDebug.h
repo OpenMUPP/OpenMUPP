@@ -23,17 +23,20 @@
 //   back before each run and step, in the order of the reference debugger
 //   (docs/avr-jtag-ocd.md, "Read and write the CPU state"): r0 to r31, the
 //   PC, then r31, r30, EIND and r16 again. The PC write loads Z with the
-//   PC - 11 (revision 4) or PC - 5 (revision 3, from the scripts, no
-//   test), as the reference debugger does. The same sequence (EIJMP, EIND)
+//   PC - 11, as the reference debugger does on revision 4: the five
+//   instructions after EIJMP add 10 to Z + 1. Revision 3 has the same
+//   rule (hardware test on the ATmega32U4), not the PC - 5 of the
+//   scripts. The same sequence (EIJMP, EIND)
 //   goes to all devices, also to the devices without EIND (no test).
 // - Memory: the data space (registers, I/O, SRAM), the flash (read only)
 //   and the EEPROM, with injected instructions. They change r16, r30 and
 //   r31 on the target. Thus reads and writes of r0 to r31 and EIND use
 //   the context, never the target.
 // - The flash read uses two IR 0xA scans for each word, as the reference
-//   debugger. That a field that is not 0 reads a flash word is an
-//   inference (docs/avr-jtag-ocd.md). Field 0 executes the instruction, so
-//   word 0 is read with LPM.
+//   debugger. A field that is not 0 reads a flash word. Field 0 executes
+//   the instruction, so word 0 goes as the flash size in words: the
+//   address wraps at the flash size (hardware test, ATmega32U4). An
+//   injected LPM does not work: on revision 3 it reads its own opcode.
 // - The EEPROM write sets EEMPE, then EEPE with two adjacent injected
 //   OUT instructions. That the 4-cycle limit of EEMPE holds for this is not
 //   tested, so each byte is read back after the write.
@@ -114,10 +117,9 @@ static_assert(resetBreak == 0xC298);
 // The BCR bits of the breakpoints: enables, mask mode and modes (11 to 3)
 inline constexpr uint16_t breakBits = 0x0FF8;
 
-// The PC write loads Z with the PC minus this offset (word addresses).
-constexpr uint32_t pcOffset(uint8_t revision) {
-   return revision >= 4 ? 11u : 5u;
-}
+// The PC write loads Z with the PC minus this offset (word addresses),
+// on revision 3 and 4.
+inline constexpr uint32_t pcOffset = 11;
 
 // An EEPROM write of a stopped core took 34 ms on the ATmega32U4
 // (hardware test), not the 3.4 ms of the datasheet.
@@ -152,10 +154,6 @@ constexpr uint16_t ldZ(uint8_t d) {
 }
 constexpr uint16_t stZ(uint8_t r) {
    return static_cast<uint16_t>(0x8200u | ((r & 0x1Fu) << 4));
-}
-// LPM Rd, Z
-constexpr uint16_t lpmZ(uint8_t d) {
-   return static_cast<uint16_t>(0x9004u | ((d & 0x1Fu) << 4));
 }
 inline constexpr uint16_t eijmp = 0x9419;
 inline constexpr uint16_t wdr = 0x95A8;
@@ -557,7 +555,7 @@ class AvrJtagDebug {
             return false;
          }
       }
-      const uint32_t z = (pc_ - jtagDebug::pcOffset(ocd_.revision())) & fieldMask();
+      const uint32_t z = (pc_ - jtagDebug::pcOffset) & fieldMask();
       return loadZ(static_cast<uint16_t>(z)) && execute(jtagDebug::wdr) &&
              writeIo(jtagDebug::ioEind, static_cast<uint8_t>(z >> 16)) && execute(jtagDebug::eijmp) &&
              execute(jtagDebug::ldi(31, regs_[31])) && execute(jtagDebug::ldi(30, regs_[30])) &&
@@ -577,7 +575,14 @@ class AvrJtagDebug {
             return status;
          }
       }
-      return JtagDebugStatus::Ok;
+      return write ? commit() : JtagDebugStatus::Ok;
+   }
+
+   // The core executes an injected instruction at the next scan
+   // (avr/AvrJtagOcd.h). A reg D read executes the last one now.
+   [[nodiscard]] JtagDebugStatus commit() {
+      uint16_t control = 0;
+      return ocd_.readRegister(jtagOcd::reg::control, control) ? JtagDebugStatus::Ok : JtagDebugStatus::NoOcd;
    }
 
    [[nodiscard]] JtagDebugStatus accessByte(uint16_t address, uint8_t &value, bool write) {
@@ -607,34 +612,21 @@ class AvrJtagDebug {
    }
 
    // Two IR 0xA scans: the word address, then the PC field. The second
-   // scan returns the word. Word 0 with LPM (see above).
+   // scan returns the word. Word 0 as the flash size (see above).
    [[nodiscard]] JtagDebugStatus readFlashWord(uint32_t word, uint16_t &value) {
-      if(word == 0) {
-         uint8_t low = 0;
-         uint8_t high = 0;
-         if(!loadZ(0) || !execute(jtagDebug::lpmZ(16))) {
-            return JtagDebugStatus::NoOcd;
-         }
-         if(JtagDebugStatus status = readOcdr(16, low); status != JtagDebugStatus::Ok) {
-            return status;
-         }
-         if(!loadZ(1) || !execute(jtagDebug::lpmZ(16))) {
-            return JtagDebugStatus::NoOcd;
-         }
-         if(JtagDebugStatus status = readOcdr(16, high); status != JtagDebugStatus::Ok) {
-            return status;
-         }
-         value = static_cast<uint16_t>(high << 8 | low);
-         return JtagDebugStatus::Ok;
+      const uint32_t address = (word == 0 ? device_.flashBytes / 2u : word) & fieldMask();
+      if(address == 0) {
+         // A flash of 2^fieldBits words: no alias for word 0
+         return JtagDebugStatus::OutOfRange;
       }
       uint16_t instruction = jtagDebug::flashReadFill;
-      uint32_t field = word;
+      uint32_t field = address;
       if(!ocd_.instructionScan(instruction, field)) {
          return JtagDebugStatus::NoOcd;
       }
       // field is the PC field now. Not 0: a field of 0 executes.
       if(field == 0) {
-         field = word;
+         field = address;
       }
       instruction = jtagDebug::flashReadFill;
       if(!ocd_.instructionScan(instruction, field)) {

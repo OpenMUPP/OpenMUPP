@@ -11,9 +11,16 @@
 //
 // - OCD register access (IR 0xB, 21 bits): bit 20 = write, bits 19..16 =
 //   register, bits 15..0 = data. A write is one scan. A read is two scans
-//   with the same read command: each scan returns the result of the scan
-//   before it, register << 16 | data. A read fails when the result has a
-//   different register number or the write bit.
+//   with the same read command (reg 0 after an OCDR read): each scan
+//   returns the result of the scan before it, register << 16 | data. A read
+//   fails when the result has a different register number or the write
+//   bit.
+// - Each scan stays in Update-xR (tap::End::Update), as the reference
+//   debugger, except an instruction execute with field 0: it ends in
+//   Run-Test/Idle. The core executes the instruction in the TCK cycle in
+//   Run-Test/Idle at the start of the next scan. Each other TCK cycle in
+//   Run-Test/Idle moves the PC of the stopped core (revision 3, hardware
+//   test).
 // - FORCE_BREAK (IR 0x8) and RUN (IR 0x9) act at Update-IR: each call
 //   scans the IR, also when the IR has the instruction already.
 // - Instruction execute (IR 0xA): the instruction goes in the high 16 bits.
@@ -22,10 +29,8 @@
 //   is not 0 reads a flash word, and the core does not execute the
 //   instruction. execute() sends field 0.
 // - OCD revision 3 and lower: a 32-bit DR with the instruction in bits
-//   31..16 (debugger scripts, no test). That the low 16 bits are the
-//   field, as bits 21..0 on revision 4, is an assumption: step 2.6 of the
-//   AVR JTAG plan tests it on the ATmega32U4. Revisions below 3 are not
-//   known.
+//   31..16 and the field in bits 15..0, with the rules of revision 4
+//   (hardware test on the ATmega32U4). Revisions below 3 are not known.
 // - AVR_RESET (IR 0xC, 1 bit) holds the core in reset while the bit is 1.
 //
 // A failed scan gives false.
@@ -132,21 +137,23 @@ class AvrJtagOcd {
 
    [[nodiscard]] bool writeRegister(uint8_t reg, uint16_t value) {
       uint64_t data = jtagOcd::writeCommand(reg, value);
-      return reg < jtagOcd::registerCount && tap_.scanDr(tap::ir::ocdAccess, data, jtagOcd::registerBits);
+      return reg < jtagOcd::registerCount && tap_.scanDr(tap::ir::ocdAccess, data, jtagOcd::registerBits, tap::End::Update);
    }
 
-   // Two scans, as the reference debugger: the read, then the same read
-   // again, which returns the result of the first.
+   // Two scans, as the reference debugger: the read, then a second read,
+   // which returns the result of the first. The second read is the same
+   // read, but reg 0 after an OCDR read: an OCDR read that the probe does
+   // not collect takes the next byte of the core (hardware test).
    [[nodiscard]] bool readRegister(uint8_t reg, uint16_t &value) {
       if(reg >= jtagOcd::registerCount) {
          return false;
       }
       uint64_t data = jtagOcd::readCommand(reg);
-      if(!tap_.scanDr(tap::ir::ocdAccess, data, jtagOcd::registerBits)) {
+      if(!tap_.scanDr(tap::ir::ocdAccess, data, jtagOcd::registerBits, tap::End::Update)) {
          return false;
       }
-      data = jtagOcd::readCommand(reg);
-      if(!tap_.scanDr(data, jtagOcd::registerBits) || (data >> 16) != reg) {
+      data = jtagOcd::readCommand(reg == jtagOcd::reg::ocdr ? 0 : reg);
+      if(!tap_.scanDr(data, jtagOcd::registerBits, tap::End::Update) || (data >> 16) != reg) {
          return false;
       }
       value = static_cast<uint16_t>(data);
@@ -155,28 +162,30 @@ class AvrJtagOcd {
 
    // Stops the core.
    [[nodiscard]] bool forceBreak() {
-      return tap_.scanIr(tap::ir::forceBreak);
+      return tap_.scanIr(tap::ir::forceBreak, nullptr, tap::End::Update);
    }
 
    // Starts the core, or executes one step when BCR bit 13 is set.
    [[nodiscard]] bool run() {
-      return tap_.scanIr(tap::ir::run);
+      return tap_.scanIr(tap::ir::run, nullptr, tap::End::Update);
    }
 
    // AVR_RESET: true holds the core in reset, false releases it.
    [[nodiscard]] bool reset(bool hold) {
       uint64_t data = hold ? 1u : 0u;
-      return tap_.scanDr(tap::ir::avrReset, data, 1);
+      return tap_.scanDr(tap::ir::avrReset, data, 1, tap::End::Update);
    }
 
    // One instruction execute scan. instruction and field go out, and get
    // the instruction and field bits that the target shifted out. The field
-   // is cut to fieldBits(revision()).
+   // is cut to fieldBits(revision()). Field 0 ends in Run-Test/Idle: the
+   // next scan executes the instruction.
    [[nodiscard]] bool instructionScan(uint16_t &instruction, uint32_t &field) {
       const uint8_t bits = jtagOcd::fieldBits(revision_);
       const uint64_t fieldMask = (uint64_t{ 1 } << bits) - 1u;
       uint64_t data = (static_cast<uint64_t>(instruction) << bits) | (field & fieldMask);
-      if(!tap_.scanDr(tap::ir::execute, data, jtagOcd::executeBits(revision_))) {
+      const tap::End end = (field & fieldMask) == 0 ? tap::End::Idle : tap::End::Update;
+      if(!tap_.setIr(tap::ir::execute, tap::End::Update) || !tap_.scanDr(data, jtagOcd::executeBits(revision_), end)) {
          return false;
       }
       instruction = static_cast<uint16_t>(data >> bits);

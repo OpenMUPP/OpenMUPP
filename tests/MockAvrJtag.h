@@ -39,18 +39,18 @@
 //   read, the command itself for a write. Reg 0 to 3, BCR (8) and reg A, B,
 //   E, F keep the written value. Reg 4 to 7 keep the low byte on revision
 //   4, and are 0 on revision 3. Writes to the BSR (9), the OCDR (C) and reg
-//   D are ignored. A read of the OCDR clears reg D bit 4.
+//   D are ignored. A read of the OCDR clears reg D bit 4. A read of the
+//   empty OCDR stays pending: it takes the next byte that the core writes,
+//   and reg D bit 4 does not come (hardware test, ATmega32U4).
 // - Reg D: 0x000C while the core is stopped, else bit 0 = BCR bit 14. Bit
 //   4 while the OCDR holds a byte.
 // - FORCE_BREAK (0x8) at Update-IR stops the running core: BSR bit 1.
 // - RUN (0x9) at Update-IR starts the stopped core at pc. With BCR bit 13
 //   it executes one step: pc + 1 (the mock does not execute the flash),
 //   BSR bit 7, and bit 13 clear. After an EIJMP since the stop, the core
-//   starts at the PC field (revision 4) or the PC field - 1 (revision 3),
-//   modulo the flash words: the PC write of the reference debugger (Z =
-//   PC - 11 or PC - 5, then five instructions) then starts at the PC. This
-//   is a model of the reference offsets, not a hardware fact (open
-//   question 3).
+//   starts at the PC field, modulo the flash words: the PC write of the
+//   reference debugger (Z = PC - 11, then five instructions) then starts
+//   at the PC (hardware test on revision 3).
 // - AVR_RESET (0xC): the core is in reset while the bit is 1, and starts
 //   at resetVector at the release, and stops there at once when a program
 //   breakpoint matches it (see reach()). With ocdenFromFuse, the OCD
@@ -66,16 +66,18 @@
 //   after FORCE_BREAK in the captures (70 ms).
 // - Instruction execute (0xA, 38 bits on revision 4, 32 on revision 3):
 //   the instruction in the high 16 bits, the field below it. At Update-DR
-//   of the stopped core, a field of 0 executes the instruction, and any
-//   other field reads the flash word at that word address. Capture-DR
-//   loads the last flash word read above the PC field.
+//   of the stopped core, a field of 0 loads the instruction, and any
+//   other field reads the flash word at that word address. The next
+//   rising TCK edge in Run-Test/Idle executes the loaded instruction.
+//   Each other rising edge in Run-Test/Idle of the stopped core adds 2 to
+//   the PC field (hardware test on revision 3, the same model for
+//   revision 4). Capture-DR loads the last flash word read above the PC
+//   field.
 // - The PC field (docs/avr-jtag-ocd.md, "Instruction execute"): pc + 1 at
-//   a stop, + 2 for each executed instruction (+ 1 on revision 3: an
-//   inference from the PC offset -5 of the scripts), Z + 1 after EIJMP.
-//   The field wraps at its bit count.
-//   The rules do not agree in one model (open question 3). Only EIJMP
-//   changes pc: pc = EIND:Z.
-// - The core: LDI, MOV, IN, OUT, LD and ST with X, Y or Z, LPM Rd, Z,
+//   a stop, + 2 for each executed instruction, Z + 1 after EIJMP. The
+//   field wraps at its bit count. Only EIJMP changes pc: pc = EIND:Z.
+// - The core: LDI, MOV, IN, OUT, LD and ST with X, Y or Z, LPM Rd, Z (on
+//   revision 3 it loads a byte of its own opcode, hardware test),
 //   EIJMP, SPM, BREAK, WDR and NOP. Other instructions are recorded in
 //   unknownInstructions. The data space has r0 to r31 at 0x00, the I/O
 //   registers at 0x20 and the SRAM. A write to the I/O address
@@ -100,6 +102,7 @@
 #include <array>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <vector>
 
 #include "MockJtagPins.h"
@@ -169,6 +172,7 @@ class MockAvrJtag final : public JtagTarget {
          break;
       case State::Idle:
          ++idleClocks;
+         idle();
          break;
       case State::CaptureIr:
          shift_ = irCapture;
@@ -354,7 +358,7 @@ class MockAvrJtag final : public JtagTarget {
          runFields.push_back(pcField);
          if(jumped_) {
             const auto words = static_cast<uint32_t>(flash.size() / 2);
-            pc = (pcField - (ocdRevision >= 4 ? 0u : 1u)) % words;
+            pc = pcField % words;
          }
          if((ocdRegs[8] & (1u << 13)) != 0) {
             ocdRegs[8] = static_cast<uint16_t>(ocdRegs[8] & ~(1u << 13));
@@ -425,6 +429,7 @@ class MockAvrJtag final : public JtagTarget {
          result = bsr;
       } else if(n == 0xC) {
          result = static_cast<uint16_t>(ocdr << 8);
+         ocdrPending_ = !ocdrFull;
          ocdrFull = false;
       } else if(n == 0xD) {
          result = controlValue();
@@ -442,10 +447,26 @@ class MockAvrJtag final : public JtagTarget {
       }
       const auto field = static_cast<uint32_t>(shift_ & fieldMask());
       if(field != 0) {
-         flashRead_ = flashWordAt(field);
+         // The address wraps at the flash size (hardware test).
+         flashRead_ = flashWordAt(field % static_cast<uint32_t>(flash.size() / 2));
          return;
       }
-      execute(static_cast<uint16_t>(shift_ >> fieldBits()));
+      loaded_ = static_cast<uint16_t>(shift_ >> fieldBits());
+   }
+
+   // A rising TCK edge in Run-Test/Idle
+   void idle() {
+      if(!ocden || !stopped || inReset) {
+         loaded_.reset();
+         return;
+      }
+      if(loaded_) {
+         const uint16_t op = *loaded_;
+         loaded_.reset();
+         execute(op);
+         return;
+      }
+      pcField = static_cast<uint32_t>((pcField + 2) & fieldMask());
    }
 
    [[nodiscard]] uint8_t load(uint16_t address) {
@@ -459,7 +480,8 @@ class MockAvrJtag final : public JtagTarget {
    void store(uint16_t address, uint8_t value) {
       if(address == 0x20u + ocdDataReg) {
          ocdr = value;
-         ocdrFull = !ocdrStuck;
+         ocdrFull = !ocdrStuck && !ocdrPending_;
+         ocdrPending_ = false;
       } else if(address == 0x20u + eecrIo) {
          eecr(value);
       } else if(address < data.size()) {
@@ -504,7 +526,10 @@ class MockAvrJtag final : public JtagTarget {
       } else if(ldst == 0x8200u || ldst == 0x8208u || ldst == 0x920Cu) { // ST
          store(pointer(ldst == 0x8200u ? 30 : ldst == 0x8208u ? 28 : 26), reg(d));
       } else if((op & 0xFE0Fu) == 0x9004u) { // LPM Rd, Z
-         reg(d) = z() < flash.size() ? flash[z()] : 0xFF;
+         // Revision 3 reads the injected opcode (hardware test).
+         reg(d) = ocdRevision < 4    ? static_cast<uint8_t>((z() & 1u) != 0 ? op >> 8 : op) :
+                  z() < flash.size() ? flash[z()] :
+                                       0xFF;
       } else if(op == 0x9419u) { // EIJMP
          pc = static_cast<uint32_t>(load(0x20u + eind)) << 16 | z();
          pcField = static_cast<uint32_t>((pc + 1) & fieldMask());
@@ -515,7 +540,7 @@ class MockAvrJtag final : public JtagTarget {
       } else if(op != 0x9598u && op != 0x95A8u && op != 0x0000u) { // BREAK, WDR, NOP
          unknownInstructions.push_back(op);
       }
-      pcField = static_cast<uint32_t>((pcField + (ocdRevision >= 4 ? 2 : 1)) & fieldMask());
+      pcField = static_cast<uint32_t>((pcField + 2) & fieldMask());
    }
 
    void spm() {
@@ -866,6 +891,10 @@ class MockAvrJtag final : public JtagTarget {
    uint8_t byte_{ 0 };
    uint64_t ocdResult_{ 0 };
    uint32_t hiddenStopReads_{ 0 };
+   bool ocdrPending_{ false };
+   // The instruction of the last instruction execute scan, for the next
+   // rising edge in Run-Test/Idle
+   std::optional<uint16_t> loaded_;
    uint32_t eepeBusy_{ 0 };
    bool jumped_{ false };
    uint16_t flashRead_{ 0 };

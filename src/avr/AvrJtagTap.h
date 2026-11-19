@@ -14,8 +14,12 @@
 // - A DR scan has 1 to maxDrBits bits, LSB first. It sends the data and
 //   returns the bits that the target shifted out. shiftDr() sends a
 //   longer DR of whole bytes and ignores TDO.
-// - Each scan starts and ends in Run-Test/Idle, with no extra idle
-//   cycles, as in cmsisdap::JtagDp.
+// - Each scan starts in Run-Test/Idle or in Update-xR. It ends in
+//   Run-Test/Idle (tap::End::Idle, the default, as in cmsisdap::JtagDp)
+//   or stays in Update-xR (tap::End::Update). Both ways go to
+//   Select-DR-Scan with TMS high. The OCD needs Update-xR: on OCD revision
+//   3, each TCK cycle in Run-Test/Idle moves the PC of the stopped core
+//   (docs/avr-jtag-ocd.md, "Instruction execute").
 // - setIr() keeps the IR from one call to the next, as
 //   cmsisdap::JtagDp::setIr(). scanIr() always scans: FORCE_BREAK and RUN
 //   act at Update-IR, so the OCD sends them again with the same IR.
@@ -59,6 +63,14 @@ inline constexpr uint8_t ocdAccess = 0xB;
 inline constexpr uint8_t avrReset = 0xC;
 inline constexpr uint8_t bypass = 0xF;
 } // namespace ir
+
+// The state at the end of a scan
+enum class End : uint8_t {
+   // Run-Test/Idle: the next scan gives one TCK cycle in it.
+   Idle,
+   // Update-IR or Update-DR: no TCK cycle in Run-Test/Idle.
+   Update,
+};
 
 // IDCODE: version in bits 31..28, part number in bits 27..12, manufacturer
 // in bits 11..1 and bit 0 = 1. Atmel (JEP106 0x1F) gives 0x03F in bits
@@ -127,17 +139,17 @@ class AvrJtagTap {
    }
 
    // Selects the instruction. No scan when the IR has it already.
-   [[nodiscard]] bool setIr(uint8_t instruction) {
-      return ir_ == instruction || scanIr(instruction);
+   [[nodiscard]] bool setIr(uint8_t instruction, tap::End end = tap::End::Idle) {
+      return ir_ == instruction || scanIr(instruction, nullptr, end);
    }
 
    // One IR scan. captured gets the Capture-IR value.
-   [[nodiscard]] bool scanIr(uint8_t instruction, uint8_t *captured = nullptr) {
+   [[nodiscard]] bool scanIr(uint8_t instruction, uint8_t *captured = nullptr, tap::End end = tap::End::Idle) {
       start();
       // Select-DR-Scan, Select-IR-Scan, Capture-IR, Shift-IR
       put(0, 2, true);
       put(0, 2, false);
-      const uint32_t first = shiftData(instruction, tap::irLength);
+      const uint32_t first = shiftData(instruction, tap::irLength, end);
       if(!run()) {
          return false;
       }
@@ -150,7 +162,7 @@ class AvrJtagTap {
 
    // One DR scan of bitCount bits (1 to maxDrBits) in the current IR. data
    // goes out, and gets the bits that the target shifted out.
-   [[nodiscard]] bool scanDr(uint64_t &data, uint8_t bitCount) {
+   [[nodiscard]] bool scanDr(uint64_t &data, uint8_t bitCount, tap::End end = tap::End::Idle) {
       if(bitCount == 0 || bitCount > tap::maxDrBits) {
          return false;
       }
@@ -158,7 +170,7 @@ class AvrJtagTap {
       // Select-DR-Scan, Capture-DR, Shift-DR
       put(0, 1, true);
       put(0, 2, false);
-      const uint32_t first = shiftData(data, bitCount);
+      const uint32_t first = shiftData(data, bitCount, end);
       if(!run()) {
          return false;
       }
@@ -203,9 +215,9 @@ class AvrJtagTap {
       return true;
    }
 
-   // setIr() and scanDr()
-   [[nodiscard]] bool scanDr(uint8_t instruction, uint64_t &data, uint8_t bitCount) {
-      return setIr(instruction) && scanDr(data, bitCount);
+   // setIr() and scanDr(), both with the same end
+   [[nodiscard]] bool scanDr(uint8_t instruction, uint64_t &data, uint8_t bitCount, tap::End end = tap::End::Idle) {
+      return setIr(instruction, end) && scanDr(data, bitCount, end);
    }
 
    [[nodiscard]] bool readIdcode(uint32_t &idcode) {
@@ -258,13 +270,16 @@ class AvrJtagTap {
    }
 
    // From Shift-xR: the data (the last bit goes to Exit1), Update-xR and
-   // Run-Test/Idle. Returns the index of the first data bit.
-   uint32_t shiftData(uint64_t value, uint8_t count) {
+   // Run-Test/Idle (End::Idle only). Returns the index of the first data
+   // bit.
+   uint32_t shiftData(uint64_t value, uint8_t count, tap::End end) {
       const uint32_t first = bits_;
       put(value, count - 1u, false);
       put(value >> (count - 1u), 1, true);
       put(0, 1, true);
-      put(0, 1, false);
+      if(end == tap::End::Idle) {
+         put(0, 1, false);
+      }
       return first;
    }
 
