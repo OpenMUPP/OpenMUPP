@@ -7,7 +7,8 @@ avrdude can also program a chip over debugWIRE, and Bloom with avr-gdb can debug
 debugWIRE passed a hardware test on an ATtiny85 at 8 MHz and at 1 MHz (see [debugWIRE hardware test](#debugwire-hardware-test)).
 avrdude can also program the classic AVR chips with a JTAG port, for example the ATmega32U4 and the ATmega2560 (see [JTAG](#jtag)).
 JTAG programming passed a hardware test on an ATmega32U4 (see [JTAG hardware test](#jtag-hardware-test)).
-Bloom with avr-gdb can debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom)). JTAG debug has no hardware test yet.
+Bloom with avr-gdb can debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom)).
+JTAG debug passed a hardware test on an ATmega32U4 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
 The probe does not have the other AVR interfaces (UPDI, PDI, TPI).
 [AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol.
 
@@ -297,7 +298,7 @@ Each new host connection starts at 200 kHz again.
 Bloom with avr-gdb can halt, run and step the core, and read and write the registers, the SRAM, the I/O registers and the EEPROM.
 It can also read the flash and use the hardware breakpoints of the OCD.
 Bloom loads a program into the flash in the JTAG programming mode. Each load erases the full flash.
-JTAG debug has no hardware test yet.
+JTAG debug passed a hardware test on an ATmega32U4, OCD revision 3 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
 
 Use the [medbg build](#the-medbg-build). Bloom accepts JTAG on this tool class.
 This `bloom.yaml` is for an ATmega32U4 over JTAG, in the format of Bloom 2.1:
@@ -389,6 +390,34 @@ The extended fuse reads `0xFB`, not `0xCB` as in the backup. Only the unused bit
 | `-x jtagchain=0,0,0,0`, and `-x jtagchain=0,1,0,4` | Pass. The first value works. With the second value, avrdude stops with "initialization failed", as expected (see [avrdude over JTAG](#avrdude-over-jtag)). |
 
 The test did not use a TCK of 1125 kHz or more (the JTAG fast path).
+
+### JTAG debug hardware test
+
+The test used a YD-CH32V307VCT6 board with the medbg build and a Seeeduino Lite (ATmega32U4, OCD revision 3) with a 3.3 V supply.
+The tools were Bloom 2.1.0 (commit `3e9ddfa2`) and avr-gdb 17.2, with the `bloom.yaml` of [JTAG debug with Bloom](#jtag-debug-with-bloom).
+The target clock was the 16 MHz crystal (low fuse `0xFF`). The debug clock was 200 kHz.
+Before the test, ISP made a backup of all memories and programmed JTAGEN (high fuse `0x98`).
+BOOTRST is programmed, thus the reset vector is the boot section at byte address `0x7000`.
+The test program calls a function `tick` in a loop. `tick` increments `counter` in SRAM and toggles a port pin. The loop then increments `ticks`.
+The test used more than one Bloom session. The EEPROM row and the two-breakpoint row are from separate sessions on the final firmware. The other rows are from the build before it. That build did not have the longer EEPROM write timeout of the final firmware. The timeout changes only the EEPROM write.
+
+| Test | Result |
+|---|---|
+| `load` and `compare-sections` | Pass. The load of 320 bytes takes about 1.2 s. |
+| A breakpoint on `tick`, then `continue` three times | Pass. The counter reads 0, 1 and 2. |
+| Write r0 to r31 with a pattern, `stepi` over an `lds r24`, then read r0 to r31 | Pass. Only r24 changes. The PC moves by two words. |
+| `monitor reset`, then `continue` to the breakpoint | Pass. After the reset, Bloom shows the PC `0x7000` (byte address). avr-gdb shows the old PC (`0xd8`) until the next stop, because it does not read the registers again after `monitor reset`. |
+| Read and write a variable and an array element in SRAM, read the I/O registers, then `continue` | Pass. The read-back values are correct. After `continue`, `counter` reads `0x56` (written `0x55`). |
+| Write 4 EEPROM bytes in debug mode, then read them back | Pass. avrdude over ISP read the same bytes after the test. |
+| Read the flash: `x/8hx 0` and `x/4i` on `tick` | Pass. Word 0 reads `0x940C` (`jmp`), the same as the program file. |
+| `step` into `tick` from the call, then `stepi` two times | Pass |
+| Two breakpoints (`tick` and the `ticks++` line), then `continue` three times | Pass. The core stops at `tick`, at `ticks++` and at `tick` again. |
+| Three breakpoints | Pass. The `continue` fails with the remote reply `01`, as expected. Bloom keeps one hardware breakpoint, thus it sends the third breakpoint as a software breakpoint. The probe rejects it (`Feature not available`). |
+| No breakpoints, `continue`, then an interrupt (`SIGINT`) after 2 s | Pass. The core stops in the delay loop. `ticks` reads 79. |
+| OCDEN: Bloom programs it at the start of the session and clears it at the end | Pass. The high fuse reads `0x98` after the session. |
+
+Software breakpoints are not tested, because the probe does not have them.
+OCD revision 4 (for example the ATmega2560) is not tested.
 
 ### debugWIRE hardware test
 
