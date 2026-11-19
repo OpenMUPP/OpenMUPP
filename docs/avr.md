@@ -334,8 +334,8 @@ environments:
 
 ### JTAG data breakpoints
 
-The probe has data breakpoints on JTAG: a stop on a read, a write or an access (read or write) of one data space address.
-Bloom does not send them, so avr-gdb watchpoints do not use them.
+The probe has data breakpoints on JTAG: a stop on a read, a write or an access (read or write) of one data space address or of an address range.
+Bloom does not send them. AVaRICE sends them for avr-gdb watchpoints.
 Other host tools can send them with the EDBG commands (see [cmsis-dap.md](cmsis-dap.md#data-breakpoints)).
 They use the hardware breakpoint numbers 2 and 3. Thus a data breakpoint and the program breakpoints share these two numbers.
 The core stops after the instruction that makes the access.

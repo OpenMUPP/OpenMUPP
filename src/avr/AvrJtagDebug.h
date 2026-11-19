@@ -87,7 +87,7 @@
 //   the probe writes the address to reg 3 and the mask to reg 2, for each
 //   order of the numbers. A 1 bit in the mask compares the address bit.
 //   A mask without a data breakpoint does nothing. The pair has no
-//   program breakpoint: InUse.
+//   program breakpoint and no second mask: InUse.
 // - After each stop the probe reads the BSR (the cause of the stop). The
 //   reference debugger does not read it.
 // - A failed context read (NoOcd, Timeout) leaves no valid context: run,
@@ -351,7 +351,7 @@ class AvrJtagDebug {
          return JtagDebugStatus::OutOfRange;
       }
       const std::optional<Break> &other = breaks_[partner(number)];
-      if(breaks_[number] || (other && other->mode == jtagOcd::bcr::modeProgram)) {
+      if(breaks_[number] || (other && (other->mode == jtagOcd::bcr::modeProgram || other->mode == maskEntry))) {
          return JtagDebugStatus::InUse;
       }
       breaks_[number] = Break{ mask, maskEntry };

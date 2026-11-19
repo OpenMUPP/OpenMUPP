@@ -792,6 +792,8 @@ TEST_CASE("AvrJtagDebug: data mask numbers") {
    REQUIRE(b.debug.clearBreakpoint(2) == JtagDebugStatus::Ok);
    REQUIRE(b.debug.setDataMask(2, 0xFFF0) == JtagDebugStatus::Ok);
    CHECK(b.debug.setDataMask(2, 0xFFF0) == JtagDebugStatus::InUse);
+   // No second mask on the other number
+   CHECK(b.debug.setDataMask(3, 0xFFFE) == JtagDebugStatus::InUse);
    CHECK(b.debug.setBreakpoint(2, 0x80) == JtagDebugStatus::InUse);
    CHECK(b.debug.setBreakpoint(3, 0x80) == JtagDebugStatus::InUse);
    CHECK(b.debug.setBreakpoint(1, 0x80) == JtagDebugStatus::Ok);

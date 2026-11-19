@@ -359,7 +359,7 @@ The core stops after the instruction that makes the access. The break event has 
 A data mask has type 3 (AVaRICE "range BP"). The address field is the mask: a 1 bit compares the address bit.
 The probe uses mask bits 15..0 and ignores the mode.
 The mask is on number 2 or 3, and applies to the data breakpoint on the other number. Number 1 gives code `0x81`.
-A mask on a number in use, or next to a program breakpoint, gives code `0x81`.
+A mask on a number in use, or next to a program breakpoint or a mask, gives code `0x81`.
 A program breakpoint next to a mask also gives code `0x81`.
 A mask without a data breakpoint has no effect.
 
