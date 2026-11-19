@@ -317,14 +317,17 @@ environments:
       name: "avr_gdb_rsp"
       ip_address: "127.0.0.1"
       port: 1442
+      range_stepping: false
 ```
 
+- Set `range_stepping: false`. Bloom uses software breakpoints for range stepping, and the probe does not have them yet. Without this setting, `next` and `step` in avr-gdb fail with `E01`.
 - With `manage_ocden_fuse_bit: true`, Bloom programs OCDEN at the start of the session and clears it at the end.
   The probe writes the fuse in the JTAG programming mode. This mode resets the core.
 - Without OCDEN, the debug commands fail with code `0x50`. Bloom then shows "check OCDEN fuse bit".
 - The OCD has three hardware breakpoints for the host. Bloom keeps one of them for its step function. Thus avr-gdb has two breakpoints.
 - The probe does not have software breakpoints yet. A software breakpoint fails.
 - The debug clock (TCK) is 200 kHz, because Bloom sends this fixed value. This is correct for a target clock of 1 MHz or more.
+  One single step takes about 140 ms at this clock. Thus a `next` over a long loop takes much time.
 - An EEPROM write takes about 35 ms for each byte, because the EEPROM write of a stopped core is slower than in the datasheet.
 - At the end of the session, the probe removes the breakpoints, and the program runs.
 
