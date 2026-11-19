@@ -399,7 +399,7 @@ The target clock was the 16 MHz crystal (low fuse `0xFF`). The debug clock was 2
 Before the test, ISP made a backup of all memories and programmed JTAGEN (high fuse `0x98`).
 BOOTRST is programmed, thus the reset vector is the boot section at byte address `0x7000`.
 The test program calls a function `tick` in a loop. `tick` increments `counter` in SRAM and toggles a port pin. The loop then increments `ticks`.
-The test used more than one Bloom session. The EEPROM row and the two-breakpoint row are from separate sessions. All rows are from the same firmware.
+The test used more than one Bloom session. The EEPROM row and the two-breakpoint row are from separate sessions on the final firmware. The other rows are from the build before it. That build did not have the longer EEPROM write timeout of the final firmware. The timeout changes only the EEPROM write.
 
 | Test | Result |
 |---|---|
