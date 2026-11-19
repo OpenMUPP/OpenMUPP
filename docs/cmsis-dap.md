@@ -299,7 +299,7 @@ A value out of range gives code `0x33` at activate physical.
 
 | Command | Function |
 |---|---|
-| `0x10` Activate physical | The probe drives the pins at the programming clock and reads the IDCODE. DATA `[IDCODE u32]`. An IDCODE that is not from Atmel (bits 11..0 not `0x03F`) gives code `0x20`. The reset flag is not used. |
+| `0x10` Activate physical | The probe drives the pins at the programming clock and reads the IDCODE. DATA `[IDCODE u32]`. An IDCODE that is not from Atmel (bits 11..0 not `0x03F`) gives code `0x20`. The reset flag is not used. AVaRICE sends the device context after this command. Without a device context (all 0), get ID, detach and deactivate physical work. Each other command takes the device context first, and gives code `0x33` when it is not valid. |
 | `0x11` Deactivate physical | Detach, then the probe leaves the programming mode and releases the pins. The device context stays for the next activate physical, because Bloom sends it only one time. |
 | `0x12` Get ID | DATA `[IDCODE u32]`, for example `3F 70 58 49` (an ATmega32U4: part number `0x9587`). |
 | `0x13` Attach | The debug mode at the debug clock. Not in the programming mode (code `0x32`). When the OCD answers, the core stops and a break event comes, also with break 0 (Bloom waits for it). Without an OCD answer (OCDEN not programmed), attach gives OK, and each command that needs the OCD gives code `0x50`. A second attach is a stop. |

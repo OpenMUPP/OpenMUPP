@@ -392,9 +392,6 @@ TEST_CASE("EDBG JTAG: the physical context") {
 
 TEST_CASE("EDBG JTAG: the device context") {
    Bench b;
-   SUBCASE("none") {
-      b.avrdudeOpen(Bytes(31, 0));
-   }
    SUBCASE("a flash page of 512 bytes") {
       b.avrdudeOpen(megaDeviceDesc(512, 32768));
    }
@@ -412,6 +409,35 @@ TEST_CASE("EDBG JTAG: the device context") {
    CHECK(b.signOn() == failed(0x33));
    CHECK(b.jtagPins.inits == 0);
    CHECK_FALSE(b.jtagScope.active());
+}
+
+// AVaRICE jtag3: ACTIVATE_PHYSICAL before the device context (issue #102)
+TEST_CASE("EDBG JTAG: AVaRICE sends the device context after the sign-on") {
+   Bench b;
+   CHECK(b.avr8(avr8Set(0, 0, { 0x02 })) == ok);
+   CHECK(b.avr8(avr8Set(0, 1, { 0x02 })) == ok);
+   CHECK(b.avr8(avr8Set(1, 0, { 0x04 })) == ok);
+   REQUIRE(b.signOn() == data(idcodeBytes));
+   CHECK(b.jtagScope.active());
+   CHECK(b.avr8({ avr8::command::getId, 0x00 }) == data(idcodeBytes));
+   SUBCASE("a valid device context") {
+      CHECK(b.avr8(avr8Set(2, 0, megaDeviceDesc())) == ok);
+      b.bloomAttach();
+      CHECK(b.jtagAvr.stopped);
+      b.bloomClose();
+   }
+   SUBCASE("no device context") {
+      CHECK(b.avr8({ avr8::command::attach, 0x00, 0x01 }) == failed(0x33));
+      CHECK(b.avr8({ avr8::command::enterProgmode, 0x00 }) == failed(0x33));
+      CHECK(b.avr8({ avr8::command::detach, 0x00 }) == ok);
+      CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
+   }
+   SUBCASE("a device context out of range") {
+      CHECK(b.avr8(avr8Set(2, 0, megaDeviceDesc(512, 32768))) == ok);
+      CHECK(b.avr8({ avr8::command::enterProgmode, 0x00 }) == failed(0x33));
+      CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
+   }
+   b.checkReleased();
 }
 
 TEST_CASE("EDBG JTAG: the ATmega2560 (256-byte pages, 256 KiB)") {
