@@ -342,11 +342,9 @@ TEST_CASE("EDBG JTAG: Bloom sets the clock and the daisy chain before the varian
    set(2, 0x18, { 0x31 });
    CHECK(b.avr8({ avr8::command::activatePhysical, 0x00, 0x01 }) == data(idcodeBytes));
    CHECK(b.avr8({ avr8::command::getId, 0x00 }) == data(idcodeBytes));
-   // The debug commands need ATTACH.
-   for(const uint8_t command :
-       { avr8::command::stop, avr8::command::run, avr8::command::step, avr8::command::reset, avr8::command::pcRead }) {
-      CHECK(b.avr8({ command, 0x00, 0x00 }) == failed(0x32));
-   }
+   // The debug commands other than the run control need ATTACH.
+   CHECK(b.pcRead() == failed(0x32));
+   CHECK(b.breakSet(1, 0x200) == failed(0x32));
    CHECK(b.avr8({ avr8::command::disableDebugWire, 0x00 }) == failed(0x90));
    CHECK(b.avr8(memoryCommand(avr8::command::readMemoryMasked, memory::sram, 0x100, 1)) == failed(0x32));
    CHECK(b.avr8({ avr8::command::detach, 0x00 }) == ok);
@@ -437,6 +435,60 @@ TEST_CASE("EDBG JTAG: AVaRICE sends the device context after the sign-on") {
       CHECK(b.avr8({ avr8::command::enterProgmode, 0x00 }) == failed(0x33));
       CHECK(b.avr8({ avr8::command::deactivatePhysical, 0x00 }) == ok);
    }
+   b.checkReleased();
+}
+
+// AVaRICE jtag3: no ATTACH, the first RESET starts the debug mode (issue
+// #108)
+TEST_CASE("EDBG JTAG: AVaRICE resets the target without ATTACH") {
+   Bench b;
+   b.jtagAvr.pc = 0x123;
+   CHECK(b.avr8(avr8Set(0, 0, { 0x02 })) == ok);
+   CHECK(b.avr8(avr8Set(0, 1, { 0x02 })) == ok);
+   CHECK(b.avr8(avr8Set(1, 0, { 0x04 })) == ok);
+   REQUIRE(b.signOn() == data(idcodeBytes));
+   CHECK(b.avr8(avr8Set(2, 0, megaDeviceDesc())) == ok);
+   CHECK(b.avr8(avr8Set(1, 0x21, { 200, 0 })) == ok);
+   // The OCDEN check: the fuses in the programming mode
+   b.jtagProgmode();
+   SUBCASE("RESET in the programming mode") {
+      CHECK(b.avr8({ avr8::command::reset, 0x00, 0x01 }) == failed(0x32));
+      CHECK(b.stop() == failed(0x32));
+   }
+   CHECK(b.avr8(readMemory(memory::fuses, 0, 3)).size() == 6);
+   CHECK(b.avr8({ avr8::command::leaveProgmode, 0x00 }) == ok);
+   CHECK(b.avr8(avr8Set(3, 0, { 0x00 })) == ok);
+   SUBCASE("RESET") {
+      CHECK(b.avr8({ avr8::command::reset, 0x00, 0x01 }) == ok);
+      // One event only: the one of the reset
+      CHECK(b.event() == b.breakEvent(0x0000, false));
+      CHECK(b.event().empty());
+      CHECK(b.jtagAvr.stopped);
+      CHECK(b.pcRead() == Bytes{ 0x83, 0x00, 0x00, 0x00, 0x00, 0x00 });
+      CHECK(b.avr8(readMemory(memory::sram, 0x100, 1)).size() == 4);
+      CHECK(b.breakSet(1, 0x200) == ok);
+      CHECK(b.run() == ok);
+      CHECK(b.jtagAvr.reach(0x100));
+      CHECK(b.event() == b.breakEvent(0x100, true));
+   }
+   SUBCASE("STOP (capture a running program)") {
+      CHECK(b.stop() == ok);
+      CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+      CHECK(b.event().empty());
+      CHECK(b.jtagAvr.stopped);
+   }
+   SUBCASE("RUN") {
+      CHECK(b.run() == ok);
+      CHECK_FALSE(b.jtagAvr.stopped);
+      CHECK(b.event().empty());
+   }
+   SUBCASE("no OCD answer (OCDEN not programmed)") {
+      b.jtagAvr.ocden = false;
+      CHECK(b.avr8({ avr8::command::reset, 0x00, 0x01 }) == failed(0x50));
+   }
+   // AVaRICE "stop debugging" and the sign-off
+   b.bloomClose();
+   CHECK_FALSE(b.jtagAvr.stopped);
    b.checkReleased();
 }
 

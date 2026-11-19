@@ -149,7 +149,10 @@
 //        core runs.
 //   STOP, RESET, RUN, RUN_TO [word address u32], STEP, PC_READ, PC_WRITE
 //        (word addresses), in the debug mode only (else FAILED 0x32): as on
-//        debugWIRE. The PC can be above 16 bits (ATmega2560).
+//        debugWIRE. The PC can be above 16 bits (ATmega2560). Without
+//        ATTACH (AVaRICE), STOP, RESET, RUN, RUN_TO and STEP start the debug
+//        mode first, as ATTACH does, but without its break event. In the
+//        programming mode they give FAILED 0x32.
 //   HW_BREAK_SET [type][number][address u32][mode], HW_BREAK_CLEAR
 //        [number]: numbers 1 to 3 (OCD reg 1 to 3). Type 1 (program): a
 //        byte address (Bloom), the OCD takes word addresses. Type 2
@@ -656,6 +659,10 @@ class Avr8Scope final : public Avr8Handler {
          case cmd::run:
          case cmd::runTo:
          case cmd::step:
+            if(const auto failure = implicitAttach()) {
+               return failed(*failure);
+            }
+            break;
          case cmd::pcRead:
          case cmd::pcWrite:
          case cmd::hwBreakSet:
@@ -754,26 +761,46 @@ class Avr8Scope final : public Avr8Handler {
       if(attached_) {
          return stopJtag();
       }
-      AvrJtagDebug &debug = target_.debug();
+      if(const auto failure = startDebugJtag()) {
+         return failed(*failure);
+      }
+      if(target_.debug().isStopped()) {
+         // Bloom waits for this event, also after ATTACH with break 0.
+         event_ = true;
+         eventAtBreak_ = false;
+      }
+      return ok();
+   }
+
+   // The debug mode at the debug clock, without a break event. A value:
+   // the FAILED code.
+   template <typename T = Target>
+   std::optional<uint8_t> startDebugJtag() {
       clearHardwareBreaks();
       attached_ = true;
       running_ = false;
       event_ = false;
       if(!target_.setSpeed(modeClock())) {
          attached_ = false;
-         return failed(avr8::failure::clockSpeed);
+         return avr8::failure::clockSpeed;
       }
-      if(const JtagDebugStatus status = debug.attach(); status != JtagDebugStatus::Ok) {
+      if(const JtagDebugStatus status = target_.debug().attach(); status != JtagDebugStatus::Ok) {
          attached_ = false;
          static_cast<void>(target_.setSpeed(modeClock()));
-         return failed(failureOf(status));
+         return failureOf(status);
       }
-      if(debug.isStopped()) {
-         // Bloom waits for this event, also after ATTACH with break 0.
-         event_ = true;
-         eventAtBreak_ = false;
+      return std::nullopt;
+   }
+
+   // AVaRICE sends no ATTACH (issue #108): the first RESET, STOP, RUN,
+   // RUN_TO or STEP starts the debug mode. The command gives the break
+   // event. A value: the FAILED code.
+   template <typename T = Target>
+   std::optional<uint8_t> implicitAttach() {
+      if(target_.prog().programming()) {
+         return avr8::failure::illegalState;
       }
-      return ok();
+      return startDebugJtag();
    }
 
    template <typename T = Target>
