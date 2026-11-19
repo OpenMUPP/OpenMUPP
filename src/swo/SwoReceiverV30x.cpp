@@ -370,13 +370,15 @@ void SwoReceiver::poll() {
    using Ring = SwoRing<edgeBufferSize>;
    const auto counts = [this](uint16_t *now) {
       Interrupt::CriticalSection cs;
-      // The time before the DMA counters: an edge after it is not in the
-      // counts, so idle() does not end a frame that goes on.
+      const uint32_t rising = Ring::writeCount(risingHalves_, edgeBufferSize - risingDma().getDataCount());
+      const uint32_t falling = Ring::writeCount(fallingHalves_, edgeBufferSize - fallingDma().getDataCount());
+      // The time after the DMA counters: each counted edge is not newer
+      // than now, so idle() sees no negative quiet time. An edge that is
+      // not counted yet is at most some cycles older than now: far inside
+      // the 0.25 bit margins of the decoder.
       if(now != nullptr) {
          *now = static_cast<uint16_t>(timer().getCounter());
       }
-      const uint32_t rising = Ring::writeCount(risingHalves_, edgeBufferSize - risingDma().getDataCount());
-      const uint32_t falling = Ring::writeCount(fallingHalves_, edgeBufferSize - fallingDma().getDataCount());
       return std::pair{ rising, falling };
    };
    uint16_t now = 0;

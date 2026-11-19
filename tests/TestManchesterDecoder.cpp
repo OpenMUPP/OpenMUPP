@@ -7,6 +7,8 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -240,7 +242,19 @@ TEST_CASE("Manchester decoder: many random frames, gaps and jitter across many t
          enc.gap(1 + next() % 64);
       }
       REQUIRE(enc.edges.back().time > 5 * 65'536U);
-      b.feed(enc.edges);
+      // As the receiver polls: batches of edges, then idle() at a time from
+      // the last edge of the batch up to the next edge (an edge that is
+      // not in the DMA counts yet), also in the middle of a frame.
+      const std::vector<Edge> &all = enc.edges;
+      std::size_t at = 0;
+      while(at < all.size()) {
+         const std::size_t end = std::min(all.size(), at + 1 + next() % 40);
+         b.feed({ all.begin() + static_cast<std::ptrdiff_t>(at), all.begin() + static_cast<std::ptrdiff_t>(end) });
+         const uint32_t last = all[end - 1].time;
+         const uint32_t limit = end < all.size() ? all[end].time : last + 1000;
+         b.idleAt(static_cast<double>(last + next() % (limit - last + 1)));
+         at = end;
+      }
       b.idleAt(enc.now());
       CHECK(b.out == sent);
       CHECK_FALSE(b.decoder.takeError());
