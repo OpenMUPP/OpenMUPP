@@ -47,7 +47,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
   Else the next scan has an extra TCK edge or a missing TCK edge.
   The idle level is high on the boards with the SPI fast path (the Mini and the STM32H5 boards), and low on the ST-Link/V2-1 and the mini clone.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
-- SWO only on the CH32V307 boards, in UART (NRZ) mode, through `DAP_SWO_Data` or the SWO trace endpoint. No Manchester mode. See [SWO commands](#swo-commands).
+- SWO only on the CH32V307 boards, through `DAP_SWO_Data` or the SWO trace endpoint. UART (NRZ) mode up to 9 Mbaud, Manchester mode up to 500 kbit/s. See [SWO commands](#swo-commands).
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
 - A `MUPP_DEBUG_CDC` build has no UART bridge and no `DAP_UART_*` commands.
 - On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
@@ -116,7 +116,8 @@ Use `probe-rs list` and then `probe-rs info`.
 | `DapUart.h` | The interface of the UART, as the `DAP_UART_*` commands need it. |
 | `src/uart/DapUartChannel.h` | The `DapUart` on the UART of the UART bridge, and the owner switch between the serial port and the DAP commands. |
 | `DapSwo.h` | The interface of the SWO receiver, as the `DAP_SWO_*` commands need it. |
-| `src/swo/SwoUart.h` | The `DapSwo` on USART2 and DMA1 channel 6 of the CH32V307. |
+| `src/swo/SwoReceiver.h` | The `DapSwo` of the CH32V307: UART mode on USART2 and DMA1 channel 6, Manchester mode on TIM5 and DMA2 channels 1 and 2. |
+| `src/swo/ManchesterDecoder.h` | The software decoder of the SWO Manchester mode. |
 
 The processor has no CMSIS header and no hardware header.
 It uses these objects:
@@ -127,7 +128,7 @@ It uses these objects:
 - A `Platform` for the microsecond time, the delay and the LEDs.
 - A `DeviceInfo` with the strings and the capabilities of `DAP_Info`.
 - A `DapUart` (`DapUart.h`, on target `uart::DapUartChannel`) for the `DAP_UART_*` commands. It is optional.
-- A `DapSwo` (`DapSwo.h`, on target `swo::SwoUart`) for the `DAP_SWO_*` commands. It is optional. `setSwo()` gives it to the processor, and tells it if the transport has the SWO trace endpoint.
+- A `DapSwo` (`DapSwo.h`, on target `swo::SwoReceiver`) for the `DAP_SWO_*` commands. It is optional. `setSwo()` gives it to the processor, and tells it if the transport has the SWO trace endpoint.
 
 ## Transport
 
@@ -376,8 +377,8 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 | `0x15` | `DAP_JTAG_Configure` | The IR length of each device in the chain. Replies an error for more than 8 devices or a bad IR length. The chain is then empty. |
 | `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
 | `0x17` | `DAP_SWO_Transport` | `0` none, `1` `DAP_SWO_Data`, `2` SWO trace endpoint. See [SWO commands](#swo-commands). |
-| `0x18` | `DAP_SWO_Mode` | `0` off, `1` UART. `2` (Manchester) replies an error and sets mode off. Stops the capture. |
-| `0x19` | `DAP_SWO_Baudrate` | The response has the real baud rate of the USART divider, or 0. Above 9 Mbaud: 9 Mbaud. |
+| `0x18` | `DAP_SWO_Mode` | `0` off, `1` UART, `2` Manchester. Stops the capture. |
+| `0x19` | `DAP_SWO_Baudrate` | UART: the response has the real baud rate of the USART divider, or 0. Above 9 Mbaud: 9 Mbaud. Manchester: the bit rate, or 0. Above 500 kbit/s: 500 kbit/s. |
 | `0x1A` | `DAP_SWO_Control` | Bit 0: start or stop the capture. |
 | `0x1B` | `DAP_SWO_Status` | The trace status and the number of bytes in the trace buffer. |
 | `0x1C` | `DAP_SWO_Data` | The trace status and up to packet size - 4 bytes of trace data. |
@@ -398,7 +399,7 @@ An unknown command replies `ID_DAP_Invalid` (`0xFF`).
 The status of a command is `DAP_OK` (`0x00`) or `DAP_ERROR` (`0xFF`), as in the specification.
 Each "replies an error" in the table means the status `0xFF`.
 `DAP_Connect` is the exception: it replies port `0` for a failure.
-The capabilities in `DAP_Info` show SWD, JTAG, SWO UART, atomic commands, SWO streaming trace, the UART port and the USB COM port.
+The capabilities in `DAP_Info` show SWD, JTAG, SWO UART, SWO Manchester, atomic commands, SWO streaming trace, the UART port and the USB COM port.
 `DAP_Info` also gives the size of the UART receive buffer (`0xFB`) and transmit buffer (`0xFC`), and the size of the SWO trace buffer (`0xFD`).
 A processor without a `DapUart` does not show the UART, and the `DAP_UART_*` commands then reply `ID_DAP_Invalid`.
 A processor without a `DapSwo` does not show SWO, and the `DAP_SWO_*` commands then reply `ID_DAP_Invalid`.
@@ -592,17 +593,19 @@ The other boards report no SWO in `DAP_Info`, and the commands reply `ID_DAP_Inv
 Only the v2 interface has the commands. The Versaloon personality has no SWO.
 The CMake build sets `MUPP_CMSIS_DAP_SWO` for the CH32V307 images with the CMSIS-DAP personality.
 
-The receiver is `swo::SwoUart` (`src/swo/SwoUart.h`):
+The receiver is `swo::SwoReceiver` (`src/swo/SwoReceiver.h`). It has two modes:
 
-- USART2 receives on PA3 (8N1, receiver only). A circular DMA on DMA1 channel 6 writes into a trace buffer of 4 KB.
-- The baud rate is 144 MHz / (16 × divider). The range is 2198 baud to 9 Mbaud.
+- UART mode: USART2 receives on PA3 (8N1, receiver only). A circular DMA on DMA1 channel 6 writes into a trace buffer of 4 KB.
+  The baud rate is 144 MHz / (16 × divider). The range is 2198 baud to 9 Mbaud.
+- Manchester mode: TIM5 captures the edges on PA3, and the CPU decodes them into the same trace buffer.
+  The range is 69 bit/s to 500 kbit/s. See [SWO Manchester mode](#swo-manchester-mode).
 - PB14 (TDO) stays an input while the capture runs.
 
 Use this sequence to start a capture:
 
 1. `DAP_SWO_Transport` `1` (`DAP_SWO_Data`) or `2` (SWO trace endpoint).
-2. `DAP_SWO_Mode` `1` (UART).
-3. `DAP_SWO_Baudrate` with the baud rate of the target. The response has the real baud rate, for example 6857143 for 7 Mbaud.
+2. `DAP_SWO_Mode` `1` (UART) or `2` (Manchester).
+3. `DAP_SWO_Baudrate` with the baud rate of the target. In Manchester mode, this is the bit rate. The response has the real baud rate, for example 6857143 for 7 Mbaud in UART mode.
 4. `DAP_SWO_Control` `1`.
 
 Then read the data with `DAP_SWO_Data` (transport `1`) or from the SWO trace endpoint (transport `2`).
@@ -613,15 +616,16 @@ Rules:
 - The commands follow the reference implementation of Arm (`SWO.c` of CMSIS-DAP).
 - While the capture runs, `DAP_SWO_Transport` replies an error.
 - `DAP_SWO_Mode` stops the capture and clears the baud rate. Thus send `DAP_SWO_Baudrate` after `DAP_SWO_Mode`.
-  `DAP_SWO_Mode` `2` (Manchester) replies an error and sets mode off.
-- `DAP_SWO_Baudrate` replies the real baud rate and stores it. A baud rate above 9 Mbaud gives 9 Mbaud.
-  It replies 0 in mode off, and for a baud rate below 2198 baud. It then stores 0 and stops the capture.
+  Another mode than `0`, `1` and `2` replies an error and sets mode off.
+- `DAP_SWO_Baudrate` replies the real baud rate and stores it. In UART mode, a baud rate above 9 Mbaud gives 9 Mbaud.
+  In Manchester mode, a bit rate above 500 kbit/s gives 500 kbit/s.
+  It replies 0 in mode off, and for a baud rate below the minimum (2198 baud UART, 69 bit/s Manchester). It then stores 0 and stops the capture.
 - While the capture runs, `DAP_SWO_Baudrate` changes the baud rate at once. The capture goes on, and the trace buffer stays.
-- A start needs mode UART and a baud rate. Else `DAP_SWO_Control` replies an error.
+- A start needs a mode and a baud rate. Else `DAP_SWO_Control` replies an error.
 - A start empties the trace buffer and clears the errors. A start while the capture runs does nothing.
 - After a stop, the bytes in the trace buffer stay readable.
 - The trace status has these bits: bit 0 capture active, bit 6 error (a framing or noise error), bit 7 overrun (data lost).
-  "Data lost" includes an overflow of the trace buffer and an overrun of the USART.
+  "Data lost" includes an overflow of the trace buffer, an overrun of the USART, and an overflow of the edge buffers in Manchester mode.
 - The receiver does not pause on a full trace buffer, so bit 1 (capture paused) is always 0.
   An overflow discards the data in the trace buffer, and sets the overrun bit.
 - Each error bit shows the errors since the last read of the status or the last start.
@@ -632,9 +636,61 @@ Rules:
 - With transport `2`, the SWO trace endpoint sends the data (see [SWO trace endpoint](#swo-trace-endpoint)). The status commands work as with transport `1`.
 - `DAP_SWO_ExtendedStatus` gives only the fields that the request asks for. Bit 2 (index and timestamp) is ignored, because the capabilities do not include the test domain timer.
 - `DAP_Disconnect` does not stop the capture.
+- `DAP_Connect` to JTAG stops the capture, because SWO is an SWD function. While the JTAG port is connected, a start replies an error.
 - When the host goes away (USB reset or unconfigure), the capture stops. The transport becomes none, the mode off and the baud rate 0.
 
 The hardware test of the SWO commands is not done yet.
+
+### SWO Manchester mode
+
+The TPIU Manchester format has these properties:
+
+- The line is low when it is idle.
+- Each bit has two halves. A 1 is high, then low. A 0 is low, then high. Thus each bit has an edge in its middle.
+- A frame starts with a start bit (a 1). One or more bytes follow, with the least significant bit first. After the frame, the line stays low for at least one bit time.
+
+The capture on the CH32V307:
+
+- The general-purpose timers of the CH32V307 capture only one edge direction on each channel. The `CCER` register has no `CCxNP` bit, and the dual-edge register `TIMx_AUX` is only on some chip lots.
+  Thus TIM5 channel 4 captures the rising edges of PA3, and channel 3 captures the falling edges of the same input (`CC3S` = `10`).
+- TIM5_CH4 is on DMA2 channel 1 and TIM5_CH3 on DMA2 channel 2. Each circular DMA writes the 16-bit capture times into an edge buffer of 1024 edges.
+- TIM5 is on APB1. The Vref measurement changes only PCLK2, so the timer clock does not change during a measurement.
+- The prescaler gives 16 to 32 timer ticks for each bit. Thus the 16-bit counter wraps after 2048 bit times or more (at least 4.1 ms at 500 kbit/s).
+- The input filter rejects pulses shorter than 8 timer clocks (56 ns).
+- PA3 has the internal pull-down, for the idle level (low). The target side of openmupp-v1 has a 10 kΩ pull-up. Thus without a target the line is high, and the decoder waits for a frame.
+
+The decoder (`src/swo/ManchesterDecoder.h`):
+
+- It uses only the 16-bit difference of two capture times. Thus the wrap of the timer has no effect inside a frame.
+- An edge in the middle of a bit is valid from 0.75 to 1.25 bit times after the middle of the bit before. Thus the bit time of the target can be from about 15 % shorter to 25 % longer than the bit time of `DAP_SWO_Baudrate`, less the jitter of the edges.
+  The limit for a shorter bit time is smaller, because a start bit after the shortest gap between two frames (1.5 bit times after the last bit middle) must come after the window of a bit middle.
+- A frame ends at a rising edge that is too late for the middle of a bit, or when the line stays low for more than 1.5 bit times.
+- A bit time out of range, a glitch, or a frame that does not end at a byte boundary sets the error bit of the trace status. The decoder then waits for a low line of more than 1.5 bit times before the next frame.
+- The decoder runs in the main loop, in the serial service of a long command, and before each read of the trace data or the status. The DMA interrupts of the edge buffers end the sleep of the main loop.
+- Limit: a gap of more than one timer period (65536 ticks) between two edges looks like the gap modulo 65536. The main loop must see the end of a frame within one timer period. The main loop runs at least each millisecond, so this is true up to the maximum bit rate.
+
+The maximum bit rate is 500 kbit/s. The CPU time of the decoder sets this limit:
+
+- The decoder uses about 35 to 50 RISC-V instructions for each edge (from the disassembly of the Release image). This is an estimate of 60 to 80 clock cycles for each edge, at 144 MHz. It is not measured.
+- A frame has one or two edges for each bit. A byte of `0x00` or `0xFF` has two edges for each bit.
+- At 500 kbit/s, the worst case is 1 million edges each second. This takes about 40 % to 55 % of the CPU time.
+  At 1 Mbit/s, the worst case takes all of the CPU time, and the USB transport stops. Thus the firmware limits the bit rate to 500 kbit/s.
+- Each edge buffer holds 1024 edges: at least 2 ms of trace at 500 kbit/s. When the main loop stops for a longer time, the decoder loses edges and sets the overrun bit.
+- During a command, the serial service runs only between two SWD transfers or sequence bytes. Below an SWD clock of about 25 kHz, one transfer takes longer than 2 ms. Thus a slow SWD clock and a high SWO bit rate can lose trace data (the overrun bit is set).
+- The CPU time is high only while the target sends trace data. The idle line has no edges.
+
+Shared resources:
+
+- DMA2 channel 2 is also the TMS channel of the JTAG fast path. `src/board/SharedDmaChannel.h` keeps the two users apart:
+  - Each setup of the JTAG port (`JtagSpi::init()`) stops the capture. All users of the JTAG port do this setup: the v2 and HID processors, the RISC-V bridge and the AVR JTAG target.
+  - While a JTAG user has the channel (from `JtagSpi::init()` to `JtagSpi::fini()`), a start of the capture fails, and `DAP_SWO_Control` replies an error.
+  - Also, `DAP_Connect` to JTAG on the v2 interface stops the capture, because SWO is an SWD function.
+- A stop puts back the channel without the circular mode and without interrupts, because the JTAG fast path does not set them.
+- A stop resets TIM5, so the timer sends no more DMA requests on DMA2 channel 2.
+- The one-wire engine (DMA2 channels 10 and 11), the UART bridge (DMA2 channels 8 and 9) and the UART mode (DMA1 channel 6) use other channels.
+- TIM2_CH4 on DMA1 channel 7 is not used: the SWIM plan uses TIM2_CH2 on PA1, which shares DMA1 channel 7.
+
+The hardware test of the Manchester mode is not done yet. It must measure the CPU time and the maximum bit rate without data loss.
 
 ### SWO trace endpoint
 

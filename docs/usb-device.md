@@ -611,25 +611,28 @@ The call comes at most once per millisecond, at these points:
 
 The serial service does these steps:
 
-1. It delivers the USB events of the serial port endpoints (`UsbStack::pollSerial()`, `src/usb/SerialEventQueue.h`).
+1. On the CH32V307 images with SWO, it decodes the captured edges of the SWO Manchester mode (see [SWO Manchester mode](cmsis-dap.md#swo-manchester-mode)).
+   At 500 kbit/s, this can take up to about 0.5 ms of CPU time, and the clock phase gets longer by that time.
+2. It delivers the USB events of the serial port endpoints (`UsbStack::pollSerial()`, `src/usb/SerialEventQueue.h`).
    It stops at the first other event: a SETUP packet, a bus reset, a suspend, a resume, or a Versaloon endpoint event.
    That event waits until the command ends, so the order of the events does not change.
    Thus the service does not start a new command, and the host does not disconnect during the command.
    In the CMSIS-DAP personality, the service also delivers the events of the CMSIS-DAP endpoints, also of the SWO trace endpoint.
    A CMSIS-DAP packet only waits in the processor, so this starts no command (see [CMSIS-DAP transport](cmsis-dap.md#transport)).
    Thus `DAP_TransferAbort` can stop a running transfer command.
-2. It moves the UART data (`uart::pollBridge()`), or the debug log in a `MUPP_DEBUG_CDC` build.
+3. It moves the UART data (`uart::pollBridge()`), or the debug log in a `MUPP_DEBUG_CDC` build.
 
 Each call sends one IN packet of up to 64 bytes: 64 bytes per ms.
 At 115200 baud, the UART receives 11.5 bytes per ms.
 
-The call makes one clock phase longer by the time of the service, some microseconds.
+The call makes one clock phase longer by the time of the service, some microseconds (more with the SWO Manchester mode, see step 1).
 The clock does not get faster: after a late edge, the next half period is complete (see [Clock pacing](clock-pacing.md)).
 For JTAG in timed mode, the low half period starts again after the call.
 Thus TDI and TMS change a full half period before the next rising edge, as for all other bits.
 For SWD, each bit waits a full half period after the SWDIO write, so SWDIO also keeps its setup time.
 The duty cycle of that one clock period changes.
 The service takes some microseconds in each millisecond, so a shift gets a little slower.
+With an SWO Manchester capture at 500 kbit/s, the service can take about 0.5 ms in each millisecond (see step 1). A shift can then take up to about two times as long.
 The time of the service on the target is not measured yet.
 
 Limits:

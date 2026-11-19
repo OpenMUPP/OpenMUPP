@@ -42,7 +42,7 @@
 #include "protocol/cmsisdap/RvDtmTap.h"
 #endif
 #if defined(MUPP_CMSIS_DAP_SWO)
-#include "swo/SwoUart.h"
+#include "swo/SwoReceiver.h"
 #endif
 #if defined(MUPP_CMSIS_DAP_AVR)
 #include "avr/AvrJtagTarget.h"
@@ -304,8 +304,8 @@ cmsisdap::Processor dapProcessor{ dapSwd,
 #if defined(MUPP_CMSIS_DAP_SWO)
 // The SWO receiver of the DAP_SWO_* commands and of the SWO trace endpoint,
 // on the bulk interface only. Only the CH32V307 boards have it;
-// swo/SwoUartV30x.cpp checks that the board has the SWO pin.
-swo::SwoUart dapSwo;
+// swo/SwoReceiverV30x.cpp checks that the board has the SWO pin.
+swo::SwoReceiver dapSwo;
 #endif
 // The owner of the target pins (protocol/TargetPinOwner.h), for the HID
 // interface and for a board without safe debug outputs.
@@ -454,6 +454,10 @@ usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
 // bridge run. Only the Versaloon and CMSIS-DAP engines call it. As in the
 // main loop, the log and the bridge run only with the serial port.
 void SerialService::service() {
+#if defined(MUPP_CMSIS_DAP_SWO)
+   // The Manchester decoder keeps up with the edges during the command.
+   dapSwo.poll();
+#endif
    usbStack.pollSerial();
    if(usbStack.hasSerialPort()) {
       debug::pollLog(usbStack);
@@ -527,6 +531,11 @@ void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
 }
 
 void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
+#if defined(MUPP_CMSIS_DAP_SWO)
+   // The Manchester decoder (swo/SwoReceiver.h). The DMA interrupts of the
+   // edges end the WFI, and the SysTick each millisecond.
+   dapSwo.poll();
+#endif
 #if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
    // Switches the target supply off when the rail drops. Only the active
    // personality switches the supply on.

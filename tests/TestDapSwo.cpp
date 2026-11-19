@@ -31,12 +31,23 @@ class FakeSwo final : public cmsisdap::DapSwo {
    [[nodiscard]] uint32_t capacity() const override {
       return 4096;
    }
-   [[nodiscard]] uint32_t realBaud(uint32_t baud) const override {
+   [[nodiscard]] bool hasMode(uint8_t mode) const override {
+      return mode == cmsisdap::swoMode::uart || (manchester && mode == cmsisdap::swoMode::manchester);
+   }
+   // Manchester: up to 2 Mbit/s, the baud rate as requested
+   [[nodiscard]] uint32_t realBaud(uint8_t mode, uint32_t baud) const override {
+      if(!hasMode(mode)) {
+         return 0;
+      }
+      if(mode == cmsisdap::swoMode::manchester) {
+         return std::min<uint32_t>(baud, 2'000'000);
+      }
       return swo::realBaud(pclk1, std::min(baud, pclk1 / 16));
    }
-   uint32_t start(uint32_t baud) override {
+   uint32_t start(uint8_t mode, uint32_t baud) override {
       ++starts;
-      const uint32_t real = realBaud(baud);
+      startedMode = mode;
+      const uint32_t real = realBaud(mode, baud);
       active_ = real != 0;
       startedBaud = real;
       data.clear();
@@ -45,7 +56,7 @@ class FakeSwo final : public cmsisdap::DapSwo {
       return real;
    }
    uint32_t setBaud(uint32_t baud) override {
-      const uint32_t real = realBaud(baud);
+      const uint32_t real = realBaud(startedMode, baud);
       if(!active_ || real == 0) {
          return 0;
       }
@@ -78,7 +89,10 @@ class FakeSwo final : public cmsisdap::DapSwo {
    bool overrun = false;
    bool framingError = false;
    int starts = 0;
+   uint8_t startedMode = 0;
    uint32_t startedBaud = 0;
+   // The receiver has the Manchester mode
+   bool manchester = false;
 
    private:
    bool active_ = false;
@@ -97,10 +111,25 @@ Bytes cat(std::initializer_list<Bytes> parts) {
    return result;
 }
 
+// A JTAG port that does nothing: DAP_Connect to JTAG
+class NullJtag final : public protocol::JtagPort {
+   public:
+   void init() override {
+   }
+   void fini() override {
+   }
+   [[nodiscard]] bool setSpeed(uint32_t) override {
+      return true;
+   }
+   [[nodiscard]] bool shift(uint32_t, art::span<const uint8_t>, art::span<const uint8_t>, art::span<uint8_t>) override {
+      return true;
+   }
+};
+
 struct SwoBench {
    explicit SwoBench(bool withSwo = true, bool streaming = false)
       : info(mupptest::dapTestInfo())
-      , dap(swd, gpio, platform, info) {
+      , dap(swd, gpio, platform, info, &jtag) {
       if(withSwo) {
          dap.setSwo(swo, streaming);
       }
@@ -132,6 +161,7 @@ struct SwoBench {
       }
    }
 
+   NullJtag jtag;
    mupptest::FakeDapSwd swd;
    mupptest::FakeDapGpio gpio;
    mupptest::FakeDapPlatform platform;
@@ -147,13 +177,13 @@ TEST_CASE("Without a DapSwo the DAP_SWO_* commands are invalid, and DAP_Info rep
    for(const uint8_t id : { 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1E }) {
       CHECK(b.run({ id, 0x00, 0x00, 0x00, 0x00 }) == Bytes{ 0xFF });
    }
-   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x11 });
+   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x13 });
    CHECK(b.run({ 0x00, 0xFD }) == Bytes{ 0x00, 0x00 });
 }
 
 TEST_CASE("DAP_Info reports SWO UART and the SWO buffer size") {
    SwoBench b;
-   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x15 });
+   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x17 });
    CHECK(b.run({ 0x00, 0xFD }) == cat({ { 0x00, 0x04 }, word(4096) }));
 }
 
@@ -165,6 +195,40 @@ TEST_CASE("DAP_SWO_Transport accepts none and DAP_SWO_Data only") {
    CHECK(b.run({ 0x17, 0x02 }) == Bytes{ 0x17, 0xFF });
    CHECK(b.run({ 0x17, 0x03 }) == Bytes{ 0x17, 0xFF });
    CHECK(b.run({ 0x17 }) == Bytes{ 0xFF });
+}
+
+TEST_CASE("With a Manchester receiver, DAP_Info reports SWO Manchester and DAP_SWO_Mode accepts mode 2") {
+   SwoBench b;
+   b.swo.manchester = true;
+   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x1F });
+   REQUIRE(b.run({ 0x17, 0x01 }) == Bytes{ 0x17, 0x00 });
+   CHECK(b.run({ 0x18, 0x02 }) == Bytes{ 0x18, 0x00 });
+   // The Manchester bit rate of the receiver, here up to 2 Mbit/s
+   CHECK(b.run(cat({ { 0x19 }, word(3'000'000) })) == cat({ { 0x19 }, word(2'000'000) }));
+   CHECK(b.run(cat({ { 0x19 }, word(1'000'000) })) == cat({ { 0x19 }, word(1'000'000) }));
+   CHECK(b.run({ 0x1A, 0x01 }) == Bytes{ 0x1A, 0x00 });
+   CHECK(b.swo.startedMode == 2);
+   CHECK(b.swo.startedBaud == 1'000'000);
+   // A baud rate change keeps the mode
+   CHECK(b.run(cat({ { 0x19 }, word(500'000) })) == cat({ { 0x19 }, word(500'000) }));
+   CHECK(b.swo.startedBaud == 500'000);
+   CHECK(b.swo.starts == 1);
+   b.receive(2);
+   CHECK(b.run({ 0x1C, 0x10, 0x00 }) == Bytes{ 0x1C, 0x01, 0x02, 0x00, 0x00, 0x01 });
+}
+
+TEST_CASE("DAP_Connect to JTAG stops the capture, and a start with the JTAG port gives an error") {
+   SwoBench b;
+   b.startCapture();
+   CHECK(b.run({ 0x02, 0x02 }) == Bytes{ 0x02, 0x02 });
+   CHECK_FALSE(b.swo.active());
+   CHECK(b.run({ 0x1A, 0x01 }) == Bytes{ 0x1A, 0xFF });
+   CHECK(b.swo.starts == 1);
+   // Back on SWD, the capture starts again with the stored settings.
+   CHECK(b.run({ 0x02, 0x01 }) == Bytes{ 0x02, 0x01 });
+   CHECK(b.run({ 0x1A, 0x01 }) == Bytes{ 0x1A, 0x00 });
+   CHECK(b.swo.active());
+   CHECK(b.swo.startedBaud == 2'000'000);
 }
 
 TEST_CASE("DAP_SWO_Mode accepts off and UART only, and another mode sets mode off") {
@@ -374,7 +438,7 @@ TEST_CASE("Without the SWO trace endpoint, DAP_SWO_Transport 2 gives an error") 
 
 TEST_CASE("With the SWO trace endpoint, DAP_Info reports SWO streaming and DAP_SWO_Transport 2 works") {
    SwoBench b(true, true);
-   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x55 });
+   CHECK(b.run({ 0x00, 0xF0 }) == Bytes{ 0x00, 0x01, 0x57 });
    CHECK(b.run({ 0x17, 0x02 }) == Bytes{ 0x17, 0x00 });
    REQUIRE(b.run({ 0x18, 0x01 }) == Bytes{ 0x18, 0x00 });
    REQUIRE(b.run(cat({ { 0x19 }, word(2'000'000) })) == cat({ { 0x19 }, word(2'000'000) }));

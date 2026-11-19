@@ -131,25 +131,29 @@
 //   A Tx Count that is more than the request has gives ID_DAP_Invalid.
 // - The DAP_SWO_* commands run on the DapSwo object (DapSwo.h, setSwo()).
 //   Without one, they reply ID_DAP_Invalid, and DAP_Info reports no SWO.
-//   With one, DAP_Info reports SWO UART and the buffer size, and SWO
-//   streaming trace when the transport has the SWO trace endpoint. The
-//   processor keeps the transport, the mode and the baud rate:
+//   With one, DAP_Info reports the SWO modes of the receiver (UART,
+//   Manchester) and the buffer size, and SWO streaming trace when the
+//   transport has the SWO trace endpoint. The processor keeps the
+//   transport, the mode and the baud rate:
 //   - DAP_SWO_Transport accepts 0 (none), 1 (DAP_SWO_Data), and 2 (the
 //     SWO trace endpoint) only with streaming. While the capture runs, it
 //     gives DAP_ERROR. With transport 2, the transport takes the data with
 //     readSwoStream().
 //   - DAP_SWO_Mode stops the capture, and clears the baud rate. It accepts
-//     0 (off) and 1 (UART). Another mode (2, Manchester) gives DAP_ERROR
-//     and sets mode off.
+//     0 (off) and the modes of the receiver (1 UART, 2 Manchester).
+//     Another mode gives DAP_ERROR and sets mode off.
 //   - DAP_SWO_Baudrate replies the real baud rate of the receiver, and
 //     stores it. A baud rate above the maximum gives the maximum. While the
 //     capture runs, the new baud rate applies at once and the capture goes
 //     on. In mode off, or for a baud rate below the minimum, it replies 0,
 //     stores 0 and stops the capture.
-//   - DAP_SWO_Control bit 0 starts or stops the capture. A start needs mode
-//     UART and a baud rate, else it gives DAP_ERROR. A start empties the
+//   - DAP_SWO_Control bit 0 starts or stops the capture. A start needs a
+//     mode, a baud rate and no JTAG port, else it gives DAP_ERROR. A start empties the
 //     buffer and clears the errors. A start while the capture runs, or a
 //     stop while it does not run, does nothing.
+//   - DAP_Connect to JTAG stops the capture: SWO is for SWD, and on the
+//     CH32V307 the Manchester capture shares a DMA channel with the JTAG
+//     fast path (swo/SwoReceiver.h).
 //   - The trace status has the bits active (0x01), error (0x40: a framing
 //     or noise error) and overrun (0x80: data lost). The receiver does not
 //     pause on a full buffer, so the paused bit (0x02) is never set. Each
@@ -273,6 +277,7 @@ namespace capability {
 inline constexpr uint16_t swd = 0x01;
 inline constexpr uint16_t jtag = 0x02;
 inline constexpr uint16_t swoUart = 0x04;
+inline constexpr uint16_t swoManchester = 0x08;
 inline constexpr uint16_t swoStreaming = 0x40;
 inline constexpr uint16_t atomicCommands = 0x10;
 inline constexpr uint16_t uartPort = 0x80;
@@ -288,7 +293,7 @@ struct DeviceInfo {
    const char *serialNumber{ nullptr };
    const char *firmwareVersion{ nullptr };
    // The processor adds JTAG when it has a JTAG port, the UART port and
-   // the USB COM port when it has a DapUart, and SWO UART (and SWO
+   // the USB COM port when it has a DapUart, and the SWO modes (and SWO
    // streaming trace) when it has a DapSwo.
    uint16_t capabilities{ capability::swd | capability::atomicCommands };
 };

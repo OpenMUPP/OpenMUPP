@@ -537,7 +537,7 @@ PB14 (TDO) has no UART RX and no timer input capture, so it cannot receive SWO.
 Connect a wire from PB14 (P3-44) to PA3 (P2-22). This is the same pattern as the TCK link.
 On the board schematic V1.0, only the MCU and P2-22 connect to PA3.
 The wire does not change JTAG: PA3 is a floating input while the SWO receiver is off.
-While the receiver is on, PA3 has the internal pull-up, and PB14 stays a floating input.
+While the receiver is on, PA3 has the internal pull-up in UART mode and the internal pull-down in Manchester mode. PB14 stays a floating input.
 
 The board definition also has PB11 (USART3 RX) as the read-back pin of SRST, for debugWIRE.
 The AVR commands use it for debugWIRE (see [avr.md](avr.md#debugwire)).

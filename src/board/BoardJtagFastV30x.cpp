@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "board/BoardJtag.h"
+#include "board/SharedDmaChannel.h"
 
 #include <Afio.h>
 #include <peripherals/Dma.h>
@@ -118,6 +119,9 @@ uint32_t JtagSpi::clockHz() const {
 }
 
 void JtagSpi::init() {
+   // DMA2 channel 2 (TMS) is also the SWO Manchester capture: it stops
+   // here, before the channel setup (board/SharedDmaChannel.h).
+   dma2Channel2.takeForJtag();
    Rcc::enableSPI2Clock();
    Rcc::enableSPI3Clock();
    Rcc::enableDMA1Clock();
@@ -159,6 +163,8 @@ void JtagSpi::fini() {
    // A disabled SPI3 still owns PC11 (MISO) while it is remapped, and can
    // mask the TIM10_CH4 output of the one-wire engine on the same pin.
    hw::Afio::remapSpi3(false);
+   // SPI3 gives no more DMA requests: the SWO capture can take the channel.
+   dma2Channel2.releaseFromJtag();
 }
 
 void JtagSpi::setShift(uint8_t shift) {

@@ -4,7 +4,7 @@
 
 // The SWO receiver as the CMSIS-DAP command processor (DapProcessor.h) sees
 // it: the receiver of the DAP_SWO_* commands of CMSIS-DAP v2.1, in UART
-// (NRZ) mode. Hardware-independent. swo/SwoUart.h gives the implementation
+// (NRZ) mode and optionally in Manchester mode. Hardware-independent. swo/SwoReceiver.h gives the implementation
 // on the CH32V307. The processor keeps the transport, the mode and the baud
 // rate of the commands.
 
@@ -51,7 +51,7 @@ class DapSwo {
       bool active;
       // An overflow of the buffer or a UART overrun
       bool overrun;
-      // A framing or noise error
+      // A framing or noise error (UART), or a framing error (Manchester)
       bool framingError;
       // The bytes to read
       uint32_t count;
@@ -59,14 +59,19 @@ class DapSwo {
 
    // The size of the trace buffer (DAP_Info 0xFD)
    [[nodiscard]] virtual uint32_t capacity() const = 0;
-   // The baud rate that start() gives for a request. A request above the
-   // maximum gives the maximum, as in the reference implementation. 0: out
-   // of range.
-   [[nodiscard]] virtual uint32_t realBaud(uint32_t baud) const = 0;
-   // Starts the capture with an empty buffer and no errors. Returns the
-   // real baud rate. 0: out of range, and the receiver is off.
-   virtual uint32_t start(uint32_t baud) = 0;
-   // Changes the baud rate of a running capture. The buffer and the errors
+   // True when the receiver has the mode (swoMode::uart or
+   // swoMode::manchester)
+   [[nodiscard]] virtual bool hasMode(uint8_t mode) const = 0;
+   // The baud rate that start() gives for a request in a mode that the
+   // receiver has. A request above the maximum gives the maximum, as in the
+   // reference implementation. 0: out of range.
+   [[nodiscard]] virtual uint32_t realBaud(uint8_t mode, uint32_t baud) const = 0;
+   // Starts the capture in a mode that the receiver has, with an empty
+   // buffer and no errors. Returns the real baud rate. 0: out of range, and
+   // the receiver is off.
+   virtual uint32_t start(uint8_t mode, uint32_t baud) = 0;
+   // Changes the baud rate of a running capture, in its mode. The buffer
+   // and the errors
    // stay. Returns the real baud rate. 0: out of range, or the capture does
    // not run; the baud rate then stays.
    virtual uint32_t setBaud(uint32_t baud) = 0;

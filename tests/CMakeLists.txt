@@ -46,6 +46,8 @@ add_executable(mupp-tests
         TestFrameFormat.cpp
         TestUartBridge.cpp
         TestSwoRing.cpp
+        TestManchesterDecoder.cpp
+        TestSharedDmaChannel.cpp
         TestDapUart.cpp
         TestDapSwo.cpp
         TestSerialEventQueue.cpp
