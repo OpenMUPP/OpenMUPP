@@ -147,11 +147,17 @@
 //   STOP, RESET, RUN, RUN_TO [word address u32], STEP, PC_READ, PC_WRITE
 //        (word addresses), in the debug mode only (else FAILED 0x32): as on
 //        debugWIRE. The PC can be above 16 bits (ATmega2560).
-//   HW_BREAK_SET [type 1][number][byte address u32][mode], HW_BREAK_CLEAR
-//        [number]: numbers 1 to 3 (OCD reg 1 to 3), program breakpoints
-//        only (other types: FAILED 0x90). Bloom sends byte addresses, the
-//        OCD takes word addresses. They take effect at the next RUN or
-//        STEP. RUN_TO uses OCD reg 0.
+//   HW_BREAK_SET [type][number][address u32][mode], HW_BREAK_CLEAR
+//        [number]: numbers 1 to 3 (OCD reg 1 to 3). Type 1 (program): a
+//        byte address (Bloom), the OCD takes word addresses. Type 2
+//        (data): numbers 2 and 3 only (1: FAILED 0x81), a data space
+//        address below 0x10000, mode 0 read, 1 write, 2 access (other
+//        modes FAILED 0x39). DS50002630A gives only type 1 and mode 3; the
+//        data values are those of AVaRICE (jtag3bp.cc) and of the JTAGICE
+//        mkII CMND_SET_BREAK. A number that holds a data breakpoint, or a
+//        data breakpoint on a number in use, gives FAILED 0x81. Other
+//        types (3, the mask): FAILED 0x90. They take effect at the next
+//        RUN or STEP. RUN_TO uses OCD reg 0.
 //   READ_MEMORY, READ_MEMORY_MASKED, WRITE_MEMORY in the debug mode (Bloom),
 //        with a stopped core: SRAM 0x20 (the data space; the OCDR reads as
 //        0, a write skips it), EEPROM 0x22 and read only SPM 0xA0 (the
@@ -170,7 +176,7 @@
 //        hardware breakpoint is free. SW_BREAK_CLEAR_ALL: OK in each mode.
 //   DISABLE_DEBUGWIRE: FAILED 0x90.
 //   Break events: as on debugWIRE, with cause 1 when the BSR shows a
-//        program breakpoint or a BREAK instruction. While the core runs,
+//        hit of reg 0 to 3 (program or data) or a BREAK instruction. While the core runs,
 //        each event() reads OCD reg D one time.
 //   A failed JTAG scan, a write that does not end, a core that does not
 //        stop in time or a context that the probe could not read gives
@@ -483,6 +489,8 @@ class Avr8Scope final : public Avr8Handler {
          return avr8::failure::illegalState;
       case JtagDebugStatus::OutOfRange:
          return avr8::failure::range;
+      case JtagDebugStatus::InUse:
+         return avr8::failure::resources;
       default:
          return avr8::failure::jtag;
       }
@@ -705,10 +713,10 @@ class Avr8Scope final : public Avr8Handler {
    template <typename T = Target>
    void jtagStopped() {
       namespace bsr = jtagOcd::bsr;
-      constexpr uint16_t programBreak = bsr::breakInstruction | bsr::break0 | bsr::break1 | bsr::break2 | bsr::break3;
+      constexpr uint16_t breakpointHit = bsr::breakInstruction | bsr::break0 | bsr::break1 | bsr::break2 | bsr::break3;
       running_ = false;
       event_ = true;
-      eventAtBreak_ = (target_.debug().breakStatus() & programBreak) != 0;
+      eventAtBreak_ = (target_.debug().breakStatus() & breakpointHit) != 0;
    }
 
    // A RESET, STEP or STOP that stopped the core: one break event with
@@ -863,6 +871,7 @@ class Avr8Scope final : public Avr8Handler {
    template <typename T = Target>
    std::size_t hardwareBreakJtag(bool set) {
       constexpr uint8_t programType = 1;
+      constexpr uint8_t dataType = 2;
       const std::size_t bytes = set ? headerBytes + 7 : headerBytes + 1;
       if(request_.size() < bytes) {
          return failed(avr8::failure::length);
@@ -875,14 +884,35 @@ class Avr8Scope final : public Avr8Handler {
       if(!set) {
          return result(debug.clearBreakpoint(number));
       }
+      const uint32_t address = u32(request_, 4);
+      if(request_[2] == dataType) {
+         return dataBreakJtag(number, address, request_[8]);
+      }
       if(request_[2] != programType) {
          return failed(avr8::failure::notSupported);
       }
-      const uint32_t address = u32(request_, 4);
       if(address % 2 != 0) {
          return failed(avr8::failure::range);
       }
       return result(debug.setBreakpoint(number, address / 2u));
+   }
+
+   // A data breakpoint: a data space address and the EDBG mode (read 0,
+   // write 1, access 2, as AVaRICE sends them, see the comment at the top)
+   template <typename T = Target>
+   std::size_t dataBreakJtag(uint8_t number, uint32_t address, uint8_t mode) {
+      static constexpr std::array<JtagDataMode, 3> ocdMode{ JtagDataMode::Read, JtagDataMode::Write, JtagDataMode::Access };
+      if(number == 1) {
+         // Reg 1 has no data mode.
+         return failed(avr8::failure::resources);
+      }
+      if(mode >= ocdMode.size()) {
+         return failed(avr8::failure::illegalValue);
+      }
+      if(address > 0xFFFFu) {
+         return failed(avr8::failure::range);
+      }
+      return result(target_.debug().setDataBreakpoint(number, static_cast<uint16_t>(address), ocdMode[mode]));
    }
 
    // [type][address u32][length u32] (masked: [mask]), in the debug mode

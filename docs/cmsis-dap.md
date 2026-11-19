@@ -310,7 +310,7 @@ A value out of range gives code `0x33` at activate physical.
 | `0x30` Reset, `0x31` Stop, `0x34` Step | Debug mode only, else code `0x32`. The core stops, and a break event comes. |
 | `0x32` Run, `0x33` Run to | Debug mode only. Run to uses OCD register 0 for one run. |
 | `0x35`, `0x36` PC read and write | Debug mode only. The PC can be above 16 bits (ATmega2560). |
-| `0x40`, `0x41` Hardware breakpoint | Debug mode only. Numbers 1 to 3 (OCD registers 1 to 3), else code `0x81`. Type 1 (program) only, else code `0x90`. The address is a byte address, as Bloom sends it. The probe writes the breakpoints at the next run or step. |
+| `0x40`, `0x41` Hardware breakpoint | Debug mode only. Numbers 1 to 3 (OCD registers 1 to 3), else code `0x81`. Type 1 (program): a byte address, as Bloom sends it. Type 2 (data): see [Data breakpoints](#data-breakpoints). Other types give code `0x90`. The probe writes the breakpoints at the next run or step. |
 | `0x43`, `0x44`, `0x45` Software breakpoints | Set and clear: debug mode only, else code `0x32`. Up to 32, byte addresses. |
 
 Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to or step, as on debugWIRE.
@@ -336,11 +336,38 @@ The memory types in the debug mode (Bloom). SRAM, EEPROM and SPM need a stopped 
 - SPM (`0xA0`): the flash, read only. A write gives code `0x34`.
 - Fuses (`0xB2`), also with a running core: for Bloom `manage_ocden_fuse_bit`. The probe enters the programming mode, reads or writes the fuses, leaves the programming mode and attaches again. The core is reset, and no break event comes.
 
-The break event has the same frame as on debugWIRE. The cause is 1 when the break status register of the OCD shows a program breakpoint or a `BREAK` instruction, else 0.
+The break event has the same frame as on debugWIRE. The cause is 1 when the break status register of the OCD shows a hit of OCD register 0 to 3 (a program or data breakpoint) or a `BREAK` instruction, else 0.
 While the core runs, each `AVR_EVT` reads the OCD control register one time.
 
 A bus reset, a USB suspend and `DAP_Disconnect` on the HID interface end the JTAG session.
 The probe removes the hardware breakpoints, lets a stopped core run, leaves the programming mode, releases the core from reset and releases the pins.
+
+#### Data breakpoints
+
+`HW_BREAK_SET` is `[0x40][version][type][number][address u32][mode]`.
+A data breakpoint has type 2. It stops the core on an access to one address in the data space (registers, I/O and SRAM).
+
+| Field | Value |
+|---|---|
+| Number | 2 or 3. Number 1 gives code `0x81`, because OCD register 1 has no data mode. |
+| Address | The data space address, below `0x10000`, else code `0x38` |
+| Mode | `0x00` read, `0x01` write, `0x02` access (read or write). Another mode gives code `0x39`. |
+
+The probe writes OCD mode 2 for read, 1 for write and 0 for access (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
+The core stops after the instruction that makes the access. The break event has cause 1.
+Mask breakpoints (type 3, an address range) give code `0x90`.
+
+Numbers 2 and 3 hold a program breakpoint or a data breakpoint, first come, first served.
+A data breakpoint on a number in use gives code `0x81`.
+A program breakpoint on a number with a data breakpoint also gives code `0x81`.
+A program breakpoint on a number with a program breakpoint replaces it, as before.
+Clear the number first to change the type.
+
+The EDBG protocol specification (DS50002630A, Table 7-31) gives only type 1 and mode 3 (program).
+The type 2 and mode values come from AVaRICE (`src/jtag3bp.cc`, the JTAGICE3 and EDBG driver).
+They are the same as the values of `CMND_SET_BREAK` of the JTAGICE mkII (AVaRICE `src/jtag2bp.cc`).
+No host tool that we know sends data breakpoints over EDBG to this probe today.
+`tools/avr_data_break_test.py` sends them for the hardware test (see [avr.md](avr.md#jtag-data-breakpoints)).
 
 ### Target pins
 
@@ -1468,6 +1495,7 @@ They also check the target pins between the two interfaces, the end of the progr
 The tests run the avrdude session (signature, flash, EEPROM) and a Bloom debug session (registers, SRAM, PC, run, stop, step, reset, hardware and software breakpoints, break events).
 They also check the device context, the pins between ISP and debugWIRE, a missing target, and a host that goes away.
 `tests/TestEdbgJtag.cpp` runs the avrdude and Bloom JTAG sessions on the mock ATmega32U4 of `tests/MockAvrJtag.h`: all memories, the parameters, the checks of the host fields, the pins and a host that goes away.
+It also sets data breakpoints in each mode, as AVaRICE sends them.
 
 ## Hardware test
 
