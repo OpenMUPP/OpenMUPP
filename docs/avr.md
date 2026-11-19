@@ -397,21 +397,23 @@ The test used a YD-CH32V307VCT6 board with the medbg build and a Seeeduino Lite 
 The tools were Bloom 2.1.0 (commit `3e9ddfa2`) and avr-gdb 17.2, with the `bloom.yaml` of [JTAG debug with Bloom](#jtag-debug-with-bloom).
 The target clock was the 16 MHz crystal (low fuse `0xFF`). The debug clock was 200 kHz.
 Before the test, ISP made a backup of all memories and programmed JTAGEN (high fuse `0x98`).
-BOOTRST is programmed, thus the reset vector is the boot section at `0x7000`.
-The test program calls a function `tick` in a loop. `tick` increments a counter in SRAM and toggles a port pin.
+BOOTRST is programmed, thus the reset vector is the boot section at byte address `0x7000`.
+The test program calls a function `tick` in a loop. `tick` increments `counter` in SRAM and toggles a port pin. The loop then increments `ticks`.
+The test used more than one Bloom session. The EEPROM row and the two-breakpoint row are from separate sessions. All rows are from the same firmware.
 
 | Test | Result |
 |---|---|
 | `load` and `compare-sections` | Pass. The load of 320 bytes takes about 1.2 s. |
 | A breakpoint on `tick`, then `continue` three times | Pass. The counter reads 0, 1 and 2. |
 | Write r0 to r31 with a pattern, `stepi` over an `lds r24`, then read r0 to r31 | Pass. Only r24 changes. The PC moves by two words. |
-| `monitor reset`, then `continue` to the breakpoint | Pass. After the reset, Bloom shows the PC `0x7000`. |
-| Read and write a variable and an array element in SRAM, read the I/O registers, then `continue` | Pass. The program uses the written values. |
+| `monitor reset`, then `continue` to the breakpoint | Pass. After the reset, Bloom shows the PC `0x7000` (byte address). avr-gdb shows the old PC (`0xd8`) until the next stop, because it does not read the registers again after `monitor reset`. |
+| Read and write a variable and an array element in SRAM, read the I/O registers, then `continue` | Pass. The read-back values are correct. After `continue`, `counter` reads `0x56` (written `0x55`). |
 | Write 4 EEPROM bytes in debug mode, then read them back | Pass. avrdude over ISP read the same bytes after the test. |
 | Read the flash: `x/8hx 0` and `x/4i` on `tick` | Pass. Word 0 reads `0x940C` (`jmp`), the same as the program file. |
 | `step` into `tick` from the call, then `stepi` two times | Pass |
-| Two breakpoints, then a third | Pass. Two breakpoints work. The third fails with the remote reply `01`, as expected (Bloom keeps one hardware breakpoint). |
-| No breakpoints, `continue`, then an interrupt (`SIGINT`) after 2 s | Pass. The core stops in the delay loop. The loop counter reads 79. |
+| Two breakpoints (`tick` and the `ticks++` line), then `continue` three times | Pass. The core stops at `tick`, at `ticks++` and at `tick` again. |
+| Three breakpoints | Pass. The `continue` fails with the remote reply `01`, as expected. Bloom keeps one hardware breakpoint, thus it sends the third breakpoint as a software breakpoint. The probe rejects it (`Feature not available`). |
+| No breakpoints, `continue`, then an interrupt (`SIGINT`) after 2 s | Pass. The core stops in the delay loop. `ticks` reads 79. |
 | OCDEN: Bloom programs it at the start of the session and clears it at the end | Pass. The high fuse reads `0x98` after the session. |
 
 Software breakpoints are not tested, because the probe does not have them.

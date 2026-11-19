@@ -10,7 +10,7 @@ The facts come from captures of a real debugger (MPLAB PICkit 5 with MPLAB X) an
 A statement that has no capture or test behind it says so. No vendor code or vendor script is in this repository.
 
 Status: the instructions, the OCD registers, the breakpoints, the instruction scan and the flash write in debug mode are known for OCD revision 4 (ATmega2560).
-OCD revision 3 (for example the ATmega32U4) is known from the debugger scripts only, not from a test.
+OCD revision 3 (for example the ATmega32U4) is known from the debugger scripts and from a hardware test on the ATmega32U4 (see [avr.md](avr.md#jtag-debug-hardware-test)).
 Some bits are open (see [Open questions](#open-questions)).
 
 ## Terms
