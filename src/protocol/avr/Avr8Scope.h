@@ -117,9 +117,12 @@
 // flash page write of the software breakpoints).
 //   ACTIVATE_PHYSICAL [reset]: drives the pins at the programming clock
 //        and reads the IDCODE. -> DATA [IDCODE u32]. No Atmel IDCODE (bits
-//        11..0 not 0x03F): FAILED 0x20. The reset flag is not used: the
-//        probe does not drive RESET, the programming mode resets the core
-//        with AVR_RESET.
+//        11..0 not 0x03F): FAILED 0x20. Without a device context (all 0:
+//        AVaRICE sends it after the IDCODE), GET_ID, DETACH and
+//        DEACTIVATE_PHYSICAL work. Each other command takes the device
+//        context first, and gives FAILED 0x33 when it is not valid. The
+//        reset flag is not used: the probe does not drive RESET, the
+//        programming mode resets the core with AVR_RESET.
 //   GET_ID -> DATA [IDCODE u32].
 //   ENTER_PROGMODE, LEAVE_PROGMODE: the JTAG programming mode. The core
 //        is in reset in the programming mode.
@@ -185,7 +188,8 @@
 // All fields come from the host. The scope checks them before it touches
 // the target: a command that is too short gives FAILED 0x35, an address
 // outside the device 0x38, a flash write that is not page aligned 0x37, a
-// device context with values out of range at ACTIVATE_PHYSICAL 0x33.
+// device context with values out of range at ACTIVATE_PHYSICAL 0x33 (JTAG:
+// also at the command that takes it).
 
 #include <algorithm>
 #include <array>
@@ -611,6 +615,9 @@ class Avr8Scope final : public Avr8Handler {
    template <typename T = Target>
    std::size_t executeJtag(uint8_t id) {
       namespace cmd = avr8::command;
+      if(bare_ && id != cmd::getId && !takeJtagDevice()) {
+         return failed(avr8::failure::invalidConfig);
+      }
       switch(id) {
       case cmd::getId: {
          uint32_t idcode = 0;
@@ -1204,10 +1211,15 @@ class Avr8Scope final : public Avr8Handler {
    template <typename T = Target>
    std::size_t activateJtag() {
       const auto device = jtagDevice();
-      if(!selected() || !device) {
+      // AVaRICE sends the device context after ACTIVATE_PHYSICAL (issue
+      // #102): without one, the next command takes it (takeJtagDevice()).
+      const bool bare = noDevice();
+      if(!selected() || (!device && !bare)) {
          return failed(avr8::failure::invalidConfig);
       }
-      target_.setDevice(*device);
+      if(device) {
+         target_.setDevice(*device);
+      }
       // The debug clock comes with the debug mode.
       if(!target_.open(u16(clockProg_, 0))) {
          return failed(avr8::failure::jtag);
@@ -1218,9 +1230,23 @@ class Avr8Scope final : public Avr8Handler {
          return failed(avr8::failure::noDevice);
       }
       active_ = true;
+      bare_ = bare;
       running_ = false;
       event_ = false;
       return idcodeData(idcode);
+   }
+
+   // A JTAG session without a device context: the device context that
+   // the host sent after ACTIVATE_PHYSICAL. False: no valid one.
+   template <typename T = Target>
+   bool takeJtagDevice() {
+      const auto device = jtagDevice();
+      if(!device) {
+         return false;
+      }
+      target_.setDevice(*device);
+      bare_ = false;
+      return true;
    }
 
    std::size_t activateDebugWire() {
