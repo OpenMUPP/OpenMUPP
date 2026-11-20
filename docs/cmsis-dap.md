@@ -192,8 +192,9 @@ The sizes are big-endian.
 The probe sends the `AVR_CMD` response of the last fragment first.
 Then the next AVR command (`AVR_RSP`, `AVR_EVT` or `AVR_CMD`) runs the frame before it gives its own response.
 Thus the response is ready for the next `AVR_RSP`, and an event of the command comes after it.
-AVaRICE reads the `AVR_CMD` response for 200 ms only, but a `GO` with a software breakpoint can take some 400 ms at 200 kHz.
-AVaRICE reads the `AVR_RSP` response for 500 ms. Thus a `GO` that writes two flash pages at 200 kHz is still too slow for AVaRICE.
+AVaRICE reads the `AVR_CMD` response for 200 ms only, the `AVR_RSP` response for 500 ms, and the `AVR_EVT` response for 200 ms.
+One flash page write takes about 1 s at 200 kHz (256 bytes, ATmega2560, issue #121).
+On JTAG, a run, run to or step with a software breakpoint change thus gives its response at once, and the `AVR_EVT` polls write the pages (see [AVR8 scope on JTAG](#avr8-scope-on-jtag)).
 After a late response, AVaRICE reads each later response one report too late, and the session stops (issue #115). Only a restart of AVaRICE repairs it.
 A long command holds the HID interface, as a long DAP command does.
 A `DAP_Disconnect`, USB suspend or bus reset drops a frame that did not run.
@@ -321,6 +322,17 @@ A value out of range gives code `0x33` at activate physical.
 
 Software breakpoints: the probe writes the `BREAK` instruction into flash at the next run, run to or step, as on debugWIRE.
 The probe writes the flash page with `SPM` in the debug mode (see [avr-jtag-ocd.md](avr-jtag-ocd.md#flash-write-in-debug-mode)).
+A run, run to or step with a software breakpoint change gives its OK response before the page write (issue #121):
+
+- Each later `AVR_EVT` poll does one part of the page write, about 50 ms at the debug clock. The poll gives no event.
+- The core starts, or does the step, after the last page. The break event of the command comes after that.
+- A page write that fails gives a break event at the PC, with cause 0. The core does not start. The breakpoint change stays for the next commit.
+- Each other command first completes the page writes, then the run or step, and then runs. This command can take about 1 s at 200 kHz for each page. A `DAP_Disconnect` also completes them, and then the probe removes the breakpoints.
+
+AVaRICE polls `AVR_EVT` every 50 ms while it waits for the break event, so the page write completes in the polls.
+Detach and deactivate physical still remove the software breakpoints before they give the response.
+AVaRICE sends the next command at once after them, so a part of the page write in a poll does not help there.
+At 200 kHz such a detach takes about 1 s for a 256-byte page, more than the 500 ms of AVaRICE. AVaRICE sends it at the end of the session only.
 To run or step from a software breakpoint, the OCD executes the original instruction in place of the `BREAK`, without a page write.
 The probe does these instructions itself on the CPU context and the data space: `RJMP`, `RCALL`, `JMP`, `CALL`, `LDS`, `STS`, the branches (`BRBS`, `BRBC`), the skips (`CPSE`, `SBRC`, `SBRS`, `SBIC`, `SBIS`), `RET` and `RETI`.
 It injects each other instruction that does not use the PC or the flash.
