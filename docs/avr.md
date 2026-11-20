@@ -359,9 +359,11 @@ avr-gdb -ex 'set remote memory-map-packet off' -ex 'target remote :4242' firmwar
 - AVaRICE sends data breakpoints for `watch`, `rwatch` and `awatch` (see [JTAG data breakpoints](#jtag-data-breakpoints)).
 - AVaRICE waits 500 ms for a response, and 200 ms for an event (see [cmsis-dap.md](cmsis-dap.md#avr8-scope-on-jtag)).
   A run or step gives its response before the page write of a software breakpoint.
-- At the end of the session, AVaRICE clears the software breakpoints. The probe writes the flash page before it gives the response.
-  One 256-byte page takes about 0.5 s at 200 kHz (ATmega2560). This is near the 500 ms limit of AVaRICE.
-  The page write time is in inverse proportion to the debug clock (`-B`). Use the fastest `-B` value that the target clock permits (see [JTAG clock](#jtag-clock)).
+- At the end of the session, AVaRICE clears the software breakpoints and sends the detach command.
+  The clear only records the change. The probe removes the breakpoints from the flash at the detach, before it gives the response.
+  One 256-byte page takes about 0.5 s (ATmega2560). This is near the 500 ms limit of AVaRICE.
+  This page write does not use the debug clock. It takes the same time at each `-B` value (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)).
+- The page write of a run or step uses the debug clock. Use the fastest `-B` value that the target clock permits (see [JTAG clock](#jtag-clock)).
 - A step or run from a software breakpoint on an indirect jump or call, `LPM`, `ELPM`, `SPM`, `SLEEP` or `BREAK` writes two pages. This stops the AVaRICE session (issue [#117](https://github.com/OpenMUPP/OpenMUPP/issues/117)).
 - AVaRICE stops with the exit code 1 after avr-gdb disconnects. It shows `gdb exited.`. This is the normal end of a session.
 
@@ -543,7 +545,8 @@ These are the times of the software breakpoint commands on the ATmega2560 at 200
 | Run with a software breakpoint change: the response | 0.5 ms |
 | Run with a software breakpoint change: the longest `AVR_EVT` poll, which writes a part of the page | 78 ms |
 | Run with a software breakpoint change: the break event, after the page write and the run to the breakpoint | 1.19 s |
-| Clear of all software breakpoints at the end of an AVaRICE session | 494 ms |
+| Clear of all software breakpoints at the end of an AVaRICE session (`0x45`) | 0.6 ms |
+| Detach, which removes the software breakpoints from the flash | 494 ms |
 
 ### debugWIRE hardware test
 
