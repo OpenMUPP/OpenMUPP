@@ -1181,9 +1181,10 @@ class AvrJtagDebug {
    [[nodiscard]] JtagDebugStatus spm(uint8_t command, uint16_t z, const uint8_t *word = nullptr) {
       // Each scan moves the PC by about 2 words (docs/avr-jtag-ocd.md,
       // "Instruction execute"). The PC field of the first scan shows the
-      // PC: the instructions up to the SPM need some 20 words of the last
-      // page, and the PC must not pass the end of the flash.
-      constexpr uint32_t reserveWords = 32;
+      // PC. The worst case up to the SPM is 7 instructions, 14 words (the
+      // flash-end test fails with 13), and the PC must not pass the end of
+      // the flash. 20 words: 14 and a margin.
+      constexpr uint32_t reserveWords = 20;
       const uint32_t words = device_.flashBytes / 2u;
       const uint32_t boot = (device_.flashBytes - device_.flashPageBytes) / 2u;
       const auto zLow = static_cast<uint8_t>(z);
