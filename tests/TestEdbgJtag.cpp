@@ -1395,8 +1395,10 @@ TEST_CASE("EDBG JTAG: AVaRICE GO with a software breakpoint on a 256-byte page i
    CHECK(flashWord(b.jtagAvr, 0x15A) == 0xFFFF);
 }
 
-// A command between the slices of a RUN or STEP completes the job first:
-// the page write ends, and no half-written page stays (issue #121).
+// A command between the slices of a RUN or STEP: STOP, DETACH and a host
+// that goes away cancel the job, the other commands complete it. While
+// the page buffer loads, the flash page is not changed yet: a host that
+// goes away without a disconnect leaves the old page (issue #121).
 TEST_CASE("EDBG JTAG: a command between the slices of a page write") {
    Bench b;
    b.jtagAvr.ocdRevision = 4;
@@ -1409,7 +1411,7 @@ TEST_CASE("EDBG JTAG: a command between the slices of a page write") {
    b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
    b.bloomAttach();
    CHECK(b.swBreak(true, { 0x2B4 }) == ok);
-   const uint16_t original = flashWord(b.jtagAvr, 0x15A);
+   const uint32_t pc = b.jtagAvr.pc;
    CHECK(b.avr8({ avr8::command::run, 0x00 }) == ok);
    // Into the page buffer loads
    for(int polls = 0; polls < 100 && !b.jtagTarget.debug().writingFlashPage(); ++polls) {
@@ -1418,8 +1420,7 @@ TEST_CASE("EDBG JTAG: a command between the slices of a page write") {
    REQUIRE(b.jtagTarget.debug().writingFlashPage());
    CHECK(b.event().empty());
    CHECK(b.jtagScope.busy());
-   // The buffer loads do not change the flash: a host that goes away
-   // without a disconnect leaves the old page.
+   // The buffer loads do not change the flash.
    CHECK(b.jtagAvr.spmPageErases == 0);
    CHECK(b.jtagAvr.spmPageWrites == 0);
    CHECK(b.jtagAvr.flash == program);
@@ -1432,12 +1433,22 @@ TEST_CASE("EDBG JTAG: a command between the slices of a page write") {
       CHECK(std::equal(program.begin() + 0x200, program.begin() + 0x2B4, b.jtagAvr.flash.begin() + 0x200));
       CHECK(std::equal(program.begin() + 0x2B6, program.begin() + 0x300, b.jtagAvr.flash.begin() + 0x2B6));
    };
-   SUBCASE("STOP: the core ran, then it stops") {
+   auto checkCancelled = [&b, &program] {
+      CHECK_FALSE(b.jtagScope.busy());
+      CHECK_FALSE(b.jtagTarget.debug().writingFlashPage());
+      CHECK(b.jtagAvr.spmPageErases == 0);
+      CHECK(b.jtagAvr.spmPageWrites == 0);
+      CHECK(b.jtagAvr.flash == program);
+   };
+   SUBCASE("STOP: the core does not start, the change stays for the next run") {
       CHECK(b.stop() == ok);
+      checkCancelled();
+      CHECK(b.jtagAvr.stopped);
+      CHECK(b.event() == b.breakEvent(pc, false));
+      CHECK(b.run() == ok);
       checkPageDone();
-      CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
    }
-   SUBCASE("a read of the flash: the core runs") {
+   SUBCASE("a read of the flash: the job completes, then the core runs") {
       CHECK(b.avr8(readMemory(memory::spm, 0x2B4, 2)) == failed(0x32));
       checkPageDone();
       CHECK_FALSE(b.jtagAvr.stopped);
@@ -1447,20 +1458,16 @@ TEST_CASE("EDBG JTAG: a command between the slices of a page write") {
       checkPageDone();
       CHECK(flashWord(b.jtagAvr, 0x160) == (program[0x2C0] | program[0x2C1] << 8));
    }
-   SUBCASE("DETACH: the BREAK goes again") {
+   SUBCASE("DETACH: no page write, the core runs") {
       b.bloomClose();
-      CHECK(flashWord(b.jtagAvr, 0x15A) == original);
-      CHECK(b.jtagAvr.flash == program);
+      checkCancelled();
       CHECK_FALSE(b.jtagAvr.stopped);
-      CHECK_FALSE(b.jtagScope.busy());
       b.checkReleased();
       return;
    }
-   SUBCASE("the host goes away (DAP_Disconnect)") {
+   SUBCASE("the host goes away (DAP_Disconnect): no page write") {
       CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
-      CHECK_FALSE(b.jtagScope.busy());
-      CHECK_FALSE(b.jtagTarget.debug().writingFlashPage());
-      CHECK(b.jtagAvr.flash == program);
+      checkCancelled();
       CHECK_FALSE(b.jtagAvr.stopped);
       b.checkReleased();
       return;

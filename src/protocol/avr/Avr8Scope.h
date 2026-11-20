@@ -366,7 +366,7 @@ class Avr8Scope final : public Avr8Handler {
       request_ = request;
       response_ = response;
       if constexpr(Target::hasProgmode) {
-         completeJob();
+         endJob(request.empty() ? uint8_t{ 0 } : request[0]);
       }
       if(request.empty()) {
          return failed(avr8::failure::unknown);
@@ -387,7 +387,7 @@ class Avr8Scope final : public Avr8Handler {
          return;
       }
       if constexpr(Target::hasProgmode) {
-         completeJob();
+         cancelJob();
          static_cast<void>(freeCore());
          static_cast<void>(target_.close());
       } else {
@@ -918,9 +918,8 @@ class Avr8Scope final : public Avr8Handler {
    // comes at once, and the AVR_EVT polls write the pages in slices. A
    // page write takes some 1 s at 200 kHz (256 bytes); AVaRICE waits
    // 500 ms for a response and 200 ms for an event (issue #121). The core
-   // starts after the last page. Each other command, and release(), first
-   // completes the job. A failed job gives a break event at the PC: the
-   // core did not run.
+   // starts after the last page. A failed job gives a break event at the
+   // PC: the core did not run.
    template <typename T = Target>
    std::size_t startJob(Job kind, std::optional<uint32_t> word) {
       if(!target_.debug().hasContext()) {
@@ -964,11 +963,47 @@ class Avr8Scope final : public Avr8Handler {
       eventAtBreak_ = false;
    }
 
+   // Before a command: STOP, RESET, ATTACH, DETACH, DEACTIVATE_PHYSICAL and
+   // ENTER_PROGMODE cancel the job (AVaRICE waits 500 ms for the STOP
+   // response). Each other command completes it.
    template <typename T = Target>
-   void completeJob() {
-      while(job_ != Job::None) {
-         advanceJob();
+   void endJob(uint8_t id) {
+      namespace cmd = avr8::command;
+      if(job_ == Job::None) {
+         return;
       }
+      switch(id) {
+      case cmd::stop:
+      case cmd::reset:
+      case cmd::attach:
+      case cmd::detach:
+      case cmd::deactivatePhysical:
+      case cmd::enterProgmode:
+         cancelJob();
+         break;
+      default:
+         while(job_ != Job::None) {
+            advanceJob();
+         }
+      }
+   }
+
+   // The core does not start, and the breakpoint changes stay for the next
+   // commit. An open page write ends without a flash change, a page that
+   // is in flash already counts (markPage()).
+   template <typename T = Target>
+   void cancelJob() {
+      if(job_ == Job::None) {
+         return;
+      }
+      AvrJtagDebug &debug = target_.debug();
+      if(debug.writingFlashPage()) {
+         static_cast<void>(debug.cancelFlashPage());
+      }
+      job_ = Job::None;
+      jobPhase_ = JobPhase::Pick;
+      running_ = false;
+      event_ = false;
    }
 
    // The number of words of one slice: some sliceMs at the debug clock
