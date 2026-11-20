@@ -341,7 +341,7 @@ To run or step from a software breakpoint, the OCD executes the original instruc
 The probe does these instructions itself on the CPU context and the data space: `RJMP`, `RCALL`, `JMP`, `CALL`, `LDS`, `STS`, the branches (`BRBS`, `BRBC`), the skips (`CPSE`, `SBRC`, `SBRS`, `SBIC`, `SBIS`), `RET` and `RETI`.
 It injects each other instruction that does not use the PC or the flash.
 For an indirect jump or call, `LPM`, `ELPM`, `SPM`, `SLEEP` and `BREAK`, the probe writes the original word, steps, and writes `BREAK` again (two page writes).
-AVaRICE waits 500 ms for the response, and two page writes take about 1 s at 200 kHz (issue #115).
+AVaRICE waits 500 ms for the response. Two page writes take about 1 s at 200 kHz for a 128-byte page, and about 2 s for a 256-byte page (issue #115).
 Thus a step or run from a software breakpoint on one of these instructions still stops the AVaRICE session.
 The data breakpoints do not stop on the memory access of an executed original instruction.
 Bloom uses the hardware breakpoints first, and sends a software breakpoint only when no hardware breakpoint is free.
