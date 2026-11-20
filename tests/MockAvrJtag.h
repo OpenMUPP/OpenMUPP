@@ -85,7 +85,7 @@
 // - The PC field (docs/avr-jtag-ocd.md, "Instruction execute"): pc + 1 at
 //   a stop, + 2 for each executed instruction, Z + 1 after EIJMP. The
 //   field wraps at its bit count. Only EIJMP changes pc: pc = EIND:Z.
-// - The core: LDI, MOV, IN, OUT, LD and ST with X, Y or Z, LPM Rd, Z (on
+// - The core: LDI, MOV, MOVW, IN, OUT, LD and ST with X, Y or Z, LPM Rd, Z (on
 //   revision 3 it loads a byte of its own opcode, hardware test),
 //   EIJMP, SPM, BREAK, WDR and NOP. Other instructions are recorded in
 //   unknownInstructions. The data space has r0 to r31 at 0x00, the I/O
@@ -96,8 +96,10 @@
 //   r1:r0 (0x01), page write (0x05, AND as without an erase) and RWW
 //   enable (0x11, clears the page buffer; a page erase keeps it). Other commands record SPM in unknownInstructions.
 //   SPMEN clears at once, but after a page erase or write it shows in the
-//   next spmBusyReads reads of SPMCSR. SPM does nothing at a pc below bootStartWords (the pc of the
-//   last EIJMP or stop), or with spmLocked (the boot lock bits).
+//   next spmBusyReads reads of SPMCSR. SPM does nothing at a PC below
+//   bootStartWords, or with spmLocked (the boot lock bits). The PC is the
+//   PC field - 1 modulo the flash size: it moves with each instruction and
+//   each other cycle in Run-Test/Idle, as on the hardware.
 // - EEPROM: a write to EECR (I/O address eecrIo) with EERE loads EEDR from
 //   eeprom at EEARH:EEARL. EEPE while EEMPE is set writes EEDR to the
 //   EEPROM (eepromWrites), and EEPE stays set for eepeBusyReads reads of
@@ -315,6 +317,9 @@ class MockAvrJtag final : public JtagTarget {
    uint32_t spmPageWrites{ 0 };
    uint32_t spmBusyReads{ 0 };
    uint32_t bootStartWords{ 0 };
+   // SPM instructions that did nothing: spmLocked, or the PC below
+   // bootStartWords
+   uint32_t spmOutsideBoot{ 0 };
    bool spmLocked{ false };
    bool stepRuns{ false };
 
@@ -563,6 +568,11 @@ class MockAvrJtag final : public JtagTarget {
       const auto io = static_cast<uint8_t>(((op >> 5) & 0x30u) | (op & 0x0Fu));
       if((op & 0xF000u) == 0xE000u) { // LDI
          reg(static_cast<uint8_t>(16 + (d & 0x0Fu))) = static_cast<uint8_t>(((op >> 4) & 0xF0u) | (op & 0x0Fu));
+      } else if((op & 0xFF00u) == 0x0100u) { // MOVW
+         const auto dw = static_cast<uint8_t>(((op >> 4) & 0x0Fu) * 2u);
+         const auto rw = static_cast<uint8_t>((op & 0x0Fu) * 2u);
+         reg(dw) = reg(rw);
+         reg(static_cast<uint8_t>(dw + 1u)) = reg(static_cast<uint8_t>(rw + 1u));
       } else if((op & 0xFC00u) == 0x2C00u) { // MOV
          reg(d) = reg(static_cast<uint8_t>(((op >> 5) & 0x10u) | (op & 0x0Fu)));
       } else if((op & 0xF800u) == 0xB000u) { // IN
@@ -594,7 +604,12 @@ class MockAvrJtag final : public JtagTarget {
    void spm() {
       const uint8_t command = data[spmcsr] & 0x1Fu;
       data[spmcsr] = static_cast<uint8_t>(data[spmcsr] & 0xE0u);
-      if(spmLocked || pc < bootStartWords) {
+      // The PC moves with the PC field: it is the field - 1, modulo the
+      // flash size (docs/avr-jtag-ocd.md, "Instruction execute").
+      const auto words = static_cast<uint32_t>(flash.size() / 2);
+      const uint32_t at = ((pcField + fieldMask()) & fieldMask()) % words;
+      if(spmLocked || at < bootStartWords) {
+         ++spmOutsideBoot;
          return;
       }
       // The address bits above the flash size have no effect.
