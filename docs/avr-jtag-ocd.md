@@ -334,7 +334,8 @@ The probe uses this sequence only for the software breakpoints (`AvrJtagDebug::w
 
 With these differences, a page buffer load has about a third of the scans of the reference sequence (issue #121).
 A 256-byte page takes about 0.5 s at 200 kHz instead of about 1 s.
-The software breakpoint tests on the ATmega32U4 and the ATmega2560 use this sequence (see [avr.md](avr.md#hardware-test)).
+A hardware test on the ATmega2560 (OCD revision 4) confirmed the shorter sequence, with the page erase before the page buffer loads (see [avr.md](avr.md#jtag-debug-hardware-test)).
+The OCD revision 3 path (for example the ATmega32U4: 16-bit PC field, 64-word pages) has host tests only.
 
 ## Open questions
 
