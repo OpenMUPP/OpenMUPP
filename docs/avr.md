@@ -7,7 +7,7 @@ avrdude can also program a chip over debugWIRE, and Bloom with avr-gdb can debug
 debugWIRE passed a hardware test on an ATtiny85 at 8 MHz and at 1 MHz (see [debugWIRE hardware test](#debugwire-hardware-test)).
 avrdude can also program the classic AVR chips with a JTAG port, for example the ATmega32U4 and the ATmega2560 (see [JTAG](#jtag)).
 JTAG programming passed a hardware test on an ATmega32U4 (see [JTAG hardware test](#jtag-hardware-test)).
-Bloom with avr-gdb can debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom)).
+Bloom and AVaRICE with avr-gdb can debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom) and [JTAG debug with AVaRICE](#jtag-debug-with-avarice)).
 JTAG debug passed a hardware test on an ATmega32U4 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
 The probe does not have the other AVR interfaces (UPDI, PDI, TPI).
 [AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol.
@@ -332,6 +332,38 @@ environments:
   One single step takes about 140 ms at this clock. Thus a `next` over a long loop takes much time.
 - An EEPROM write takes about 35 ms for each byte, because the EEPROM write of a stopped core is slower than in the datasheet.
 - At the end of the session, the probe removes the breakpoints, and the program runs.
+
+### JTAG debug with AVaRICE
+
+AVaRICE is a GDB server for the Microchip debug tools. With the option `-4`, it uses the EDBG protocol over USB.
+AVaRICE with avr-gdb can halt, run and step the core, read and write the memories, and use hardware breakpoints, software breakpoints and watchpoints.
+The hardware test used AVaRICE 2.14 (`2.14svn20200906`) with the [medbg build](#the-medbg-build).
+JTAG debug passed a hardware test on an ATmega32U4 and an ATmega2560 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
+
+Program OCDEN before the session. The hardware test programmed it with avrdude over JTAG.
+The medbg build has the USB ID `03eb:2145`, thus give this ID to avrdude with `-P`.
+
+```sh
+# Program OCDEN (high fuse 0x18 on the ATmega2560 with JTAGEN, BOOTRST and the 4K word boot section)
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp_jtag -p m2560 -P usb:03eb:2145 -U hfuse:w:0x18:m
+
+# Start AVaRICE as the GDB server on port 4242
+avarice -4 -j usb -P atmega2560 -B 200kHz :4242
+
+# Connect avr-gdb
+avr-gdb -ex 'set remote memory-map-packet off' -ex 'target remote :4242' firmware.elf
+```
+
+- Set `remote memory-map-packet off` in avr-gdb. The memory map reply of AVaRICE is longer than the length that avr-gdb requests. Without this setting, avr-gdb does not accept the reply.
+- AVaRICE uses the three hardware breakpoints first. When no hardware breakpoint is free, it uses software breakpoints.
+- AVaRICE sends data breakpoints for `watch`, `rwatch` and `awatch` (see [JTAG data breakpoints](#jtag-data-breakpoints)).
+- AVaRICE waits 500 ms for a response, and 200 ms for an event (see [cmsis-dap.md](cmsis-dap.md#avr8-scope-on-jtag)).
+  A run or step gives its response before the page write of a software breakpoint.
+- At the end of the session, AVaRICE clears the software breakpoints. The probe writes the flash page before it gives the response.
+  One 256-byte page takes about 0.5 s at 200 kHz (ATmega2560). This is near the 500 ms limit of AVaRICE.
+  The page write time is in inverse proportion to the debug clock (`-B`). Use the fastest `-B` value that the target clock permits (see [JTAG clock](#jtag-clock)).
+- A step or run from a software breakpoint on an indirect jump or call, `LPM`, `ELPM`, `SPM`, `SLEEP` or `BREAK` writes two pages. This stops the AVaRICE session (issue [#117](https://github.com/OpenMUPP/OpenMUPP/issues/117)).
+- AVaRICE stops with the exit code 1 after avr-gdb disconnects. It shows `gdb exited.`. This is the normal end of a session.
 
 ### JTAG data breakpoints
 
