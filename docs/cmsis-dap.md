@@ -193,7 +193,7 @@ The probe sends the `AVR_CMD` response of the last fragment first.
 Then the next AVR command (`AVR_RSP`, `AVR_EVT` or `AVR_CMD`) runs the frame before it gives its own response.
 Thus the response is ready for the next `AVR_RSP`, and an event of the command comes after it.
 AVaRICE reads the `AVR_CMD` response for 200 ms only, the `AVR_RSP` response for 500 ms, and the `AVR_EVT` response for 200 ms.
-One flash page write takes about 0.5 s at 200 kHz (256 bytes, ATmega2560, issue #121).
+One flash page write takes about 0.5 s at 200 kHz (256 bytes, ATmega2560, issue #121). This is near the 500 ms of AVaRICE.
 On JTAG, a run, run to or step with a software breakpoint change thus gives its response at once, and the `AVR_EVT` polls write the pages (see [AVR8 scope on JTAG](#avr8-scope-on-jtag)).
 After a late response, AVaRICE reads each later response one report too late, and the session stops (issue #115). Only a restart of AVaRICE repairs it.
 A long command holds the HID interface, as a long DAP command does.
