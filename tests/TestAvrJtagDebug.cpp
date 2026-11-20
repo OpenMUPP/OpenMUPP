@@ -948,34 +948,49 @@ TEST_CASE("AvrJtagDebug: flash page write with SPM") {
       CHECK(b.target.unknownInstructions.empty());
 
       // 64 page buffer loads, then erase, write, RWW enable: the flash
-      // changes only at the end (issue #121). Each SPM is one step after an
-      // EIJMP to the last page (word 0x3FC0).
+      // changes only at the end. Each SPM is one step in the boot section.
+      // The EIJMP to the last page (word 0x3FC0) comes only when the
+      // moving PC leaves it (issue #121).
       constexpr std::size_t spms = 64 + 3;
       CHECK(count(b.target.executed, d::spm) == spms);
-      CHECK(count(b.target.executed, d::eijmp) == spms);
+      CHECK(b.target.spmOutsideBoot == 0);
+      CHECK(count(b.target.executed, d::eijmp) >= 1);
+      CHECK(count(b.target.executed, d::eijmp) < spms);
       CHECK(static_cast<std::size_t>(std::count(b.target.irScans.begin(), b.target.irScans.end(), ir::run)) == spms);
       const auto writes = b.writes();
       CHECK(static_cast<std::size_t>(std::count(writes.begin(), writes.end(), 0x18A000u)) == spms);
       CHECK(writes.back() == 0x18C000);
       const auto &e = b.target.executed;
-      // The SPMCSR command before each SPM
+      // The SPMCSR command of each SPM: the last LDI r18 before it (r18 is
+      // loaded only when the command changes)
       std::vector<uint16_t> commands;
-      for(auto at = e.begin(); at != e.end(); ++at) {
-         if(*at == d::spm && at - e.begin() >= 4) {
-            commands.push_back(*(at - 4));
+      uint16_t command = 0;
+      for(const uint16_t op : e) {
+         if((op & 0xFFF0u & ~0x0F00u) == (d::ldi(18, 0) & 0xFFF0u & ~0x0F00u)) {
+            command = op;
+         } else if(op == d::spm) {
+            commands.push_back(command);
          }
       }
-      std::vector<uint16_t> order(64, d::ldi(16, 0x01));
-      order.insert(order.end(), { d::ldi(16, 0x03), d::ldi(16, 0x05), d::ldi(16, 0x11) });
+      std::vector<uint16_t> order(64, d::ldi(18, 0x01));
+      order.insert(order.end(), { d::ldi(18, 0x03), d::ldi(18, 0x05), d::ldi(18, 0x11) });
       CHECK(commands == order);
       const auto firstSpm = std::find(e.begin(), e.end(), d::spm);
       REQUIRE(firstSpm - e.begin() >= 4);
-      CHECK(std::vector<uint16_t>(firstSpm - 4, firstSpm + 1) ==
-            std::vector<uint16_t>{ d::ldi(16, 0x01), d::ldi(29, 0x00), d::ldi(28, 0x57), d::stY(16), d::spm });
+      CHECK(std::vector<uint16_t>(firstSpm - 2, firstSpm + 1) == std::vector<uint16_t>{ d::ldi(18, 0x01), d::stY(18), d::spm });
+      // EIND and Y once for the page, then the first EIJMP
+      CHECK(count(e, d::ldi(28, 0x57)) == 1);
       const auto firstJump = std::find(e.begin(), e.end(), d::eijmp);
-      REQUIRE(firstJump - e.begin() >= 4);
-      CHECK(std::vector<uint16_t>(firstJump - 4, firstJump) ==
-            std::vector<uint16_t>{ d::ldi(31, 0x3F), d::ldi(30, 0xC0), d::ldi(16, 0x00), d::out(0x3C, 16) });
+      REQUIRE(firstJump - e.begin() >= 7);
+      CHECK(std::vector<uint16_t>(firstJump - 7, firstJump) ==
+            std::vector<uint16_t>{ d::ldi(16, 0x00), d::out(0x3C, 16), d::ldi(29, 0x00), d::ldi(28, 0x57),
+                                   d::ldi(30, 0x00), d::ldi(31, 0x3F), d::ldi(30, 0xC0) });
+      // A page buffer load: r1:r0 with MOVW, no SPMCSR poll after it
+      CHECK(std::find(e.begin(), firstSpm, d::movw(0, 16)) != firstSpm);
+      CHECK(std::find(e.begin(), firstSpm, d::ldi(16, 0x10)) != firstSpm);
+      const auto secondSpm = std::find(firstSpm + 1, e.end(), d::spm);
+      REQUIRE(secondSpm != e.end());
+      CHECK(std::find(firstSpm, secondSpm, d::ldZ(16)) == secondSpm);
 
       // The state comes back: SREG, SPMCSR without the command bits,
       // RAMPZ not touched below 64 KB, then the registers at the run.

@@ -51,21 +51,25 @@
 // - The flash page write (writeFlashPage(), for the software breakpoints)
 //   uses the SPM sequence of the reference debugger (docs/avr-jtag-ocd.md,
 //   "Flash write in debug mode"): save SPMCSR and SREG (and RAMPZ above
-//   64 KB), then for each SPM an EIJMP into the boot section, the SPMCSR
-//   command with ST Y, and the SPM as a single step (BCR 0xA000, RUN).
-//   Then restore SPMCSR (without its command bits), SREG, RAMPZ and EIND,
-//   and read the page back. Differences from the reference debugger: the
-//   order is one page buffer load for each word, page erase, page write,
-//   RWW enable ("alternative 1" of the datasheet; the reference debugger
-//   erases first), so that the flash changes only at the end (issue
-//   #121). The probe polls SPMCSR after each SPM until SPMEN is clear, it writes RAMPZ only for a flash above 64 KB (bits 17..16
-//   of the page address), and the boot section address is the start of
-//   the last flash page. This page is in the boot section for all BOOTSZ
-//   fuses; the boot start of the device context is not (avrdude sends the
-//   start of the last 4 pages, which is below the smallest boot section
-//   of the ATmega16). The read back finds a page that SPM did not write,
-//   for example when the boot lock bits stop SPM. r0, r1, r28 and r29 also
-//   change on the target: the write-back restores them. An SPM step that
+//   64 KB), then for each SPM the SPMCSR command with ST Y, and the SPM as
+//   a single step (BCR 0xA000, RUN). Then restore SPMCSR (without its
+//   command bits), SREG, RAMPZ and EIND, and read the page back.
+//   Differences from the reference debugger: the order is one page buffer
+//   load for each word, page erase, page write, RWW enable ("alternative
+//   1" of the datasheet; the reference debugger erases first), so that the
+//   flash changes only at the end (issue #121). The probe polls SPMCSR
+//   after each SPM until SPMEN is clear, but not after a page buffer load.
+//   It writes RAMPZ only for a flash above 64 KB (bits 17..16 of the page
+//   address), and EIND and Y once for each page. The boot section address
+//   is the start of the last flash page. The EIJMP to it comes only when
+//   the PC field shows a PC outside this page or near the flash end
+//   (issue #121: one third of the scans). This page is in the boot
+//   section for all BOOTSZ fuses; the boot start of the device context is
+//   not (avrdude sends the start of the last 4 pages, which is below the
+//   smallest boot section of the ATmega16). The read back finds a page
+//   that SPM did not write, for example when the boot lock bits stop SPM.
+//   r0, r1, r16 to r18 and r28 to r31 also change on the target: the
+//   write-back restores them. An SPM step that
 //   does not stop gets a FORCE_BREAK, then the restore and Timeout. When
 //   the core also does not stop then, the probe sends nothing more.
 // - Hardware breakpoints (program addresses, word addresses): the host
@@ -224,6 +228,10 @@ inline constexpr uint32_t spmTimeoutMs = 100;
 // The injected AVR instructions
 constexpr uint16_t ldi(uint8_t d, uint8_t k) {
    return static_cast<uint16_t>(0xE000u | ((k & 0xF0u) << 4) | (((d - 16u) & 0x0Fu) << 4) | (k & 0x0Fu));
+}
+// MOVW Rd+1:Rd, Rr+1:Rr (d and r even)
+constexpr uint16_t movw(uint8_t d, uint8_t r) {
+   return static_cast<uint16_t>(0x0100u | ((d / 2u) << 4) | (r / 2u));
 }
 constexpr uint16_t mov(uint8_t d, uint8_t r) {
    return static_cast<uint16_t>(0x2C00u | ((r & 0x10u) << 5) | ((d & 0x1Fu) << 4) | (r & 0x0Fu));
@@ -714,7 +722,7 @@ class AvrJtagDebug {
          flashReadField((address + pageBytes) / 2u - 1u) == 0) {
          return JtagDebugStatus::OutOfRange;
       }
-      write_ = { address, page, 0, 0, 0, 0, device_.flashBytes > 0x10000u };
+      write_ = { address, page, 0, 0, 0, 0, device_.flashBytes > 0x10000u, -1, -1 };
       if(!loadZ(device_.spmcsr) || !execute(jtagDebug::ldZ(16))) {
          return JtagDebugStatus::NoOcd;
       }
@@ -730,7 +738,12 @@ class AvrJtagDebug {
          }
       }
       writing_ = true;
-      if(write_.far && !writeIo(jtagDebug::ioRampz, static_cast<uint8_t>(address >> 16))) {
+      // EIND for the EIJMP into the last page, and Y = SPMCSR, for each SPM
+      // of the page (spm())
+      const uint32_t boot = (device_.flashBytes - pageBytes) / 2u;
+      if((write_.far && !writeIo(jtagDebug::ioRampz, static_cast<uint8_t>(address >> 16))) ||
+         !writeIo(jtagDebug::ioEind, static_cast<uint8_t>(boot >> 16)) || !execute(jtagDebug::ldi(29, 0)) ||
+         !execute(jtagDebug::ldi(28, static_cast<uint8_t>(device_.spmcsr)))) {
          return finishFlashPage(JtagDebugStatus::NoOcd);
       }
       return JtagDebugStatus::Ok;
@@ -1157,27 +1170,56 @@ class AvrJtagDebug {
       return restored ? JtagDebugStatus::Ok : JtagDebugStatus::NoOcd;
    }
 
-   // One SPM with command at Z = z, r1:r0 = word (a page buffer load), in
-   // the reference order: EIJMP into the boot section, Z, r0 and r1,
-   // BCR 0xC000, the command to SPMCSR with ST Y, BCR 0xA000, SPM and RUN
-   // (one step). Then the stop, BCR 0xC000, and SPMCSR until SPMEN is
-   // clear.
+   // One SPM with command at Z = z, r1:r0 = word (a page buffer load):
+   // EIJMP into the last page when the PC is not in it, Z, r1:r0, the
+   // command to SPMCSR with ST Y (Y and EIND from beginFlashPage()),
+   // BCR 0xA000, SPM and RUN (one step). Then the stop, BCR 0xC000, and
+   // SPMCSR until SPMEN is clear. A page buffer load ends with the SPM
+   // (datasheet), so it has no poll. The reference debugger does the
+   // EIJMP, Y and the poll before each SPM (docs/avr-jtag-ocd.md); this
+   // sequence has about a third of its scans (issue #121).
    [[nodiscard]] JtagDebugStatus spm(uint8_t command, uint16_t z, const uint8_t *word = nullptr) {
-      // Each injected instruction after the EIJMP moves the PC by about 2
-      // words: the 10 instructions before SPM must stay in the last page
-      // (64 words at the smallest JTAG page). To check in the hardware test.
+      // Each scan moves the PC by about 2 words (docs/avr-jtag-ocd.md,
+      // "Instruction execute"). The PC field of the first scan shows the
+      // PC: the instructions up to the SPM need some 20 words of the last
+      // page, and the PC must not pass the end of the flash.
+      constexpr uint32_t reserveWords = 32;
+      const uint32_t words = device_.flashBytes / 2u;
       const uint32_t boot = (device_.flashBytes - device_.flashPageBytes) / 2u;
-      if(!loadZ(static_cast<uint16_t>(boot)) || !writeIo(jtagDebug::ioEind, static_cast<uint8_t>(boot >> 16)) ||
-         !execute(jtagDebug::eijmp) || !loadZ(z)) {
+      const auto zLow = static_cast<uint8_t>(z);
+      const auto zHigh = static_cast<uint8_t>(z >> 8);
+      uint32_t field = 0;
+      if(!execute(jtagDebug::ldi(30, zLow), &field)) {
          return JtagDebugStatus::NoOcd;
       }
-      if(word != nullptr && (!execute(jtagDebug::ldi(16, word[0])) || !execute(jtagDebug::mov(0, 16)) ||
-                             !execute(jtagDebug::ldi(16, word[1])) || !execute(jtagDebug::mov(1, 16)))) {
+      const uint32_t pc = (field - 1u) & fieldMask();
+      if(pc < boot || pc + reserveWords >= words) {
+         if(!loadZ(static_cast<uint16_t>(boot)) || !execute(jtagDebug::eijmp) || !execute(jtagDebug::ldi(30, zLow))) {
+            return JtagDebugStatus::NoOcd;
+         }
+         write_.r31 = -1;
+      }
+      // r31 and r18 keep their values from the last SPM of the page.
+      if(write_.r31 != zHigh) {
+         if(!execute(jtagDebug::ldi(31, zHigh))) {
+            return JtagDebugStatus::NoOcd;
+         }
+         write_.r31 = zHigh;
+      }
+      if(word != nullptr && (!execute(jtagDebug::ldi(16, word[0])) || !execute(jtagDebug::ldi(17, word[1])) ||
+                             !execute(jtagDebug::movw(0, 16)))) {
          return JtagDebugStatus::NoOcd;
       }
-      if(!writeBcr(jtagDebug::idle) || !execute(jtagDebug::ldi(16, command)) || !execute(jtagDebug::ldi(29, 0)) ||
-         !execute(jtagDebug::ldi(28, device_.spmcsr)) || !execute(jtagDebug::stY(16)) ||
-         !writeBcr(jtagDebug::spmStep) || !execute(jtagDebug::spm) || !ocd_.run()) {
+      if(bcr_ != jtagDebug::idle && !writeBcr(jtagDebug::idle)) {
+         return JtagDebugStatus::NoOcd;
+      }
+      if(write_.r18 != command) {
+         if(!execute(jtagDebug::ldi(18, command))) {
+            return JtagDebugStatus::NoOcd;
+         }
+         write_.r18 = command;
+      }
+      if(!execute(jtagDebug::stY(18)) || !writeBcr(jtagDebug::spmStep) || !execute(jtagDebug::spm) || !ocd_.run()) {
          return JtagDebugStatus::NoOcd;
       }
       if(JtagDebugStatus status = waitStop(); status != JtagDebugStatus::Ok) {
@@ -1190,9 +1232,16 @@ class AvrJtagDebug {
          }
          return JtagDebugStatus::Timeout;
       }
-      if(!writeBcr(jtagDebug::idle) || !loadZ(device_.spmcsr)) {
+      if(!writeBcr(jtagDebug::idle)) {
          return JtagDebugStatus::NoOcd;
       }
+      if(command == jtagDebug::spmEnable) {
+         return JtagDebugStatus::Ok;
+      }
+      if(!loadZ(device_.spmcsr)) {
+         return JtagDebugStatus::NoOcd;
+      }
+      write_.r31 = static_cast<int16_t>(device_.spmcsr >> 8);
       // The same poll cost as the EEPROM: two instructions, two reads
       const uint32_t polls = jtagDebug::spmTimeoutMs * tap_.kHz() / jtagDebug::eepromPollCycles + 1u;
       for(uint32_t i = 0; i < polls; ++i) {
@@ -1331,6 +1380,9 @@ class AvrJtagDebug {
       uint8_t sreg;
       uint8_t rampz;
       bool far;
+      // The values in r31 and r18 that spm() wrote, -1: not known
+      int16_t r31;
+      int16_t r18;
    };
    PageWrite write_{};
    bool writing_{ false };
