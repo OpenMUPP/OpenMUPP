@@ -1411,15 +1411,18 @@ TEST_CASE("EDBG JTAG: a command between the slices of a page write") {
    CHECK(b.swBreak(true, { 0x2B4 }) == ok);
    const uint16_t original = flashWord(b.jtagAvr, 0x15A);
    CHECK(b.avr8({ avr8::command::run, 0x00 }) == ok);
-   // Into the page buffer loads: the page is erased now.
+   // Into the page buffer loads
    for(int polls = 0; polls < 100 && !b.jtagTarget.debug().writingFlashPage(); ++polls) {
       CHECK(b.event().empty());
    }
    REQUIRE(b.jtagTarget.debug().writingFlashPage());
    CHECK(b.event().empty());
    CHECK(b.jtagScope.busy());
-   CHECK(b.jtagAvr.spmPageErases == 1);
+   // The buffer loads do not change the flash: a host that goes away
+   // without a disconnect leaves the old page.
+   CHECK(b.jtagAvr.spmPageErases == 0);
    CHECK(b.jtagAvr.spmPageWrites == 0);
+   CHECK(b.jtagAvr.flash == program);
 
    auto checkPageDone = [&b, &program] {
       CHECK_FALSE(b.jtagScope.busy());

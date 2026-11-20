@@ -53,11 +53,12 @@
 //   "Flash write in debug mode"): save SPMCSR and SREG (and RAMPZ above
 //   64 KB), then for each SPM an EIJMP into the boot section, the SPMCSR
 //   command with ST Y, and the SPM as a single step (BCR 0xA000, RUN).
-//   Page erase, RWW enable, one page buffer load for each word, page
-//   write, RWW enable. Then restore SPMCSR (without its command bits),
-//   SREG, RAMPZ and EIND, and read the page back. Differences from the
-//   reference debugger: the probe polls SPMCSR after each SPM until SPMEN
-//   is clear, it writes RAMPZ only for a flash above 64 KB (bits 17..16
+//   Then restore SPMCSR (without its command bits), SREG, RAMPZ and EIND,
+//   and read the page back. Differences from the reference debugger: the
+//   order is one page buffer load for each word, page erase, page write,
+//   RWW enable ("alternative 1" of the datasheet; the reference debugger
+//   erases first), so that the flash changes only at the end (issue
+//   #121). The probe polls SPMCSR after each SPM until SPMEN is clear, it writes RAMPZ only for a flash above 64 KB (bits 17..16
 //   of the page address), and the boot section address is the start of
 //   the last flash page. This page is in the boot section for all BOOTSZ
 //   fuses; the boot start of the device context is not (avrdude sends the
@@ -678,24 +679,29 @@ class AvrJtagDebug {
    }
 
    // Writes one flash page at a page-aligned byte address with SPM (see
-   // above). The page has device.flashPageBytes bytes.
+   // above), and reads it back. The page has device.flashPageBytes bytes.
    [[nodiscard]] JtagDebugStatus writeFlashPage(uint32_t address, const uint8_t *page) {
       JtagDebugStatus status = beginFlashPage(address, page);
       bool loaded = false;
       while(status == JtagDebugStatus::Ok && !loaded) {
          status = loadFlashPage(device_.flashPageBytes / 2u, loaded);
       }
-      return status == JtagDebugStatus::Ok ? endFlashPage() : status;
+      if(status == JtagDebugStatus::Ok) {
+         status = endFlashPage();
+      }
+      return status == JtagDebugStatus::Ok ? verifyFlashPage(address, page, 0, device_.flashPageBytes) : status;
    }
 
-   // writeFlashPage() in three parts, so that a host that waits for an
-   // event gets its answers between them (issue #121): beginFlashPage()
-   // saves the state and erases the page, each loadFlashPage() loads up to
-   // words words of the page buffer, endFlashPage() writes the page,
-   // restores the state and reads the page back. page must stay valid until
-   // the end. A part that fails ends the write: it restores the state, and
-   // the page stays erased or old. Between the parts only these calls may
-   // go to the core.
+   // writeFlashPage() in parts, so that a host that waits for an event gets
+   // its answers between them (issue #121). beginFlashPage() saves the
+   // state, each loadFlashPage() loads up to words words of the page
+   // buffer, and endFlashPage() erases and writes the page and restores the
+   // state. The flash changes only in endFlashPage(): the page buffer keeps
+   // its data over the page erase (datasheet, "alternative 1"). page must
+   // stay valid until the end. cancelFlashPage() clears the page buffer and
+   // restores the state. A part that fails ends the write: it restores the
+   // state. Between the parts only these calls may go to the core.
+   // verifyFlashPage() reads the page back after the end.
    [[nodiscard]] JtagDebugStatus beginFlashPage(uint32_t address, const uint8_t *page) {
       if(JtagDebugStatus status = ready(); status != JtagDebugStatus::Ok) {
          return status;
@@ -724,18 +730,10 @@ class AvrJtagDebug {
          }
       }
       writing_ = true;
-      JtagDebugStatus status = JtagDebugStatus::Ok;
       if(write_.far && !writeIo(jtagDebug::ioRampz, static_cast<uint8_t>(address >> 16))) {
-         status = JtagDebugStatus::NoOcd;
+         return finishFlashPage(JtagDebugStatus::NoOcd);
       }
-      const auto z = static_cast<uint16_t>(address);
-      if(status == JtagDebugStatus::Ok) {
-         status = spm(jtagDebug::spmPageErase, z);
-      }
-      if(status == JtagDebugStatus::Ok) {
-         status = spm(jtagDebug::spmRwwEnable, z);
-      }
-      return status == JtagDebugStatus::Ok ? status : finishFlashPage(status);
+      return JtagDebugStatus::Ok;
    }
 
    // loaded: all words of the page are in the page buffer.
@@ -753,16 +751,49 @@ class AvrJtagDebug {
       return status == JtagDebugStatus::Ok ? status : finishFlashPage(status);
    }
 
+   // Page erase, page write, RWW enable, then the restore. Not the RWW
+   // enable between the loads and the erase: RWWSRE clears the page buffer.
    [[nodiscard]] JtagDebugStatus endFlashPage() {
       if(!writing_) {
          return JtagDebugStatus::NoContext;
       }
       const auto z = static_cast<uint16_t>(write_.address);
-      JtagDebugStatus status = write_.next >= device_.flashPageBytes ? spm(jtagDebug::spmPageWrite, z) : JtagDebugStatus::NoContext;
+      JtagDebugStatus status = write_.next >= device_.flashPageBytes ? spm(jtagDebug::spmPageErase, z) : JtagDebugStatus::NoContext;
+      if(status == JtagDebugStatus::Ok) {
+         status = spm(jtagDebug::spmPageWrite, z);
+      }
       if(status == JtagDebugStatus::Ok) {
          status = spm(jtagDebug::spmRwwEnable, z);
       }
       return finishFlashPage(status);
+   }
+
+   // The flash is not changed. The RWW enable clears the page buffer, so
+   // that no SPM of the program writes the old buffer data.
+   [[nodiscard]] JtagDebugStatus cancelFlashPage() {
+      if(!writing_) {
+         return JtagDebugStatus::Ok;
+      }
+      return finishFlashPage(spm(jtagDebug::spmRwwEnable, static_cast<uint16_t>(write_.address)));
+   }
+
+   // Compares bytes at..at + length - 1 of the page at the byte address
+   // with the flash. A different word gives VerifyFailed, for example when
+   // the boot lock bits stop SPM.
+   [[nodiscard]] JtagDebugStatus verifyFlashPage(uint32_t address, const uint8_t *page, uint16_t at, uint16_t length) {
+      if(JtagDebugStatus status = ready(); status != JtagDebugStatus::Ok) {
+         return status;
+      }
+      for(uint16_t i = at; i < at + length; i += 2) {
+         uint16_t word = 0;
+         if(JtagDebugStatus status = readFlashWord((address + i) / 2u, word); status != JtagDebugStatus::Ok) {
+            return status;
+         }
+         if(word != static_cast<uint16_t>(page[i] | page[i + 1u] << 8u)) {
+            return JtagDebugStatus::VerifyFailed;
+         }
+      }
+      return JtagDebugStatus::Ok;
    }
 
    // True between beginFlashPage() and the end of the write
@@ -1106,8 +1137,7 @@ class AvrJtagDebug {
       return readOcdr(16, value);
    }
 
-   // The end of a page write: the restore of the state, then with status
-   // Ok the read back.
+   // The end of a page write: the restore of the state
    [[nodiscard]] JtagDebugStatus finishFlashPage(JtagDebugStatus status) {
       writing_ = false;
       if(!stopped_) {
@@ -1124,20 +1154,7 @@ class AvrJtagDebug {
       if(status != JtagDebugStatus::Ok) {
          return status;
       }
-      if(!restored) {
-         return JtagDebugStatus::NoOcd;
-      }
-      const uint16_t pageBytes = device_.flashPageBytes;
-      for(uint16_t i = 0; i < pageBytes; i += 2) {
-         uint16_t word = 0;
-         if(status = readFlashWord((write_.address + i) / 2u, word); status != JtagDebugStatus::Ok) {
-            return status;
-         }
-         if(word != static_cast<uint16_t>(write_.page[i] | write_.page[i + 1u] << 8u)) {
-            return JtagDebugStatus::VerifyFailed;
-         }
-      }
-      return JtagDebugStatus::Ok;
+      return restored ? JtagDebugStatus::Ok : JtagDebugStatus::NoOcd;
    }
 
    // One SPM with command at Z = z, r1:r0 = word (a page buffer load), in

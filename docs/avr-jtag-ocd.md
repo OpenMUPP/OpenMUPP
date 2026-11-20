@@ -323,6 +323,7 @@ The boot lock bits must allow `SPM` in the boot section.
 
 The probe uses this sequence only for the software breakpoints (`AvrJtagDebug::writeFlashPage`). It has these differences from the reference debugger:
 
+- The order is: one page buffer load for each word, page erase, page write, RWW enable. The reference debugger erases the page first. The page buffer keeps its data over the page erase (datasheet, "alternative 1"), so the flash changes only at the end (issue #121). An RWW enable between the loads and the erase would clear the page buffer.
 - After each `SPM`, it polls SPMCSR until SPMEN is clear.
 - The `EIJMP` goes to the start of the last flash page. This page is in the boot section for all BOOTSZ values. The boot start of the device context is not always in the boot section: avrdude sends the start of the last 4 pages, and on the ATmega16 this address is below the smallest boot section.
 - It writes RAMPZ only for a flash of more than 64 KB. The restore writes the saved value, not `0x0C`.

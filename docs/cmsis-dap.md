@@ -325,11 +325,13 @@ The probe writes the flash page with `SPM` in the debug mode (see [avr-jtag-ocd.
 A run, run to or step with a software breakpoint change gives its OK response before the page write (issue #121):
 
 - Each later `AVR_EVT` poll does one part of the page write, about 50 ms at the debug clock. The poll gives no event.
+- The parts are: the page read, the page buffer loads, the page erase and write, and the read back. Only the erase and write part changes the flash: the page buffer keeps its data over the page erase (datasheet, "alternative 1"). Thus a host that goes away between two polls leaves the old page in flash.
 - The core starts, or does the step, after the last page. The break event of the command comes after that.
 - A page write that fails gives a break event at the PC, with cause 0. The core does not start. The breakpoint change stays for the next commit.
 - Each other command first completes the page writes, then the run or step, and then runs. This command can take about 1 s at 200 kHz for each page. A `DAP_Disconnect` also completes them, and then the probe removes the breakpoints.
 
 AVaRICE polls `AVR_EVT` every 50 ms while it waits for the break event, so the page write completes in the polls.
+The erase and write part does not get shorter at a lower debug clock. It needs about 3500 TCK cycles and about 9 ms of flash time. At a debug clock below about 25 kHz, this poll takes more than the 200 ms of AVaRICE.
 Detach and deactivate physical still remove the software breakpoints before they give the response.
 AVaRICE sends the next command at once after them, so a part of the page write in a poll does not help there.
 At 200 kHz such a detach takes about 1 s for a 256-byte page, more than the 500 ms of AVaRICE. AVaRICE sends it at the end of the session only.

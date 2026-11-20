@@ -424,8 +424,9 @@ class Avr8Scope final : public Avr8Handler {
 
    private:
    enum class BreakState : uint8_t { Inserting, Active, Removing };
-   // The command of a job (startJob())
+   // The command of a job (startJob()), and its part (commitSlice())
    enum class Job : uint8_t { None, Run, Step };
+   enum class JobPhase : uint8_t { Pick, Read, Load, Write, Verify };
    struct SoftwareBreak {
       uint32_t word;
       uint16_t original;
@@ -927,8 +928,7 @@ class Avr8Scope final : public Avr8Handler {
       }
       job_ = kind;
       jobTo_ = word;
-      jobRead_ = 0;
-      jobLoaded_ = false;
+      jobPhase_ = JobPhase::Pick;
       running_ = true;
       event_ = false;
       return ok();
@@ -944,8 +944,7 @@ class Avr8Scope final : public Avr8Handler {
       }
       const Job kind = job_;
       job_ = Job::None;
-      jobRead_ = 0;
-      jobLoaded_ = false;
+      jobPhase_ = JobPhase::Pick;
       if(status == JtagDebugStatus::Ok) {
          if(kind == Job::Run) {
             status = stepOverBreak();
@@ -978,46 +977,74 @@ class Avr8Scope final : public Avr8Handler {
       return static_cast<uint16_t>(std::clamp<uint32_t>(words, 1, 0xFFFF));
    }
 
-   // The next part of the commit: a part of the page read, the page erase,
-   // or a part of the page buffer loads, then the page write. done: all
-   // changes are in flash.
+   // The next part of the commit: a part of the page read, a part of the
+   // page buffer loads, the page erase and write, or a part of the read
+   // back. done: all changes are in flash.
    template <typename T = Target>
    JtagDebugStatus commitSlice(bool &done) {
       AvrJtagDebug &debug = target_.debug();
+      const uint16_t pageBytes = flashPageBytes();
       done = false;
-      if(debug.writingFlashPage()) {
-         // The page write and the read back are one slice of their own.
-         if(jobLoaded_) {
-            jobLoaded_ = false;
-            const JtagDebugStatus status = debug.endFlashPage();
-            if(status == JtagDebugStatus::Ok) {
-               markPage(jobPage_);
-            }
-            return status;
-         }
-         return debug.loadFlashPage(sliceWords(spmLoadCycles), jobLoaded_);
-      }
-      if(jobRead_ == 0) {
+      switch(jobPhase_) {
+      case JobPhase::Pick: {
          const SoftwareBreak *pending = pendingBreak();
          if(pending == nullptr) {
             done = true;
             return JtagDebugStatus::Ok;
          }
          jobPage_ = pageOf(pending->word);
+         jobAt_ = 0;
+         jobPhase_ = JobPhase::Read;
+         return JtagDebugStatus::Ok;
       }
-      const uint16_t pageBytes = flashPageBytes();
-      if(jobRead_ < pageBytes) {
-         const auto bytes = static_cast<uint16_t>(std::min<uint32_t>(pageBytes - jobRead_, 2u * sliceWords(flashReadCycles)));
-         if(JtagDebugStatus status = debug.readFlash(jobPage_ + jobRead_, page_.data() + jobRead_, bytes);
+      case JobPhase::Read: {
+         const uint16_t bytes = sliceBytes(pageBytes);
+         if(JtagDebugStatus status = debug.readFlash(jobPage_ + jobAt_, page_.data() + jobAt_, bytes);
             status != JtagDebugStatus::Ok) {
             return status;
          }
-         jobRead_ = static_cast<uint16_t>(jobRead_ + bytes);
+         jobAt_ = static_cast<uint16_t>(jobAt_ + bytes);
+         if(jobAt_ < pageBytes) {
+            return JtagDebugStatus::Ok;
+         }
+         preparePage(jobPage_);
+         jobPhase_ = JobPhase::Load;
+         return debug.beginFlashPage(jobPage_, page_.data());
+      }
+      case JobPhase::Load: {
+         bool loaded = false;
+         const JtagDebugStatus status = debug.loadFlashPage(sliceWords(spmLoadCycles), loaded);
+         if(loaded) {
+            jobPhase_ = JobPhase::Write;
+         }
+         return status;
+      }
+      case JobPhase::Write:
+         // The only slice that changes the flash: erase and write
+         jobAt_ = 0;
+         jobPhase_ = JobPhase::Verify;
+         return debug.endFlashPage();
+      case JobPhase::Verify: {
+         const uint16_t bytes = sliceBytes(pageBytes);
+         if(JtagDebugStatus status = debug.verifyFlashPage(jobPage_, page_.data(), jobAt_, bytes);
+            status != JtagDebugStatus::Ok) {
+            return status;
+         }
+         jobAt_ = static_cast<uint16_t>(jobAt_ + bytes);
+         if(jobAt_ < pageBytes) {
+            return JtagDebugStatus::Ok;
+         }
+         markPage(jobPage_);
+         jobPhase_ = JobPhase::Pick;
          return JtagDebugStatus::Ok;
       }
-      jobRead_ = 0;
-      preparePage(jobPage_);
-      return debug.beginFlashPage(jobPage_, page_.data());
+      }
+      return JtagDebugStatus::Ok;
+   }
+
+   // The bytes of the next read slice from jobAt_ (an even count)
+   [[nodiscard]] uint16_t sliceBytes(uint16_t pageBytes) const {
+      return static_cast<uint16_t>(std::min<uint32_t>(pageBytes - jobAt_, 2u * sliceWords(flashReadCycles)));
    }
 
    std::size_t pcData(uint32_t pc) {
@@ -2306,13 +2333,13 @@ class Avr8Scope final : public Avr8Handler {
    // The breakpoint of the last run (word), 0xFFFF for none
    uint16_t runBreak_{ 0xFFFF };
    std::array<SoftwareBreak, avr8::maxSoftwareBreaks> breaks_{};
-   // The job of a RUN, RUN_TO or STEP (startJob()). jobRead_: the bytes of
-   // the page at jobPage_ in page_ (0: no page read yet).
+   // The job of a RUN, RUN_TO or STEP (startJob()): the page at jobPage_
+   // in page_, jobAt_ the byte offset of the read or the read back
    Job job_{ Job::None };
+   JobPhase jobPhase_{ JobPhase::Pick };
    std::optional<uint32_t> jobTo_;
    uint32_t jobPage_{ 0 };
-   uint16_t jobRead_{ 0 };
-   bool jobLoaded_{ false };
+   uint16_t jobAt_{ 0 };
    // One slice takes some 50 ms, below the 200 ms of an AVaRICE event poll.
    // The TCK cycles of one flash word read and of one page buffer load
    // (host model, tests/TestEdbgJtag.cpp).
