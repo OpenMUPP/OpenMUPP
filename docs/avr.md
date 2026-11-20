@@ -292,6 +292,7 @@ Each new host connection starts at 200 kHz again.
 - Below 1125 kHz, the probe uses the bit-bang engine at the requested rate.
 - From 1125 kHz, the probe uses the JTAG fast path (SPI and DMA, see [boards.md](boards.md#yd-ch32v307vct6-development-board)). The fast path needs the link from PB13 to PC10. Without the link, JTAG fails at 1125 kHz and more.
 - TCK is never faster than the request.
+- JTAG debug on an ATmega2560 at 16 MHz passed up to TCK 4.5 MHz, and failed at 9 MHz (see [Debug clock](#debug-clock)).
 
 ### JTAG debug with Bloom
 
@@ -547,6 +548,27 @@ These are the times of the software breakpoint commands on the ATmega2560 at 200
 | Run with a software breakpoint change: the break event, after the page write and the run to the breakpoint | 1.19 s |
 | Clear of all software breakpoints at the end of an AVaRICE session (`0x45`) | 0.6 ms |
 | Detach, which removes the software breakpoints from the flash | 494 ms |
+
+#### Debug clock
+
+The debug clock test used AVaRICE on the ATmega2560 at 16 MHz, with the PB13 to PC10 link.
+For each `-B` value, it ran the full AVaRICE test (12 stops) and the four-breakpoint test (3 hardware, 1 software).
+A test passes when the stops and the variable values are the same as at 200 kHz.
+After each `-B` value, avrdude verified the program in the flash.
+From 1125 kHz, the SPI of the fast path gives only 1.125, 2.25, 4.5 and 9 MHz. TCK is never faster than the request.
+
+| `-B` | TCK | Result | Break event after the run (page write and run to the breakpoint) |
+|---|---|---|---|
+| `200kHz` | 200 kHz | Pass | 1193 ms |
+| `500kHz` | 500 kHz | Pass | 717 ms |
+| `1000kHz` | 1 MHz | Pass | 575 ms |
+| `2000kHz` | 1.125 MHz | Pass | 530 ms |
+| `4000kHz` | 2.25 MHz | Pass | 494 ms |
+| `6000kHz`, `6400kHz`, `8000kHz` | 4.5 MHz | Pass | 474 ms |
+| `9000kHz` | 9 MHz | Fail. The core stops at wrong addresses, for example at the reset vector `0x3E000`. The variables read wrong values. The flash verifies. | – |
+
+TCK 4.5 MHz is more than the datasheet limit (a quarter of the target clock, 4 MHz). The chip has a margin, but do not rely on it.
+The detach takes 494 ms at each `-B` value (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)).
 
 ### debugWIRE hardware test
 
