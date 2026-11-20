@@ -1513,6 +1513,29 @@ TEST_CASE("EDBG JTAG: a command between the slices of a page write") {
    CHECK(b.jtagAvr.flash == program);
 }
 
+// RUN_TO with a breakpoint change: the core runs to the address after the
+// page write.
+TEST_CASE("EDBG JTAG: RUN_TO with a breakpoint change in slices") {
+   Bench b;
+   b.jtagAvr.ocdRevision = 4;
+   b.jtagAvr.flashPageBytes = 256;
+   b.jtagAvr.flash.assign(0x40000, 0xFF);
+   b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
+   b.bloomAttach();
+   CHECK(b.swBreak(true, { 0x2B4 }) == ok);
+   Bytes runTo{ avr8::command::runTo, 0x00 };
+   putU32(runTo, 0x40);
+   CHECK(b.avr8(runTo) == ok);
+   CHECK(b.jtagScope.busy());
+   b.finishJob();
+   CHECK(flashWord(b.jtagAvr, 0x15A) == 0x9598);
+   CHECK_FALSE(b.jtagAvr.stopped);
+   CHECK(b.jtagAvr.reach(0x40));
+   CHECK(b.event() == b.breakEvent(0x40, true));
+   b.bloomClose();
+   CHECK(flashWord(b.jtagAvr, 0x15A) == 0xFFFF);
+}
+
 // A STEP with a breakpoint change answers at once too; its break event
 // comes after the page write.
 TEST_CASE("EDBG JTAG: a STEP with a breakpoint change in slices") {
