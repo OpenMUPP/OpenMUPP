@@ -1074,8 +1074,7 @@ class Avr8Scope final : public Avr8Handler {
          return debug.endFlashPage();
       case JobPhase::Verify: {
          const uint16_t bytes = sliceBytes(pageBytes);
-         if(JtagDebugStatus status = debug.verifyFlashPage(jobPage_, page_.data(), jobAt_, bytes);
-            status != JtagDebugStatus::Ok) {
+         if(JtagDebugStatus status = debug.verifyFlashPage(jobPage_, page_.data(), jobAt_, bytes); status != JtagDebugStatus::Ok) {
             return status;
          }
          jobAt_ = static_cast<uint16_t>(jobAt_ + bytes);
