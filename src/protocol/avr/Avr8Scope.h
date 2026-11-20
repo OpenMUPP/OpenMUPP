@@ -2395,7 +2395,7 @@ class Avr8Scope final : public Avr8Handler {
    // (host model, tests/TestEdbgJtag.cpp).
    static constexpr uint32_t sliceMs = 50;
    static constexpr uint32_t flashReadCycles = 84;
-   static constexpr uint32_t spmLoadCycles = 1200;
+   static constexpr uint32_t spmLoadCycles = 450;
    std::size_t breakCount_{ 0 };
    std::array<uint8_t, Target::hasProgmode ? avr8::maxJtagPageBytes : avr8::maxPageBytes> page_{};
 };
