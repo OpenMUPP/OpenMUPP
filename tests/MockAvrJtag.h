@@ -405,9 +405,13 @@ class MockAvrJtag final : public JtagTarget {
          stop(pc, 1u << 1);
       } else if(ir == 0x9 && stopped) {
          runFields.push_back(pcField);
+         const auto words = static_cast<uint32_t>(flash.size() / 2);
          if(jumped_) {
-            const auto words = static_cast<uint32_t>(flash.size() / 2);
             pc = pcField % words;
+         } else {
+            // The PC moved with the scans since the stop: the field - 1,
+            // as for SPM (an SPM step without an EIJMP before it).
+            pc = ((pcField + fieldMask()) & fieldMask()) % words;
          }
          if((ocdRegs[8] & (1u << 13)) != 0 && !stepRuns) {
             ocdRegs[8] = static_cast<uint16_t>(ocdRegs[8] & ~(1u << 13));
