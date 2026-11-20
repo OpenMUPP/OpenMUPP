@@ -221,7 +221,7 @@ It also reads the signature, the calibration bytes and the signature row.
 JTAG has a chip erase. avrdude erases the chip before it writes the flash.
 The probe needs this erase before a flash write.
 With `-D`, or with a flash read before the write in the same command, avrdude does not erase. Then give `-e`.
-Bloom with avr-gdb can also debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom)).
+Bloom and AVaRICE with avr-gdb can also debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom) and [JTAG debug with AVaRICE](#jtag-debug-with-avarice)).
 
 ### JTAG wiring
 
@@ -299,7 +299,7 @@ Each new host connection starts at 200 kHz again.
 Bloom with avr-gdb can halt, run and step the core, and read and write the registers, the SRAM, the I/O registers and the EEPROM.
 It can also read the flash and use the hardware breakpoints of the OCD and software breakpoints.
 Bloom loads a program into the flash in the JTAG programming mode. Each load erases the full flash.
-JTAG debug passed a hardware test on an ATmega32U4 (OCD revision 3) and an ATmega2560 (OCD revision 4) (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
+JTAG debug passed a hardware test on an ATmega32U4 with OCD revision 3 and an ATmega2560 with OCD revision 4. See [JTAG debug hardware test](#jtag-debug-hardware-test).
 
 Use the [medbg build](#the-medbg-build). Bloom accepts JTAG on this tool class.
 This `bloom.yaml` is for an ATmega32U4 over JTAG, in the format of Bloom 2.1:
@@ -342,10 +342,10 @@ The hardware test used AVaRICE 2.14 (`2.14svn20200906`) with the [medbg build](#
 JTAG debug passed a hardware test on an ATmega32U4 and an ATmega2560 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
 
 Program OCDEN before the session. The hardware test programmed it with avrdude over JTAG.
-The medbg build has the USB ID `03eb:2145`, thus give this ID to avrdude with `-P`.
+The medbg build has the USB ID `03eb:2145`. Give this ID to avrdude with `-P`.
 
 ```sh
-# Program OCDEN (high fuse 0x18 on the ATmega2560 with JTAGEN, BOOTRST and the 4K word boot section)
+# Program OCDEN (high fuse 0x18 on the ATmega2560: OCDEN, JTAGEN, BOOTRST, boot section of 4K words)
 avrdude -C +etc/avrdude-openmupp.conf -c openmupp_jtag -p m2560 -P usb:03eb:2145 -U hfuse:w:0x18:m
 
 # Start AVaRICE as the GDB server on port 4242
@@ -360,10 +360,10 @@ avr-gdb -ex 'set remote memory-map-packet off' -ex 'target remote :4242' firmwar
 - AVaRICE sends data breakpoints for `watch`, `rwatch` and `awatch` (see [JTAG data breakpoints](#jtag-data-breakpoints)).
 - AVaRICE waits 500 ms for a response, and 200 ms for an event (see [cmsis-dap.md](cmsis-dap.md#avr8-scope-on-jtag)).
   A run or step gives its response before the page write of a software breakpoint.
-- At the end of the session, AVaRICE clears the software breakpoints and sends the detach command.
-  The clear only records the change. The probe removes the breakpoints from the flash at the detach, before it gives the response.
+- At the end of the session, AVaRICE clears the software breakpoints and sends the detach command (`0x14`).
+  The clear only records the change. The probe removes the breakpoints from the flash at the detach, before it gives the response. Deactivate physical (`0x11`) does the same.
   One 256-byte page takes about 0.5 s (ATmega2560). This is near the 500 ms limit of AVaRICE.
-  This page write does not use the debug clock. It takes the same time at each `-B` value (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)).
+  This page write uses the programming clock, 200 kHz by default. AVaRICE `-B` sets only the debug clock. Thus the time is the same at each `-B` value (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)).
 - The page write of a run or step uses the debug clock. Use the fastest `-B` value that the target clock permits (see [JTAG clock](#jtag-clock)).
 - A step or run from a software breakpoint on an indirect jump or call, `LPM`, `ELPM`, `SPM`, `SLEEP` or `BREAK` writes two pages. This stops the AVaRICE session (issue [#117](https://github.com/OpenMUPP/OpenMUPP/issues/117)).
 - AVaRICE stops with the exit code 1 after avr-gdb disconnects. It shows `gdb exited.`. This is the normal end of a session.
@@ -387,7 +387,7 @@ Thus a second `rwatch` on the same 2-byte variable stops only on an access to th
 Start a new AVaRICE session to watch the range again.
 The OCD has the mask only in register 2, for register 3.
 Thus the probe writes the address to register 3 and the mask to register 2.
-The mask mode on a data address is not tested on the hardware yet. The program address test passed (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
+The mask mode on a data address passed the hardware test: AVaRICE sends a data breakpoint with a mask for `rwatch` on a 2-byte variable (see [JTAG debug hardware test](#jtag-debug-hardware-test)). The program address test also passed (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
 
 `tools/avr_data_break_test.py` tests the data breakpoints on the hardware.
 Load a test program that reads and writes a known SRAM address, and program OCDEN.
@@ -507,7 +507,7 @@ The Bloom tests used three environments of `bloom.yaml`. All have `manage_ocden_
 | Two breakpoints (`tick` and the `ticks++` line), then `continue` three times | Pass. The core stops at `tick`, at `ticks++` and at `tick` again. | Pass. The core stops at `ticks++`, at `tick` and at `ticks++` again. |
 | Three breakpoints. Bloom sends the third as a software breakpoint. | Not done. See the four-breakpoint test. | Pass. The core stops at the `ticks++` line. |
 | No breakpoints, `continue`, then an interrupt (`SIGINT`) after 2 s | Pass. The core stops in the delay loop. `ticks` reads 79. | Pass. The core stops in the delay loop. `ticks` reads 78. |
-| OCDEN: Bloom programs it at the start of the session and clears it at the end | Pass. The high fuse reads `0x98` after the session. | Pass. The high fuse reads `0x98` after the session. |
+| OCDEN: Bloom programs it at the start of the session and clears it at the end | Pass. The high fuse reads `0x98` after the session. | Pass. The high fuse reads `0x98` after the session. Before each AVaRICE session, avrdude programmed OCDEN again (`0x18`). |
 
 avr-gdb shows the old PC after `monitor reset` until the next stop, because it does not read the registers again.
 
@@ -547,7 +547,7 @@ These are the times of the software breakpoint commands on the ATmega2560 at 200
 | Run with a software breakpoint change: the longest `AVR_EVT` poll, which writes a part of the page | 78 ms |
 | Run with a software breakpoint change: the break event, after the page write and the run to the breakpoint | 1.19 s |
 | Clear of all software breakpoints at the end of an AVaRICE session (`0x45`) | 0.6 ms |
-| Detach, which removes the software breakpoints from the flash | 494 ms |
+| Deactivate physical (`0x11`), which removes the software breakpoints from the flash | 494 ms |
 
 #### Debug clock
 
@@ -564,11 +564,11 @@ From 1125 kHz, the SPI of the fast path gives only 1.125, 2.25, 4.5 and 9 MHz. T
 | `1000kHz` | 1 MHz | Pass | 575 ms |
 | `2000kHz` | 1.125 MHz | Pass | 530 ms |
 | `4000kHz` | 2.25 MHz | Pass | 494 ms |
-| `6000kHz`, `6400kHz`, `8000kHz` | 4.5 MHz | Pass | 474 ms |
+| `6000kHz`, `6400kHz`, `8000kHz` | 4.5 MHz | Pass | 474, 476 and 473 ms |
 | `9000kHz` | 9 MHz | Fail. The core stops at wrong addresses, for example at the reset vector `0x3E000`. The variables read wrong values. The flash verifies. | – |
 
 TCK 4.5 MHz is more than the datasheet limit (a quarter of the target clock, 4 MHz). The chip has a margin, but do not rely on it.
-The detach takes 494 ms at each `-B` value (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)).
+Deactivate physical (`0x11`) takes 494 ms at each `-B` value that passed, because its page write uses the programming clock (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)). At 9 MHz it takes 16 ms, because no software breakpoint is in the flash.
 
 ### debugWIRE hardware test
 
