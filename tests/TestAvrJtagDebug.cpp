@@ -924,8 +924,8 @@ TEST_CASE("AvrJtagDebug: flash page write with SPM") {
       CAPTURE(revision);
       Bench b{ revision };
       std::fill(b.target.flash.begin(), b.target.flash.end(), 0x5A);
-      // The smallest boot section of the ATmega32U4: 256 words
-      b.target.bootStartWords = 0x3F00;
+      // The last page (word 0x3FC0): in the boot section for each BOOTSZ
+      b.target.bootStartWords = 0x3FC0;
       b.target.spmBusyReads = 5;
       fillRegisters(b.target);
       const auto pattern = registers(b.target);
@@ -1005,6 +1005,31 @@ TEST_CASE("AvrJtagDebug: flash page write with SPM") {
       REQUIRE(b.debug.run() == JtagDebugStatus::Ok);
       CHECK(registers(b.target) == pattern);
       CHECK(b.target.pc == 0x123);
+   }
+}
+
+// The worst case at the flash end: each stop PC from one page below the
+// last page to the last word. The scans before the first SPM move the PC,
+// so the PC at the check of spm() covers each value near the flash end.
+// Each SPM must be in the last page (bootStartWords), also the first one
+// with new r31 and r18 (issue #121). A reserve of 13 words fails here.
+TEST_CASE("AvrJtagDebug: flash page write from each stop PC near the flash end") {
+   for(const uint8_t revision : { uint8_t{ 3 }, uint8_t{ 4 } }) {
+      CAPTURE(revision);
+      constexpr uint32_t words = 0x4000;
+      constexpr uint32_t boot = words - 64;
+      for(uint32_t pc = boot - 64; pc < words; ++pc) {
+         CAPTURE(pc);
+         Bench b{ revision };
+         std::fill(b.target.flash.begin(), b.target.flash.end(), 0x5A);
+         b.target.bootStartWords = boot;
+         b.target.pc = pc;
+         REQUIRE(b.debug.attach() == JtagDebugStatus::Ok);
+         const auto page = flashPattern(128, static_cast<uint8_t>(pc));
+         REQUIRE(b.debug.writeFlashPage(0x100, page.data()) == JtagDebugStatus::Ok);
+         CHECK(b.target.spmOutsideBoot == 0);
+         CHECK(std::equal(page.begin(), page.end(), b.target.flash.begin() + 0x100));
+      }
    }
 }
 

@@ -1398,8 +1398,8 @@ TEST_CASE("EDBG JTAG: AVaRICE GO with a software breakpoint on a 256-byte page i
    b.jtagAvr.ocdRevision = 4;
    b.jtagAvr.flashPageBytes = 256;
    b.jtagAvr.flash.assign(0x40000, 0xFF);
-   // The boot section of BOOTSZ 00: 4096 words
-   b.jtagAvr.bootStartWords = 0x1F000;
+   // The last page (word 0x1FF80): in the boot section for each BOOTSZ
+   b.jtagAvr.bootStartWords = 0x1FF80;
    b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
    b.bloomAttach();
    CHECK(b.swBreak(true, { 0x2B4 }) == ok);
