@@ -743,6 +743,7 @@ class Avr8Scope final : public Avr8Handler {
       if(pendingBreak() != nullptr) {
          return startJob(Job::Step, std::nullopt);
       }
+      jobFailure_.reset();
       return afterCommand(stepJtag());
    }
 
@@ -817,6 +818,7 @@ class Avr8Scope final : public Avr8Handler {
    template <typename T = Target>
    std::optional<uint8_t> startDebugJtag() {
       clearHardwareBreaks();
+      jobFailure_.reset();
       attached_ = true;
       running_ = false;
       event_ = false;
@@ -902,6 +904,7 @@ class Avr8Scope final : public Avr8Handler {
       if(pendingBreak() != nullptr) {
          return startJob(Job::Run, word);
       }
+      jobFailure_.reset();
       JtagDebugStatus status = stepOverBreak();
       if(status == JtagDebugStatus::Ok) {
          status = target_.debug().run(word);
@@ -919,9 +922,16 @@ class Avr8Scope final : public Avr8Handler {
    // page write takes some 1 s at 200 kHz (256 bytes); AVaRICE waits
    // 500 ms for a response and 200 ms for an event (issue #121). The core
    // starts after the last page. A failed job gives a break event at the
-   // PC: the core did not run.
+   // PC (the core did not run), and the next RUN, RUN_TO or STEP with a
+   // change gives the failure at once: a host that resumes at once (gdb
+   // next) gets an error, not the same failure again.
    template <typename T = Target>
    std::size_t startJob(Job kind, std::optional<uint32_t> word) {
+      if(jobFailure_) {
+         const JtagDebugStatus failure = *jobFailure_;
+         jobFailure_.reset();
+         return failed(failureOf(failure));
+      }
       if(!target_.debug().hasContext()) {
          return failed(failureOf(contextFailure()));
       }
@@ -956,6 +966,9 @@ class Avr8Scope final : public Avr8Handler {
          } else {
             status = findBreak(corePc(), BreakState::Active) != nullptr ? stepOverBreak() : target_.debug().step();
          }
+      }
+      if(status != JtagDebugStatus::Ok) {
+         jobFailure_ = status;
       }
       // The step is done, or the core did not start: a stop at the PC.
       running_ = false;
@@ -1556,6 +1569,7 @@ class Avr8Scope final : public Avr8Handler {
       running_ = false;
       event_ = false;
       hardwareBreak_.reset();
+      jobFailure_.reset();
    }
 
    std::size_t getId() {
@@ -2375,6 +2389,8 @@ class Avr8Scope final : public Avr8Handler {
    std::optional<uint32_t> jobTo_;
    uint32_t jobPage_{ 0 };
    uint16_t jobAt_{ 0 };
+   // The failure of the last job, for the next RUN, RUN_TO or STEP
+   std::optional<JtagDebugStatus> jobFailure_;
    // One slice takes some 50 ms, below the 200 ms of an AVaRICE event poll.
    // The TCK cycles of one flash word read and of one page buffer load
    // (host model, tests/TestEdbgJtag.cpp).

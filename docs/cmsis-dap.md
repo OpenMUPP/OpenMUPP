@@ -328,6 +328,7 @@ A run, run to or step with a software breakpoint change gives its OK response be
 - The parts are: the page read, the page buffer loads, the page erase and write, and the read back. Only the erase and write part changes the flash: the page buffer keeps its data over the page erase (datasheet, "alternative 1"). Thus a host that goes away between two polls leaves the old page in flash.
 - The core starts, or does the step, after the last page. The break event of the command comes after that.
 - A page write that fails gives a break event at the PC, with cause 0. The core does not start. The breakpoint change stays for the next commit.
+- After a failed page write, the next run, run to or step with a breakpoint change gives the failure at once (code `0x13` for a read back that does not agree), without a new page write. Thus a host that resumes at once, for example avr-gdb `next`, shows the error and does not try the same page write again and again. A run or step without a change runs and drops the failure.
 - Stop, reset, attach, detach, deactivate physical, enter programming mode and a `DAP_Disconnect` cancel the page writes that did not start the erase. The core does not start. Stop gives its OK response and a break event at the PC at once. The breakpoint changes stay for the next commit, or detach removes them.
 - Each other command first completes the page writes, then the run or step, and then runs. This command can take about 1 s at 200 kHz for each 256-byte page.
 

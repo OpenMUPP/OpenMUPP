@@ -1116,11 +1116,48 @@ TEST_CASE("EDBG JTAG: software breakpoint checks") {
       CHECK(b.jtagAvr.stopped);
       CHECK(b.event() == b.breakEvent(pc, false));
       CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+      // The next RUN with the change gives the failure at once, without a
+      // page write (gdb next must not repeat the failed job without end).
+      const uint32_t erases = b.jtagAvr.spmPageErases;
+      CHECK(b.run() == failed(0x13));
+      CHECK(b.jtagAvr.spmPageErases == erases);
+      CHECK(b.event().empty());
       b.jtagAvr.spmLocked = false;
       CHECK(b.run() == ok);
       CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
       b.bloomClose();
       CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
+   }
+   SUBCASE("a failed STEP job: no step, then the failure at the next STEP") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      b.jtagAvr.spmLocked = true;
+      const uint32_t pc = b.jtagAvr.pc;
+      CHECK(b.step() == ok);
+      CHECK(b.event() == b.breakEvent(pc, false));
+      CHECK(b.step() == failed(0x13));
+      b.jtagAvr.spmLocked = false;
+      CHECK(b.step() == ok);
+      CHECK(b.event() == b.breakEvent(pc + 1, false));
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+   }
+   SUBCASE("a RUN without a change after a failed job runs and drops the failure") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      b.jtagAvr.spmLocked = true;
+      const uint32_t pc = b.jtagAvr.pc;
+      CHECK(b.run() == ok);
+      CHECK(b.event() == b.breakEvent(pc, false));
+      // The host removes the breakpoint: no change for flash is left.
+      CHECK(b.swBreak(false, { 0x200 }) == ok);
+      CHECK(b.run() == ok);
+      CHECK_FALSE(b.jtagAvr.stopped);
+      CHECK(b.stop() == ok);
+      CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+      b.jtagAvr.spmLocked = false;
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      CHECK(b.run() == ok);
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
    }
    SUBCASE("a failed insert, then DETACH") {
       b.bloomAttach();
