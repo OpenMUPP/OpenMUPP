@@ -1679,16 +1679,54 @@ class Avr8Scope final : public Avr8Handler {
       at[1] = static_cast<uint8_t>(value >> 8);
    }
 
+   // An entry with a change that is not in flash yet, or nullptr
+   [[nodiscard]] const SoftwareBreak *pendingBreak() const {
+      for(std::size_t i = 0; i < breakCount_; ++i) {
+         if(breaks_[i].state != BreakState::Active) {
+            return &breaks_[i];
+         }
+      }
+      return nullptr;
+   }
+
+   // page_ (the flash page at the byte address page) gets the changes of
+   // the table: BREAK at an inserted entry, the original at a removed one.
+   void preparePage(uint32_t page) {
+      for(std::size_t i = 0; i < breakCount_; ++i) {
+         SoftwareBreak &entry = breaks_[i];
+         if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
+            continue;
+         }
+         uint8_t *at = &page_[entry.word * 2u - page];
+         if(entry.state == BreakState::Inserting) {
+            entry.original = static_cast<uint16_t>(at[0] | (at[1] << 8));
+            putWord(at, avr8::breakOpcode);
+         } else {
+            putWord(at, entry.original);
+         }
+      }
+   }
+
+   // The changes of page are in flash now.
+   void markPage(uint32_t page) {
+      for(std::size_t i = breakCount_; i > 0; --i) {
+         SoftwareBreak &entry = breaks_[i - 1];
+         if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
+            continue;
+         }
+         if(entry.state == BreakState::Inserting) {
+            entry.state = BreakState::Active;
+         } else {
+            removeBreak(&entry);
+         }
+      }
+   }
+
    // Writes the changes of the breakpoint table into flash, one page
    // write for each page with a change.
    Status commitBreaks() {
       for(;;) {
-         const SoftwareBreak *pending = nullptr;
-         for(std::size_t i = 0; i < breakCount_ && pending == nullptr; ++i) {
-            if(breaks_[i].state != BreakState::Active) {
-               pending = &breaks_[i];
-            }
-         }
+         const SoftwareBreak *pending = pendingBreak();
          if(pending == nullptr) {
             return Status::Ok;
          }
@@ -1699,33 +1737,11 @@ class Avr8Scope final : public Avr8Handler {
          // The table changes only after the write: after a failed write
          // the next commit tries again, and no BREAK stays in flash without
          // an entry.
-         for(std::size_t i = 0; i < breakCount_; ++i) {
-            SoftwareBreak &entry = breaks_[i];
-            if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
-               continue;
-            }
-            uint8_t *at = &page_[entry.word * 2u - page];
-            if(entry.state == BreakState::Inserting) {
-               entry.original = static_cast<uint16_t>(at[0] | (at[1] << 8));
-               putWord(at, avr8::breakOpcode);
-            } else {
-               putWord(at, entry.original);
-            }
-         }
+         preparePage(page);
          if(Status status = writePageBuffer(page); status != Status::Ok) {
             return status;
          }
-         for(std::size_t i = breakCount_; i > 0; --i) {
-            SoftwareBreak &entry = breaks_[i - 1];
-            if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
-               continue;
-            }
-            if(entry.state == BreakState::Inserting) {
-               entry.state = BreakState::Active;
-            } else {
-               removeBreak(&entry);
-            }
-         }
+         markPage(page);
       }
    }
 
