@@ -539,15 +539,15 @@ avr-gdb shows the old PC after `monitor reset` until the next stop, because it d
 
 After the AVaRICE sessions, avrdude verified the program in the flash of the ATmega2560. No `BREAK` stayed in the flash.
 
-These are the times of the software breakpoint commands on the ATmega2560 at 200 kHz, with one 256-byte page:
+These are the times of the software breakpoint commands on the ATmega2560 at 200 kHz, with one 256-byte page (build `v0.13.0-476-g94787af`):
 
 | Command | Time |
 |---|---|
 | Run with a software breakpoint change: the response | 0.5 ms |
-| Run with a software breakpoint change: the longest `AVR_EVT` poll, which writes a part of the page | 78 ms |
-| Run with a software breakpoint change: the break event, after the page write and the run to the breakpoint | 1.19 s |
+| Run with a software breakpoint change: the longest `AVR_EVT` poll, which writes a part of the page | 59 ms |
+| Run with a software breakpoint change: the break event, after the page write and the run to the breakpoint | 1.29 s |
 | Clear of all software breakpoints at the end of an AVaRICE session (`0x45`) | 0.6 ms |
-| Deactivate physical (`0x11`), which removes the software breakpoints from the flash | 494 ms |
+| Deactivate physical (`0x11`), which removes the software breakpoints from the flash | 488 ms |
 
 #### Debug clock
 
@@ -555,6 +555,7 @@ The debug clock test used AVaRICE on the ATmega2560 at 16 MHz, with the PB13 to 
 For each `-B` value, it ran the full AVaRICE test (12 stops) and the four-breakpoint test (3 hardware, 1 software).
 A test passes when the stops and the variable values are the same as at 200 kHz.
 After each `-B` value, avrdude verified the program in the flash.
+This test used an earlier build of the faster page write (`v0.13.0-465-g98a39f6`). Thus its time at 200 kHz is not the same as in the table above.
 From 1125 kHz, the SPI of the fast path gives only 1.125, 2.25, 4.5 and 9 MHz. TCK is never faster than the request.
 
 | `-B` | TCK | Result | Break event after the run (page write and run to the breakpoint) |
