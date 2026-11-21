@@ -163,8 +163,20 @@ struct Bench : EdbgBench {
       return avr8({ avr8::command::pcRead, 0x00 });
    }
 
+   // A RUN or STEP with breakpoint changes answers at once, and the AVR_EVT
+   // polls write the pages (issue #121). run() and step() poll until the
+   // job ends; the event of the command comes after it.
    Bytes run() {
-      return avr8({ avr8::command::run, 0x00 });
+      const Bytes response = avr8({ avr8::command::run, 0x00 });
+      finishJob();
+      return response;
+   }
+
+   void finishJob() {
+      for(int polls = 0; jtagScope.busy() && polls < 10000; ++polls) {
+         CHECK(event().empty());
+      }
+      CHECK_FALSE(jtagScope.busy());
    }
 
    Bytes stop() {
@@ -172,7 +184,9 @@ struct Bench : EdbgBench {
    }
 
    Bytes step() {
-      return avr8({ avr8::command::step, 0x00, 0x01, 0x01 });
+      const Bytes response = avr8({ avr8::command::step, 0x00, 0x01, 0x01 });
+      finishJob();
+      return response;
    }
 
    // Bloom: type 1 (program), a byte address, mode 3
@@ -1093,21 +1107,65 @@ TEST_CASE("EDBG JTAG: software breakpoint checks") {
       CHECK(b.stop() == ok);
       CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
       CHECK(b.swBreak(false, { 0x200 }) == ok);
-      // The boot lock bits stop SPM: the read back fails.
+      // The boot lock bits stop SPM: the read back fails. The RUN answered
+      // before the page write (issue #121): the core does not start, and a
+      // break event at the PC comes.
       b.jtagAvr.spmLocked = true;
-      CHECK(b.run() == failed(0x13));
+      const uint32_t pc = b.jtagAvr.pc;
+      CHECK(b.run() == ok);
+      CHECK(b.jtagAvr.stopped);
+      CHECK(b.event() == b.breakEvent(pc, false));
       CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+      // The next RUN with the change gives the failure at once, without a
+      // page write (gdb next must not repeat the failed job without end).
+      const uint32_t erases = b.jtagAvr.spmPageErases;
+      CHECK(b.run() == failed(0x13));
+      CHECK(b.jtagAvr.spmPageErases == erases);
+      CHECK(b.event().empty());
       b.jtagAvr.spmLocked = false;
       CHECK(b.run() == ok);
       CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
       b.bloomClose();
       CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
    }
+   SUBCASE("a failed STEP job: no step, then the failure at the next STEP") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      b.jtagAvr.spmLocked = true;
+      const uint32_t pc = b.jtagAvr.pc;
+      CHECK(b.step() == ok);
+      CHECK(b.event() == b.breakEvent(pc, false));
+      CHECK(b.step() == failed(0x13));
+      b.jtagAvr.spmLocked = false;
+      CHECK(b.step() == ok);
+      CHECK(b.event() == b.breakEvent(pc + 1, false));
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+   }
+   SUBCASE("a RUN without a change after a failed job runs and drops the failure") {
+      b.bloomAttach();
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      b.jtagAvr.spmLocked = true;
+      const uint32_t pc = b.jtagAvr.pc;
+      CHECK(b.run() == ok);
+      CHECK(b.event() == b.breakEvent(pc, false));
+      // The host removes the breakpoint: no change for flash is left.
+      CHECK(b.swBreak(false, { 0x200 }) == ok);
+      CHECK(b.run() == ok);
+      CHECK_FALSE(b.jtagAvr.stopped);
+      CHECK(b.stop() == ok);
+      CHECK(b.event() == b.breakEvent(b.jtagAvr.pc, false));
+      b.jtagAvr.spmLocked = false;
+      CHECK(b.swBreak(true, { 0x200 }) == ok);
+      CHECK(b.run() == ok);
+      CHECK(flashWord(b.jtagAvr, 0x100) == 0x9598);
+   }
    SUBCASE("a failed insert, then DETACH") {
       b.bloomAttach();
       CHECK(b.swBreak(true, { 0x200 }) == ok);
       b.jtagAvr.spmLocked = true;
-      CHECK(b.run() == failed(0x13));
+      const uint32_t pc = b.jtagAvr.pc;
+      CHECK(b.run() == ok);
+      CHECK(b.event() == b.breakEvent(pc, false));
       b.jtagAvr.spmLocked = false;
       b.bloomClose();
       CHECK(flashWord(b.jtagAvr, 0x100) == 0xFFFF);
@@ -1188,7 +1246,9 @@ TEST_CASE("EDBG JTAG: AVaRICE GO with a software breakpoint") {
    }
    SUBCASE("AVR_EVT runs the frame first: no event of the old stop") {
       CHECK(b.event().empty());
-      CHECK(b.jtagAvr.spmPageWrites == 1);
+      // The first slice of the page write (issue #121)
+      CHECK(b.jtagAvr.spmPageWrites == 0);
+      CHECK(b.jtagScope.busy());
    }
    SUBCASE("DAP_Disconnect drops the frame (the last subcase: it ends the test)") {
       CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
@@ -1201,6 +1261,8 @@ TEST_CASE("EDBG JTAG: AVaRICE GO with a software breakpoint") {
    REQUIRE(response.has_value());
    CHECK(*response == Bytes{ avr::edbg::sof, go[2], go[3], handler::avr8, 0x80, 0x00 });
    ++b.sequence;
+   // The AVR_EVT polls write the page, then the core starts (issue #121).
+   b.finishJob();
    CHECK(b.jtagAvr.spmPageWrites == 1);
    CHECK(flashWord(b.jtagAvr, 0x8E) == 0x9598);
    CHECK_FALSE(b.jtagAvr.stopped);
@@ -1324,4 +1386,177 @@ TEST_CASE("EDBG JTAG: a step from a software breakpoint without a page write") {
    b.bloomClose();
    CHECK(avr.unknownInstructions.empty());
    b.checkReleased();
+}
+
+// AVaRICE waits 500 ms for the response of a GO and 200 ms for an event.
+// A flash page write takes some 1 s at 200 kHz (256 bytes, ATmega2560,
+// hardware test): the GO answers at once, and each AVR_EVT poll writes one
+// slice of some 50 ms (issue #121). 200 kHz: 10000 TCK cycles are 50 ms;
+// the firmware adds some 20 %.
+TEST_CASE("EDBG JTAG: AVaRICE GO with a software breakpoint on a 256-byte page in slices") {
+   Bench b;
+   b.jtagAvr.ocdRevision = 4;
+   b.jtagAvr.flashPageBytes = 256;
+   b.jtagAvr.flash.assign(0x40000, 0xFF);
+   b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
+   b.bloomAttach();
+   CHECK(b.swBreak(true, { 0x2B4 }) == ok);
+   auto cyclesOf = [&b](auto request) {
+      const std::size_t before = b.jtagPins.edges.size();
+      request();
+      return (b.jtagPins.edges.size() - before) / 2;
+   };
+   const std::size_t go = cyclesOf([&b] { CHECK(b.avr8({ avr8::command::run, 0x00 }) == ok); });
+   MESSAGE("GO: ", go, " TCK cycles");
+   CHECK(go < 1000);
+   CHECK(b.jtagAvr.stopped);
+   std::size_t polls = 0;
+   std::size_t longest = 0;
+   std::size_t total = 0;
+   while(b.jtagScope.busy() && polls < 1000) {
+      CHECK(b.jtagAvr.stopped);
+      const std::size_t slice = cyclesOf([&b] { CHECK(b.event().empty()); });
+      longest = std::max(longest, slice);
+      total += slice;
+      ++polls;
+   }
+   MESSAGE(polls, " AVR_EVT polls, the longest ", longest, " TCK cycles, all ", total);
+   CHECK_FALSE(b.jtagScope.busy());
+   CHECK(longest < 15000);
+   CHECK(b.jtagAvr.spmPageWrites == 1);
+   CHECK(flashWord(b.jtagAvr, 0x15A) == 0x9598);
+   CHECK_FALSE(b.jtagAvr.stopped);
+   CHECK(b.jtagAvr.reach(0x15A));
+   CHECK(b.event() == b.breakEvent(0x15A, true));
+   b.bloomClose();
+   CHECK(flashWord(b.jtagAvr, 0x15A) == 0xFFFF);
+}
+
+// A command between the slices of a RUN or STEP: STOP, DETACH and a host
+// that goes away cancel the job, the other commands complete it. While
+// the page buffer loads, the flash page is not changed yet: a host that
+// goes away without a disconnect leaves the old page (issue #121).
+TEST_CASE("EDBG JTAG: a command between the slices of a page write") {
+   Bench b;
+   b.jtagAvr.ocdRevision = 4;
+   b.jtagAvr.flashPageBytes = 256;
+   b.jtagAvr.flash.assign(0x40000, 0xFF);
+   for(std::size_t i = 0; i < 0x400; ++i) {
+      b.jtagAvr.flash[i] = static_cast<uint8_t>(i * 7 + 1);
+   }
+   const std::vector<uint8_t> program = b.jtagAvr.flash;
+   b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
+   b.bloomAttach();
+   CHECK(b.swBreak(true, { 0x2B4 }) == ok);
+   const uint32_t pc = b.jtagAvr.pc;
+   CHECK(b.avr8({ avr8::command::run, 0x00 }) == ok);
+   // Into the page buffer loads
+   for(int polls = 0; polls < 100 && !b.jtagTarget.debug().writingFlashPage(); ++polls) {
+      CHECK(b.event().empty());
+   }
+   REQUIRE(b.jtagTarget.debug().writingFlashPage());
+   CHECK(b.event().empty());
+   CHECK(b.jtagScope.busy());
+   // The buffer loads do not change the flash.
+   CHECK(b.jtagAvr.spmPageErases == 0);
+   CHECK(b.jtagAvr.spmPageWrites == 0);
+   CHECK(b.jtagAvr.flash == program);
+
+   auto checkPageDone = [&b, &program] {
+      CHECK_FALSE(b.jtagScope.busy());
+      CHECK_FALSE(b.jtagTarget.debug().writingFlashPage());
+      CHECK(b.jtagAvr.spmPageWrites == 1);
+      CHECK(flashWord(b.jtagAvr, 0x15A) == 0x9598);
+      CHECK(std::equal(program.begin() + 0x200, program.begin() + 0x2B4, b.jtagAvr.flash.begin() + 0x200));
+      CHECK(std::equal(program.begin() + 0x2B6, program.begin() + 0x300, b.jtagAvr.flash.begin() + 0x2B6));
+   };
+   auto checkCancelled = [&b, &program] {
+      CHECK_FALSE(b.jtagScope.busy());
+      CHECK_FALSE(b.jtagTarget.debug().writingFlashPage());
+      CHECK(b.jtagAvr.spmPageErases == 0);
+      CHECK(b.jtagAvr.spmPageWrites == 0);
+      CHECK(b.jtagAvr.flash == program);
+   };
+   SUBCASE("STOP: the core does not start, the change stays for the next run") {
+      CHECK(b.stop() == ok);
+      checkCancelled();
+      CHECK(b.jtagAvr.stopped);
+      CHECK(b.event() == b.breakEvent(pc, false));
+      CHECK(b.run() == ok);
+      checkPageDone();
+   }
+   SUBCASE("a read of the flash: the job completes, then the core runs") {
+      CHECK(b.avr8(readMemory(memory::spm, 0x2B4, 2)) == failed(0x32));
+      checkPageDone();
+      CHECK_FALSE(b.jtagAvr.stopped);
+   }
+   SUBCASE("SW_BREAK_SET of a second breakpoint: for the next run") {
+      CHECK(b.swBreak(true, { 0x2C0 }) == ok);
+      checkPageDone();
+      CHECK(flashWord(b.jtagAvr, 0x160) == (program[0x2C0] | program[0x2C1] << 8));
+   }
+   SUBCASE("DETACH: no page write, the core runs") {
+      b.bloomClose();
+      checkCancelled();
+      CHECK_FALSE(b.jtagAvr.stopped);
+      b.checkReleased();
+      return;
+   }
+   SUBCASE("the host goes away (DAP_Disconnect): no page write") {
+      CHECK(b.hidCommand({ 0x03 })[1] == 0x00);
+      checkCancelled();
+      CHECK_FALSE(b.jtagAvr.stopped);
+      b.checkReleased();
+      return;
+   }
+   b.bloomClose();
+   CHECK(b.jtagAvr.flash == program);
+}
+
+// RUN_TO with a breakpoint change: the core runs to the address after the
+// page write.
+TEST_CASE("EDBG JTAG: RUN_TO with a breakpoint change in slices") {
+   Bench b;
+   b.jtagAvr.ocdRevision = 4;
+   b.jtagAvr.flashPageBytes = 256;
+   b.jtagAvr.flash.assign(0x40000, 0xFF);
+   b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
+   b.bloomAttach();
+   CHECK(b.swBreak(true, { 0x2B4 }) == ok);
+   Bytes runTo{ avr8::command::runTo, 0x00 };
+   putU32(runTo, 0x40);
+   CHECK(b.avr8(runTo) == ok);
+   CHECK(b.jtagScope.busy());
+   b.finishJob();
+   CHECK(flashWord(b.jtagAvr, 0x15A) == 0x9598);
+   CHECK_FALSE(b.jtagAvr.stopped);
+   CHECK(b.jtagAvr.reach(0x40));
+   CHECK(b.event() == b.breakEvent(0x40, true));
+   b.bloomClose();
+   CHECK(flashWord(b.jtagAvr, 0x15A) == 0xFFFF);
+}
+
+// A STEP with a breakpoint change answers at once too; its break event
+// comes after the page write.
+TEST_CASE("EDBG JTAG: a STEP with a breakpoint change in slices") {
+   Bench b;
+   b.jtagAvr.ocdRevision = 4;
+   b.jtagAvr.flashPageBytes = 256;
+   b.jtagAvr.flash.assign(0x40000, 0xFF);
+   b.bloomOpen(megaDeviceDesc(256, 0x40000, 4));
+   b.bloomAttach();
+   const uint32_t pc = b.jtagAvr.pc;
+   CHECK(b.swBreak(true, { 0x2B4 }) == ok);
+   CHECK(b.avr8({ avr8::command::step, 0x00, 0x01, 0x01 }) == ok);
+   CHECK(b.jtagScope.busy());
+   int polls = 0;
+   Bytes event;
+   for(; polls < 1000 && event.empty(); ++polls) {
+      event = b.event();
+   }
+   CHECK(polls > 2);
+   CHECK(event == b.breakEvent(pc + 1, false));
+   CHECK(flashWord(b.jtagAvr, 0x15A) == 0x9598);
+   b.bloomClose();
+   CHECK(flashWord(b.jtagAvr, 0x15A) == 0xFFFF);
 }

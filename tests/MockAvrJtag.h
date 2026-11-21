@@ -94,7 +94,7 @@
 // - SPM uses SPMCSR at the data address spmcsr and the byte address
 //   RAMPZ:Z modulo the flash size: page erase (0x03), page buffer load of
 //   r1:r0 (0x01), page write (0x05, AND as without an erase) and RWW
-//   enable (0x11). Other commands record SPM in unknownInstructions.
+//   enable (0x11, clears the page buffer; a page erase keeps it). Other commands record SPM in unknownInstructions.
 //   SPMEN clears at once, but after a page erase or write it shows in the
 //   next spmBusyReads reads of SPMCSR. SPM does nothing at a pc below bootStartWords (the pc of the
 //   last EIJMP or stop), or with spmLocked (the boot lock bits).
@@ -618,7 +618,11 @@ class MockAvrJtag final : public JtagTarget {
             }
          }
          spmBuffer_.clear();
-      } else if(command != 0x11) {
+      } else if(command == 0x11) {
+         // RWW enable: RWWSRE clears the page buffer (datasheet). A page
+         // erase keeps it.
+         spmBuffer_.clear();
+      } else {
          unknownInstructions.push_back(0x95E8u);
       }
    }

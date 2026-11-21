@@ -947,9 +947,10 @@ TEST_CASE("AvrJtagDebug: flash page write with SPM") {
       CHECK(b.target.spmPageWrites == 1);
       CHECK(b.target.unknownInstructions.empty());
 
-      // Erase, RWW enable, 64 page buffer loads, write, RWW enable: each
-      // SPM is one step after an EIJMP to the last page (word 0x3FC0).
-      constexpr std::size_t spms = 2 + 64 + 2;
+      // 64 page buffer loads, then erase, write, RWW enable: the flash
+      // changes only at the end (issue #121). Each SPM is one step after an
+      // EIJMP to the last page (word 0x3FC0).
+      constexpr std::size_t spms = 64 + 3;
       CHECK(count(b.target.executed, d::spm) == spms);
       CHECK(count(b.target.executed, d::eijmp) == spms);
       CHECK(static_cast<std::size_t>(std::count(b.target.irScans.begin(), b.target.irScans.end(), ir::run)) == spms);
@@ -957,10 +958,20 @@ TEST_CASE("AvrJtagDebug: flash page write with SPM") {
       CHECK(static_cast<std::size_t>(std::count(writes.begin(), writes.end(), 0x18A000u)) == spms);
       CHECK(writes.back() == 0x18C000);
       const auto &e = b.target.executed;
+      // The SPMCSR command before each SPM
+      std::vector<uint16_t> commands;
+      for(auto at = e.begin(); at != e.end(); ++at) {
+         if(*at == d::spm && at - e.begin() >= 4) {
+            commands.push_back(*(at - 4));
+         }
+      }
+      std::vector<uint16_t> order(64, d::ldi(16, 0x01));
+      order.insert(order.end(), { d::ldi(16, 0x03), d::ldi(16, 0x05), d::ldi(16, 0x11) });
+      CHECK(commands == order);
       const auto firstSpm = std::find(e.begin(), e.end(), d::spm);
       REQUIRE(firstSpm - e.begin() >= 4);
       CHECK(std::vector<uint16_t>(firstSpm - 4, firstSpm + 1) ==
-            std::vector<uint16_t>{ d::ldi(16, 0x03), d::ldi(29, 0x00), d::ldi(28, 0x57), d::stY(16), d::spm });
+            std::vector<uint16_t>{ d::ldi(16, 0x01), d::ldi(29, 0x00), d::ldi(28, 0x57), d::stY(16), d::spm });
       const auto firstJump = std::find(e.begin(), e.end(), d::eijmp);
       REQUIRE(firstJump - e.begin() >= 4);
       CHECK(std::vector<uint16_t>(firstJump - 4, firstJump) ==

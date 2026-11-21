@@ -185,8 +185,12 @@
 //        breakpoint table: no BREAK is left in flash.
 //   SW_BREAK_SET, SW_BREAK_CLEAR: in the debug mode only (else FAILED
 //        0x32), as on debugWIRE. The page write uses SPM in the debug mode
-//        (AvrJtagDebug::writeFlashPage()). A run or step from a software
-//        breakpoint executes the original instruction with
+//        (AvrJtagDebug::writeFlashPage()). RUN, RUN_TO and STEP with a
+//        change for flash give OK at once; the AVR_EVT polls write the
+//        pages in slices, then the core starts (startJob(), issue #121).
+//        DETACH and DEACTIVATE_PHYSICAL write them before the response.
+//        A run or step from a software breakpoint executes the original
+//        instruction with
 //        AvrJtagDebug::stepInstead() when it can (no page write, issue
 //        #115), else as on debugWIRE. Bloom sends them only when no
 //        hardware breakpoint is free. SW_BREAK_CLEAR_ALL: OK in each mode.
@@ -361,6 +365,9 @@ class Avr8Scope final : public Avr8Handler {
       }
       request_ = request;
       response_ = response;
+      if constexpr(Target::hasProgmode) {
+         endJob(request.empty() ? uint8_t{ 0 } : request[0]);
+      }
       if(request.empty()) {
          return failed(avr8::failure::unknown);
       }
@@ -380,6 +387,7 @@ class Avr8Scope final : public Avr8Handler {
          return;
       }
       if constexpr(Target::hasProgmode) {
+         cancelJob();
          static_cast<void>(freeCore());
          static_cast<void>(target_.close());
       } else {
@@ -408,8 +416,17 @@ class Avr8Scope final : public Avr8Handler {
       return config_[0] == Target::avr8Variant && physical_[0] == Target::avr8Physical;
    }
 
+   // True while the AVR_EVT polls write the flash pages of a RUN, RUN_TO or
+   // STEP (startJob())
+   [[nodiscard]] bool busy() const {
+      return job_ != Job::None;
+   }
+
    private:
    enum class BreakState : uint8_t { Inserting, Active, Removing };
+   // The command of a job (startJob()), and its part (commitSlice())
+   enum class Job : uint8_t { None, Run, Step };
+   enum class JobPhase : uint8_t { Pick, Read, Load, Write, Verify };
    struct SoftwareBreak {
       uint32_t word;
       uint16_t original;
@@ -453,6 +470,11 @@ class Avr8Scope final : public Avr8Handler {
    template <typename T = Target>
    std::size_t jtagEvent(art::span<uint8_t> frame) {
       if(frame.size() < avr8::eventFrameBytes) {
+         return 0;
+      }
+      if(job_ != Job::None) {
+         // The event of the command comes after the job, at a later poll.
+         advanceJob();
          return 0;
       }
       if(attached_ && running_ && !event_) {
@@ -698,7 +720,7 @@ class Avr8Scope final : public Avr8Handler {
          }
          return runJtag(u32(request_, headerBytes));
       case cmd::step:
-         return afterCommand(stepJtag());
+         return stepCommandJtag();
       case cmd::pcRead:
          return debug.hasContext() ? pcData(debug.pc()) : failed(failureOf(contextFailure()));
       case cmd::pcWrite:
@@ -716,6 +738,15 @@ class Avr8Scope final : public Avr8Handler {
 
    // STEP: the breakpoint changes go into flash first. At an active
    // software breakpoint the step executes the original word.
+   template <typename T = Target>
+   std::size_t stepCommandJtag() {
+      if(pendingBreak() != nullptr) {
+         return startJob(Job::Step, std::nullopt);
+      }
+      jobFailure_.reset();
+      return afterCommand(stepJtag());
+   }
+
    template <typename T = Target>
    JtagDebugStatus stepJtag() {
       JtagDebugStatus status = commitBreaks();
@@ -787,6 +818,7 @@ class Avr8Scope final : public Avr8Handler {
    template <typename T = Target>
    std::optional<uint8_t> startDebugJtag() {
       clearHardwareBreaks();
+      jobFailure_.reset();
       attached_ = true;
       running_ = false;
       event_ = false;
@@ -869,10 +901,11 @@ class Avr8Scope final : public Avr8Handler {
 
    template <typename T = Target>
    std::size_t runJtag(std::optional<uint32_t> word) {
-      JtagDebugStatus status = commitBreaks();
-      if(status == JtagDebugStatus::Ok) {
-         status = stepOverBreak();
+      if(pendingBreak() != nullptr) {
+         return startJob(Job::Run, word);
       }
+      jobFailure_.reset();
+      JtagDebugStatus status = stepOverBreak();
       if(status == JtagDebugStatus::Ok) {
          status = target_.debug().run(word);
       }
@@ -882,6 +915,183 @@ class Avr8Scope final : public Avr8Handler {
       running_ = true;
       event_ = false;
       return ok();
+   }
+
+   // A RUN, RUN_TO or STEP with breakpoint changes for flash: the response
+   // comes at once, and the AVR_EVT polls write the pages in slices. A
+   // page write takes some 1 s at 200 kHz (256 bytes); AVaRICE waits
+   // 500 ms for a response and 200 ms for an event (issue #121). The core
+   // starts after the last page. A failed job gives a break event at the
+   // PC (the core did not run), and the next RUN, RUN_TO or STEP with a
+   // change gives the failure at once: a host that resumes at once (gdb
+   // next) gets an error, not the same failure again.
+   template <typename T = Target>
+   std::size_t startJob(Job kind, std::optional<uint32_t> word) {
+      if(jobFailure_) {
+         const JtagDebugStatus failure = *jobFailure_;
+         jobFailure_.reset();
+         return failed(failureOf(failure));
+      }
+      if(!target_.debug().hasContext()) {
+         return failed(failureOf(contextFailure()));
+      }
+      job_ = kind;
+      jobTo_ = word;
+      jobPhase_ = JobPhase::Pick;
+      running_ = true;
+      event_ = false;
+      return ok();
+   }
+
+   // One slice of the job
+   template <typename T = Target>
+   void advanceJob() {
+      bool done = false;
+      JtagDebugStatus status = commitSlice(done);
+      if(status == JtagDebugStatus::Ok && !done) {
+         return;
+      }
+      const Job kind = job_;
+      job_ = Job::None;
+      jobPhase_ = JobPhase::Pick;
+      if(status == JtagDebugStatus::Ok) {
+         if(kind == Job::Run) {
+            status = stepOverBreak();
+            if(status == JtagDebugStatus::Ok) {
+               status = target_.debug().run(jobTo_);
+            }
+            if(status == JtagDebugStatus::Ok) {
+               return;
+            }
+         } else {
+            status = findBreak(corePc(), BreakState::Active) != nullptr ? stepOverBreak() : target_.debug().step();
+         }
+      }
+      if(status != JtagDebugStatus::Ok) {
+         jobFailure_ = status;
+      }
+      // The step is done, or the core did not start: a stop at the PC.
+      running_ = false;
+      event_ = true;
+      eventAtBreak_ = false;
+   }
+
+   // Before a command: STOP, RESET, ATTACH, DETACH, DEACTIVATE_PHYSICAL and
+   // ENTER_PROGMODE cancel the job (AVaRICE waits 500 ms for the STOP
+   // response). Each other command completes it.
+   template <typename T = Target>
+   void endJob(uint8_t id) {
+      namespace cmd = avr8::command;
+      if(job_ == Job::None) {
+         return;
+      }
+      switch(id) {
+      case cmd::stop:
+      case cmd::reset:
+      case cmd::attach:
+      case cmd::detach:
+      case cmd::deactivatePhysical:
+      case cmd::enterProgmode:
+         cancelJob();
+         break;
+      default:
+         while(job_ != Job::None) {
+            advanceJob();
+         }
+      }
+   }
+
+   // The core does not start, and the breakpoint changes stay for the next
+   // commit. An open page write ends without a flash change, a page that
+   // is in flash already counts (markPage()).
+   template <typename T = Target>
+   void cancelJob() {
+      if(job_ == Job::None) {
+         return;
+      }
+      AvrJtagDebug &debug = target_.debug();
+      if(debug.writingFlashPage()) {
+         static_cast<void>(debug.cancelFlashPage());
+      }
+      job_ = Job::None;
+      jobPhase_ = JobPhase::Pick;
+      running_ = false;
+      event_ = false;
+   }
+
+   // The number of words of one slice: some sliceMs at the debug clock
+   [[nodiscard]] uint16_t sliceWords(uint32_t wordCycles) const {
+      const uint32_t words = sliceMs * modeClock() / wordCycles;
+      return static_cast<uint16_t>(std::clamp<uint32_t>(words, 1, 0xFFFF));
+   }
+
+   // The next part of the commit: a part of the page read, a part of the
+   // page buffer loads, the page erase and write, or a part of the read
+   // back. done: all changes are in flash.
+   template <typename T = Target>
+   JtagDebugStatus commitSlice(bool &done) {
+      AvrJtagDebug &debug = target_.debug();
+      const uint16_t pageBytes = flashPageBytes();
+      done = false;
+      switch(jobPhase_) {
+      case JobPhase::Pick: {
+         const SoftwareBreak *pending = pendingBreak();
+         if(pending == nullptr) {
+            done = true;
+            return JtagDebugStatus::Ok;
+         }
+         jobPage_ = pageOf(pending->word);
+         jobAt_ = 0;
+         jobPhase_ = JobPhase::Read;
+         return JtagDebugStatus::Ok;
+      }
+      case JobPhase::Read: {
+         const uint16_t bytes = sliceBytes(pageBytes);
+         if(JtagDebugStatus status = debug.readFlash(jobPage_ + jobAt_, page_.data() + jobAt_, bytes);
+            status != JtagDebugStatus::Ok) {
+            return status;
+         }
+         jobAt_ = static_cast<uint16_t>(jobAt_ + bytes);
+         if(jobAt_ < pageBytes) {
+            return JtagDebugStatus::Ok;
+         }
+         preparePage(jobPage_);
+         jobPhase_ = JobPhase::Load;
+         return debug.beginFlashPage(jobPage_, page_.data());
+      }
+      case JobPhase::Load: {
+         bool loaded = false;
+         const JtagDebugStatus status = debug.loadFlashPage(sliceWords(spmLoadCycles), loaded);
+         if(loaded) {
+            jobPhase_ = JobPhase::Write;
+         }
+         return status;
+      }
+      case JobPhase::Write:
+         // The only slice that changes the flash: erase and write
+         jobAt_ = 0;
+         jobPhase_ = JobPhase::Verify;
+         return debug.endFlashPage();
+      case JobPhase::Verify: {
+         const uint16_t bytes = sliceBytes(pageBytes);
+         if(JtagDebugStatus status = debug.verifyFlashPage(jobPage_, page_.data(), jobAt_, bytes); status != JtagDebugStatus::Ok) {
+            return status;
+         }
+         jobAt_ = static_cast<uint16_t>(jobAt_ + bytes);
+         if(jobAt_ < pageBytes) {
+            return JtagDebugStatus::Ok;
+         }
+         markPage(jobPage_);
+         jobPhase_ = JobPhase::Pick;
+         return JtagDebugStatus::Ok;
+      }
+      }
+      return JtagDebugStatus::Ok;
+   }
+
+   // The bytes of the next read slice from jobAt_ (an even count)
+   [[nodiscard]] uint16_t sliceBytes(uint16_t pageBytes) const {
+      return static_cast<uint16_t>(std::min<uint32_t>(pageBytes - jobAt_, 2u * sliceWords(flashReadCycles)));
    }
 
    std::size_t pcData(uint32_t pc) {
@@ -1358,6 +1568,7 @@ class Avr8Scope final : public Avr8Handler {
       running_ = false;
       event_ = false;
       hardwareBreak_.reset();
+      jobFailure_.reset();
    }
 
    std::size_t getId() {
@@ -1679,16 +1890,54 @@ class Avr8Scope final : public Avr8Handler {
       at[1] = static_cast<uint8_t>(value >> 8);
    }
 
+   // An entry with a change that is not in flash yet, or nullptr
+   [[nodiscard]] const SoftwareBreak *pendingBreak() const {
+      for(std::size_t i = 0; i < breakCount_; ++i) {
+         if(breaks_[i].state != BreakState::Active) {
+            return &breaks_[i];
+         }
+      }
+      return nullptr;
+   }
+
+   // page_ (the flash page at the byte address page) gets the changes of
+   // the table: BREAK at an inserted entry, the original at a removed one.
+   void preparePage(uint32_t page) {
+      for(std::size_t i = 0; i < breakCount_; ++i) {
+         SoftwareBreak &entry = breaks_[i];
+         if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
+            continue;
+         }
+         uint8_t *at = &page_[entry.word * 2u - page];
+         if(entry.state == BreakState::Inserting) {
+            entry.original = static_cast<uint16_t>(at[0] | (at[1] << 8));
+            putWord(at, avr8::breakOpcode);
+         } else {
+            putWord(at, entry.original);
+         }
+      }
+   }
+
+   // The changes of page are in flash now.
+   void markPage(uint32_t page) {
+      for(std::size_t i = breakCount_; i > 0; --i) {
+         SoftwareBreak &entry = breaks_[i - 1];
+         if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
+            continue;
+         }
+         if(entry.state == BreakState::Inserting) {
+            entry.state = BreakState::Active;
+         } else {
+            removeBreak(&entry);
+         }
+      }
+   }
+
    // Writes the changes of the breakpoint table into flash, one page
    // write for each page with a change.
    Status commitBreaks() {
       for(;;) {
-         const SoftwareBreak *pending = nullptr;
-         for(std::size_t i = 0; i < breakCount_ && pending == nullptr; ++i) {
-            if(breaks_[i].state != BreakState::Active) {
-               pending = &breaks_[i];
-            }
-         }
+         const SoftwareBreak *pending = pendingBreak();
          if(pending == nullptr) {
             return Status::Ok;
          }
@@ -1699,33 +1948,11 @@ class Avr8Scope final : public Avr8Handler {
          // The table changes only after the write: after a failed write
          // the next commit tries again, and no BREAK stays in flash without
          // an entry.
-         for(std::size_t i = 0; i < breakCount_; ++i) {
-            SoftwareBreak &entry = breaks_[i];
-            if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
-               continue;
-            }
-            uint8_t *at = &page_[entry.word * 2u - page];
-            if(entry.state == BreakState::Inserting) {
-               entry.original = static_cast<uint16_t>(at[0] | (at[1] << 8));
-               putWord(at, avr8::breakOpcode);
-            } else {
-               putWord(at, entry.original);
-            }
-         }
+         preparePage(page);
          if(Status status = writePageBuffer(page); status != Status::Ok) {
             return status;
          }
-         for(std::size_t i = breakCount_; i > 0; --i) {
-            SoftwareBreak &entry = breaks_[i - 1];
-            if(pageOf(entry.word) != page || entry.state == BreakState::Active) {
-               continue;
-            }
-            if(entry.state == BreakState::Inserting) {
-               entry.state = BreakState::Active;
-            } else {
-               removeBreak(&entry);
-            }
-         }
+         markPage(page);
       }
    }
 
@@ -2154,6 +2381,21 @@ class Avr8Scope final : public Avr8Handler {
    // The breakpoint of the last run (word), 0xFFFF for none
    uint16_t runBreak_{ 0xFFFF };
    std::array<SoftwareBreak, avr8::maxSoftwareBreaks> breaks_{};
+   // The job of a RUN, RUN_TO or STEP (startJob()): the page at jobPage_
+   // in page_, jobAt_ the byte offset of the read or the read back
+   Job job_{ Job::None };
+   JobPhase jobPhase_{ JobPhase::Pick };
+   std::optional<uint32_t> jobTo_;
+   uint32_t jobPage_{ 0 };
+   uint16_t jobAt_{ 0 };
+   // The failure of the last job, for the next RUN, RUN_TO or STEP
+   std::optional<JtagDebugStatus> jobFailure_;
+   // One slice takes some 50 ms, below the 200 ms of an AVaRICE event poll.
+   // The TCK cycles of one flash word read and of one page buffer load
+   // (host model, tests/TestEdbgJtag.cpp).
+   static constexpr uint32_t sliceMs = 50;
+   static constexpr uint32_t flashReadCycles = 84;
+   static constexpr uint32_t spmLoadCycles = 1200;
    std::size_t breakCount_{ 0 };
    std::array<uint8_t, Target::hasProgmode ? avr8::maxJtagPageBytes : avr8::maxPageBytes> page_{};
 };
