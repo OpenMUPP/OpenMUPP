@@ -324,13 +324,18 @@ The boot lock bits must allow `SPM` in the boot section.
 The probe uses this sequence only for the software breakpoints (`AvrJtagDebug::writeFlashPage`). It has these differences from the reference debugger:
 
 - The order is: one page buffer load for each word, page erase, page write, RWW enable. The reference debugger erases the page first. The page buffer keeps its data over the page erase (datasheet, "alternative 1"), so the flash changes only at the end (issue #121). An RWW enable between the loads and the erase would clear the page buffer.
-- After each `SPM`, it polls SPMCSR until SPMEN is clear.
+- After each `SPM`, it polls SPMCSR until SPMEN is clear. After a page buffer load it does not poll: this `SPM` ends at once (datasheet).
 - The `EIJMP` goes to the start of the last flash page. This page is in the boot section for all BOOTSZ values. The boot start of the device context is not always in the boot section: avrdude sends the start of the last 4 pages, and on the ATmega16 this address is below the smallest boot section.
+- The `EIJMP` does not come before each `SPM`. Each scan moves the PC (see [Instruction execute](#instruction-execute-ir-0xa)). The first instruction scan of each `SPM` returns the PC field. The probe sends the `EIJMP` only when this PC is outside the last page, or less than 20 words before the end of the flash. The worst case from this scan to the `SPM` is 7 instructions, 14 words.
+- It writes EIND and Y (SPMCSR) one time for each page, not before each `SPM`. It loads r1:r0 with `LDI r16`, `LDI r17` and `MOVW r0, r16`, and the command with `LDI r18`. It does not load r31 and r18 again when they keep their value.
 - It writes RAMPZ only for a flash of more than 64 KB. The restore writes the saved value, not `0x0C`.
 - The restore writes SPMCSR without its command bits (4..0).
 - After the restore, it reads the page back. A different page gives an error, for example when the boot lock bits stop `SPM`.
 
-The probe sequence has host tests only. No hardware test confirms it yet.
+With these differences, a page buffer load has about a third of the scans of the reference sequence (issue #121).
+A 256-byte page takes about 0.5 s at 200 kHz instead of about 1 s.
+A hardware test on the ATmega2560 (OCD revision 4) confirmed the shorter sequence, with the page erase before the page buffer loads (see [avr.md](avr.md#jtag-debug-hardware-test)).
+The OCD revision 3 path (for example the ATmega32U4: 16-bit PC field, 64-word pages) has host tests only.
 
 ## Open questions
 

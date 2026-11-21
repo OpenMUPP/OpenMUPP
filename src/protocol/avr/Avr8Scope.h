@@ -919,7 +919,7 @@ class Avr8Scope final : public Avr8Handler {
 
    // A RUN, RUN_TO or STEP with breakpoint changes for flash: the response
    // comes at once, and the AVR_EVT polls write the pages in slices. A
-   // page write takes some 1 s at 200 kHz (256 bytes); AVaRICE waits
+   // page write takes some 0.5 s at 200 kHz (256 bytes); AVaRICE waits
    // 500 ms for a response and 200 ms for an event (issue #121). The core
    // starts after the last page. A failed job gives a break event at the
    // PC (the core did not run), and the next RUN, RUN_TO or STEP with a
@@ -1959,7 +1959,7 @@ class Avr8Scope final : public Avr8Handler {
    // At an active software breakpoint: one step of the original word. On
    // JTAG the OCD executes it without a flash write when it can: AVaRICE
    // waits 500 ms for the response, two page writes take some 1 s at
-   // 200 kHz (issue #115). Else the original word for one step, then
+   // 200 kHz for 256-byte pages (issue #115). Else the original word for one step, then
    // BREAK again.
    Status stepOverBreak() {
       const SoftwareBreak *entry = findBreak(corePc(), BreakState::Active);
@@ -2395,7 +2395,7 @@ class Avr8Scope final : public Avr8Handler {
    // (host model, tests/TestEdbgJtag.cpp).
    static constexpr uint32_t sliceMs = 50;
    static constexpr uint32_t flashReadCycles = 84;
-   static constexpr uint32_t spmLoadCycles = 1200;
+   static constexpr uint32_t spmLoadCycles = 450;
    std::size_t breakCount_{ 0 };
    std::array<uint8_t, Target::hasProgmode ? avr8::maxJtagPageBytes : avr8::maxPageBytes> page_{};
 };
