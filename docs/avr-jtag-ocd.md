@@ -345,5 +345,5 @@ The OCD revision 3 path (for example the ATmega32U4: 16-bit PC field, 64-word pa
 4. The two low bits of the instruction field in the first scan of a flash read.
 5. Answered for the ATmega32U4: OCD revision 3 has the 32-bit instruction scan with the PC field in bits 15..0, and the rules of revision 4.
 6. The values that MPLAB X gives to its last script of the flash write (for example `0x35`, the saved SREG value), and the write of RAMPZ = `0x0C`.
-7. The fastest TCK for the OCD. MPLAB X used 200 kHz. avrdude used about 450 kHz for JTAG programming. The datasheet limit for JTAG is a TCK below 1/4 of the CPU clock.
+7. Answered for the ATmega2560 at 16 MHz: JTAG debug with AVaRICE passed up to a TCK of 4.5 MHz and failed at 9 MHz (see [avr.md](avr.md#debug-clock)). 4.5 MHz is more than the datasheet limit for JTAG, a TCK below 1/4 of the CPU clock. MPLAB X used 200 kHz.
 8. Mode 0 for a data write: not tested.

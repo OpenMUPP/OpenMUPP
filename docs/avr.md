@@ -7,8 +7,8 @@ avrdude can also program a chip over debugWIRE, and Bloom with avr-gdb can debug
 debugWIRE passed a hardware test on an ATtiny85 at 8 MHz and at 1 MHz (see [debugWIRE hardware test](#debugwire-hardware-test)).
 avrdude can also program the classic AVR chips with a JTAG port, for example the ATmega32U4 and the ATmega2560 (see [JTAG](#jtag)).
 JTAG programming passed a hardware test on an ATmega32U4 (see [JTAG hardware test](#jtag-hardware-test)).
-Bloom with avr-gdb can debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom)).
-JTAG debug passed a hardware test on an ATmega32U4 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
+Bloom and AVaRICE with avr-gdb can debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom) and [JTAG debug with AVaRICE](#jtag-debug-with-avarice)).
+JTAG debug passed a hardware test on an ATmega32U4 and an ATmega2560 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
 The probe does not have the other AVR interfaces (UPDI, PDI, TPI).
 [AVR JTAG on-chip debug protocol](avr-jtag-ocd.md) describes the JTAG debug protocol.
 
@@ -221,7 +221,7 @@ It also reads the signature, the calibration bytes and the signature row.
 JTAG has a chip erase. avrdude erases the chip before it writes the flash.
 The probe needs this erase before a flash write.
 With `-D`, or with a flash read before the write in the same command, avrdude does not erase. Then give `-e`.
-Bloom with avr-gdb can also debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom)).
+Bloom and AVaRICE with avr-gdb can also debug these chips over JTAG (see [JTAG debug with Bloom](#jtag-debug-with-bloom) and [JTAG debug with AVaRICE](#jtag-debug-with-avarice)).
 
 ### JTAG wiring
 
@@ -292,13 +292,14 @@ Each new host connection starts at 200 kHz again.
 - Below 1125 kHz, the probe uses the bit-bang engine at the requested rate.
 - From 1125 kHz, the probe uses the JTAG fast path (SPI and DMA, see [boards.md](boards.md#yd-ch32v307vct6-development-board)). The fast path needs the link from PB13 to PC10. Without the link, JTAG fails at 1125 kHz and more.
 - TCK is never faster than the request.
+- JTAG debug on an ATmega2560 at 16 MHz passed up to TCK 4.5 MHz, and failed at 9 MHz (see [Debug clock](#debug-clock)).
 
 ### JTAG debug with Bloom
 
 Bloom with avr-gdb can halt, run and step the core, and read and write the registers, the SRAM, the I/O registers and the EEPROM.
-It can also read the flash and use the hardware breakpoints of the OCD.
+It can also read the flash and use the hardware breakpoints of the OCD and software breakpoints.
 Bloom loads a program into the flash in the JTAG programming mode. Each load erases the full flash.
-JTAG debug passed a hardware test on an ATmega32U4, OCD revision 3 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
+JTAG debug passed a hardware test on an ATmega32U4 with OCD revision 3 and an ATmega2560 with OCD revision 4. See [JTAG debug hardware test](#jtag-debug-hardware-test).
 
 Use the [medbg build](#the-medbg-build). Bloom accepts JTAG on this tool class.
 This `bloom.yaml` is for an ATmega32U4 over JTAG, in the format of Bloom 2.1:
@@ -321,7 +322,7 @@ environments:
       range_stepping: false
 ```
 
-- Set `range_stepping: false`. Bloom uses software breakpoints for range stepping. Each change of a software breakpoint writes a flash page, which wears the flash and takes time. Range stepping with the probe is not tested.
+- Set `range_stepping: false`. Bloom uses software breakpoints for range stepping. Each change of a software breakpoint writes a flash page, which wears the flash and takes time. Range stepping works with the probe (environment `rangestep` in the hardware test), but each range step writes flash pages.
 - With `manage_ocden_fuse_bit: true`, Bloom programs OCDEN at the start of the session and clears it at the end.
   The probe writes the fuse in the JTAG programming mode. This mode resets the core.
 - Without OCDEN, the debug commands fail with code `0x50`. Bloom then shows "check OCDEN fuse bit".
@@ -332,6 +333,40 @@ environments:
   One single step takes about 140 ms at this clock. Thus a `next` over a long loop takes much time.
 - An EEPROM write takes about 35 ms for each byte, because the EEPROM write of a stopped core is slower than in the datasheet.
 - At the end of the session, the probe removes the breakpoints, and the program runs.
+
+### JTAG debug with AVaRICE
+
+AVaRICE is a GDB server for the Microchip debug tools. With the option `-4`, it uses the EDBG protocol over USB.
+AVaRICE with avr-gdb can halt, run and step the core, read and write the memories, and use hardware breakpoints, software breakpoints and watchpoints.
+The hardware test used AVaRICE 2.14 (`2.14svn20200906`) with the [medbg build](#the-medbg-build).
+JTAG debug passed a hardware test on an ATmega32U4 and an ATmega2560 (see [JTAG debug hardware test](#jtag-debug-hardware-test)).
+
+Program OCDEN before the session. The hardware test programmed it with avrdude over JTAG.
+The medbg build has the USB ID `03eb:2145`. Give this ID to avrdude with `-P`.
+
+```sh
+# Program OCDEN (high fuse 0x18 on the ATmega2560: OCDEN, JTAGEN, BOOTRST, boot section of 4K words)
+avrdude -C +etc/avrdude-openmupp.conf -c openmupp_jtag -p m2560 -P usb:03eb:2145 -U hfuse:w:0x18:m
+
+# Start AVaRICE as the GDB server on port 4242
+avarice -4 -j usb -P atmega2560 -B 200kHz :4242
+
+# Connect avr-gdb
+avr-gdb -ex 'set remote memory-map-packet off' -ex 'target remote :4242' firmware.elf
+```
+
+- Set `remote memory-map-packet off` in avr-gdb. The memory map reply of AVaRICE is longer than the length that avr-gdb requests. Without this setting, avr-gdb does not accept the reply.
+- AVaRICE uses the three hardware breakpoints first. When no hardware breakpoint is free, it uses software breakpoints.
+- AVaRICE sends data breakpoints for `watch`, `rwatch` and `awatch` (see [JTAG data breakpoints](#jtag-data-breakpoints)).
+- AVaRICE waits 500 ms for a response, and 200 ms for an event (see [cmsis-dap.md](cmsis-dap.md#avr8-scope-on-jtag)).
+  A run or step gives its response before the page write of a software breakpoint.
+- At the end of the session, AVaRICE clears the software breakpoints and sends the detach command (`0x14`).
+  The clear only records the change. The probe removes the breakpoints from the flash at the detach, before it gives the response. Deactivate physical (`0x11`) does the same.
+  One 256-byte page takes about 0.5 s (ATmega2560). This is near the 500 ms limit of AVaRICE.
+  This page write uses the programming clock, 200 kHz by default. AVaRICE `-B` sets only the debug clock. Thus the time is the same at each `-B` value (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)).
+- The page write of a run or step uses the debug clock. Use the fastest `-B` value that the target clock permits (see [JTAG clock](#jtag-clock)).
+- A step or run from a software breakpoint on an indirect jump or call, `LPM`, `ELPM`, `SPM`, `SLEEP` or `BREAK` writes two pages. This stops the AVaRICE session (issue [#117](https://github.com/OpenMUPP/OpenMUPP/issues/117)).
+- AVaRICE stops with the exit code 1 after avr-gdb disconnects. It shows `gdb exited.`. This is the normal end of a session.
 
 ### JTAG data breakpoints
 
@@ -352,7 +387,7 @@ Thus a second `rwatch` on the same 2-byte variable stops only on an access to th
 Start a new AVaRICE session to watch the range again.
 The OCD has the mask only in register 2, for register 3.
 Thus the probe writes the address to register 3 and the mask to register 2.
-The mask mode on a data address is not tested on the hardware yet. The program address test passed (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
+The mask mode on a data address passed the hardware test: AVaRICE sends a data breakpoint with a mask for `rwatch` on a 2-byte variable (see [JTAG debug hardware test](#jtag-debug-hardware-test)). The program address test also passed (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
 
 `tools/avr_data_break_test.py` tests the data breakpoints on the hardware.
 Load a test program that reads and writes a known SRAM address, and program OCDEN.
@@ -434,31 +469,107 @@ The test did not use a TCK of 1125 kHz or more (the JTAG fast path).
 
 ### JTAG debug hardware test
 
-The test used a YD-CH32V307VCT6 board with the medbg build and a Seeeduino Lite (ATmega32U4, OCD revision 3) with a 3.3 V supply.
-The tools were Bloom 2.1.0 (commit `3e9ddfa2`) and avr-gdb 17.2, with the `bloom.yaml` of [JTAG debug with Bloom](#jtag-debug-with-bloom).
-The target clock was the 16 MHz crystal (low fuse `0xFF`). The debug clock was 200 kHz.
-Before the test, ISP made a backup of all memories and programmed JTAGEN (high fuse `0x98`).
-BOOTRST is programmed, thus the reset vector is the boot section at byte address `0x7000`.
-The test program calls a function `tick` in a loop. `tick` increments `counter` in SRAM and toggles a port pin. The loop then increments `ticks`.
-The test used more than one Bloom session. The EEPROM row and the two-breakpoint row are from separate sessions on the final firmware. The other rows are from the build before it. That build did not have the longer EEPROM write timeout of the final firmware. The timeout changes only the EEPROM write.
+The test used a YD-CH32V307VCT6 board with the medbg build and two targets:
 
-| Test | Result |
+| Target | Chip | Clock | Supply | Low fuse, high fuse | Reset vector |
+|---|---|---|---|---|---|
+| Seeeduino Lite | ATmega32U4, OCD revision 3 | 16 MHz crystal | 3.3 V | `0xFF`, `0x98` | `0x7000` (boot section) |
+| Arduino Mega 2560 | ATmega2560 revision F, OCD revision 4, IDCODE `0x5980103F` | 16 MHz crystal | 3.3 V | `0xFF`, `0x18` | `0x3E000` (boot section) |
+
+- The tools were Bloom 2.1.0 (commit `3e9ddfa2`), AVaRICE 2.14 (`2.14svn20200906`), avr-gdb 17.2 and avrdude 8.3.
+- The debug clock (TCK) was 200 kHz for Bloom and for AVaRICE (`-B 200kHz`).
+- Before the test, ISP (ATmega32U4) or avrdude over JTAG (ATmega2560) made a backup of all memories.
+- BOOTRST is programmed on both chips. Thus a reset starts the core in the boot section.
+- The datasheet of the ATmega2560 specifies 16 MHz only from 4.5 V. The chip ran at 16 MHz and 3.3 V in this test.
+
+The test program is the same C source for both chips. Only the LED port is different (PC7 on the ATmega32U4, PB7 on the ATmega2560).
+It calls a function `tick` in a loop. `tick` increments `counter` in SRAM and toggles the LED pin. The loop then increments `ticks`.
+The program does not use port F, because the JTAG pins are on port F.
+
+The Bloom tests used three environments of `bloom.yaml`. All have `manage_ocden_fuse_bit: true`:
+
+- `default`: `hardware_breakpoints: true`, `range_stepping: false`.
+- `swonly`: `hardware_breakpoints: false`. Bloom uses software breakpoints only.
+- `rangestep`: `hardware_breakpoints: true`, `range_stepping: true`.
+
+#### Bloom, hardware breakpoints (environment `default`)
+
+| Test | ATmega32U4 | ATmega2560 |
+|---|---|---|
+| `load` and `compare-sections` | Pass. The load of 320 bytes takes about 1.2 s. | Pass. The load of 382 bytes takes about 1.1 s. |
+| A breakpoint on `tick`, then `continue` three times | Pass. The counter reads 0, 1 and 2. | Pass. The counter reads 0, 1 and 2. |
+| Write r0 to r31 with a pattern, `stepi` over an `lds r24`, then read r0 to r31 | Pass. Only r24 changes. The PC moves by two words. | Pass. Only r24 changes. The PC moves by two words. |
+| `monitor reset`, then `continue` to the breakpoint | Pass. After the reset, Bloom shows the PC `0x7000` (byte address). | Pass. After the reset, Bloom shows the PC `0x3E000` (byte address). |
+| Read and write a variable and an array element in SRAM, read the I/O registers, then `continue` | Pass. After `continue`, `counter` reads `0x56` (written `0x55`). | Pass. After `continue`, `counter` reads `0x56` (written `0x55`). DDRB reads `0x80`. PORTB changes from `0x00` to `0x80`. |
+| Write EEPROM bytes in debug mode, then read them back | Pass. avrdude over ISP read the same bytes after the test. | Pass. A new Bloom session read the same bytes. |
+| Read the flash: `x/8hx 0` and `x/4i` on `tick` | Pass. Word 0 reads `0x940C` (`jmp`), the same as the program file. | Pass. Word 0 reads `0x940C` (`jmp`), the same as the program file. |
+| `step` into `tick` from the call, then `stepi` two times | Pass | Pass |
+| Two breakpoints (`tick` and the `ticks++` line), then `continue` three times | Pass. The core stops at `tick`, at `ticks++` and at `tick` again. | Pass. The core stops at `ticks++`, at `tick` and at `ticks++` again. |
+| Three breakpoints. Bloom sends the third as a software breakpoint. | Not done. See the four-breakpoint test. | Pass. The core stops at the `ticks++` line. |
+| No breakpoints, `continue`, then an interrupt (`SIGINT`) after 2 s | Pass. The core stops in the delay loop. `ticks` reads 79. | Pass. The core stops in the delay loop. `ticks` reads 78. |
+| OCDEN: Bloom programs it at the start of the session and clears it at the end | Pass. The high fuse reads `0x98` after the session. | Pass. The high fuse reads `0x98` after the session. Before each AVaRICE session, avrdude programmed OCDEN again (`0x18`). |
+
+avr-gdb shows the old PC after `monitor reset` until the next stop, because it does not read the registers again.
+
+#### Bloom, software breakpoints and range stepping
+
+| Test | ATmega32U4 | ATmega2560 |
+|---|---|---|
+| `swonly`: `load`, a breakpoint on `tick` (a 2-word `lds`), then `continue` three times | Pass. The counter reads 0, 1 and 2. | Pass. The counter reads 0, 1 and 2. |
+| `swonly`: read the flash at the breakpoint while the core is stopped | Pass. The flash shows the original word `0x9180`, not `BREAK`. | Pass. The flash shows the original word `0x9180`, not `BREAK`. |
+| `swonly`: a second breakpoint on the `ticks++` line, then `continue` three times | Pass. The stops alternate. | Pass. The stops alternate. |
+| `swonly`: `stepi` two times from the breakpoint on the 2-word `lds` | Pass. The PC moves by two words for each step. | Pass. The PC moves by two words for each step. |
+| `swonly`: delete the breakpoints, `continue`, then `SIGINT` | Pass | Pass |
+| `swonly`: a breakpoint on the 2-word `call` of `tick`, then `stepi` into `tick` | Pass | Pass |
+| `swonly`: `compare-sections` after the breakpoints are deleted | Pass. No `BREAK` stays in the flash. | Pass. No `BREAK` stays in the flash. |
+| `default`: four breakpoints (two hardware, two software), then `continue` five times | Pass. The core stops at lines 21, 11, 22, 24 and 21. | Pass. The core stops at lines 21, 11, 22, 24 and 21. |
+| `default`: delete two breakpoints, then `continue` two times, then `compare-sections` | Pass | Pass |
+| `rangestep`: `step` into `tick`, `next`, `finish`, then `compare-sections` | Pass. `finish` returns to line 22. | Pass. `finish` returns to line 22. |
+
+#### AVaRICE
+
+| Test | ATmega32U4 | ATmega2560 |
+|---|---|---|
+| Two breakpoints (`tick` and the `ticks++` line), then `continue` three times | Pass | Pass |
+| `watch counter` (write), `continue` two times | Pass. The core stops after the `sts` to `counter`. The counter reads 2, then 3. | Pass. The core stops after the `sts` to `counter`. The counter reads 2, then 3. |
+| `rwatch ticks` (read), `continue` | Pass. The core stops after the `lds` of `ticks`. | Pass. The core stops after the `lds` of `ticks`. |
+| `awatch counter` (access), `continue` two times | Pass. Both stops are after the `lds` of `counter` (the read). | Pass. Both stops are after the `lds` of `counter` (the read). |
+| Three breakpoints, all hardware, then `continue` four times | Not done. See the next test. | Pass |
+| Four breakpoints (three hardware, one software), then `continue` four times | Pass. The core stops at lines 22, 24, 21 and 11. | Pass. The core stops at lines 22, 24, 21 and 11. |
+
+After the AVaRICE sessions, avrdude verified the program in the flash of the ATmega2560. No `BREAK` stayed in the flash.
+
+These are the times of the software breakpoint commands on the ATmega2560 at 200 kHz, with one 256-byte page (build `v0.13.0-476-g94787af`):
+
+| Command | Time |
 |---|---|
-| `load` and `compare-sections` | Pass. The load of 320 bytes takes about 1.2 s. |
-| A breakpoint on `tick`, then `continue` three times | Pass. The counter reads 0, 1 and 2. |
-| Write r0 to r31 with a pattern, `stepi` over an `lds r24`, then read r0 to r31 | Pass. Only r24 changes. The PC moves by two words. |
-| `monitor reset`, then `continue` to the breakpoint | Pass. After the reset, Bloom shows the PC `0x7000` (byte address). avr-gdb shows the old PC (`0xd8`) until the next stop, because it does not read the registers again after `monitor reset`. |
-| Read and write a variable and an array element in SRAM, read the I/O registers, then `continue` | Pass. The read-back values are correct. After `continue`, `counter` reads `0x56` (written `0x55`). |
-| Write 4 EEPROM bytes in debug mode, then read them back | Pass. avrdude over ISP read the same bytes after the test. |
-| Read the flash: `x/8hx 0` and `x/4i` on `tick` | Pass. Word 0 reads `0x940C` (`jmp`), the same as the program file. |
-| `step` into `tick` from the call, then `stepi` two times | Pass |
-| Two breakpoints (`tick` and the `ticks++` line), then `continue` three times | Pass. The core stops at `tick`, at `ticks++` and at `tick` again. |
-| Three breakpoints | Pass. The `continue` fails with the remote reply `01`, as expected. Bloom keeps one hardware breakpoint, thus it sends the third breakpoint as a software breakpoint. The probe rejects it (`Feature not available`). |
-| No breakpoints, `continue`, then an interrupt (`SIGINT`) after 2 s | Pass. The core stops in the delay loop. `ticks` reads 79. |
-| OCDEN: Bloom programs it at the start of the session and clears it at the end | Pass. The high fuse reads `0x98` after the session. |
+| Run with a software breakpoint change: the response | 0.5 ms |
+| Run with a software breakpoint change: the longest `AVR_EVT` poll, which writes a part of the page | 59 ms |
+| Run with a software breakpoint change: the break event, after the page write and the run to the breakpoint | 1.29 s |
+| Clear of all software breakpoints at the end of an AVaRICE session (`0x45`) | 0.6 ms |
+| Deactivate physical (`0x11`), which removes the software breakpoints from the flash | 488 ms |
 
-At the time of this test, the probe did not have software breakpoints. Software breakpoints are not tested on hardware.
-OCD revision 4 (for example the ATmega2560) is not tested.
+#### Debug clock
+
+The debug clock test used AVaRICE on the ATmega2560 at 16 MHz, with the PB13 to PC10 link.
+For each `-B` value, it ran the full AVaRICE test (12 stops) and the four-breakpoint test (3 hardware, 1 software).
+A test passes when the stops and the variable values are the same as at 200 kHz.
+After each `-B` value, avrdude verified the program in the flash.
+This test used an earlier build of the faster page write (`v0.13.0-465-g98a39f6`). Thus its time at 200 kHz is not the same as in the table above.
+From 1125 kHz, the SPI of the fast path gives only 1.125, 2.25, 4.5 and 9 MHz. TCK is never faster than the request.
+
+| `-B` | TCK | Result | Break event after the run (page write and run to the breakpoint) |
+|---|---|---|---|
+| `200kHz` | 200 kHz | Pass | 1193 ms |
+| `500kHz` | 500 kHz | Pass | 717 ms |
+| `1000kHz` | 1 MHz | Pass | 575 ms |
+| `2000kHz` | 1.125 MHz | Pass | 530 ms |
+| `4000kHz` | 2.25 MHz | Pass | 494 ms |
+| `6000kHz`, `6400kHz`, `8000kHz` | 4.5 MHz | Pass | 474, 476 and 473 ms |
+| `9000kHz` | 9 MHz | Fail. The core stops at wrong addresses, for example at the reset vector `0x3E000`. The variables read wrong values. The flash verifies. | – |
+
+TCK 4.5 MHz is more than the datasheet limit (a quarter of the target clock, 4 MHz). The chip has a margin, but do not rely on it.
+Deactivate physical (`0x11`) takes 494 ms at each `-B` value that passed, because its page write uses the programming clock (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)). At 9 MHz it takes 16 ms, because no software breakpoint is in the flash.
 
 ### debugWIRE hardware test
 
