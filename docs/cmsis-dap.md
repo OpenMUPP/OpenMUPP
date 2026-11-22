@@ -193,7 +193,7 @@ The probe sends the `AVR_CMD` response of the last fragment first.
 Then the next AVR command (`AVR_RSP`, `AVR_EVT` or `AVR_CMD`) runs the frame before it gives its own response.
 Thus the response is ready for the next `AVR_RSP`, and an event of the command comes after it.
 AVaRICE reads the `AVR_CMD` response for 200 ms only, the `AVR_RSP` response for 500 ms, and the `AVR_EVT` response for 200 ms.
-One flash page write takes about 0.5 s at 200 kHz (256 bytes, ATmega2560, issue #121).
+One flash page write takes about 0.5 s at 200 kHz (256 bytes, ATmega2560, issue #121). This is near the 500 ms of AVaRICE.
 On JTAG, a run, run to or step with a software breakpoint change thus gives its response at once, and the `AVR_EVT` polls write the pages (see [AVR8 scope on JTAG](#avr8-scope-on-jtag)).
 After a late response, AVaRICE reads each later response one report too late, and the session stops (issue #115). Only a restart of AVaRICE repairs it.
 A long command holds the HID interface, as a long DAP command does.
@@ -336,7 +336,7 @@ AVaRICE polls `AVR_EVT` every 50 ms while it waits for the break event, so the p
 The erase and write part does not get shorter at a lower debug clock. It needs about 2400 TCK cycles and about 9 ms of flash time. At a debug clock below about 16 kHz, this poll takes more than the 200 ms of AVaRICE.
 Detach and deactivate physical still remove the software breakpoints before they give the response.
 AVaRICE sends the next command at once after them, so a part of the page write in a poll does not help there.
-At 200 kHz such a detach takes about 0.5 s for a 256-byte page, near the 500 ms of AVaRICE. AVaRICE sends it at the end of the session only.
+At 200 kHz such a detach takes about 0.5 s for a 256-byte page, near the 500 ms of AVaRICE. This page write uses the programming clock (200 kHz by default), not the debug clock. Thus a faster `-B` of AVaRICE does not make it shorter (issue [#126](https://github.com/OpenMUPP/OpenMUPP/issues/126)). AVaRICE sends it at the end of the session only.
 To run or step from a software breakpoint, the OCD executes the original instruction in place of the `BREAK`, without a page write.
 The probe does these instructions itself on the CPU context and the data space: `RJMP`, `RCALL`, `JMP`, `CALL`, `LDS`, `STS`, the branches (`BRBS`, `BRBC`), the skips (`CPSE`, `SBRC`, `SBRS`, `SBIC`, `SBIS`), `RET` and `RETI`.
 It injects each other instruction that does not use the PC or the flash.
