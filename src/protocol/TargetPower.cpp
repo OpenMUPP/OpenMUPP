@@ -17,6 +17,7 @@ uint16_t TargetPower::millivolts() {
 }
 
 bool TargetPower::takeFaultReport() {
+   takeHardwareFault();
    const bool report = faultReport_;
    faultReport_ = false;
    return report;

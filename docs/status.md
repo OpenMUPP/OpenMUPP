@@ -1,7 +1,7 @@
 # Status
 
 This document lists the functions of the firmware and the state of the hardware tests.
-The main target is the OpenMUPP v1 probe board (CH32V307). Its board definition has the pins of the level shifters, the power functions and the ID dividers. The start-up sets these pins to a safe state. The debug engines and the UART bridge reach the target through the level shifters. The power functions, VPP and the ID dividers are not used yet.
+The main target is the OpenMUPP v1 probe board (CH32V307). Its board definition has the pins of the level shifters, the power functions and the ID dividers. The start-up sets these pins to a safe state. The debug engines and the UART bridge reach the target through the level shifters. The firmware switches the target supply at 3.3 V or 5 V and reacts to the power fault inputs. VPP and the ID dividers are not used yet.
 The tests below run on the YD-CH32V307VCT6 board (the same MCU family), the WeAct STM32H523 core board and the older STM32F1 boards.
 
 The Versaloon and CMSIS-DAP images have these functions:

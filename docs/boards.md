@@ -482,7 +482,8 @@ Use this sequence for each change:
 ### Target power on OpenMUPP v1
 
 The firmware selects 3.3 V or 5 V with `src/protocol/TargetPower.h`, and `src/board/BoardPower.cpp` drives the pins.
-The Versaloon `POWER` block, `ID_DAP_Vendor2` and the EDBG control scope select 3.3 V.
+The host selects the voltage with `ID_DAP_Vendor2` (see [Target power](cmsis-dap.md#target-power)).
+The Versaloon `POWER` block and the EDBG control scope select 3.3 V only.
 The firmware uses the sequence above, with these values:
 
 - Both switches stay off for 10 ms.
@@ -496,6 +497,7 @@ The firmware uses the sequence above, with these values:
 The fault inputs PA11 and PA12 have an EXTI interrupt on the falling edge.
 The interrupt sets both enable pins low at once.
 The main loop then counts the fault, writes an error line to the debug log, and shows a probe error on the state LED (the double flash).
+The next `ID_DAP_Vendor2` response reports the fault to the host.
 
 ### VPP sequence
 

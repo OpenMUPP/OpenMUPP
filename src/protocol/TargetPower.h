@@ -102,7 +102,8 @@ class TargetPower {
    }
 
    // True once after a fault, for the report to the host. The call clears
-   // the report.
+   // the report. It also takes a fault of the hardware that poll() did not
+   // take yet.
    [[nodiscard]] bool takeFaultReport();
 
    // The target voltage in mV, 0 without a sense or when it fails.

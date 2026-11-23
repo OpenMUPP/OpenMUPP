@@ -339,14 +339,14 @@ TEST_CASE("EDBG: target power: switch-on for the owner or while nobody owns the 
    }
    SUBCASE("ID_DAP_Vendor2 on the v2 interface") {
       b.enterProgmode();
-      CHECK(b.bulkCommand({ 0x82, 0x01 }) == Bytes{ 0x82, 0x01, 0x00, 0x00 });
+      CHECK(b.bulkCommand({ 0x82, 0x01 }) == Bytes{ 0x82, 0x01, 0x00, 0x00, 0x00 });
       CHECK_FALSE(b.targetPower.isOn());
       CHECK(b.transact(handler::edbgControl, powerOn) == ok);
       // Switch-off always works.
-      CHECK(b.bulkCommand({ 0x82, 0x00 }) == Bytes{ 0x82, 0x00, 0x00, 0x00 });
+      CHECK(b.bulkCommand({ 0x82, 0x00 }) == Bytes{ 0x82, 0x00, 0x00, 0x00, 0x00 });
       CHECK_FALSE(b.targetPower.isOn());
       CHECK(b.isp(leaveRequest) == Bytes{ isp::command::leaveProgmode, isp::status::ok });
-      CHECK(b.bulkCommand({ 0x82, 0x01 }) == Bytes{ 0x82, 0x00, 0xE4, 0x0C });
+      CHECK(b.bulkCommand({ 0x82, 0x01 }) == Bytes{ 0x82, 0x00, 0xE4, 0x0C, 0x01 });
    }
    SUBCASE("a protection refuses the switch-on") {
       b.power.externalMv = 3300;

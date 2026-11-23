@@ -87,14 +87,17 @@
 //   ID_DAP_Invalid. hostGone() sets the stored mode.
 //   DAP_SWJ_Pins with SWCLK or SWDIO selected tells the bridge that the
 //   pins changed (Bridge::pinsChanged()).
-// - ID_DAP_Vendor2 [0x82][op u8] -> [0x82][status u8][mV u16] switches the
-//   3.3 V target supply (protocol/TargetPower.h): op 0 off, 1 on, 2 only
-//   read. The status is 0 (done), 1 (a protection refused the switch-on),
-//   or 0xFF: op 0 or 1 on a board without a power switch, or another op.
+// - ID_DAP_Vendor2 [0x82][op u8] -> [0x82][status u8][mV u16][state u8]
+//   switches the target supply (protocol/TargetPower.h): op 0 off, 1 on at
+//   3.3 V, 2 only read, and [0x82][3][mV u16] on at 3300 or 5000 mV. The
+//   status is 0 (done), 1 (a protection refused the switch-on), or 0xFF:
+//   a switch that the board does not have, another voltage, or another op.
 //   mV is the target voltage after the operation, 0 without a sense or
-//   when the measurement fails. Without a TargetPower, the command replies
+//   when the measurement fails. state bits 0-1 are the supply (0 off,
+//   1 3.3 V, 2 5 V). Bit 7 is set once after a fault switched the supply
+//   off. Without a TargetPower, the command replies
 //   ID_DAP_Invalid. hostGone() keeps the supply on. With a pin owner, op 1
-//   replies status 1 while the other processor owns the pins: only the
+//   and op 3 reply status 1 while the other processor owns the pins: only the
 //   owner, or any processor while nobody owns the pins, switches the
 //   supply on. Op 0 always works.
 // - With vendor commands (setVendorCommands()), 0x80-0x82 go to that
