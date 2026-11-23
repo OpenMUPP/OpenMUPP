@@ -128,6 +128,10 @@ This function does these steps:
    - All LEDs are off, but the power LED is on. The main loop then drives the LEDs (see below).
    - The USB pull-up is off, so the host does not see the device.
    - The target power is off (the switch pin floats).
+   - The direction pins of the level shifters are low outputs, so the target side of the shifters is high-impedance.
+     The UART TX direction pin is a high output, so UART TX drives the target.
+   - Both target switches are off (low outputs). The fault inputs have internal pull-ups.
+   - VPP is off: the VPP enable, VPP on and pull-down pins are low outputs. A reset of the DAC turns it off.
    - The key pin has a pull resistor to the released level.
 
 The JTAG, SWD, UART and Vref pins stay inputs until their drivers configure them.
@@ -414,16 +418,17 @@ These items are different:
 - SWO: the TDO net also goes to PA3 (USART2 RX). The YD board needs a wire for this (see [YD-CH32V307VCT6 development board](#yd-ch32v307vct6-development-board)).
 
 The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definition hold the pins of the level shifters, the power functions and the ID dividers (see the table below).
-The firmware does not drive the direction pins and the power functions yet.
+The start-up sets these pins to a safe state (see [Start-up and LEDs](#start-up-and-leds)).
+The engines and the power functions do not use the blocks yet.
 Thus only the UART bridge reaches the target:
 
-- `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) have external pull-downs. The firmware does not drive them.
+- The start-up sets `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) low. The external pull-downs hold them low while the MCU is in reset.
   Thus the TCK, TDI, TRST, AUX and SWDIO shifters work from the target to the probe. The target side stays high-impedance, and the shifters drive PB13, PB15, PB9, PA2, PA0 and PC11.
 - An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
   `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.
 - Only the CMSIS-DAP personality has this lock. A build with the Versaloon or WCH-Link personality fails for this board.
-- `UART_TX_DIR` (PC9) has a pull-up, so UART TX drives the target. UART RX has a fixed shifter.
-- The firmware does not turn on the target power switches and VPP.
+- The start-up sets `UART_TX_DIR` (PC9) high, as its pull-up does in reset. Thus UART TX drives the target. UART RX has a fixed shifter.
+- The start-up turns off the target power switches and VPP. The firmware does not turn them on.
 
 The firmware must follow these rules when it adds these functions:
 
