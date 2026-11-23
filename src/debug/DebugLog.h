@@ -2,14 +2,22 @@
 
 #pragma once
 
-// Debug log over the CDC-ACM port (plan section 9.2). Target only.
+// Debug log over the CDC-ACM port and the debug UART (plan section 9.2).
+// Target only.
 //
 // The CMake option MUPP_DEBUG_CDC (ON by default in a Debug build) defines
 // MUPP_DEBUG_CDC. Then the libArT logger writes into a LogSink (debug/
 // LogSink.h), and pollLog() sends the log to the one CDC-ACM port of the
 // device. The USB descriptors are the same in both builds.
 //
-// Without the option, CMake defines LOGGING_DISABLED: the LOG_* macros
+// The CMake option MUPP_DEBUG_UART (ON by default in a Debug build of a
+// board with a debugUart, see board/BoardDefinition.h) defines
+// MUPP_DEBUG_UART. Then pollLog() also sends the log to that UART
+// (debug/DebugUart.h), with its own sink. The UART log works without the
+// CDC port: in an image with the WCH-Link personality, and during USB
+// problems.
+//
+// Without both options, CMake defines LOGGING_DISABLED: the LOG_* macros
 // expand to nothing, the loggers do not exist and startLog()/pollLog() are
 // empty. A release build carries no log code.
 //
@@ -18,9 +26,10 @@
 // debug::cdcLog is false. The UART of the board then stays unused, and the device ignores
 // the data that the host sends to the CDC port.
 //
-// Call pollLog() only when UsbStack::hasSerialPort() is true: the
-// WCH-Link personality has no CDC port. The log lines of a start without
-// the port stay in the sink until it is full, and the newer ones are lost.
+// Call pollLog() in each main loop iteration. It sends to the CDC port only
+// when UsbStack::hasSerialPort() is true: the WCH-Link personality has no
+// CDC port. The log lines of a start without the port stay in the CDC sink
+// until it is full, and the newer ones are lost.
 //
 // Use: LOG_INFO(debug::appLog, "format", args...). Log only from the main
 // loop, never from an interrupt handler (see debug/LogSink.h).
@@ -39,8 +48,12 @@ class UsbStack;
 
 namespace debug {
 
+#if defined(MUPP_DEBUG_CDC) || defined(MUPP_DEBUG_UART)
 #if defined(MUPP_DEBUG_CDC)
 inline constexpr bool cdcLog = true;
+#else
+inline constexpr bool cdcLog = false;
+#endif
 
 // Log topics
 extern logging::Logger appLog;
@@ -50,9 +63,10 @@ extern logging::Logger usbLog;
 // log line.
 void startLog();
 
-// Sends the buffered log to the CDC port and logs USB state changes. Call
-// it in each main loop iteration, after UsbStack::poll(), and in the
-// serial service during a long command (protocol/Background.h).
+// Sends the buffered log to the CDC port and to the debug UART, and logs USB
+// state changes. Call it in each main loop iteration, after
+// UsbStack::poll(), and in the serial service during a long command
+// (protocol/Background.h).
 void pollLog(usb::UsbStack &usbStack);
 #else
 inline constexpr bool cdcLog = false;

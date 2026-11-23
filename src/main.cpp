@@ -451,15 +451,16 @@ usb::UsbStack usbStack{ activePersonality, usb::UsbStack::Functions{
 #if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
 // A command runs only after usbStack.start(), so the USB device and the
 // bridge run. Only the Versaloon and CMSIS-DAP engines call it. As in the
-// main loop, the log and the bridge run only with the serial port.
+// main loop, the bridge runs only with the serial port, and the log sends to
+// the CDC port only with the serial port.
 void SerialService::service() {
 #if defined(MUPP_CMSIS_DAP_SWO)
    // The Manchester decoder keeps up with the edges during the command.
    dapSwo.poll();
 #endif
    usbStack.pollSerial();
+   debug::pollLog(usbStack);
    if(usbStack.hasSerialPort()) {
-      debug::pollLog(usbStack);
       uart::pollBridge();
    }
 }
@@ -639,10 +640,11 @@ int main() {
       if(clockFromCrystal) {
          usbStack.poll();
          if(usbStack.hasSerialPort()) {
-            debug::pollLog(usbStack);
             uart::pollBridge();
          }
       }
+      // Also without USB: the debug UART carries the log then
+      debug::pollLog(usbStack);
       afterUsbPoll(nowMs);
       updateLeds(nowMs, clockFromCrystal);
       // The SysTick and the USB interrupt end the WFI.

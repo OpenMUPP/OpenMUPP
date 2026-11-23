@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Debug log over the CDC-ACM port. See debug/DebugLog.h.
+// Debug log over the CDC-ACM port and the debug UART. See debug/DebugLog.h.
 #include "debug/DebugLog.h"
 
-#if defined(MUPP_DEBUG_CDC)
+#if defined(MUPP_DEBUG_CDC) || defined(MUPP_DEBUG_UART)
 
 #include <logging/Formatter.h>
 #include <utils/Timekeeping.h>
 
+#include "debug/DebugUart.h"
 #include "debug/LogSink.h"
 #include "usb/UsbStack.h"
 
@@ -17,8 +18,23 @@ logging::Logger usbLog{ "usb" };
 
 namespace {
 
+#if defined(MUPP_DEBUG_CDC)
 // Holds about 20 log lines while no terminal has the port open.
-LogSink<1024> sink;
+LogSink<1024> cdcSink;
+#endif
+
+#if defined(MUPP_DEBUG_UART)
+LogSink<1024> uartSink;
+DebugUart uartPort;
+#endif
+
+#if defined(MUPP_DEBUG_CDC) && defined(MUPP_DEBUG_UART)
+TeeSink sink{ cdcSink, uartSink };
+#elif defined(MUPP_DEBUG_CDC)
+LogSink<1024> &sink = cdcSink;
+#else
+LogSink<1024> &sink = uartSink;
+#endif
 
 // "<seconds>.<milliseconds> [topic][LEVEL] text\r\n". One SysTick is 1 ms.
 class UptimeFormatter final : public logging::Formatter {
@@ -37,11 +53,16 @@ class UptimeFormatter final : public logging::Formatter {
 UptimeFormatter formatter;
 
 bool wasConfigured = false;
+#if defined(MUPP_DEBUG_CDC)
 bool wasTerminalOpen = false;
+#endif
 
 } // namespace
 
 void startLog() {
+#if defined(MUPP_DEBUG_UART)
+   uartPort.start();
+#endif
    auto &manager = LogManager::getInstance();
    manager.set_formatter(&formatter);
    manager.set_sink(&sink);
@@ -53,13 +74,20 @@ void pollLog(usb::UsbStack &usbStack) {
       wasConfigured = configured;
       LOG_INFO(usbLog, configured ? "configured" : "not configured");
    }
-   auto &port = usbStack.serialPort();
-   const bool terminalOpen = port.isTerminalOpen();
-   if(terminalOpen != wasTerminalOpen) {
-      wasTerminalOpen = terminalOpen;
-      LOG_INFO(usbLog, terminalOpen ? "terminal open" : "terminal closed");
+#if defined(MUPP_DEBUG_CDC)
+   if(usbStack.hasSerialPort()) {
+      auto &port = usbStack.serialPort();
+      const bool terminalOpen = port.isTerminalOpen();
+      if(terminalOpen != wasTerminalOpen) {
+         wasTerminalOpen = terminalOpen;
+         LOG_INFO(usbLog, terminalOpen ? "terminal open" : "terminal closed");
+      }
+      cdcSink.drainTo(port);
    }
-   sink.drainTo(port);
+#endif
+#if defined(MUPP_DEBUG_UART)
+   uartSink.drainTo(uartPort);
+#endif
 }
 
 } // namespace debug

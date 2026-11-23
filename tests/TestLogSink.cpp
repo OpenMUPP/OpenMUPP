@@ -31,8 +31,7 @@ struct FakePort {
    }
 };
 
-template <std::size_t Size>
-void writeText(debug::LogSink<Size> &sink, std::string_view text) {
+void writeText(Writable &sink, std::string_view text) {
    const auto result = sink.write(art::span<const uint8_t>(reinterpret_cast<const uint8_t *>(text.data()), text.size()));
    REQUIRE(result);
    CHECK(*result == text.size());
@@ -141,4 +140,19 @@ TEST_CASE("The libArT logger writes complete lines into the LogSink") {
 
    sink.drainTo(port);
    CHECK(port.sent == "[test][INFO] value 42\r\n");
+}
+
+TEST_CASE("TeeSink writes each log line into both sinks") {
+   debug::LogSink<128> first;
+   debug::LogSink<64> second;
+   debug::TeeSink tee{ first, second };
+   writeText(tee, "line one\r\n");
+   // The small sink overflows and drops bytes, the other sink keeps all
+   writeText(tee, std::string(70, 'x') + "\r\n");
+
+   FakePort port;
+   first.drainTo(port);
+   CHECK(port.sent == "line one\r\n" + std::string(70, 'x') + "\r\n");
+   CHECK(first.droppedBytes() == 0);
+   CHECK(second.droppedBytes() != 0);
 }
