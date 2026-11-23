@@ -505,6 +505,7 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool hostStatus(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool connect(PacketReader &in, PacketWriter &out);
    void disconnect();
+   void activatePort();
    [[nodiscard]] bool transferConfigure(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool transfer(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool transferBlock(PacketReader &in, PacketWriter &out);
@@ -566,6 +567,8 @@ class Processor final : private TransferAbort {
    protocol::PinClient pinClient_{ protocol::PinClient::None };
 
    Port port_{ Port::None };
+   // True after the first command that drove the pins of port_
+   bool portActive_{ false };
    // Also the idle cycles and the WAIT retries of JTAG
    SwdSettings settings_;
    uint16_t matchRetries_{ 0 };
