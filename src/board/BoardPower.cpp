@@ -98,6 +98,11 @@ void BoardPower::init() {
       }
 #endif
    }
+   if(current.idSense) {
+      // Analog: no internal pull, which would move the ratio
+      gpioPin(current.idSense->adapterId).configure(GpioPin::Mode::Analog);
+      gpioPin(current.idSense->boardId).configure(GpioPin::Mode::Analog);
+   }
    if(!current.vref) {
       return;
    }
@@ -110,6 +115,11 @@ void BoardPower::init() {
       adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin)), sampling);
       if(current.targetSupply) {
          adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.targetSupply->v5Sense.pin)), sampling);
+      }
+      if(current.idSense) {
+         for(const Pin pin : { current.idSense->adapterId, current.idSense->boardId }) {
+            adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, pin)), sampling);
+         }
       }
    };
 #if defined(STM32F1) || defined(__riscv)
@@ -168,12 +178,21 @@ std::optional<uint16_t> BoardPower::senseMillivolts() {
 }
 
 std::optional<uint16_t> BoardPower::measure(const VrefSense &sense) const {
-   if(!adcReady_) {
+   const auto raw = meanRaw(sense.pin);
+   if(!raw) {
+      return std::nullopt;
+   }
+   return vrefMillivolts(*raw, sense.divider);
+}
+
+std::optional<uint16_t> BoardPower::meanRaw(Pin pin) const {
+   const auto adcChannel = adcChannelOf(current.family, pin);
+   if(!adcReady_ || !adcChannel) {
       return std::nullopt;
    }
    const AdcClockWindow window;
    const Adc adc(ADC1);
-   const auto channel = static_cast<Adc::Channel>(*adcChannelOf(current.family, sense.pin));
+   const auto channel = static_cast<Adc::Channel>(*adcChannel);
    uint32_t sum = 0;
    for(unsigned i = 0; i < conversions; ++i) {
       uint16_t raw = 0;
@@ -182,7 +201,7 @@ std::optional<uint16_t> BoardPower::measure(const VrefSense &sense) const {
       }
       sum += raw;
    }
-   return vrefMillivolts((sum + conversions / 2) / conversions, sense.divider);
+   return static_cast<uint16_t>((sum + conversions / 2) / conversions);
 }
 
 std::optional<uint16_t> BoardPower::fiveVoltInputMillivolts() {
