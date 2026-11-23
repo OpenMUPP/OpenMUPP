@@ -223,6 +223,9 @@ Processor::Processor(DapSwd &swd,
 }
 
 bool Processor::claimPins() {
+   if(gate_ != nullptr && !gate_->isAllowed()) {
+      return false;
+   }
    return pinOwner_ == nullptr || pinOwner_->acquire(pinClient_);
 }
 
@@ -892,7 +895,18 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
    }
    out.u8(command::connect);
    const bool jtag = port == portJtag && jtag_.available();
-   if((port != portDefault && port != portSwd && !jtag) || !claimPins()) {
+   if(port != portDefault && port != portSwd && !jtag) {
+      out.u8(0);
+      return true;
+   }
+   // A new reading of the adapter at each connect. A refused connect
+   // also ends the old port.
+   if(gate_ != nullptr && !gate_->check(jtag ? protocol::TargetProtocol::Jtag : protocol::TargetProtocol::Swd)) {
+      disconnect();
+      out.u8(0);
+      return true;
+   }
+   if(!claimPins()) {
       out.u8(0);
       return true;
    }

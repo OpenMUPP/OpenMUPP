@@ -119,6 +119,11 @@
 //   applies them. ID_DAP_Vendor1 replies DAP_ERROR, and hostGone() keeps
 //   the bridge mode, while the other processor owns the pins: the bridge
 //   is its JTAG port too.
+// - With a target gate (setTargetGate(), protocol/TargetGate.h), DAP_Connect
+//   asks the gate first (TargetGate::check()). When the gate refuses,
+//   DAP_Connect ends the old port and replies port 0. DAP_SWJ_Pins and
+//   DAP_ResetTarget then work as when the other processor owns the pins
+//   (see below), until a DAP_Connect that the gate allows.
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -198,6 +203,7 @@
 
 #include "protocol/GpioPins.h"
 #include "protocol/JtagPort.h"
+#include "protocol/TargetGate.h"
 #include "protocol/TargetPinOwner.h"
 #include "protocol/TargetPower.h"
 #include "protocol/cmsisdap/DapJtag.h"
@@ -460,6 +466,12 @@ class Processor final : private TransferAbort {
       pinClient_ = client;
    }
 
+   // Asks `gate` at each DAP_Connect. The gate must outlive the processor.
+   // Call it before the first packet.
+   void setTargetGate(protocol::TargetGate &gate) {
+      gate_ = &gate;
+   }
+
    // Sends the commands 0x80-0x82 to `vendor`, which must outlive the
    // processor. Call it before the first packet.
    void setVendorCommands(VendorCommands &vendor) {
@@ -564,6 +576,7 @@ class Processor final : private TransferAbort {
    Bridge *bridge_;
    protocol::TargetPower *power_;
    VendorCommands *vendor_{ nullptr };
+   protocol::TargetGate *gate_{ nullptr };
    DapSwo *swo_{ nullptr };
    bool swoStreaming_{ false };
    protocol::TargetPinOwner *pinOwner_{ nullptr };

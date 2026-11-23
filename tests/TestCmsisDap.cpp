@@ -5,6 +5,7 @@
 #include "protocol/cmsisdap/BitBangDapSwd.h"
 #include "protocol/cmsisdap/DapProcessor.h"
 
+#include "FakeTargetGate.h"
 #include "MockBackground.h"
 #include "MockSwdPins.h"
 
@@ -1558,4 +1559,39 @@ TEST_CASE("Shared pins: the bridge mode does not change while the other processo
    CHECK(runBulk({ 0x81, 0x00 }) == V{ 0x81, 0x00 });
    bulk.hostGone();
    CHECK(bridge.modes == std::vector{ cmsisdap::BridgeMode::Off, cmsisdap::BridgeMode::Auto });
+}
+
+TEST_CASE("Target gate: DAP_Connect asks the gate with the port") {
+   Bench b;
+   mupptest::FakeTargetGate gate;
+   b.dap.setTargetGate(gate);
+   b.connect();
+   CHECK(b.run({ 0x02, 0x00 }) == V{ 0x02, 0x01 });
+   CHECK(gate.checks == std::vector{ protocol::TargetProtocol::Swd, protocol::TargetProtocol::Swd });
+   // A port that the processor does not have asks nothing: JTAG (no JTAG port here)
+   CHECK(b.run({ 0x02, 0x02 }) == V{ 0x02, 0x00 });
+   CHECK(gate.checks.size() == 2);
+}
+
+TEST_CASE("Target gate: a refused DAP_Connect ends the port and keeps the pins") {
+   Bench b;
+   mupptest::FakeTargetGate gate;
+   b.dap.setTargetGate(gate);
+   b.connect();
+   // The first transfer drives the pins
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr })[0] == 0x05);
+   gate.allow = false;
+   CHECK(b.run({ 0x02, 0x01 }) == V{ 0x02, 0x00 });
+   CHECK(b.pins.finis == 1);
+   CHECK_FALSE(b.dap.connected());
+   // No transfer, no reset, and DAP_SWJ_Pins only reads
+   CHECK(b.run({ 0x05, 0x00, 0x01, readDpidr }) == V{ 0x05, 0x00, 0x00 });
+   CHECK(b.run({ 0x0A }) == V{ 0x0A, 0xFF, 0x00 });
+   b.gpio.configured.clear();
+   b.run(cat({ { 0x10, 0x00, 0x80 }, word(0) }));
+   CHECK(b.gpio.configured.empty());
+   // The next allowed DAP_Connect drives again
+   gate.allow = true;
+   b.connect();
+   CHECK(b.run({ 0x0A }) == V{ 0x0A, 0x00, 0x01 });
 }
