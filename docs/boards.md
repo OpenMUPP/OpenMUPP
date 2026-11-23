@@ -430,8 +430,10 @@ Only the UART bridge reaches the target:
 
 - The start-up sets `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) low. The external pull-downs hold them low while the MCU is in reset.
   Thus the TCK, TDI, TRST, AUX and SWDIO shifters work from the target to the probe. The target side stays high-impedance, and the shifters drive PB13, PB15, PB9, PA2, PA0 and PC11.
-- Each engine sets its MCU pins first and then sets `DIR_OUT` high. At the end, it sets `DIR_OUT` low first and then sets its MCU pins to inputs.
-  The JTAG engines also set `DIR_SWDIO` in the same order, because TMS is always an output.
+- Before `DIR_OUT` goes high, each engine sets all MCU pins of the `DIR_OUT` group to outputs. The pins that the engine does not use get an idle level: TRST and TDI high, `AUX1` and `AUX2` low.
+  Then the engine sets `DIR_OUT` high.
+  At the end, the engine sets `DIR_OUT` and `DIR_SWDIO` low first. Then it sets the MCU pins to inputs.
+  The JTAG engines also set `DIR_SWDIO` high, because TMS is always an output.
   The SWD and one-wire engines do not set `DIR_SWDIO` yet.
 - An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
   `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.

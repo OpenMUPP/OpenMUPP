@@ -8,6 +8,7 @@
 // host unit tests check it. board/BoardTargetDrive.h applies it to
 // board::current on target.
 
+#include <array>
 #include <optional>
 
 #include "board/BoardDefinition.h"
@@ -21,24 +22,55 @@ namespace board {
 enum class ShifterGroups : uint8_t { Out, OutAndSwdio };
 
 // Drives the target outputs of an engine (on) or releases them (off).
-// on: setMcuPins() sets the MCU pins first, then the direction pins go high.
-// off: the direction pins go low first, then setMcuPins() sets the MCU pins
-// to inputs. Thus a shifter never drives the target from a floating MCU
-// pin, and an MCU output never drives against a shifter. Without shifters,
-// only setMcuPins() runs. setDirection(pin, level) writes a direction pin.
-template <class SetDirection, class SetMcuPins>
-void driveTargetOutputs(const std::optional<Shifters> &shifters, ShifterGroups groups, bool on, SetDirection &&setDirection, SetMcuPins &&setMcuPins) {
+// Without shifters, only setMcuPins() runs. With shifters:
+// - on: first the pins of the DIR_OUT group get a defined output level,
+//   because DIR_OUT high also drives the pins that the engine does not use:
+//   TRST high (released), TDI high, AUX1 and AUX2 low. Then setMcuPins()
+//   sets the pins of the engine, and then the direction pins of groups go
+//   high.
+// - off: both direction pins go low first (low is the safe state of each),
+//   then setMcuPins() sets the pins of the engine to inputs, and then the
+//   pins of the first step become inputs again.
+// Thus a shifter does not drive the target from a floating MCU pin, and an
+// MCU output does not drive against a shifter. Io has direction(pin, level)
+// (write a direction pin), output(pin, level) and input(pin).
+// Limit: on also releases a TRST that DAP_SWJ_Pins asserted before.
+template <class Io, class SetMcuPins>
+void driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &shifters, ShifterGroups groups, bool on, Io &io, SetMcuPins &&setMcuPins) {
+   if(!shifters) {
+      setMcuPins();
+      return;
+   }
+   struct Idle {
+      Pin pin;
+      bool level;
+   };
+   const std::array<std::optional<Idle>, 4> idle{ {
+   pins.trst ? std::optional<Idle>(Idle{ *pins.trst, true }) : std::nullopt,
+   Idle{ pins.tdi, true },
+   Idle{ shifters->aux1, false },
+   Idle{ shifters->aux2, false },
+   } };
    if(on) {
-      setMcuPins();
-   }
-   if(shifters) {
-      setDirection(shifters->dirOut, on);
-      if(groups == ShifterGroups::OutAndSwdio) {
-         setDirection(shifters->dirSwdio, on);
+      for(const auto &pin : idle) {
+         if(pin) {
+            io.output(pin->pin, pin->level);
+         }
       }
-   }
-   if(!on) {
       setMcuPins();
+      io.direction(shifters->dirOut, true);
+      if(groups == ShifterGroups::OutAndSwdio) {
+         io.direction(shifters->dirSwdio, true);
+      }
+      return;
+   }
+   io.direction(shifters->dirOut, false);
+   io.direction(shifters->dirSwdio, false);
+   setMcuPins();
+   for(const auto &pin : idle) {
+      if(pin) {
+         io.input(pin->pin);
+      }
    }
 }
 

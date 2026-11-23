@@ -9,6 +9,7 @@
 
 #include <doctest/doctest.h>
 
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -20,48 +21,80 @@ using board::ShifterGroups;
 using board::SrstPinSetting;
 using protocol::PinMode;
 
-// Records the steps of driveTargetOutputs(): "pins" for the MCU pins,
-// "<pin>=<level>" for a direction pin.
+std::string name(Pin pin) {
+   return std::string(1, static_cast<char>('A' + static_cast<int>(pin.port))) + std::to_string(pin.number);
+}
+
+// Records the steps of driveTargetOutputs(): "pins" for the MCU pins of the
+// engine, "dir <pin>=<level>" for a direction pin, "out <pin>=<level>" and
+// "in <pin>" for the other pins of the DIR_OUT group.
 struct Recorder {
    std::vector<std::string> steps;
 
-   void drive(const std::optional<board::Shifters> &shifters, ShifterGroups groups, bool on) {
-      board::driveTargetOutputs(
-      shifters, groups, on,
-      [this](Pin pin, bool level) {
-         steps.push_back(std::string(1, static_cast<char>('A' + static_cast<int>(pin.port))) +
-                         std::to_string(pin.number) + (level ? "=1" : "=0"));
-      },
-      [this] { steps.emplace_back("pins"); });
+   void direction(Pin pin, bool level) {
+      steps.push_back("dir " + name(pin) + (level ? "=1" : "=0"));
+   }
+   void output(Pin pin, bool level) {
+      steps.push_back("out " + name(pin) + (level ? "=1" : "=0"));
+   }
+   void input(Pin pin) {
+      steps.push_back("in " + name(pin));
+   }
+
+   void drive(const board::Definition &def, ShifterGroups groups, bool on) {
+      board::driveTargetOutputs(def.debug, def.shifters, groups, on, *this, [this] { steps.emplace_back("pins"); });
    }
 };
 
+// v1: TRST PB9, TDI PB15, AUX1 PA2, AUX2 PA0
+const std::vector<std::string> v1Idle{ "out B9=1", "out B15=1", "out A2=0", "out A0=0" };
+const std::vector<std::string> v1Released{ "in B9", "in B15", "in A2", "in A0" };
+
+std::vector<std::string> join(std::initializer_list<std::vector<std::string>> parts) {
+   std::vector<std::string> all;
+   for(const auto &part : parts) {
+      all.insert(all.end(), part.begin(), part.end());
+   }
+   return all;
+}
+
 } // namespace
 
-TEST_CASE("driveTargetOutputs sets the MCU pins before DIR_OUT goes high") {
+TEST_CASE("driveTargetOutputs sets all DIR_OUT group pins before DIR_OUT goes high") {
    Recorder r;
-   r.drive(board::openMuppV1.shifters, ShifterGroups::Out, true);
-   CHECK(r.steps == std::vector<std::string>{ "pins", "B10=1" });
+   r.drive(board::openMuppV1, ShifterGroups::Out, true);
+   CHECK(r.steps == join({ v1Idle, { "pins", "dir B10=1" } }));
 }
 
-TEST_CASE("driveTargetOutputs sets DIR_OUT low before the MCU pins become inputs") {
-   Recorder r;
-   r.drive(board::openMuppV1.shifters, ShifterGroups::Out, false);
-   CHECK(r.steps == std::vector<std::string>{ "B10=0", "pins" });
+TEST_CASE("driveTargetOutputs sets both direction pins low before the MCU pins become inputs") {
+   // Also after an engine without DIR_SWDIO: a JTAG init before can have
+   // set it high (Versaloon has no port owner between its blocks).
+   for(const auto groups : { ShifterGroups::Out, ShifterGroups::OutAndSwdio }) {
+      Recorder r;
+      r.drive(board::openMuppV1, groups, false);
+      CHECK(r.steps == join({ { "dir B10=0", "dir C3=0", "pins" }, v1Released }));
+   }
 }
 
-TEST_CASE("driveTargetOutputs for JTAG also sets DIR_SWDIO") {
+TEST_CASE("driveTargetOutputs for JTAG also sets DIR_SWDIO high") {
    Recorder r;
-   r.drive(board::openMuppV1.shifters, ShifterGroups::OutAndSwdio, true);
-   r.drive(board::openMuppV1.shifters, ShifterGroups::OutAndSwdio, false);
-   CHECK(r.steps == std::vector<std::string>{ "pins", "B10=1", "C3=1", "B10=0", "C3=0", "pins" });
+   r.drive(board::openMuppV1, ShifterGroups::OutAndSwdio, true);
+   CHECK(r.steps == join({ v1Idle, { "pins", "dir B10=1", "dir C3=1" } }));
+}
+
+TEST_CASE("driveTargetOutputs without TRST skips it") {
+   board::Definition def = board::openMuppV1;
+   def.debug.trst = std::nullopt;
+   Recorder r;
+   r.drive(def, ShifterGroups::Out, true);
+   CHECK(r.steps == std::vector<std::string>{ "out B15=1", "out A2=0", "out A0=0", "pins", "dir B10=1" });
 }
 
 TEST_CASE("driveTargetOutputs without shifters only sets the MCU pins") {
    REQUIRE_FALSE(board::ydCh32V307.shifters.has_value());
    Recorder r;
-   r.drive(board::ydCh32V307.shifters, ShifterGroups::OutAndSwdio, true);
-   r.drive(board::ydCh32V307.shifters, ShifterGroups::OutAndSwdio, false);
+   r.drive(board::ydCh32V307, ShifterGroups::OutAndSwdio, true);
+   r.drive(board::ydCh32V307, ShifterGroups::OutAndSwdio, false);
    CHECK(r.steps == std::vector<std::string>{ "pins", "pins" });
 }
 
