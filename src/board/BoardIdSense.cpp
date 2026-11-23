@@ -44,7 +44,7 @@ bool BoardTargetGate::readAdapter() {
 
 bool BoardTargetGate::check(protocol::TargetProtocol protocol) {
    const bool read = readAdapter();
-   allowed_ = boardKnown_ && read && adapter_.kind != IdKind::Fault;
+   allowed_ = isTargetAllowed(boardKnown_, read ? std::optional<IdReading>(adapter_) : std::nullopt);
    if(!read) {
       LOG_ERROR(debug::appLog, "adapter ID: the ADC fails: the probe does not drive the target");
    } else if(!boardKnown_) {

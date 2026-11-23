@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 #include "board/VrefScale.h"
 #include "protocol/TargetGate.h"
@@ -104,9 +105,19 @@ constexpr const char *nameOf(TargetProtocol protocol) {
    return "";
 }
 
+// The decision of the target gate (decisions D14, D15): the board ID is a
+// known revision, the ADC gave the adapter ID (a value), and the adapter ID
+// is not a fault.
+constexpr bool isTargetAllowed(bool boardKnown, std::optional<IdReading> adapter) {
+   return boardKnown && adapter && adapter->kind != IdKind::Fault;
+}
+
 // The VPP rule (decision D2): VPP only on slot 8 (AVR high voltage) and
 // slot 9 (PIC high voltage), and with no adapter (pin open) when the setting
 // "VPP without an adapter" is on. Never on a fault or an unknown slot.
+// This rule does not know the board ID: the VPP driver uses
+// BoardTargetGate::isVppAllowed() (board/BoardIdSense.h), which also needs
+// isTargetAllowed().
 constexpr bool isVppAllowed(IdReading adapter, bool vppWithoutAdapter) {
    if(adapter.kind == IdKind::None) {
       return vppWithoutAdapter;

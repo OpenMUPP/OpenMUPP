@@ -125,3 +125,30 @@ TEST_CASE("The DAP_Info vendor string shows the adapter") {
    board::formatAdapterVendor(shortText, "OpenMUPP", { IdKind::Slot, 4 });
    CHECK(std::string(shortText) == "OpenMUPP, a");
 }
+
+TEST_CASE("The target gate decision: board ID, ADC and adapter fault") {
+   const IdReading arm{ IdKind::Slot, 4 };
+   CHECK(board::isTargetAllowed(true, arm));
+   CHECK(board::isTargetAllowed(true, IdReading{ IdKind::None, 0 }));
+   CHECK(board::isTargetAllowed(true, IdReading{ IdKind::Unknown, 6 }));
+   CHECK_FALSE(board::isTargetAllowed(true, IdReading{ IdKind::Fault, 0 }));
+   // An unknown board revision, and an ADC that fails
+   CHECK_FALSE(board::isTargetAllowed(false, arm));
+   CHECK_FALSE(board::isTargetAllowed(true, std::nullopt));
+}
+
+TEST_CASE("VPP needs the gate decision and the VPP rule") {
+   // As BoardTargetGate::isVppAllowed()
+   const auto vpp = [](bool boardKnown, std::optional<IdReading> adapter, IdReading last, bool setting) {
+      return board::isTargetAllowed(boardKnown, adapter) && board::isVppAllowed(last, setting);
+   };
+   const IdReading open{ IdKind::None, 0 };
+   const IdReading pic{ IdKind::Slot, 9 };
+   CHECK(vpp(true, open, open, true));
+   CHECK(vpp(true, pic, pic, false));
+   // Unknown board revision, pin 16 open, setting on
+   CHECK_FALSE(vpp(false, open, open, true));
+   CHECK_FALSE(vpp(false, pic, pic, false));
+   // The ADC fails: the old reading (no adapter) does not allow VPP
+   CHECK_FALSE(vpp(true, std::nullopt, open, true));
+}

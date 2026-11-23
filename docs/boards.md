@@ -532,7 +532,8 @@ Most host tools do not show this string, so the debug log is the main warning.
 The setting "VPP without an adapter" also allows VPP when pin 16 is open.
 The default is off. `ID_DAP_Vendor3` reads and writes the setting (see [VPP without an adapter](cmsis-dap.md#vpp-without-an-adapter)).
 A fault and an unknown slot never allow VPP.
-`board::isVppAllowed()` has this rule for the VPP driver. The firmware does not turn VPP on yet.
+The VPP driver must use `BoardTargetGate::isVppAllowed()` (`src/board/BoardIdSense.h`). It also refuses VPP in each case that refuses the connect: an unknown board revision, an adapter fault or an ADC failure.
+The firmware does not turn VPP on yet.
 
 ### Target power sequence
 

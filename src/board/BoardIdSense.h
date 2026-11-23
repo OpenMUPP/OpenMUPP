@@ -39,6 +39,13 @@ class BoardTargetGate final : public protocol::TargetGate {
       return allowed_;
    }
 
+   // The VPP rule for the VPP driver: the gate allows the target
+   // (isTargetAllowed()), and the last adapter reading allows VPP with the
+   // setting "VPP without an adapter" (board::isVppAllowed()).
+   [[nodiscard]] bool isVppAllowed(bool vppWithoutAdapter) const {
+      return allowed_ && board::isVppAllowed(adapter_, vppWithoutAdapter);
+   }
+
    // The last reading of the adapter ID
    [[nodiscard]] IdReading adapter() const {
       return adapter_;
