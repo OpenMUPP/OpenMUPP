@@ -18,7 +18,11 @@
 // above bitlen are 0 in the TDO reply.
 //
 // INIT drives TCK, TMS and TDI, and sets the speed to defaultKHz. FINI
-// releases these pins. CONFIG sets the TCK frequency; kHz = 0 selects
+// releases these pins.
+// With a target gate (setTargetGate(), protocol/TargetGate.h), INIT asks
+// the gate first (TargetProtocol::Jtag). When it refuses, INIT releases the
+// pins and replies FAILED, and each sub-command but INIT and FINI replies
+// FAILED until an INIT that the gate allows. CONFIG sets the TCK frequency; kHz = 0 selects
 // adaptive clocking with RTCK. A board without RTCK replies INVALID_PARA
 // to kHz = 0. When RTCK does not follow TCK, IN_OUT stops and replies
 // TIMEOUT. TRST and SRST are in the GPIO block (protocol/versaloon/GpioBlock.h).

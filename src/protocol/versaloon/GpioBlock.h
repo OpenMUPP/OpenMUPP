@@ -31,6 +31,10 @@
 // A pin that the board does not have is ignored, and reads as 0. A bit
 // above gpio::tms, or an output on TDO or RTCK, is INVALID_PARA.
 //
+// With a target gate (setTargetGate()), CONFIG of an output replies FAILED
+// while the gate refuses: after a refused connect of another block or
+// interface, or on a board that never allows it (protocol/TargetGate.h).
+//
 // hostGone() releases SRST and TRST: inputs with pull-up, as OpenOCD
 // releases SRST. Thus a target does not stay in reset when OpenOCD stops
 // while it asserts SRST.

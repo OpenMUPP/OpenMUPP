@@ -18,7 +18,11 @@
 // n = ceil(bitlen / 8); the first bit is the LSB of the first byte.
 //
 // INIT drives SWCLK and SWDIO and sets the default configuration. FINI
-// releases them. CONFIG:
+// releases them.
+// With a target gate (setTargetGate(), protocol/TargetGate.h), INIT asks
+// the gate first (TargetProtocol::Swd). When it refuses, INIT releases the
+// pins and replies FAILED, and each sub-command but INIT and FINI replies
+// FAILED until an INIT that the gate allows. CONFIG:
 //
 // - trn: the turnaround cycles of one transfer, both turnarounds together,
 //   as in the original firmware. OpenOCD sends 2: one cycle at each

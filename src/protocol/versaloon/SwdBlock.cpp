@@ -46,6 +46,17 @@ void SwdBlock::runSubCommand(const SubCommand &command, Reply &reply) {
       return;
    }
    const auto &payload = command.payload;
+   // A new reading of the adapter at INIT. A refused INIT also ends the
+   // old session.
+   if(command.command == subcommand::init && gate_ != nullptr && !gate_->check(TargetProtocol::Swd)) {
+      port_.fini();
+      slot->setStatus(Status::Failed);
+      return;
+   }
+   if(command.command != subcommand::init && command.command != subcommand::fini && isRefused()) {
+      slot->setStatus(Status::Failed);
+      return;
+   }
    switch(command.command) {
    case subcommand::init:
       port_.init();
