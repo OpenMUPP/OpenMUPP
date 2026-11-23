@@ -255,3 +255,13 @@ build-openmuppv1-cmsis-dap:
     BOARD: openmuppv1
     VARIANT: -cmsis-dap
   artifacts: null
+
+# The same image as a Debug build: the debug log goes to the CDC port and to
+# UART5 on J2. Build and size check only, no artifacts.
+build-openmuppv1-debug:
+  extends: .build-board-template
+  variables:
+    BOARD: openmuppv1
+    VARIANT: -debug
+    BUILD_TYPE: Debug
+  artifacts: null

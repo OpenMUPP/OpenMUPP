@@ -185,6 +185,23 @@ if (CMAKE_CROSSCOMPILING)
         message(FATAL_ERROR "MUPP_DEBUG_CDC is for debug builds: a Release build has no debug log. Set -DMUPP_DEBUG_CDC=OFF.")
     endif ()
 
+    # Debug log on the debug UART of the board (src/debug/DebugUart.h). Only
+    # the boards with a debugUart in their definition have it. It works with
+    # or without MUPP_DEBUG_CDC.
+    set(_mupp_boards_with_debug_uart openmuppv1)
+    if (BOARD IN_LIST _mupp_boards_with_debug_uart)
+        set(_MUPP_DEBUG_UART_DEFAULT ${_MUPP_DEBUG_DEFAULT})
+    else ()
+        set(_MUPP_DEBUG_UART_DEFAULT OFF)
+    endif ()
+    option(MUPP_DEBUG_UART "Send the debug log to the debug UART of the board" ${_MUPP_DEBUG_UART_DEFAULT})
+    if (MUPP_DEBUG_UART AND NOT BOARD IN_LIST _mupp_boards_with_debug_uart)
+        message(FATAL_ERROR "MUPP_DEBUG_UART: board ${BOARD} has no debug UART. Set -DMUPP_DEBUG_UART=OFF.")
+    endif ()
+    if (MUPP_DEBUG_UART AND CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "MUPP_DEBUG_UART is for debug builds: a Release build has no debug log. Set -DMUPP_DEBUG_UART=OFF.")
+    endif ()
+
     # Keep the SW-DP of the dongle MCU on (plan section 3): the board drops
     # its LEDs on the SWD pins (board::withSwd() in src/board/BoardDefinition.h).
     option(MUPP_DEBUG_SWD "Keep SWD of the dongle MCU on; drop the LEDs on the SWD pins" ${_MUPP_DEBUG_DEFAULT})
@@ -268,7 +285,11 @@ if (CMAKE_CROSSCOMPILING)
     endforeach ()
     if (MUPP_DEBUG_CDC)
         list(APPEND PROJECT_DEFINES MUPP_DEBUG_CDC)
-    else ()
+    endif ()
+    if (MUPP_DEBUG_UART)
+        list(APPEND PROJECT_DEFINES MUPP_DEBUG_UART)
+    endif ()
+    if (NOT MUPP_DEBUG_CDC AND NOT MUPP_DEBUG_UART)
         # The libArT LOG_* macros expand to nothing
         list(APPEND PROJECT_DEFINES LOGGING_DISABLED)
     endif ()
@@ -349,7 +370,7 @@ if (CMAKE_CROSSCOMPILING)
 
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/output_files.cmake")
 
-    MESSAGE(STATUS "Building openmupp version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${MUPP_APP_IMAGES}" ", personalities: " "${MUPP_PERSONALITY_SET}" ", default: " ${MUPP_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${MUPP_DEBUG_CDC} ", SWD on: " ${MUPP_DEBUG_SWD} ", RISC-V bridge: " ${MUPP_RV_BRIDGE} ", CMSIS-DAP HID: " ${MUPP_HID} ", AVR: " ${MUPP_AVR} ", strict size: " ${MUPP_STRICT_SIZE} ", LTO: " ${MUPP_LTO} ")")
+    MESSAGE(STATUS "Building openmupp version " ${FIRMWARE_VERSION} " (" ${CMAKE_BUILD_TYPE} ") for board: " ${BOARD} " (images: " "${MUPP_APP_IMAGES}" ", personalities: " "${MUPP_PERSONALITY_SET}" ", default: " ${MUPP_DEFAULT_PERSONALITY_NAME} ", debug log over CDC: " ${MUPP_DEBUG_CDC} ", over UART: " ${MUPP_DEBUG_UART} ", SWD on: " ${MUPP_DEBUG_SWD} ", RISC-V bridge: " ${MUPP_RV_BRIDGE} ", CMSIS-DAP HID: " ${MUPP_HID} ", AVR: " ${MUPP_AVR} ", strict size: " ${MUPP_STRICT_SIZE} ", LTO: " ${MUPP_LTO} ")")
 
     #----------------------------------------------------------------------------------------------------#
     # Main program

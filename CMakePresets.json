@@ -484,6 +484,15 @@
       ]
     },
     {
+      "name": "openmuppv1-debug",
+      "displayName": "OpenMUPP v1, CMSIS-DAP, Debug (firmware image)",
+      "inherits": [
+        "debug",
+        "board-openmuppv1",
+        "personalities-cmsis-dap"
+      ]
+    },
+    {
       "name": "host-tests",
       "displayName": "Host unit tests",
       "description": "Native build of the unit tests (no toolchain file)",
@@ -625,6 +634,10 @@
     {
       "name": "openmuppv1-cmsis-dap",
       "configurePreset": "openmuppv1-cmsis-dap"
+    },
+    {
+      "name": "openmuppv1-debug",
+      "configurePreset": "openmuppv1-debug"
     },
     {
       "name": "host-tests",

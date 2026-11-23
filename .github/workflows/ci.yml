@@ -94,6 +94,8 @@ jobs:
           - ydch32v307-cmsis-dap-avr-medbg
           # The OpenMUPP v1 probe board (CH32V307): build and size check only
           - openmuppv1-cmsis-dap
+          # The debug log on the debug UART (UART5)
+          - openmuppv1-debug
     steps:
       - uses: actions/checkout@v5
         with:
