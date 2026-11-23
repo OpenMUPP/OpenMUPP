@@ -40,6 +40,11 @@ class JtagRawBlock final : public SubCommandBlock {
    public:
    explicit JtagRawBlock(JtagPort &port);
 
+   // Releases the pins: a killed host must not leave the target driven.
+   void hostGone() override {
+      port_.fini();
+   }
+
    protected:
    void runSubCommand(const SubCommand &command, Reply &reply) override;
 

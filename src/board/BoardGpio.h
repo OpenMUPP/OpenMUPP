@@ -15,6 +15,11 @@ class BoardGpio final : public protocol::GpioPins {
    void configure(uint16_t bit, protocol::PinMode mode, bool level) override;
    void write(uint16_t mask, uint16_t value) override;
    [[nodiscard]] uint16_t read(uint16_t mask) const override;
+
+   private:
+   // The last mode request on SRST: write() changes an asserting output
+   // only (board::srstPinSetting()).
+   protocol::PinMode srstMode_{ protocol::PinMode::Input };
 };
 
 } // namespace board

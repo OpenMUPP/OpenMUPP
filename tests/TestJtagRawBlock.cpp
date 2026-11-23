@@ -105,6 +105,10 @@ class Bench {
 
    FakeJtagPort port;
 
+   void hostGone() {
+      dispatcher_.hostGone();
+   }
+
    private:
    std::size_t replySize_;
    NoDelay delay_;
@@ -128,6 +132,13 @@ TEST_CASE("JTAG_RAW: INIT, CONFIG and FINI") {
    CHECK(bench.run({ sub(subcommand::init), sub(subcommand::config, u32(4000)), sub(subcommand::fini) }) ==
          std::vector<uint8_t>{ 0, 0, 0 });
    CHECK(bench.port.calls == std::vector<std::string>{ "init", "speed 1000", "speed 4000", "fini" });
+}
+
+TEST_CASE("JTAG_RAW: the host gone releases the pins") {
+   Bench bench;
+   CHECK(bench.run({ sub(subcommand::init) }) == std::vector<uint8_t>{ 0 });
+   bench.hostGone();
+   CHECK(bench.port.calls == std::vector<std::string>{ "init", "speed 1000", "fini" });
 }
 
 TEST_CASE("JTAG_RAW: CONFIG with kHz 0 selects RTCK") {

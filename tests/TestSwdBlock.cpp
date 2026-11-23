@@ -125,6 +125,10 @@ class Bench {
 
    FakeSwdPort port;
 
+   void hostGone() {
+      dispatcher_.hostGone();
+   }
+
    private:
    std::size_t replySize_;
    NoDelay delay_;
@@ -170,6 +174,13 @@ TEST_CASE("SWD: request encoding sets start, parity, stop and park bits") {
 TEST_CASE("SWD: INIT sets the default configuration, FINI releases") {
    Bench bench;
    CHECK(bench.run({ sub(subcommand::init), sub(subcommand::fini) }) == std::vector<uint8_t>{ 0, 0 });
+   CHECK(bench.port.calls == std::vector<std::string>{ "init", "config 1 0 1", "fini" });
+}
+
+TEST_CASE("SWD: the host gone releases the pins") {
+   Bench bench;
+   CHECK(bench.run({ sub(subcommand::init) }) == std::vector<uint8_t>{ 0 });
+   bench.hostGone();
    CHECK(bench.port.calls == std::vector<std::string>{ "init", "config 1 0 1", "fini" });
 }
 

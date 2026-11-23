@@ -79,6 +79,11 @@ class SwdBlock final : public SubCommandBlock {
       return errorCount_;
    }
 
+   // Releases the pins: a killed host must not leave the target driven.
+   void hostGone() override {
+      port_.fini();
+   }
+
    protected:
    void runSubCommand(const SubCommand &command, Reply &reply) override;
 

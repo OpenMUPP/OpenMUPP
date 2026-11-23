@@ -413,6 +413,9 @@ These items are different:
 
 - UART bridge: UART7 on its remap pins, PA6 (TX) and PA7 (RX), with DMA (see [DMA on the CH32V307](uart-bridge.md#dma-on-the-ch32v307)).
 - `SRST` (PB12) drives the gate of a low-side FET (Q1). High pulls nRESET low (`srstActive` high).
+  `DAP_ResetTarget`, `DAP_SWJ_Pins`, `DAP_Disconnect` and the Versaloon GPIO block use this polarity.
+  These users set SRST as a push-pull output. A released SRST is a low output, not an input with pull-up.
+  A read of nRESET (`DAP_SWJ_Pins`, GPIO `IN`) uses the read-back pin PB11.
 - `VTREF_SENSE` (PB0) shows half of the target voltage.
 - LEDs: state on PA10 (red), USB on PA9 (green). Both are active high. The blue LED (PC4) is not used yet.
 - Debug log: UART5 on J2, PC12 (TX) and PD2 (RX), 115200 baud 8N1 (see [Debug log](debug-log.md#debug-uart)).
@@ -421,11 +424,17 @@ These items are different:
 
 The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definition hold the pins of the level shifters, the power functions and the ID dividers (see the table below).
 The start-up sets these pins to a safe state (see [Start-up and LEDs](#start-up-and-leds)).
-The engines and the power functions do not use the blocks yet.
-Thus only the UART bridge reaches the target:
+The engines use the `shifters` block for `DIR_OUT` (see the direction rule below).
+The power functions do not use the blocks yet.
+Only the UART bridge reaches the target:
 
 - The start-up sets `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) low. The external pull-downs hold them low while the MCU is in reset.
   Thus the TCK, TDI, TRST, AUX and SWDIO shifters work from the target to the probe. The target side stays high-impedance, and the shifters drive PB13, PB15, PB9, PA2, PA0 and PC11.
+- Before `DIR_OUT` goes high, each engine sets all MCU pins of the `DIR_OUT` group to outputs. The pins that the engine does not use get an idle level: TRST and TDI high, `AUX1` and `AUX2` low.
+  Then the engine sets `DIR_OUT` high.
+  At the end, the engine sets `DIR_OUT` and `DIR_SWDIO` low first. Then it sets the MCU pins to inputs.
+  The JTAG engines also set `DIR_SWDIO` high, because TMS is always an output.
+  The SWD and one-wire engines do not set `DIR_SWDIO` yet.
 - An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
   `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.
 - Only the CMSIS-DAP personality has this lock. A build with the Versaloon or WCH-Link personality fails for this board.

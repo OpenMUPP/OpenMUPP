@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "board/BoardRvSwd.h"
+#include "board/BoardTargetDrive.h"
 
 #include <array>
 #include <peripherals/Dma.h>
@@ -162,7 +163,8 @@ void RvSwdPins::init() {
    if(pins.tmsIn != pins.tmsOut) {
       gpioPin(pins.tmsIn).configure(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
    }
-   configureOutput(pins.tck, false);
+   // SWCLK only: SWDIO has its own shifter direction (DIR_SWDIO).
+   driveTargetOutputs(true, [&] { configureOutput(pins.tck, false); });
    configureOutput(pins.tmsOut, true);
    initOneWire();
 }

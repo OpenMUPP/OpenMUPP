@@ -140,8 +140,9 @@ The [pinout image](boards.md#yd-ch32v307vct6-development-board) shows the ISP pi
 
 ### OpenMUPP v1 board
 
-The board definition of OpenMUPP v1 (`openmuppv1`) has the AVR pins, but the firmware does not drive the shifter direction pins yet.
-Thus the firmware keeps the target pins, and the AVR commands do not start on this board today (see [OpenMUPP v1 probe board](boards.md#openmupp-v1-probe-board)).
+The board definition of OpenMUPP v1 (`openmuppv1`) has the AVR pins.
+The ISP engine sets `DIR_OUT` high after SCK, MOSI and the other pins of the `DIR_OUT` group become outputs. It sets `DIR_OUT` low before they become inputs.
+The board definition still sets `debugOutputs` to false. Thus the firmware keeps the target pins, and the AVR commands do not start on this board today (see [OpenMUPP v1 probe board](boards.md#openmupp-v1-probe-board)).
 The adapter that maps the target connector J4 to the ICSP pins is part of the board design.
 See the [board repository](https://github.com/OpenMUPP/openmupp-v1) for the pin map of J4.
 
