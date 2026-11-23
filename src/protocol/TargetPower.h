@@ -19,7 +19,8 @@
 //   - 5 V is selected and the input of the 5 V switch is below
 //     min5vInputMillivolts, or cannot be measured: the USB supply is weak;
 //   - the target gate refuses (setTargetGate(), protocol/TargetGate.h). The
-//     supply then also goes off when it is on.
+//     supply then also goes off when it is on. poll() also switches the
+//     supply off after a check of a protocol that the gate refused.
 //
 // A change between 3.3 V and 5 V uses the sequence of docs/boards.md
 // ("Target power sequence"): both switches off, wait changeOffMs, for 5 V

@@ -503,7 +503,8 @@ The firmware refuses the connect in these cases:
 - The adapter ID is a fault.
 - The ADC fails.
 
-A refused connect does not drive the target pins, and the target power stays off. A supply that is on goes off.
+A refused connect does not drive the target pins, and the target power stays off.
+A supply that is on goes off in the next main loop iteration, also after a refused connect of a protocol.
 The refusal is an error in the debug log.
 The host sees the refusal as follows:
 

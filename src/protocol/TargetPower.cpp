@@ -35,6 +35,12 @@ void TargetPower::takeHardwareFault() {
 
 void TargetPower::poll(uint64_t nowMs) {
    takeHardwareFault();
+   // A refused connect of a protocol (an adapter fault) also removes the
+   // supply, within one main loop.
+   if(isOn() && gate_ != nullptr && !gate_->isAllowed()) {
+      switchOff();
+      return;
+   }
    if(!isOn() || !hardware_.hasSense() || nowMs - lastCheckMs_ < pollIntervalMs) {
       return;
    }

@@ -191,3 +191,18 @@ TEST_CASE("Target supply: the target gate refuses the switch-on and switches off
    CHECK(b.power.switchOn(Supply::V5) == Result::Refused);
    CHECK(b.hardware.selections.size() == 2);
 }
+
+TEST_CASE("Target supply: poll() switches off after a refused connect of a protocol") {
+   Bench b;
+   mupptest::FakeTargetGate gate;
+   b.power.setTargetGate(gate);
+   REQUIRE(b.power.switchOn(Supply::V3v3) == Result::Ok);
+   b.power.poll(0);
+   CHECK(b.power.isOn());
+   // A DAP_Connect sees an adapter fault
+   gate.allow = false;
+   CHECK_FALSE(gate.check(protocol::TargetProtocol::Swd));
+   b.power.poll(1);
+   CHECK_FALSE(b.power.isOn());
+   CHECK(b.hardware.selections.back() == Supply::Off);
+}
