@@ -261,6 +261,29 @@ TEST_CASE("DAP JTAG: DAP_Info reports JTAG with a JTAG port") {
    CHECK(b.run({ 0x00, 0xF0 }) == V{ 0x00, 0x01, 0x13 });
 }
 
+TEST_CASE("DAP JTAG: each JTAG command drives the pins at its first use") {
+   const std::vector<V> commands{
+      { 0x14, 0x01, 0x08, 0x00 }, // DAP_JTAG_Sequence
+      { 0x16, 0x00 },             // DAP_JTAG_IDCODE
+      { 0x05, 0x00, 0x01, 0x02 }, // DAP_Transfer
+   };
+   for(const V &command : commands) {
+      Bench b;
+      CHECK(b.run({ 0x02, 0x02 }) == V{ 0x02, 0x02 });
+      CHECK(b.pins.inits == 0);
+      static_cast<void>(b.run(command));
+      CHECK(b.pins.inits == 1);
+      static_cast<void>(b.run(command));
+      CHECK(b.pins.inits == 1);
+   }
+   // DAP_SWD_Sequence on SWD
+   Bench b;
+   CHECK(b.run({ 0x02, 0x01 }) == V{ 0x02, 0x01 });
+   CHECK(b.swd.inits == 0);
+   CHECK(b.run({ 0x1D, 0x01, 0x08, 0xFF }) == V{ 0x1D, 0x00 });
+   CHECK(b.swd.inits == 1);
+}
+
 TEST_CASE("DAP JTAG: DAP_Connect and DAP_Disconnect") {
    Bench b;
    CHECK(b.run({ 0x02, 0x02 }) == V{ 0x02, 0x02 });
