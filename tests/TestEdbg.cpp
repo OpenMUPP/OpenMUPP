@@ -6,6 +6,7 @@
 // debugWIRE sessions.
 
 #include "EdbgBench.h"
+#include "FakeTargetGate.h"
 
 #include <doctest/doctest.h>
 
@@ -270,6 +271,18 @@ TEST_CASE("EDBG: ISP programming mode and the pins of the other interface") {
       CHECK(b.isp(request) == Bytes{ isp::command::enterProgmode, isp::status::failed });
       CHECK_FALSE(b.pins.driven);
       CHECK(b.owner.owner() == PinClient::None);
+   }
+   SUBCASE("the target gate refuses: ENTER_PROGMODE fails without a pin change") {
+      mupptest::FakeTargetGate gate;
+      gate.allow = false;
+      b.edbg.setTargetGate(gate);
+      CHECK(b.isp(enterRequest) == Bytes{ isp::command::enterProgmode, isp::status::failed });
+      CHECK(gate.checks == std::vector{ protocol::TargetProtocol::Avr });
+      CHECK(b.pins.inits == 0);
+      CHECK(b.target.resets == 0);
+      CHECK(b.owner.owner() == PinClient::None);
+      gate.allow = true;
+      b.enterProgmode();
    }
    SUBCASE("other ISP commands do not touch the owner") {
       CHECK(b.hidCommand({ 0x02, 0x01 })[1] == 0x01);

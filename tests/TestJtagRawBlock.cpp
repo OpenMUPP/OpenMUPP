@@ -4,6 +4,8 @@
 #include "protocol/versaloon/JtagRawBlock.h"
 #include "protocol/versaloon/UsbToAll.h"
 
+#include "FakeTargetGate.h"
+
 #include <doctest/doctest.h>
 
 #include <array>
@@ -109,6 +111,10 @@ class Bench {
       dispatcher_.hostGone();
    }
 
+   void setTargetGate(protocol::TargetGate &gate) {
+      block_.setTargetGate(gate);
+   }
+
    private:
    std::size_t replySize_;
    NoDelay delay_;
@@ -209,4 +215,17 @@ TEST_CASE("JTAG_RAW: an IN_OUT whose TDO does not fit shifts no bit") {
    Bench bench(4);
    CHECK(bench.run({ inOut(24, { 1, 2, 3 }, { 0, 0, 0 }), inOut(32, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }) }).empty());
    CHECK(bench.port.calls == std::vector<std::string>{ "shift 24" });
+}
+
+TEST_CASE("JTAG_RAW: INIT asks the target gate, a refused INIT ends the session") {
+   Bench bench;
+   mupptest::FakeTargetGate gate;
+   bench.setTargetGate(gate);
+   CHECK(bench.run({ sub(subcommand::init) }) == std::vector<uint8_t>{ 0 });
+   CHECK(gate.checks == std::vector{ protocol::TargetProtocol::Jtag });
+   gate.allow = false;
+   bench.port.calls.clear();
+   CHECK(bench.run({ sub(subcommand::init), sub(subcommand::config, u32(4000)), sub(subcommand::fini) }) ==
+         std::vector<uint8_t>{ 1, 1, 0 });
+   CHECK(bench.port.calls == std::vector<std::string>{ "fini", "fini" });
 }

@@ -3,21 +3,27 @@
 #pragma once
 
 // The settings of an image: the stored personality of an image with more
-// than one personality (MUPP_MULTI_PERSONALITY), and the stored mode of the
-// RISC-V bridge (MUPP_CMSIS_DAP_RV_BRIDGE). They are in one flash page at
+// than one personality (MUPP_MULTI_PERSONALITY), the stored mode of the
+// RISC-V bridge (MUPP_CMSIS_DAP_RV_BRIDGE), and the setting "VPP without an
+// adapter" of a board with an adapter ID (board/IdSense.h, ID_DAP_Vendor3).
+// They are in one flash page at
 // the end of the application area. Hardware-independent: the host unit
 // tests run it on a fake page. board/SettingsFlashPage.h has the page of
 // the target.
 //
-// The page is a log of 16-bit records. An erased slot is 0xFFFF. Each pair
-// of a personality and a bridge mode has one record value (recordOf()). The
+// The page is a log of 16-bit records. An erased slot is 0xFFFF. Each set
+// of a personality, a bridge mode and the VPP setting has one record value
+// (recordOf()). The
 // first erased slot ends the log, and the record before it holds the
 // stored settings. Each store writes the next slot, so the page is erased
 // only when it is full: one erase for each slot of the page. A store of
-// one setting writes the other setting of the last record again.
+// one setting writes the other settings of the last record again.
 //
 // The records of the bridge mode auto are the records of the older images,
-// which stored only the personality. Such a page thus gives auto.
+// which stored only the personality. Such a page thus gives auto. The
+// records with the VPP setting off are the records of the images before
+// the VPP setting. An older image does not know a record with the VPP
+// setting on: it then starts with its default settings.
 //
 // A write clears bits from 1 to 0, so a write that a power loss cut keeps
 // some 1 bits of the erased slot. The record values have 8 bits set each,
@@ -27,7 +33,7 @@
 // page with data after the first erased slot is not a log (for example
 // code of an older, larger image): a store erases it first. Limit: in such
 // a page, the word before the first erased slot can be a record by chance
-// (12 of 65536 values). The image then starts with those settings until
+// (24 of 65536 values). The image then starts with those settings until
 // the next store. When a write to a slot that reads as erased fails, the
 // store erases the page and writes slot 0.
 
@@ -63,6 +69,8 @@ inline constexpr uint8_t bridgeModeAuto = 2;
 struct Settings {
    Personality personality;
    uint8_t bridgeMode{ bridgeModeAuto };
+   // VPP is also allowed when no adapter is connected (decision D2)
+   bool vppWithoutAdapter{ false };
 
    constexpr bool operator==(const Settings &) const = default;
 };
@@ -71,25 +79,31 @@ class PersonalityStore {
    public:
    static constexpr uint16_t erasedSlot = 0xFFFF;
 
-   // The record of a personality code (below maxPersonalities) and a bridge
-   // mode (below bridgeModes). Each value has 8 bits set and the values
-   // differ, so none has all the bits of another.
-   static constexpr uint16_t recordOfCode(uint8_t code, uint8_t bridgeMode = bridgeModeAuto) {
+   // The record of a personality code (below maxPersonalities), a bridge
+   // mode (below bridgeModes) and the VPP setting. Each value has 8 bits set
+   // and the values differ, so none has all the bits of another.
+   static constexpr uint16_t recordOfCode(uint8_t code, uint8_t bridgeMode = bridgeModeAuto, bool vppWithoutAdapter = false) {
       // Rows: off, on, auto. The auto row has the records of the older images.
       constexpr std::array<std::array<uint16_t, maxPersonalities>, bridgeModes> records{ {
       { 0x0FF0, 0xF00F, 0x33CC, 0xCC33 },
       { 0x6699, 0x9966, 0x55AA, 0xAA55 },
       { 0xA55A, 0x5AA5, 0x3CC3, 0xC33C },
       } };
-      return records[bridgeMode][code];
+      // The same rows with the VPP setting on
+      constexpr std::array<std::array<uint16_t, maxPersonalities>, bridgeModes> vppRecords{ {
+      { 0x0F0F, 0xF0F0, 0x00FF, 0xFF00 },
+      { 0x3333, 0xCCCC, 0x5555, 0xAAAA },
+      { 0x6666, 0x9999, 0x3C3C, 0xC3C3 },
+      } };
+      return (vppWithoutAdapter ? vppRecords : records)[bridgeMode][code];
    }
 
-   static constexpr uint16_t recordOf(Personality personality, uint8_t bridgeMode = bridgeModeAuto) {
-      return recordOfCode(toCode(personality), bridgeMode);
+   static constexpr uint16_t recordOf(Personality personality, uint8_t bridgeMode = bridgeModeAuto, bool vppWithoutAdapter = false) {
+      return recordOfCode(toCode(personality), bridgeMode, vppWithoutAdapter);
    }
 
    static constexpr uint16_t recordOf(const Settings &settings) {
-      return recordOf(settings.personality, settings.bridgeMode);
+      return recordOf(settings.personality, settings.bridgeMode, settings.vppWithoutAdapter);
    }
 
    explicit PersonalityStore(FlashPage &page)
@@ -108,8 +122,10 @@ class PersonalityStore {
       // mode then keeps the personality of another image.
       for(uint8_t code = 0; code < maxPersonalities; ++code) {
          for(uint8_t mode = 0; mode < bridgeModes; ++mode) {
-            if(record == recordOfCode(code, mode)) {
-               return Settings{ static_cast<Personality>(code), mode };
+            for(const bool vpp : { false, true }) {
+               if(record == recordOfCode(code, mode, vpp)) {
+                  return Settings{ static_cast<Personality>(code), mode, vpp };
+               }
             }
          }
       }
@@ -148,20 +164,30 @@ class PersonalityStore {
       return page_.program(0, recordOf(settings)) && loadSettings() == settings;
    }
 
-   // Stores the personality with the stored bridge mode, auto when the
-   // page holds no valid record. True when load() then returns it.
+   // Stores the personality with the other stored settings, the defaults
+   // when the page holds no valid record. True when load() then returns it.
    bool store(Personality personality) {
-      const auto settings = loadSettings();
-      return store(Settings{ personality, settings ? settings->bridgeMode : bridgeModeAuto });
+      Settings settings = loadSettings().value_or(Settings{ personality });
+      settings.personality = personality;
+      return store(settings);
    }
 
-   // Stores the bridge mode with the stored personality, also one that is
-   // not in the image. active: the personality when the page holds no
-   // valid record. True when
-   // loadSettings() then has the mode.
+   // Stores the bridge mode with the other stored settings, also a
+   // personality that is not in the image. active: the personality when
+   // the page holds no valid record. True when loadSettings() then has the
+   // mode.
    bool storeBridgeMode(uint8_t bridgeMode, Personality active) {
-      const auto settings = loadSettings();
-      return store(Settings{ settings ? settings->personality : active, bridgeMode });
+      Settings settings = loadSettings().value_or(Settings{ active });
+      settings.bridgeMode = bridgeMode;
+      return store(settings);
+   }
+
+   // Stores the VPP setting with the other stored settings, as
+   // storeBridgeMode(). True when loadSettings() then has the setting.
+   bool storeVppWithoutAdapter(bool allowed, Personality active) {
+      Settings settings = loadSettings().value_or(Settings{ active });
+      settings.vppWithoutAdapter = allowed;
+      return store(settings);
    }
 
    private:

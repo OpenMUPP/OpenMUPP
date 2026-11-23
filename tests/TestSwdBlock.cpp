@@ -5,6 +5,8 @@
 #include "protocol/versaloon/SwdBlock.h"
 #include "protocol/versaloon/UsbToAll.h"
 
+#include "FakeTargetGate.h"
+
 #include <doctest/doctest.h>
 
 #include <array>
@@ -127,6 +129,10 @@ class Bench {
 
    void hostGone() {
       dispatcher_.hostGone();
+   }
+
+   void setTargetGate(protocol::TargetGate &gate) {
+      block_.setTargetGate(gate);
    }
 
    private:
@@ -302,4 +308,18 @@ TEST_CASE("SWD: a transfer whose reply does not fit does not run") {
    Bench bench(8);
    CHECK(bench.run({ transact(0xA5, 0), transact(0xA5, 0) }).empty());
    CHECK(bench.port.calls.size() == 1);
+}
+
+TEST_CASE("SWD: INIT asks the target gate, a refused INIT ends the session") {
+   Bench bench;
+   mupptest::FakeTargetGate gate;
+   bench.setTargetGate(gate);
+   CHECK(bench.run({ sub(subcommand::init) }) == std::vector<uint8_t>{ 0 });
+   CHECK(gate.checks == std::vector{ protocol::TargetProtocol::Swd });
+   gate.allow = false;
+   bench.port.calls.clear();
+   CHECK(bench.run({ sub(subcommand::init), config(2, 0, 1), sub(subcommand::fini) }) == std::vector<uint8_t>{ 1, 1, 0 });
+   CHECK(bench.port.calls == std::vector<std::string>{ "fini", "fini" });
+   gate.allow = true;
+   CHECK(bench.run({ sub(subcommand::init) }) == std::vector<uint8_t>{ 0 });
 }

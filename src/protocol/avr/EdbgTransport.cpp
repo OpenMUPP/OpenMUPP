@@ -377,11 +377,21 @@ void EdbgTransport::housekeeping(art::span<const uint8_t> payload, Writer &out) 
    }
 }
 
+namespace {
+
+// A new reading of the adapter at each start of an AVR interface
+bool gateAllows(protocol::TargetGate *gate) {
+   return gate == nullptr || gate->check(protocol::TargetProtocol::Avr);
+}
+
+} // namespace
+
 void EdbgTransport::avrIsp(art::span<const uint8_t> payload, Writer &out) {
    constexpr protocol::PinClient client = protocol::PinClient::CmsisDapHid;
    const uint8_t id = payload.empty() ? 0 : payload[0];
-   if(id == isp::command::enterProgmode && (avr8_.active() || (owner_ != nullptr && !owner_->acquire(client)))) {
-      // The v2 interface owns the pins, or debugWIRE uses them.
+   if(id == isp::command::enterProgmode &&
+      (avr8_.active() || !gateAllows(gate_) || (owner_ != nullptr && !owner_->acquire(client)))) {
+      // The v2 interface owns the pins, debugWIRE uses them, or the gate refuses.
       out.u8(id);
       out.u8(isp::status::failed);
       return;
@@ -402,8 +412,9 @@ void EdbgTransport::avrIsp(art::span<const uint8_t> payload, Writer &out) {
 void EdbgTransport::avr8(art::span<const uint8_t> payload, Writer &out) {
    const uint8_t id = payload.empty() ? 0 : payload[0];
    const bool activate = id == avr8::command::activatePhysical && !avr8_.active();
-   if(activate && (isp_.programming() || (owner_ != nullptr && !owner_->acquire(protocol::PinClient::CmsisDapHid)))) {
-      // The v2 interface owns the pins, or the ISP programming mode uses them.
+   if(activate && (isp_.programming() || !gateAllows(gate_) ||
+                   (owner_ != nullptr && !owner_->acquire(protocol::PinClient::CmsisDapHid)))) {
+      // The v2 interface owns the pins, the ISP programming mode uses them, or the gate refuses.
       out.failed(avr8::failure::invalidConfig);
       return;
    }

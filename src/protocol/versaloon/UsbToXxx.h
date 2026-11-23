@@ -25,6 +25,8 @@
 #include <optional>
 #include <utils/compat/span.h>
 
+#include "protocol/TargetGate.h"
+
 namespace protocol {
 
 // Block types (the USB_TO_XXX command codes)
@@ -176,6 +178,12 @@ class SubCommandBlock : public Block {
    [[nodiscard]] bool isWellFormed(art::span<const uint8_t> payload) const final;
    void run(art::span<const uint8_t> payload, Reply &reply) final;
 
+   // The target gate (protocol/TargetGate.h) of a block that drives the
+   // target pins. It must outlive the block.
+   void setTargetGate(TargetGate &gate) {
+      gate_ = &gate;
+   }
+
    protected:
    explicit SubCommandBlock(uint8_t type)
       : Block(type) {
@@ -186,6 +194,14 @@ class SubCommandBlock : public Block {
    // reply.reserve() before it changes the hardware, and does nothing when
    // reserve() has no value.
    virtual void runSubCommand(const SubCommand &command, Reply &reply) = 0;
+
+   // False when the gate refused the last connect. The SWD and JTAG blocks
+   // then reply FAILED to each sub-command but INIT and FINI.
+   [[nodiscard]] bool isRefused() const {
+      return gate_ != nullptr && !gate_->isAllowed();
+   }
+
+   TargetGate *gate_{ nullptr };
 };
 
 // Reads a little-endian u16 or u32 at data[offset]. The caller checks the

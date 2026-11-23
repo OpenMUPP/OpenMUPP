@@ -201,6 +201,10 @@ bool Processor::connect() {
       endProgram();
    }
    detach();
+   // A new reading of the adapter at each connect
+   if(gate_ != nullptr && !gate_->check(protocol::TargetProtocol::RvSwd)) {
+      return false;
+   }
    // One wire first: its frames change SWDIO only while SWCLK is low, so a
    // two-wire target sees no start or stop condition in them. The frames of
    // two wires would be noise on the line of a one-wire target.

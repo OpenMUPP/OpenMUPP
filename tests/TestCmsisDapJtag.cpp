@@ -7,6 +7,7 @@
 #include "jtag/JtagFastPath.h"
 #include "protocol/cmsisdap/DapProcessor.h"
 
+#include "FakeTargetGate.h"
 #include "MockJtagDp.h"
 #include "MockJtagPins.h"
 #include "MockJtagSpi.h"
@@ -695,4 +696,16 @@ TEST_CASE("DAP JTAG: the fast path does the same transfers") {
    CHECK(b.run(request) == cat({ { 0x05, 0x04, 0x01 }, word(0xF0000000), word(0x600DF00D) }));
    CHECK_FALSE(b.port.spi().transfers.empty());
    CHECK_FALSE(b.port.spi().tckLowAtTransfer);
+}
+
+TEST_CASE("DAP JTAG: DAP_Connect to JTAG asks the target gate") {
+   Bench b;
+   mupptest::FakeTargetGate gate;
+   b.dap.setTargetGate(gate);
+   b.connect();
+   CHECK(gate.checks == std::vector{ protocol::TargetProtocol::Jtag });
+   gate.allow = false;
+   CHECK(b.run({ 0x02, 0x02 }) == V{ 0x02, 0x00 });
+   CHECK(b.pins.finis == 1);
+   CHECK_FALSE(b.dap.connected());
 }

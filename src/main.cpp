@@ -15,6 +15,7 @@
 #include "Version.h"
 #include "board/Board.h"
 #include "board/BoardGpio.h"
+#include "board/BoardIdSense.h"
 #include "board/BoardJtag.h"
 #include "board/BoardPower.h"
 #include "board/BoardSwd.h"
@@ -128,6 +129,11 @@ bool isActive(Personality personality) {
 // sense in every personality.
 board::BoardPower boardPower;
 
+// The adapter ID and the board ID (board/BoardIdSense.h). Only a board with
+// an IdSense block gives it to the protocols: the other boards have no gate.
+constexpr bool hasTargetGate = board::current.idSense.has_value();
+board::BoardTargetGate targetGate{ boardPower };
+
 #if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
 
 // The DELAY block busy-waits: the main loop stops for the delay, up to
@@ -194,7 +200,8 @@ wchlink::Processor wchProcessor{ wchTarget, wchPlatform };
 // --- CMSIS-DAP --------------------------------------------------------
 // The CMSIS-DAP strings are NUL-terminated and must stay valid, so the
 // processor keeps a pointer to the serial number text.
-constexpr const char *dapVendor = "OpenMUPP";
+// With the target gate, the vendor string also shows the adapter.
+const char *const dapVendor = hasTargetGate ? targetGate.vendorText() : "OpenMUPP";
 constexpr const char *dapProduct = "OpenMUPP CMSIS-DAP";
 
 std::array<char, 2 * hw::Uid::SizeBytes + 1> dapSerialNumber{};
@@ -270,6 +277,24 @@ class BridgeModeFlash final : public cmsisdap::BridgeModeStore {
 };
 
 BridgeModeFlash dapRvModeStore;
+
+// The setting "VPP without an adapter" of ID_DAP_Vendor3: in the settings
+// page, with the personality and the bridge mode.
+class VppSettingFlash final : public cmsisdap::VppSetting {
+   public:
+   [[nodiscard]] bool load() const override {
+      board::SettingsFlashPage page;
+      const auto settings = personality::PersonalityStore{ page }.loadSettings();
+      return settings && settings->vppWithoutAdapter;
+   }
+
+   bool store(bool allowed) override {
+      board::SettingsFlashPage page;
+      return personality::PersonalityStore{ page }.storeVppWithoutAdapter(allowed, activePersonality);
+   }
+};
+
+VppSettingFlash dapVppSetting;
 cmsisdap::RvBridge dapRvBridge{ boardJtag, dapSwd, dapRvTap, dapRvModeStore, BridgeModeFlash::load() };
 #endif
 const cmsisdap::DeviceInfo dapInfo{
@@ -379,6 +404,19 @@ void startDap() {
 #if defined(MUPP_CMSIS_DAP_AVR)
    dapHidProcessor.setVendorCommands(edbgTransport);
 #endif
+   if constexpr(hasTargetGate) {
+      dapProcessor.setTargetGate(targetGate);
+#if defined(MUPP_CMSIS_DAP_HID)
+      dapHidProcessor.setTargetGate(targetGate);
+#endif
+#if defined(MUPP_CMSIS_DAP_AVR)
+      edbgTransport.setTargetGate(targetGate);
+#endif
+#if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
+      // The settings page is in the image with the bridge
+      dapProcessor.setVppSetting(dapVppSetting);
+#endif
+   }
 }
 
 #endif
@@ -410,6 +448,11 @@ void startVersaloon() {
       LOG_ERROR(debug::appLog, "USB_TO_ALL: cannot add the POWER block");
    }
    usbToAll.setTargetVoltage(&powerBlock);
+   if constexpr(hasTargetGate) {
+      gpioBlock.setTargetGate(targetGate);
+      jtagRawBlock.setTargetGate(targetGate);
+      swdBlock.setTargetGate(targetGate);
+   }
 }
 
 #endif
@@ -501,6 +544,15 @@ void pollPersonality(uint64_t nowMs) {
 // Before the first command
 void startProtocol() {
    boardPower.init();
+   if constexpr(hasTargetGate) {
+      targetGate.init();
+#if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
+      targetPower.setTargetGate(targetGate);
+#endif
+#if defined(MUPP_WITH_WCH_LINK)
+      wchProcessor.setTargetGate(targetGate);
+#endif
+   }
 #if defined(MUPP_WITH_CMSIS_DAP)
    if(isActive(Personality::CmsisDap)) {
       startDap();

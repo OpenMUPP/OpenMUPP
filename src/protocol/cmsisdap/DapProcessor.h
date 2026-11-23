@@ -30,6 +30,7 @@
 //   0x1A DAP_SWO_Control        0x80 ID_DAP_Vendor0
 //   0x1B DAP_SWO_Status         0x81 ID_DAP_Vendor1
 //   0x1C DAP_SWO_Data           0x82 ID_DAP_Vendor2
+//                               0x83 ID_DAP_Vendor3
 //   0x1E DAP_SWO_ExtendedStatus
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
@@ -100,6 +101,12 @@
 //   and op 3 reply status 1 while the other processor owns the pins: only the
 //   owner, or any processor while nobody owns the pins, switches the
 //   supply on. Op 0 always works.
+// - ID_DAP_Vendor3 [0x83][op u8] -> [0x83][status u8][setting u8] reads
+//   and writes the setting "VPP without an adapter" (VppSetting,
+//   setVppSetting()): op 0 stores off, 1 stores on, 2 only reads. The
+//   status is DAP_OK (0), or DAP_ERROR (0xFF) for another op and for a
+//   failed store. setting is the stored value after the operation: 0 off,
+//   1 on. Without a VppSetting, the command replies ID_DAP_Invalid.
 // - With vendor commands (setVendorCommands()), 0x80-0x82 go to that
 //   object instead (the EDBG commands AVR_CMD, AVR_RSP, AVR_EVT on the HID
 //   interface). They take the rest of the packet, so in a
@@ -119,6 +126,11 @@
 //   applies them. ID_DAP_Vendor1 replies DAP_ERROR, and hostGone() keeps
 //   the bridge mode, while the other processor owns the pins: the bridge
 //   is its JTAG port too.
+// - With a target gate (setTargetGate(), protocol/TargetGate.h), DAP_Connect
+//   asks the gate first (TargetGate::check()). When the gate refuses,
+//   DAP_Connect ends the old port and replies port 0. DAP_SWJ_Pins and
+//   DAP_ResetTarget then work as when the other processor owns the pins
+//   (see below), until a DAP_Connect that the gate allows.
 // - errorCount() counts the transfers of DAP_Transfer and DAP_TransferBlock
 //   that end with an error on the wire: FAULT, no acknowledge, a parity
 //   error, or WAIT after all retries. A WAIT that DAP_TransferAbort stops
@@ -198,6 +210,7 @@
 
 #include "protocol/GpioPins.h"
 #include "protocol/JtagPort.h"
+#include "protocol/TargetGate.h"
 #include "protocol/TargetPinOwner.h"
 #include "protocol/TargetPower.h"
 #include "protocol/cmsisdap/DapJtag.h"
@@ -250,6 +263,7 @@ inline constexpr uint8_t uartStatus = 0x23;
 inline constexpr uint8_t vendor0 = 0x80;
 inline constexpr uint8_t vendor1 = 0x81;
 inline constexpr uint8_t vendor2 = 0x82;
+inline constexpr uint8_t vendor3 = 0x83;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
 inline constexpr uint8_t invalid = 0xFF;
@@ -343,6 +357,18 @@ class Bridge {
 
    protected:
    ~Bridge() = default;
+};
+
+// The stored setting "VPP without an adapter" of ID_DAP_Vendor3 (board/IdSense.h)
+class VppSetting {
+   public:
+   // The stored value: false when none is stored
+   [[nodiscard]] virtual bool load() const = 0;
+   // False when the store failed
+   virtual bool store(bool allowed) = 0;
+
+   protected:
+   ~VppSetting() = default;
 };
 
 // The vendor commands 0x80-0x82 of one processor (setVendorCommands())
@@ -460,6 +486,18 @@ class Processor final : private TransferAbort {
       pinClient_ = client;
    }
 
+   // Asks `gate` at each DAP_Connect. The gate must outlive the processor.
+   // Call it before the first packet.
+   void setTargetGate(protocol::TargetGate &gate) {
+      gate_ = &gate;
+   }
+
+   // Gives ID_DAP_Vendor3 to `setting`, which must outlive the processor.
+   // Call it before the first packet.
+   void setVppSetting(VppSetting &setting) {
+      vppSetting_ = &setting;
+   }
+
    // Sends the commands 0x80-0x82 to `vendor`, which must outlive the
    // processor. Call it before the first packet.
    void setVendorCommands(VendorCommands &vendor) {
@@ -528,6 +566,7 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool switchPersonality(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool switchBridge(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool targetPower(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool vppSettingCommand(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartCommand(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool swoCommand(uint8_t id, PacketReader &in, PacketWriter &out);
@@ -564,6 +603,8 @@ class Processor final : private TransferAbort {
    Bridge *bridge_;
    protocol::TargetPower *power_;
    VendorCommands *vendor_{ nullptr };
+   protocol::TargetGate *gate_{ nullptr };
+   VppSetting *vppSetting_{ nullptr };
    DapSwo *swo_{ nullptr };
    bool swoStreaming_{ false };
    protocol::TargetPinOwner *pinOwner_{ nullptr };

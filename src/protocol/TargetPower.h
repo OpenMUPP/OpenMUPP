@@ -17,7 +17,10 @@
 //   - the supply is off and the target voltage cannot be measured on a
 //     board with a sense;
 //   - 5 V is selected and the input of the 5 V switch is below
-//     min5vInputMillivolts, or cannot be measured: the USB supply is weak.
+//     min5vInputMillivolts, or cannot be measured: the USB supply is weak;
+//   - the target gate refuses (setTargetGate(), protocol/TargetGate.h). The
+//     supply then also goes off when it is on. poll() also switches the
+//     supply off after a check of a protocol that the gate refused.
 //
 // A change between 3.3 V and 5 V uses the sequence of docs/boards.md
 // ("Target power sequence"): both switches off, wait changeOffMs, for 5 V
@@ -43,6 +46,7 @@
 
 #include "protocol/Delay.h"
 #include "protocol/PowerHardware.h"
+#include "protocol/TargetGate.h"
 
 namespace protocol {
 
@@ -77,6 +81,11 @@ class TargetPower {
    };
 
    TargetPower(PowerHardware &hardware, Delay &delay);
+
+   // Asks `gate` at each switchOn(). The gate must outlive the object.
+   void setTargetGate(TargetGate &gate) {
+      gate_ = &gate;
+   }
 
    // Switches the supply on at 3.3 V or 5 V, or changes the voltage.
    // Supply::Off is the same as switchOff().
@@ -125,6 +134,7 @@ class TargetPower {
 
    PowerHardware &hardware_;
    Delay &delay_;
+   TargetGate *gate_{ nullptr };
    Supply supply_{ Supply::Off };
    unsigned lowChecks_{ 0 };
    uint64_t lastCheckMs_{ 0 };

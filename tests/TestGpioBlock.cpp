@@ -10,6 +10,8 @@
 
 #include "VersaloonBench.h"
 
+#include "FakeTargetGate.h"
+
 #include <doctest/doctest.h>
 
 #include <array>
@@ -168,6 +170,10 @@ class Bench {
 
    protocol::UsbToAll &dispatcher() {
       return dispatcher_;
+   }
+
+   void setTargetGate(protocol::TargetGate &gate) {
+      block_.setTargetGate(gate);
    }
 
    FakeGpioPins pins;
@@ -453,5 +459,21 @@ TEST_CASE("Host gone: SET_CONFIGURATION 0 releases SRST") {
 TEST_CASE("Host gone: a USB suspend releases SRST") {
    UsbGpioBench bench;
    bench.usb.controller().busSuspend();
+   CHECK(bench.pins.state(gpio::srst).mode == PinMode::InputPullUp);
+}
+
+TEST_CASE("CONFIG of an output fails while the target gate refuses") {
+   Bench bench;
+   mupptest::FakeTargetGate gate;
+   bench.setTargetGate(gate);
+   static_cast<void>(gate.check(protocol::TargetProtocol::None));
+   CHECK(bench.run({ config(gpio::srst, gpio::srst, 0, 0) }) == std::vector<uint8_t>{ 0x00 });
+   gate.allow = false;
+   static_cast<void>(gate.check(protocol::TargetProtocol::None));
+   bench.pins.configured.clear();
+   // An output fails and changes nothing, an input still releases the pin
+   CHECK(bench.run({ config(gpio::trst, gpio::trst, 0, 0), config(gpio::srst, 0, gpio::srst, gpio::srst) }) ==
+         std::vector<uint8_t>{ 0x01, 0x00 });
+   CHECK(bench.pins.configured.size() == 1);
    CHECK(bench.pins.state(gpio::srst).mode == PinMode::InputPullUp);
 }

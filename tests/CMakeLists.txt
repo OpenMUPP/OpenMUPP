@@ -30,6 +30,7 @@ add_executable(mupp-tests
         test_main.cpp
         TestVersion.cpp
         TestBoards.cpp
+        TestIdSense.cpp
         TestHeartbeat.cpp
         TestActivityLed.cpp
         TestErrorLed.cpp
@@ -78,6 +79,7 @@ add_executable(mupp-tests
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
         TestDapTargetPower.cpp
+        TestDapVppSetting.cpp
         TestTargetPower.cpp
         TestAvrIsp.cpp
         TestAvrIspScope.cpp

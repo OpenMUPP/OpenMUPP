@@ -78,6 +78,11 @@ Status GpioBlock::config(art::span<const uint8_t> payload) {
    if((mask & ~gpio::all) != 0 || (io & gpio::inputOnly) != 0) {
       return Status::InvalidPara;
    }
+   // No output while the gate refuses (protocol/TargetGate.h). An input
+   // releases a pin, so it stays possible.
+   if(io != 0 && isRefused()) {
+      return Status::Failed;
+   }
    const uint16_t selected = mask & pins_.available();
    for(uint16_t bit = 1; bit <= gpio::tms; bit = static_cast<uint16_t>(bit << 1)) {
       if((selected & bit) != 0) {
