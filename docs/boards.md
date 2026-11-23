@@ -187,6 +187,7 @@ A host can cause probe errors in normal operation, for example when it scans for
 Thus a short double flash at the connection is not always a problem.
 The WCH-Link personality counts no transfer errors.
 On OpenMUPP v1, a failed connect self-test is also a probe error, in all personalities (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)).
+A target power fault is also a probe error, in the Versaloon and CMSIS-DAP personalities (see [Target power on OpenMUPP v1](#target-power-on-openmupp-v1)).
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (openmupp-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
@@ -494,7 +495,7 @@ The firmware uses the sequence above, with these values:
 
 The fault inputs PA11 and PA12 have an EXTI interrupt on the falling edge.
 The interrupt sets both enable pins low at once.
-The main loop then takes the fault: the supply is off.
+The main loop then counts the fault, writes an error line to the debug log, and shows a probe error on the state LED (the double flash).
 
 ### VPP sequence
 

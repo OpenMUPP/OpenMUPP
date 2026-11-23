@@ -535,6 +535,11 @@ void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
    // Switches the target supply off when the rail drops. Only the active
    // personality switches the supply on.
    targetPower.poll(nowMs);
+   static uint32_t loggedFaults = 0;
+   if(targetPower.faultCount() != loggedFaults) {
+      loggedFaults = targetPower.faultCount();
+      LOG_ERROR(debug::appLog, "target power: a switch fault turned the supply off");
+   }
 #endif
 }
 
@@ -559,8 +564,13 @@ uint32_t personalityErrorCount() {
    return 0;
 }
 
+// The errors above and the target power faults
 uint32_t probeErrorCount() {
+#if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_CMSIS_DAP)
+   return personalityErrorCount() + board::selfTestErrors + targetPower.faultCount();
+#else
    return personalityErrorCount() + board::selfTestErrors;
+#endif
 }
 
 constexpr Heartbeat clockFaultBlink{ Heartbeat::clockFault };
