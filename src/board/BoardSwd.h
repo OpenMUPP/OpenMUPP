@@ -8,8 +8,12 @@
 // (see board::DebugPins). Each pin access is one store to BSRR or one load
 // from IDR, and a direction change is four bit-band stores (hw::FastPin).
 // On the CH32V307, a direction change is one store of a word from begin().
+// On a board with level shifters (board::Shifters), each direction change
+// also writes DIR_SWDIO: drive sets the MCU pin first and then DIR_SWDIO
+// high, release sets DIR_SWDIO low first and then the MCU pin to input.
 
 #include <cstdint>
+#include <type_traits>
 
 #include "board/Board.h"
 #include "board/BoardPins.h"
@@ -79,11 +83,13 @@ class SwdPins {
 #else
       SwdioOut::setOutput();
 #endif
+      SwdioDir::set();
    }
    // Input first, then the pull-up: SWDIO does not glitch. On the STM32H5,
    // PUPDR keeps the pull-up of init() in both directions, so only the mode
    // changes.
    [[gnu::always_inline]] void swdioRelease() {
+      SwdioDir::clear();
 #if defined(STM32F1) || defined(__riscv)
       // F1-style GPIO (also CH32): the pull-up is a pull input with ODR high.
 #if defined(__riscv)
@@ -125,8 +131,10 @@ class SwdPins {
    [[gnu::always_inline]] static void swdioDriveReadModifyWrite(bool level) {
       SwdioOut::write(level);
       SwdioOut::setOutput();
+      SwdioDir::set();
    }
    [[gnu::always_inline]] static void swdioReleaseReadModifyWrite() {
+      SwdioDir::clear();
       SwdioOut::setConfig<pullUpInput>();
       SwdioOut::set();
    }
@@ -143,6 +151,23 @@ class SwdPins {
    using SwdioOut = FastPinOf<current.debug.tmsOut>;
    using SwdioIn = FastPinOf<current.debug.tmsIn>;
 
+   protected:
+   // DIR_SWDIO, or no pin on a board without level shifters. One more
+   // store in each direction change. The timed engine keeps its rate. On
+   // the untimed engine (CH32V307 from 2 MHz) the half period at a
+   // turnaround gets about one bus write (1 to 2 cycles at 144 MHz)
+   // longer, so the fastest rates there are a little lower.
+   struct NoDirPin {
+      [[gnu::always_inline]] static void set() {
+      }
+      [[gnu::always_inline]] static void clear() {
+      }
+   };
+   using SwdioDir = std::conditional_t<current.shifters.has_value(),
+                                       FastPinOf<current.shifters ? current.shifters->dirSwdio : current.debug.tmsOut>,
+                                       NoDirPin>;
+
+   private:
 #if defined(__riscv)
    static constexpr uint8_t swdioPin = current.debug.tmsOut.number;
 

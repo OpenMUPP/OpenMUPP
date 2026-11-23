@@ -28,9 +28,11 @@ void SwdPins::init() {
       gpioPin(pins.tmsIn).configure(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
    }
    // SWDIO has its own shifter direction (DIR_SWDIO): only SWCLK is in the
-   // shifter group of driveTargetOutputs().
+   // shifter group of driveTargetOutputs(). DIR_SWDIO goes high after the
+   // SWDIO output, as in swdioDrive(). fini() sets it low first.
    driveTargetOutputs(true, [&] { configureOutput(pins.tck, true); });
    configureOutput(pins.tmsOut, true);
+   SwdioDir::set();
 #if !defined(STM32F1) && !defined(__riscv)
    // The pull-up of swdioRelease() (board/BoardSwd.h). A pull-up on a
    // push-pull output has no effect. The F1-style GPIO (STM32F1, CH32) has no pull on outputs
