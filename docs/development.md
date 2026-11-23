@@ -233,6 +233,8 @@ The jobs:
   This image has the USB ID of the Atmel Xplained Mini (`MUPP_AVR_USB_ID=medbg`). This job keeps no artifacts.
 - `build-openmuppv1-cmsis-dap`: build of the firmware image of the OpenMUPP v1 probe board with the `openmuppv1-cmsis-dap` preset, plus the size check.
   It builds the UART7 remap (PA6, PA7). This job keeps no artifacts.
+- `build-openmuppv1-debug`: build of the same board with the `openmuppv1-debug` preset, plus the size check.
+  It builds the debug log on the CDC port and on UART5. This job keeps no artifacts.
 
 The build jobs of the Mini, the WeAct STM32H523 core board and the YD-CH32V307VCT6 board run in each pipeline.
 The build jobs of the ST-Link boards are manual: start them in the pipeline view of GitLab.
