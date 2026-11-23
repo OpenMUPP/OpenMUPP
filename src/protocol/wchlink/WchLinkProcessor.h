@@ -97,6 +97,7 @@
 #include <cstdint>
 #include <utils/compat/span.h>
 
+#include "protocol/TargetGate.h"
 #include "protocol/wchlink/WchLinkFlash.h"
 #include "protocol/wchlink/WchLinkTarget.h"
 
@@ -281,6 +282,13 @@ class Processor {
 
    Processor(Target &target, Platform &platform);
 
+   // Asks `gate` at each connect (01 03): when it refuses, the connect
+   // replies the error and attaches no wire. The gate must outlive the
+   // processor.
+   void setTargetGate(protocol::TargetGate &gate) {
+      gate_ = &gate;
+   }
+
    // No request waits and no response is unsent.
    [[nodiscard]] bool canSubmit() const {
       return !hasRequest_ && responseLength_ == 0;
@@ -391,6 +399,7 @@ class Processor {
 
    Target &target_;
    Platform &platform_;
+   protocol::TargetGate *gate_{ nullptr };
 
    bool connected_{ false };
    uint32_t chipId_{ 0 };

@@ -4,6 +4,7 @@
 // pins and a mock DM. The request and response bytes come from the
 // WCH-LinkE captures in docs/wch-link-captures (docs/wch-link-protocol.md).
 
+#include "FakeTargetGate.h"
 #include "boot/BootloaderEntry.h"
 
 #include "SwitchRequestHost.h"
@@ -884,4 +885,18 @@ TEST_CASE("The switch request works before SET_CONFIGURATION") {
 
    CHECK_FALSE(mupptest::switchRequest(controller, personality::toCode(personality::Personality::Versaloon)).stalled);
    CHECK(mupptest::switchesTo(personalitySwitch, personality::Personality::Versaloon));
+}
+
+TEST_CASE("WCH-Link: a connect that the target gate refuses attaches no wire") {
+   WchLinkBench bench(Wire::One);
+   mupptest::FakeTargetGate gate;
+   gate.allow = false;
+   bench.processor.setTargetGate(gate);
+   bench.enumerate();
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectError);
+   CHECK(gate.checks == std::vector{ protocol::TargetProtocol::RvSwd });
+   CHECK(bench.pins.inits == 0);
+   CHECK_FALSE(bench.processor.connected());
+   gate.allow = true;
+   CHECK(bench.transact(request(0x0d, { 0x02 })) == connectReply(0x09, v003ChipId));
 }
