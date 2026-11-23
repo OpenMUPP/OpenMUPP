@@ -28,8 +28,7 @@
 #             YD-CH32V307VCT6 development board, the test board of the
 #             CH32V307 port.
 #   openmuppv1
-#             OpenMUPP v1 probe board (CH32V307RCT6). Only the UART bridge
-#             reaches the target (docs/boards.md). Not tested on hardware.
+#             OpenMUPP v1 probe board (CH32V307RCT6), see docs/boards.md.
 # The STM32F1 boards have an STM32F103x8 or an STM32F103xB. CMSIS has one
 # define (STM32F103xB) for both parts. The firmware uses only the 64 KB of
 # the STM32F103x8.
