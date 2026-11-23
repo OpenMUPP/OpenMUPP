@@ -56,7 +56,8 @@
 //                      (protocol/avr/Avr8Scope.h). avrdude sets its
 //                      parameters before ISP programming too.
 //   0x20 EDBG control  SET and GET of context 0 address 0x10, TARGET_POWER
-//                      (1 byte): 0 off, 1 on. FAILED 0x01 (not supported)
+//                      (1 byte): 0 off, 1 on (3.3 V; a supply that is
+//                      on already stays). FAILED 0x01 (not supported)
 //                      on a board without a power switch, and for the other
 //                      parameters and commands. A switch-on that the
 //                      target power protection or the pin owner refuses:

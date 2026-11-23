@@ -483,7 +483,7 @@ Use this sequence for each change:
 
 The firmware selects 3.3 V or 5 V with `src/protocol/TargetPower.h`, and `src/board/BoardPower.cpp` drives the pins.
 The host selects the voltage with `ID_DAP_Vendor2` (see [Target power](cmsis-dap.md#target-power)).
-The Versaloon `POWER` block and the EDBG control scope select 3.3 V only.
+The Versaloon `POWER` block and the EDBG control scope select 3.3 V only. The EDBG control scope keeps a supply that is on.
 The firmware uses the sequence above, with these values:
 
 - Both switches stay off for 10 ms.

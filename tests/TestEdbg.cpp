@@ -348,6 +348,15 @@ TEST_CASE("EDBG: target power: switch-on for the owner or while nobody owns the 
       CHECK(b.isp(leaveRequest) == Bytes{ isp::command::leaveProgmode, isp::status::ok });
       CHECK(b.bulkCommand({ 0x82, 0x01 }) == Bytes{ 0x82, 0x00, 0xE4, 0x0C, 0x01 });
    }
+   SUBCASE("on keeps a 5 V supply at 5 V") {
+      b.power.has5vSwitchPin = true;
+      b.enterProgmode();
+      REQUIRE(b.targetPower.switchOn(protocol::Supply::V5) == protocol::TargetPower::Result::Ok);
+      CHECK(b.transact(handler::edbgControl, powerOn) == ok);
+      CHECK(b.targetPower.supply() == protocol::Supply::V5);
+      CHECK(b.power.selections == std::vector<protocol::Supply>{ protocol::Supply::V5 });
+      CHECK(b.transact(handler::edbgControl, powerGet) == data({ 0x01 }));
+   }
    SUBCASE("a protection refuses the switch-on") {
       b.power.externalMv = 3300;
       CHECK(b.transact(handler::edbgControl, powerOn) == failed(0x16));

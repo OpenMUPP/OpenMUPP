@@ -437,7 +437,8 @@ void EdbgTransport::edbgControl(art::span<const uint8_t> payload, Writer &out) {
    const bool mayDrive = owner_ == nullptr || owner_->isFreeFor(protocol::PinClient::CmsisDapHid);
    if(value != 1) {
       out.failed(edbgNotSupported);
-   } else if(!mayDrive || power_->switchOn() != protocol::TargetPower::Result::Ok) {
+   } else if(!mayDrive || (!power_->isOn() && power_->switchOn() != protocol::TargetPower::Result::Ok)) {
+      // "On" is any supply: a 5 V supply stays at 5 V.
       out.failed(edbgIllegalAction);
    } else {
       out.ok();

@@ -570,7 +570,8 @@ With `MUPP_CMSIS_DAP_AVR`, the EDBG control scope switches the supply on the HID
 Its switch-on fails with code `0x16` when the v2 interface owns the pins or a protection refuses.
 On a board without a power switch, its `SET` and `GET` fail with code `0x01`.
 While the supply is on, the main loop switches it off when the voltage stays low, as in the Versaloon personality.
-The EDBG control scope and the Versaloon personality switch on at 3.3 V only.
+The Versaloon personality switches on at 3.3 V only.
+The EDBG control scope also switches on at 3.3 V only, and it keeps a supply that is on, for example 5 V.
 
 The supply is off at power-up.
 It stays on when the host goes away, so that a tool can switch the target on and then end.
