@@ -250,6 +250,159 @@ TEST_CASE("OpenMUPP v1 has the pin map of docs/hardware.md of openmupp-v1") {
    CHECK(board::ydCh32V307.debugOutputs);
 }
 
+TEST_CASE("OpenMUPP v1 has the shifter, power, VPP and ID pins of docs/hardware.md of openmupp-v1") {
+   const Definition &v1 = board::openMuppV1;
+
+   REQUIRE(v1.shifters);
+   CHECK(v1.shifters->dirOut == Pin{ Port::B, 10 });
+   CHECK(v1.shifters->dirSwdio == Pin{ Port::C, 3 });
+   CHECK(v1.shifters->uartTxDir == Pin{ Port::C, 9 });
+   CHECK(v1.shifters->aux1 == Pin{ Port::A, 2 });
+   CHECK(v1.shifters->aux2 == Pin{ Port::A, 0 });
+   CHECK(v1.shifters->tckReadBack == Pin{ Port::C, 6 });
+   CHECK(v1.shifters->tdiReadBack == Pin{ Port::C, 7 });
+   CHECK(v1.shifters->aux1ReadBack == Pin{ Port::C, 8 });
+
+   REQUIRE(v1.targetSupply);
+   CHECK(v1.targetSupply->enable3v3 == Pin{ Port::B, 8 });
+   CHECK(v1.targetSupply->enable5v == Pin{ Port::B, 5 });
+   CHECK(v1.targetSupply->fault3v3 == Pin{ Port::A, 11 });
+   CHECK(v1.targetSupply->fault5v == Pin{ Port::A, 12 });
+   CHECK(v1.targetSupply->v5Sense == board::VrefSense{ .pin{ Port::C, 0 }, .divider = 2 });
+   CHECK(board::adcChannelOf(V30x, v1.targetSupply->v5Sense.pin) == 10);
+
+   REQUIRE(v1.vpp);
+   CHECK(v1.vpp->dac == Pin{ Port::A, 5 });
+   CHECK(board::dacChannelOf(V30x, v1.vpp->dac) == 2);
+   CHECK(v1.vpp->enable == Pin{ Port::C, 14 });
+   CHECK(v1.vpp->on == Pin{ Port::C, 15 });
+   CHECK(v1.vpp->pullDown == Pin{ Port::C, 5 });
+   CHECK(v1.vpp->sense == Pin{ Port::A, 4 });
+   CHECK(board::adcChannelOf(V30x, v1.vpp->sense) == 4);
+   CHECK(v1.vpp->sense2 == Pin{ Port::C, 1 });
+   CHECK(board::adcChannelOf(V30x, v1.vpp->sense2) == 11);
+
+   REQUIRE(v1.idSense);
+   CHECK(v1.idSense->adapterId == Pin{ Port::B, 1 });
+   CHECK(board::adcChannelOf(V30x, v1.idSense->adapterId) == 9);
+   CHECK(v1.idSense->boardId == Pin{ Port::C, 2 });
+   CHECK(board::adcChannelOf(V30x, v1.idSense->boardId) == 12);
+}
+
+TEST_CASE("allPins has the pins of the shifter, power, VPP and ID blocks") {
+   const Definition &v1 = board::openMuppV1;
+   const auto pins = board::detail::allPins(v1);
+   auto has = [&](Pin pin) {
+      for(const auto &p : pins) {
+         if(p == pin) {
+            return true;
+         }
+      }
+      return false;
+   };
+   for(const Pin pin : { v1.shifters->dirOut,
+                         v1.shifters->dirSwdio,
+                         v1.shifters->uartTxDir,
+                         v1.shifters->aux1,
+                         v1.shifters->aux2,
+                         v1.shifters->tckReadBack,
+                         v1.shifters->tdiReadBack,
+                         v1.shifters->aux1ReadBack,
+                         v1.targetSupply->enable3v3,
+                         v1.targetSupply->enable5v,
+                         v1.targetSupply->fault3v3,
+                         v1.targetSupply->fault5v,
+                         v1.targetSupply->v5Sense.pin,
+                         v1.vpp->dac,
+                         v1.vpp->enable,
+                         v1.vpp->on,
+                         v1.vpp->pullDown,
+                         v1.vpp->sense,
+                         v1.vpp->sense2,
+                         v1.idSense->adapterId,
+                         v1.idSense->boardId }) {
+      CAPTURE(static_cast<int>(pin.port));
+      CAPTURE(static_cast<int>(pin.number));
+      CHECK(has(pin));
+   }
+   // The other boards do not have the blocks
+   for(const Definition &def :
+       { board::mini, board::otherUse, board::stLinkV21, board::stLinkV2MiniClone, board::weActH523, board::ydCh32V307 }) {
+      CAPTURE(def.name);
+      CHECK_FALSE(def.shifters);
+      CHECK_FALSE(def.targetSupply);
+      CHECK_FALSE(def.vpp);
+      CHECK_FALSE(def.idSense);
+   }
+}
+
+TEST_CASE("isValid checks the shifter, power, VPP and ID pins") {
+   Definition def = board::openMuppV1;
+   REQUIRE(board::isValid(def));
+
+   SUBCASE("direction pin on a debug pin") {
+      def.shifters->dirOut = def.debug.tck;
+   }
+   SUBCASE("read-back on another block") {
+      def.shifters->tckReadBack = def.vpp->pullDown;
+   }
+   SUBCASE("power fault pin on the USBHS pin PB6") {
+      def.targetSupply->fault3v3 = Pin{ Port::B, 6 };
+   }
+   SUBCASE("5 V sense pin without an ADC channel") {
+      def.targetSupply->v5Sense.pin = Pin{ Port::C, 13 };
+   }
+   SUBCASE("5 V sense without a divider") {
+      def.targetSupply->v5Sense.divider = 0;
+   }
+   SUBCASE("VPP DAC pin without a DAC channel") {
+      def.vpp->dac = Pin{ Port::C, 13 };
+   }
+   SUBCASE("VPP sense pin without an ADC channel") {
+      def.vpp->sense = Pin{ Port::C, 13 };
+   }
+   SUBCASE("VPP sense2 pin without an ADC channel") {
+      def.vpp->sense2 = Pin{ Port::C, 13 };
+   }
+   SUBCASE("adapter ID pin without an ADC channel") {
+      def.idSense->adapterId = Pin{ Port::C, 13 };
+   }
+   SUBCASE("board ID pin without an ADC channel") {
+      def.idSense->boardId = Pin{ Port::C, 13 };
+   }
+   SUBCASE("ID pin used twice") {
+      def.idSense->boardId = def.vref->pin;
+   }
+
+   CHECK_FALSE(board::isValid(def));
+}
+
+TEST_CASE("PA11 and PA12 are reserved for USB only on the STM32F103 and the STM32H5") {
+   // The CH32V307 uses USBHS (PB6, PB7) and keeps USBFS off
+   Definition def = board::ydCh32V307;
+   def.key = Signal{ { Port::A, 11 }, Active::Low };
+   CHECK(board::isValid(def));
+   def.key = Signal{ { Port::A, 12 }, Active::Low };
+   CHECK(board::isValid(def));
+
+   def = h5Board;
+   def.key = Signal{ { Port::A, 11 }, Active::Low };
+   CHECK_FALSE(board::isValid(def));
+   def.key = Signal{ { Port::A, 12 }, Active::Low };
+   CHECK_FALSE(board::isValid(def));
+}
+
+TEST_CASE("dacChannelOf gives the DAC channel of PA4 and PA5") {
+   CHECK(board::dacChannelOf(V30x, { Port::A, 4 }) == 1);
+   CHECK(board::dacChannelOf(V30x, { Port::A, 5 }) == 2);
+   CHECK(board::dacChannelOf(H5, { Port::A, 4 }) == 1);
+   CHECK(board::dacChannelOf(H5, { Port::A, 5 }) == 2);
+   CHECK_FALSE(board::dacChannelOf(V30x, { Port::A, 6 }));
+   CHECK_FALSE(board::dacChannelOf(V30x, { Port::B, 5 }));
+   // The STM32F103 of the boards has no DAC
+   CHECK_FALSE(board::dacChannelOf(F1, { Port::A, 4 }));
+}
+
 TEST_CASE("isValid checks the CH32V307 rules") {
    Definition def = board::ydCh32V307;
 

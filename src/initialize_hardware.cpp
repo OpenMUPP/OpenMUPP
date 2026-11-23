@@ -25,6 +25,23 @@ namespace {
 
 bool clockFromCrystal = false;
 
+#if defined(CH32V30x_D8C)
+// RCC bits that ch32v30x.h does not define (CH32FV2x_V3xRM 3.4.5, 3.4.6,
+// 3.4.8, 3.4.11): the clock enable and the reset of USBFS (USBOTG_FS) and
+// of the DAC.
+constexpr uint32_t rccOtgFs = 1ul << 12; // RCC_AHBPCENR, RCC_AHBRSTR
+constexpr uint32_t rccDac = 1ul << 29;   // RCC_APB1PCENR, RCC_APB1PRSTR
+
+// USBFS off: the firmware uses USBHS, and a board can use the USBFS pins
+// PA11 and PA12 (board::reservedPins()). The reset also releases the pins
+// when a bootloader used USBFS.
+void disableUsbFs() {
+   RCC->AHBRSTR |= rccOtgFs;
+   RCC->AHBRSTR &= ~rccOtgFs;
+   RCC->AHBPCENR &= ~rccOtgFs;
+}
+#endif
+
 void configureClocks() {
 #if defined(STM32F1)
    // SYSCLK 72 MHz, USB 48 MHz. On failure the clock stays on HSI.
@@ -84,6 +101,37 @@ void configurePins() {
       board::gpioPin(def.powerSwitch->pin).configure(GpioPin::Mode::Input);
    }
 
+   // Level shifters: the target side is high-impedance until an engine
+   // sets a direction pin high. UART TX drives the target, as its pull-up
+   // does in reset. The MCU pins of the shifter groups stay inputs.
+   if(def.shifters) {
+      board::configureOutput({ def.shifters->dirOut, board::Active::High }, false);
+      board::configureOutput({ def.shifters->dirSwdio, board::Active::High }, false);
+      board::configureOutput({ def.shifters->uartTxDir, board::Active::High }, true);
+   }
+
+   // Both target switches off. The fault inputs have no external pull-up.
+   if(def.targetSupply) {
+      board::configureOutput({ def.targetSupply->enable3v3, board::Active::High }, false);
+      board::configureOutput({ def.targetSupply->enable5v, board::Active::High }, false);
+      for(const auto fault : { def.targetSupply->fault3v3, def.targetSupply->fault5v }) {
+         board::gpioPin(fault).configure(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
+      }
+   }
+
+   // VPP off: boost and output switch off, no pull-down on the target pin.
+   // The DAC reset turns the DAC off, so its pin is high-impedance.
+   if(def.vpp) {
+      board::configureOutput({ def.vpp->enable, board::Active::High }, false);
+      board::configureOutput({ def.vpp->on, board::Active::High }, false);
+      board::configureOutput({ def.vpp->pullDown, board::Active::High }, false);
+#if defined(CH32V30x_D8C)
+      RCC->APB1PRSTR |= rccDac;
+      RCC->APB1PRSTR &= ~rccDac;
+      RCC->APB1PCENR &= ~rccDac;
+#endif
+   }
+
    // Pull the key to its released level.
    if(def.key) {
       const auto pull = def.key->levelFor(false) ? GpioPin::Pull::Up : GpioPin::Pull::Down;
@@ -117,6 +165,9 @@ void os_startup_initialize_hardware() {
    boot::startRomBootloaderOnRequest();
 #endif
    configureClocks();
+#if defined(CH32V30x_D8C)
+   disableUsbFs();
+#endif
 
    // Set the debug port before the pins: the JTAG-DP and the SW-DP own
    // their pins (PA13-PA15, PB3, PB4) until SWJ_CFG releases them. The

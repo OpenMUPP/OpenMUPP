@@ -60,7 +60,7 @@ OpenMUPP v1 is the main target. The other boards are for development, tests and 
 
 | `BOARD` | Hardware | Crystal | Role | Status |
 |---|---|---|---|---|
-| `openmuppv1` | OpenMUPP v1 probe board, CH32V307RCT6, see [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) | 8 MHz | Main target | Not tested on hardware. Only the UART bridge: the firmware keeps the debug pins |
+| `openmuppv1` | OpenMUPP v1 probe board, CH32V307RCT6, see [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) | 8 MHz | Main target | Only the UART bridge: the firmware keeps the debug pins |
 | `weacth523` | WeAct STM32H523 core board | 8 MHz | Secondary | target, 3.3 V targets only |
 | `mini` | Versaloon Mini | 12 MHz | Secondary | target |
 | `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | 8 MHz | Secondary | WCH-Link one wire tested, SWD only (no JTAG pins) |

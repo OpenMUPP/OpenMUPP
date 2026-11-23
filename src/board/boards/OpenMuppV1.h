@@ -11,14 +11,12 @@ namespace board {
 // map is in docs/hardware.md of the openmupp-v1 repository
 // (https://github.com/OpenMUPP/openmupp-v1).
 //
-// The definition has only the pins that the board layer knows. The board
-// layer does not drive the shifter direction pins (DIR_OUT PB10, DIR_SWDIO
-// PC3, UART_TX_DIR PC9) and the power pins (target switches, VPP). The
-// pull-downs on DIR_OUT and DIR_SWDIO set the shifters from the target to
-// the probe, so the shifters drive PB13, PB15, PB9 and PC11. An MCU output
-// on these pins would drive against them: debugOutputs is false, so the
-// debug engines do not run. Only the UART bridge reaches the target
-// (docs/boards.md).
+// The start-up (initialize_hardware.cpp) sets the direction pins DIR_OUT
+// (PB10) and DIR_SWDIO (PC3) low, so the shifters work from the target to
+// the probe and drive PB13, PB15, PB9, PA2, PA0 and PC11. The engines do
+// not set the direction pins yet. An MCU output on these pins would drive
+// against the shifters: debugOutputs is false, so the debug engines do not
+// run. Only the UART bridge reaches the target (docs/boards.md).
 inline constexpr Definition openMuppV1{
    .name = "openmuppv1",
    .hseFrequency = 8'000'000,
@@ -56,6 +54,35 @@ inline constexpr Definition openMuppV1{
    // SW1 on the BOOT0 net
    .key = Signal{ { Port::B, 3 }, Active::High },
    .usbPullUp = std::nullopt,
+   .shifters{ {
+   .dirOut{ Port::B, 10 },
+   .dirSwdio{ Port::C, 3 },
+   .uartTxDir{ Port::C, 9 },
+   .aux1{ Port::A, 2 },
+   .aux2{ Port::A, 0 },
+   .tckReadBack{ Port::C, 6 },
+   .tdiReadBack{ Port::C, 7 },
+   .aux1ReadBack{ Port::C, 8 },
+   } },
+   // U12 (3.3 V) and U14 (5 V). Q4 gives 3.3 V priority. R45, R46: +5V / 2.
+   .targetSupply{ {
+   .enable3v3{ Port::B, 8 },
+   .enable5v{ Port::B, 5 },
+   .fault3v3{ Port::A, 11 },
+   .fault5v{ Port::A, 12 },
+   .v5Sense{ .pin{ Port::C, 0 }, .divider = 2 },
+   } },
+   // VPP_12V_ADJ on DAC channel 2: a higher DAC voltage gives a lower VPP.
+   // PC14 and PC15 are backup-domain pins (3 mA, 2 MHz): static levels only.
+   .vpp{ {
+   .dac{ Port::A, 5 },
+   .enable{ Port::C, 14 },
+   .on{ Port::C, 15 },
+   .pullDown{ Port::C, 5 },
+   .sense{ Port::A, 4 },
+   .sense2{ Port::C, 1 },
+   } },
+   .idSense = IdSense{ .adapterId{ Port::B, 1 }, .boardId{ Port::C, 2 } },
    .debugOutputs = false,
 };
 
