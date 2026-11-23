@@ -186,7 +186,8 @@ In the Versaloon personality, these are the failed `IN_OUT` transfers of the `SW
 The `JTAG_RAW` block has no acknowledge, so the Versaloon personality does not show JTAG errors.
 A host can cause probe errors in normal operation, for example when it scans for access ports that are not there.
 Thus a short double flash at the connection is not always a problem.
-The WCH-Link personality counts no probe errors, so it never shows the double flash.
+The WCH-Link personality counts no transfer errors.
+On OpenMUPP v1, a failed connect self-test is also a probe error, in all personalities (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)).
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (openmupp-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
@@ -437,6 +438,11 @@ Only the UART bridge reaches the target:
   The SWD engine sets `DIR_SWDIO` at each turnaround. To drive SWDIO, it sets PC11 to an output first and then `DIR_SWDIO` high. To release SWDIO, it sets `DIR_SWDIO` low first and then PC11 to an input.
   The one-wire engine makes `DIR_SWDIO` with TIM10_CH3 during a frame. The value of the CH3 compare is in the DMA burst of each bit, so CH3 needs no DMA request.
   In each read bit, `DIR_SWDIO` goes high with the falling edge of the host pulse. It goes low one timer tick before the host releases the line.
+- Connect self-test: when an engine sets `DIR_OUT` high, it sets TCK and TDI to the inverse level and back, one pin at a time.
+  After each step, the read-back inputs PC6 (TCK) and PC7 (TDI) must show the levels of both pins.
+  A mismatch shows a short, or a target that drives against the probe. The firmware then counts a probe error, and the state LED shows the double flash.
+  The engine continues, so the host sees the error in the transfers.
+  The test gives one pulse on TCK and on TDI. At that time, JTAG holds TMS high, SWD and RVSWD have SWDIO released, and ISP holds RESET.
 - `DAP_SWJ_Pins`, `DAP_Disconnect` and the Versaloon GPIO block follow the same rule for TCK, TDI, TRST and TMS.
   An output request on a pin of the `DIR_OUT` group sets the other pins of the group to their idle level, and TCK low. Then the pin becomes an output, and `DIR_OUT` goes high.
   `DIR_OUT` goes low again when the last of these outputs becomes an input and no engine runs. Then all pins of the group become inputs.

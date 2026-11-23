@@ -18,6 +18,7 @@
 #include "board/BoardJtag.h"
 #include "board/BoardPower.h"
 #include "board/BoardSwd.h"
+#include "board/BoardTargetDrive.h"
 #include "board/Leds.h"
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
@@ -543,9 +544,10 @@ void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
 #endif
 }
 
-// Number of JTAG and SWD errors of the active personality, for the error
-// LED. It wraps at 2^32: only the difference between two values counts.
-uint32_t probeErrorCount() {
+// Number of JTAG and SWD errors of the active personality and of the failed
+// connect self-tests (board/BoardTargetDrive.h), for the error LED. It
+// wraps at 2^32: only the difference between two values counts.
+uint32_t personalityErrorCount() {
 #if defined(MUPP_WITH_VERSALOON)
    if(isActive(Personality::Versaloon)) {
       return swdBlock.errorCount();
@@ -561,6 +563,10 @@ uint32_t probeErrorCount() {
    }
 #endif
    return 0;
+}
+
+uint32_t probeErrorCount() {
+   return personalityErrorCount() + board::selfTestErrors;
 }
 
 constexpr Heartbeat clockFaultBlink{ Heartbeat::clockFault };

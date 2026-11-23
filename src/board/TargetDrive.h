@@ -61,6 +61,38 @@ constexpr std::array<std::optional<IdlePin>, 5> dirOutIdlePins(const DebugPins &
 
 } // namespace detail
 
+// The connect self-test: DIR_OUT is high, and TCK and TDI are MCU outputs.
+// Each of the two pins goes to the inverse of its level and back. After
+// each step both read-back inputs (connector side) must show the levels of
+// TCK and TDI. A mismatch shows a short, or a target that drives against
+// the probe. The test gives one pulse on TCK and on TDI. At that time JTAG
+// holds TMS high (the pulse moves the TAP to Test-Logic-Reset), SWD and
+// RVSWD have SWDIO released (no start condition), and ISP holds RESET.
+template <class Io>
+bool connectSelfTest(const DebugPins &pins, const Shifters &shifters, Io &io) {
+   struct Line {
+      Pin pin;
+      Pin readBack;
+      bool level;
+   };
+   std::array<Line, 2> lines{ {
+   { pins.tck, shifters.tckReadBack, io.read(pins.tck) },
+   { pins.tdi, shifters.tdiReadBack, io.read(pins.tdi) },
+   } };
+   bool ok = true;
+   for(Line &line : lines) {
+      for(int step = 0; step < 2; ++step) {
+         line.level = !line.level;
+         io.write(line.pin, line.level);
+         io.settle();
+         for(const Line &check : lines) {
+            ok = ok && io.read(check.readBack) == check.level;
+         }
+      }
+   }
+   return ok;
+}
+
 // Drives the target outputs of an engine (on) or releases them (off).
 // Without shifters, only setMcuPins() runs. With shifters:
 // - on: first the pins of the DIR_OUT group get a defined output level,
@@ -76,12 +108,15 @@ constexpr std::array<std::optional<IdlePin>, 5> dirOutIdlePins(const DebugPins &
 //   the group are inputs then.
 // Thus a shifter does not drive the target from a floating MCU pin, and an
 // MCU output does not drive against a shifter. Io has direction(pin, level)
-// (write a direction pin), output(pin, level) and input(pin).
+// (write a direction pin), output(pin, level), input(pin), and for the
+// self-test write(pin, level), read(pin) and settle().
+// When on sets DIR_OUT high, the self-test of the read-back pins runs
+// (connectSelfTest()). The result is false when it fails, else true.
 template <class Io, class SetMcuPins>
-void driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &shifters, DirOutUsers &users, ShifterGroups groups, bool on, Io &io, SetMcuPins &&setMcuPins) {
+bool driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &shifters, DirOutUsers &users, ShifterGroups groups, bool on, Io &io, SetMcuPins &&setMcuPins) {
    if(!shifters) {
       setMcuPins();
-      return;
+      return true;
    }
    const auto idle = detail::dirOutIdlePins(pins, *shifters, false);
    if(on) {
@@ -101,7 +136,7 @@ void driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &sh
       if(groups == ShifterGroups::OutAndSwdio) {
          io.direction(shifters->dirSwdio, true);
       }
-      return;
+      return high || connectSelfTest(pins, *shifters, io);
    }
    io.direction(shifters->dirOut, false);
    io.direction(shifters->dirSwdio, false);
@@ -113,6 +148,7 @@ void driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &sh
       }
    }
    users = {};
+   return true;
 }
 
 // The pin mode of a gpio request. Behind a shifter an output is push-pull:

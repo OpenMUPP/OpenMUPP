@@ -10,6 +10,8 @@
 #include <doctest/doctest.h>
 
 #include <initializer_list>
+#include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,22 +30,46 @@ std::string name(Pin pin) {
 // Records the steps of driveTargetOutputs(): "pins" for the MCU pins of the
 // engine, "dir <pin>=<level>" for a direction pin, "out <pin>=<level>" and
 // "in <pin>" for the other pins of the DIR_OUT group.
+// The self-test steps (write, read, settle) are not in steps: levels holds
+// the pin levels, and the read-back inputs of v1 read TCK and TDI, or
+// stuckTdi.
 struct Recorder {
    std::vector<std::string> steps;
    board::DirOutUsers users;
+   std::map<std::string, bool> levels;
+   std::optional<bool> stuckTdi;
+   int settles = 0;
+   bool result = true;
 
    void direction(Pin pin, bool level) {
       steps.push_back("dir " + name(pin) + (level ? "=1" : "=0"));
    }
    void output(Pin pin, bool level) {
       steps.push_back("out " + name(pin) + (level ? "=1" : "=0"));
+      levels[name(pin)] = level;
+   }
+   void write(Pin pin, bool level) {
+      levels[name(pin)] = level;
+   }
+   bool read(Pin pin) {
+      const auto &shifters = *board::openMuppV1.shifters;
+      if(pin == shifters.tckReadBack) {
+         return levels[name(board::openMuppV1.debug.tck)];
+      }
+      if(pin == shifters.tdiReadBack) {
+         return stuckTdi.value_or(levels[name(board::openMuppV1.debug.tdi)]);
+      }
+      return levels[name(pin)];
+   }
+   void settle() {
+      ++settles;
    }
    void input(Pin pin) {
       steps.push_back("in " + name(pin));
    }
 
    void drive(const board::Definition &def, ShifterGroups groups, bool on) {
-      board::driveTargetOutputs(def.debug, def.shifters, users, groups, on, *this, [this] { steps.emplace_back("pins"); });
+      result = board::driveTargetOutputs(def.debug, def.shifters, users, groups, on, *this, [this] { steps.emplace_back("pins"); });
    }
    // A gpio request: "pin" for setPin()
    void gpio(const board::Definition &def, uint16_t bit, bool output) {
@@ -197,6 +223,40 @@ TEST_CASE("gpio open-drain output behind a shifter is push-pull") {
    }
    // SRST has its own rule (srstPinSetting()).
    CHECK(board::gpioPinMode(v1, gpio::srst, PinMode::OpenDrain) == PinMode::OpenDrain);
+}
+
+TEST_CASE("connect self-test: TCK and TDI go to both levels, and end at the engine levels") {
+   Recorder r;
+   r.levels["B13"] = true; // the engine sets TCK high in setMcuPins()
+   r.drive(board::openMuppV1, ShifterGroups::Out, true);
+   CHECK(r.result);
+   CHECK(r.settles == 4);
+   CHECK(r.levels["B13"]);
+   CHECK(r.levels["B15"]);
+}
+
+TEST_CASE("connect self-test: a read-back mismatch fails") {
+   for(const bool stuck : { false, true }) {
+      Recorder r;
+      r.stuckTdi = stuck;
+      r.drive(board::openMuppV1, ShifterGroups::OutAndSwdio, true);
+      CHECK_FALSE(r.result);
+      // The pins stay driven: the host sees the error in the transfers.
+      CHECK(r.users.engine);
+   }
+}
+
+TEST_CASE("connect self-test: not when DIR_OUT is high already, and not without shifters") {
+   Recorder r;
+   r.gpio(board::openMuppV1, gpio::trst, true);
+   r.stuckTdi = false;
+   r.drive(board::openMuppV1, ShifterGroups::Out, true);
+   CHECK(r.result);
+   CHECK(r.settles == 0);
+   Recorder yd;
+   yd.drive(board::ydCh32V307, ShifterGroups::Out, true);
+   CHECK(yd.result);
+   CHECK(yd.settles == 0);
 }
 
 TEST_CASE("SRST active low: the request goes to the pin unchanged") {

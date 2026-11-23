@@ -27,7 +27,7 @@ The `wch-link` image has these properties:
   A `Debug` build of this image needs `-DMUPP_DEBUG_CDC=OFF`. CMake stops with an error when `MUPP_DEBUG_CDC` is on.
   The image has a debug log only on a board with a debug UART (`-DMUPP_DEBUG_UART=ON`, see [Debug log](debug-log.md#debug-uart)).
 - The image does not link the Versaloon and CMSIS-DAP code. The SWD and JTAG engines of these personalities are not used.
-- The LEDs show the target power, the command activity and the USB state. They show no probe error pattern.
+- The LEDs show the target power, the command activity and the USB state. They show the probe error pattern only for a failed connect self-test on OpenMUPP v1 (see [boards.md](boards.md#openmupp-v1-probe-board)).
 - The image has no `VERSALOON_FW_UPDATE` command. To start the bootloader, send the switch request on EP0 with the bootloader code `0xB0`, or use the key (see [Bootloader code](firmware-update.md#bootloader-code)).
 - A multi image can have this personality with others, for example `-DMUPP_PERSONALITIES=versaloon,cmsis-dap,wch-link` (see [Multi image](usb-device.md#multi-image)).
   The switch commands of the other personalities (code `2`), the switch request on EP0 and the key switch to it.
