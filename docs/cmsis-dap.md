@@ -953,7 +953,9 @@ A failed store also gives `81 FF`, but the command still sets the mode.
 - The mode at power-up and after a USB reset is the stored mode. Auto is the stored mode until a store.
 - In the TAP, `DAP_Connect` to JTAG, `DAP_JTAG_Sequence`, `DAP_SWJ_Sequence` and the JTAG transfers use the emulated TAP.
   SWD (`DAP_Connect` to SWD) does not change in any mode.
-- A mode change while JTAG is connected stops the old port and starts the new one at once.
+- A mode change while the JTAG port is in use stops the old port and starts the new one at once.
+  The port is in use after the first JTAG command that follows `DAP_Connect`.
+  Between `DAP_Connect` and that command, a mode change only sets the mode: the next JTAG command starts the port.
   The TAP state and the IR of the new port are not known, as after `DAP_SWJ_Pins`.
   The change to auto keeps the port until the next `DAP_Connect`. Thus the OpenOCD `shutdown` causes no pin activity on the target when the stored mode is auto.
 - The change from the TAP to the board port releases SWCLK and SWDIO, and resets the timer of the one-wire engine.
@@ -1022,7 +1024,11 @@ The steps are in this order. The first step that finds a target stops the search
 
 Each step releases its pins before the next step.
 The result stays until the next `DAP_Connect`, `DAP_Disconnect`, mode change or USB reset.
-Thus connect the target, and switch on its supply, before the host connects.
+Thus connect the target, and switch on its supply, before the first JTAG command.
+
+The detection runs after the `DAP_SWJ_Pins` commands that the host sends between `DAP_Connect` and its first JTAG command.
+With `connect_assert_srst` in OpenOCD, the host asserts SRST first. The detection then runs with SRST asserted.
+A JTAG chain or an SW-DP normally answers while the target is in reset. The behaviour of a WCH target with nRST on the probe is not known.
 
 - The detection uses the TCK of `DAP_SWJ_Clock`. The SWD step uses the SWD clock and the settings of the last `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure`.
 - The SWD step only runs when the JTAG step finds no chain.

@@ -9,7 +9,8 @@
 //
 // - Off: the real port.
 // - On: the TAP.
-// - Auto: init() (DAP_Connect to JTAG) finds the port, see detect(). A
+// - Auto: init() finds the port, see detect(). The processor calls init() at
+//   the first JTAG command after DAP_Connect to JTAG, not at DAP_Connect. A
 //   change to auto keeps the port until then.
 //
 // The stored mode is the mode at power-up and after hostGone() (a USB
