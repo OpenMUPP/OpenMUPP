@@ -30,6 +30,7 @@ add_executable(mupp-tests
         test_main.cpp
         TestVersion.cpp
         TestBoards.cpp
+        TestIdSense.cpp
         TestHeartbeat.cpp
         TestActivityLed.cpp
         TestErrorLed.cpp
