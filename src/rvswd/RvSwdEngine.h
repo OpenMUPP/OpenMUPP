@@ -238,9 +238,10 @@ constexpr OneWireBit oneWireBit(const OneWireTicks &t, uint64_t bits, uint32_t c
 // the line. oneWireDriveTicks() gives the ticks from the start of bit i in
 // which the direction pin is high (the shifter drives the target):
 // - Write bits: the full bit (oneWireDriveAlways, above each period).
-// - The bit before readFrom: until a quarter of its high level, before the
-//   switch to open drain at half of it (oneWireTimes()). Thus the
-//   direction pin goes low first, and then the MCU pin releases the line.
+// - The bit before readFrom: until a quarter of the normal high time
+//   (t.high, not t.turnaroundHigh), before the switch to open drain at half
+//   of it (oneWireTimes()). Thus the direction pin goes low first, and
+//   then the MCU pin releases the line.
 // - Read bits: the low pulse less one tick. The direction pin goes low one
 //   tick before the line release. The rise comes with the falling edge of
 //   the low pulse, at the update event of the bit.
