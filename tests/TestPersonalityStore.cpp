@@ -143,12 +143,16 @@ TEST_CASE("The records of all settings are distinct and none is a subset of anot
    std::vector<uint16_t> records;
    for(uint8_t code = 0; code < personality::maxPersonalities; ++code) {
       for(uint8_t mode = 0; mode < personality::bridgeModes; ++mode) {
-         records.push_back(PersonalityStore::recordOfCode(code, mode));
+         for(const bool vpp : { false, true }) {
+            records.push_back(PersonalityStore::recordOfCode(code, mode, vpp));
+         }
       }
    }
    for(std::size_t x = 0; x < records.size(); ++x) {
       CHECK(__builtin_popcount(records[x]) == 8);
       CHECK(records[x] != PersonalityStore::erasedSlot);
+      // The erased half-word of the CH32V30x (board/SettingsFlashPage.h)
+      CHECK(records[x] != 0xE339);
       for(std::size_t y = 0; y < records.size(); ++y) {
          if(x != y) {
             CHECK(records[x] != records[y]);
@@ -390,4 +394,41 @@ TEST_CASE("A cut record of a bridge mode is no stored settings") {
    CHECK(store.storeBridgeMode(0, Personality::CmsisDap));
    CHECK(page.content[2] == PersonalityStore::recordOf(Personality::CmsisDap, 0));
    CHECK(page.erases == 0);
+}
+
+TEST_CASE("The VPP setting is stored with the other settings") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+   constexpr uint8_t on = 1;
+
+   // An empty page: the defaults, the setting off
+   CHECK(store.storeBridgeMode(on, Personality::CmsisDap));
+   CHECK_FALSE(store.loadSettings()->vppWithoutAdapter);
+
+   CHECK(store.storeVppWithoutAdapter(true, Personality::Versaloon));
+   CHECK(store.loadSettings() == Settings{ Personality::CmsisDap, on, true });
+   CHECK(page.content[1] == PersonalityStore::recordOf(Personality::CmsisDap, on, true));
+
+   // A personality switch and a bridge mode keep the setting
+   CHECK(store.store(Personality::Versaloon));
+   CHECK(store.loadSettings() == Settings{ Personality::Versaloon, on, true });
+   CHECK(store.storeBridgeMode(0, Personality::Versaloon));
+   CHECK(store.loadSettings() == Settings{ Personality::Versaloon, 0, true });
+
+   CHECK(store.storeVppWithoutAdapter(false, Personality::CmsisDap));
+   CHECK(store.loadSettings() == Settings{ Personality::Versaloon, 0, false });
+
+   // The same setting again writes nothing
+   const int programs = page.programs;
+   CHECK(store.storeVppWithoutAdapter(false, Personality::CmsisDap));
+   CHECK(page.programs == programs);
+}
+
+TEST_CASE("The VPP setting on an empty page takes the active personality") {
+   FakeFlashPage page;
+   PersonalityStore store{ page };
+
+   CHECK(store.storeVppWithoutAdapter(true, Personality::CmsisDap));
+   CHECK(store.loadSettings() == Settings{ Personality::CmsisDap, personality::bridgeModeAuto, true });
+   CHECK(store.load() == Personality::CmsisDap);
 }
