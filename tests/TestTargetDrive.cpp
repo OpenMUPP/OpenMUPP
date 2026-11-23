@@ -247,13 +247,24 @@ TEST_CASE("connect self-test: a read-back mismatch fails") {
    }
 }
 
-TEST_CASE("connect self-test: not when DIR_OUT is high already, and not without shifters") {
+TEST_CASE("connect self-test: at each engine start, also after a gpio output, and not without shifters") {
    Recorder r;
+   // OpenOCD releases TRST with DAP_SWJ_Pins before the first transfer.
    r.gpio(board::openMuppV1, gpio::trst, true);
+   r.drive(board::openMuppV1, ShifterGroups::Out, true);
+   CHECK(r.result);
+   CHECK(r.settles == 4);
+   // A second engine start without an end (Versaloon blocks): no test.
    r.stuckTdi = false;
    r.drive(board::openMuppV1, ShifterGroups::Out, true);
    CHECK(r.result);
-   CHECK(r.settles == 0);
+   CHECK(r.settles == 4);
+   // A mismatch after a gpio output fails too.
+   Recorder fail;
+   fail.gpio(board::openMuppV1, gpio::trst, true);
+   fail.stuckTdi = false;
+   fail.drive(board::openMuppV1, ShifterGroups::Out, true);
+   CHECK_FALSE(fail.result);
    Recorder yd;
    yd.drive(board::ydCh32V307, ShifterGroups::Out, true);
    CHECK(yd.result);

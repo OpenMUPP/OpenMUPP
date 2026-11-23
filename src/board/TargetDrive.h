@@ -61,7 +61,7 @@ constexpr std::array<std::optional<IdlePin>, 5> dirOutIdlePins(const DebugPins &
 
 } // namespace detail
 
-// The connect self-test: DIR_OUT is high, and TCK and TDI are MCU outputs.
+// The connect self-test: DIR_OUT is high, and all group pins are MCU outputs.
 // Each of the two pins goes to the inverse of its level and back. After
 // each step both read-back inputs (connector side) must show the levels of
 // TCK and TDI. A mismatch shows a short, or a target that drives against
@@ -110,8 +110,10 @@ bool connectSelfTest(const DebugPins &pins, const Shifters &shifters, Io &io) {
 // MCU output does not drive against a shifter. Io has direction(pin, level)
 // (write a direction pin), output(pin, level), input(pin), and for the
 // self-test write(pin, level), read(pin) and settle().
-// When on sets DIR_OUT high, the self-test of the read-back pins runs
-// (connectSelfTest()). The result is false when it fails, else true.
+// When on starts an engine (no engine ran before), the self-test of the
+// read-back pins runs (connectSelfTest()), also when a gpio output set
+// DIR_OUT high before: OpenOCD releases TRST and SRST with DAP_SWJ_Pins
+// before the first transfer. The result is false when it fails, else true.
 template <class Io, class SetMcuPins>
 bool driveTargetOutputs(const DebugPins &pins,
                         const std::optional<Shifters> &shifters,
@@ -127,6 +129,7 @@ bool driveTargetOutputs(const DebugPins &pins,
    const auto idle = detail::dirOutIdlePins(pins, *shifters, false);
    if(on) {
       const bool high = users.any();
+      const bool start = !users.engine;
       if(!high) {
          for(const auto &pin : idle) {
             if(pin) {
@@ -142,7 +145,7 @@ bool driveTargetOutputs(const DebugPins &pins,
       if(groups == ShifterGroups::OutAndSwdio) {
          io.direction(shifters->dirSwdio, true);
       }
-      return high || connectSelfTest(pins, *shifters, io);
+      return !start || connectSelfTest(pins, *shifters, io);
    }
    io.direction(shifters->dirOut, false);
    io.direction(shifters->dirSwdio, false);

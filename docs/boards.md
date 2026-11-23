@@ -438,7 +438,7 @@ The engines, the gpio requests and the UART bridge reach the target with these r
   The SWD engine sets `DIR_SWDIO` at each turnaround. To drive SWDIO, it sets PC11 to an output first and then `DIR_SWDIO` high. To release SWDIO, it sets `DIR_SWDIO` low first and then PC11 to an input.
   The one-wire engine makes `DIR_SWDIO` with TIM10_CH3 during a frame. The value of the CH3 compare is in the DMA burst of each bit, so CH3 needs no DMA request.
   In each read bit, `DIR_SWDIO` goes high with the falling edge of the host pulse. It goes low one timer tick before the host releases the line.
-- Connect self-test: when an engine sets `DIR_OUT` high, it sets TCK and TDI to the inverse level and back, one pin at a time.
+- Connect self-test: when an engine starts, it sets TCK and TDI to the inverse level and back, one pin at a time. The test also runs when a gpio output already set `DIR_OUT` high, for example a TRST release of OpenOCD before the first transfer.
   After each step, the read-back inputs PC6 (TCK) and PC7 (TDI) must show the levels of both pins.
   A mismatch shows a short, or a target that drives against the probe. The firmware then counts a probe error, and the state LED shows the double flash.
   The engine continues, so the host sees the error in the transfers.
