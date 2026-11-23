@@ -69,7 +69,8 @@ struct Recorder {
    }
 
    void drive(const board::Definition &def, ShifterGroups groups, bool on) {
-      result = board::driveTargetOutputs(def.debug, def.shifters, users, groups, on, *this, [this] { steps.emplace_back("pins"); });
+      result =
+      board::driveTargetOutputs(def.debug, def.shifters, users, groups, on, *this, [this] { steps.emplace_back("pins"); });
    }
    // A gpio request: "pin" for setPin()
    void gpio(const board::Definition &def, uint16_t bit, bool output) {

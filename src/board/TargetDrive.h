@@ -113,7 +113,13 @@ bool connectSelfTest(const DebugPins &pins, const Shifters &shifters, Io &io) {
 // When on sets DIR_OUT high, the self-test of the read-back pins runs
 // (connectSelfTest()). The result is false when it fails, else true.
 template <class Io, class SetMcuPins>
-bool driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &shifters, DirOutUsers &users, ShifterGroups groups, bool on, Io &io, SetMcuPins &&setMcuPins) {
+bool driveTargetOutputs(const DebugPins &pins,
+                        const std::optional<Shifters> &shifters,
+                        DirOutUsers &users,
+                        ShifterGroups groups,
+                        bool on,
+                        Io &io,
+                        SetMcuPins &&setMcuPins) {
    if(!shifters) {
       setMcuPins();
       return true;
