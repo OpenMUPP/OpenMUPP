@@ -242,9 +242,8 @@ cmsisdap::BitBangDapSwd<board::BoardSwd> dapSwd{ boardSwd };
 #if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
 // The RISC-V bridge: the JTAG port is the port of the board or the
 // emulated RISC-V DTM on the debug wire engine. ID_DAP_Vendor1 sets the
-// mode and can store it; auto finds the port at the first JTAG command after DAP_Connect. In a multi image the wire pins
-// are separate objects from the ones of wch-link: only the active
-// personality sets them up.
+// mode and can store it; auto finds the port at the first JTAG command after DAP_Connect. In a multi image the wire
+// pins are separate objects from the ones of wch-link: only the active personality sets them up.
 board::RvSwdPins dapRvSwdPins;
 wchlink::RvSwdTarget<board::RvSwdPins> dapRvTarget{ dapRvSwdPins, &serialService };
 cmsisdap::RvDtmTap dapRvTap{ dapRvTarget };
