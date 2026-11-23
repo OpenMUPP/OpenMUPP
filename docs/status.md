@@ -25,7 +25,7 @@ The Versaloon personality has the USB identity of the original Versaloon firmwar
 The CMSIS-DAP personality is a CMSIS-DAP v2 probe:
 
 - It runs SWD and JTAG transfers, and `DAP_TransferAbort` during a transfer command.
-- It switches the 3.3 V target supply and reads the target voltage with `ID_DAP_Vendor2`, with the protections of the `POWER` block (see [cmsis-dap.md](cmsis-dap.md#target-power)).
+- It switches the target supply (3.3 V, and 5 V on OpenMUPP v1) and reads the target voltage with `ID_DAP_Vendor2`, with the protections of the `POWER` block (see [cmsis-dap.md](cmsis-dap.md#target-power)).
 - On the CH32V307 boards, it captures SWO in UART mode and in Manchester mode with `DAP_SWO_Data` or the SWO trace endpoint (see [cmsis-dap.md](cmsis-dap.md#swo-commands)). The `DAP_UART_*` commands can take the UART from the CDC-ACM serial port (see [cmsis-dap.md](cmsis-dap.md#uart-commands)).
 - With `MUPP_CMSIS_DAP_AVR` (CH32V307 boards), its HID interface has the AVR commands of the Microchip EDBG tools: ISP programming, debugWIRE programming and debug, JTAG programming, and JTAG debug with hardware breakpoints, software breakpoints and data breakpoints (see [avr.md](avr.md)).
 
