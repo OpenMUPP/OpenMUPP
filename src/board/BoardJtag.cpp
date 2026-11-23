@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "board/BoardJtag.h"
+#include "board/BoardTargetDrive.h"
 
 // The JTAG engines, compiled with -O2 (CMakeLists.txt).
 template class jtag::BitBangPort<board::JtagPins>;
@@ -29,10 +30,16 @@ void configureOutput(Pin pin, bool level) {
 void JtagPins::init(bool tckLevel) {
    const DebugPins &pins = current.debug;
    // TMS and TDI high: extra TCK pulses keep the TAP in Test-Logic-Reset.
-   // They go first: a rising edge on TCK then samples them high.
-   configureOutput(pins.tmsOut, true);
-   configureOutput(pins.tdi, true);
-   configureOutput(pins.tck, tckLevel);
+   // They go first: a rising edge on TCK then samples them high. TMS is
+   // always an output: the TMS / SWDIO shifter drives the target too.
+   driveTargetOutputs(
+   true,
+   [&] {
+      configureOutput(pins.tmsOut, true);
+      configureOutput(pins.tdi, true);
+      configureOutput(pins.tck, tckLevel);
+   },
+   ShifterGroups::OutAndSwdio);
    // An open TDO reads 1: OpenOCD then sees no device instead of a chain
    // of zeros.
    gpioPin(pins.tdo).configure(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
@@ -47,9 +54,14 @@ void JtagPins::init(bool tckLevel) {
 
 void JtagPins::fini() {
    const DebugPins &pins = current.debug;
-   for(const Pin pin : { pins.tck, pins.tmsOut, pins.tdi }) {
-      gpioPin(pin).configure(GpioPin::Mode::Input);
-   }
+   driveTargetOutputs(
+   false,
+   [&] {
+      for(const Pin pin : { pins.tck, pins.tmsOut, pins.tdi }) {
+         gpioPin(pin).configure(GpioPin::Mode::Input);
+      }
+   },
+   ShifterGroups::OutAndSwdio);
 }
 
 } // namespace board

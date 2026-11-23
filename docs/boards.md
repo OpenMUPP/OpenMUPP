@@ -421,11 +421,15 @@ These items are different:
 
 The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definition hold the pins of the level shifters, the power functions and the ID dividers (see the table below).
 The start-up sets these pins to a safe state (see [Start-up and LEDs](#start-up-and-leds)).
-The engines and the power functions do not use the blocks yet.
-Thus only the UART bridge reaches the target:
+The engines use the `shifters` block for `DIR_OUT` (see the direction rule below).
+The power functions do not use the blocks yet.
+Only the UART bridge reaches the target:
 
 - The start-up sets `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) low. The external pull-downs hold them low while the MCU is in reset.
   Thus the TCK, TDI, TRST, AUX and SWDIO shifters work from the target to the probe. The target side stays high-impedance, and the shifters drive PB13, PB15, PB9, PA2, PA0 and PC11.
+- Each engine sets its MCU pins first and then sets `DIR_OUT` high. At the end, it sets `DIR_OUT` low first and then sets its MCU pins to inputs.
+  The JTAG engines also set `DIR_SWDIO` in the same order, because TMS is always an output.
+  The SWD and one-wire engines do not set `DIR_SWDIO` yet.
 - An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
   `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.
 - Only the CMSIS-DAP personality has this lock. A build with the Versaloon or WCH-Link personality fails for this board.

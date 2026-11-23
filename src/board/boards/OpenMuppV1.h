@@ -13,10 +13,11 @@ namespace board {
 //
 // The start-up (initialize_hardware.cpp) sets the direction pins DIR_OUT
 // (PB10) and DIR_SWDIO (PC3) low, so the shifters work from the target to
-// the probe and drive PB13, PB15, PB9, PA2, PA0 and PC11. The engines do
-// not set the direction pins yet. An MCU output on these pins would drive
-// against the shifters: debugOutputs is false, so the debug engines do not
-// run. Only the UART bridge reaches the target (docs/boards.md).
+// the probe and drive PB13, PB15, PB9, PA2, PA0 and PC11. The engines set
+// DIR_OUT through board::driveTargetOutputs() (board/TargetDrive.h). The
+// SWD and one-wire engines do not set DIR_SWDIO yet, so debugOutputs is
+// false and the debug engines do not run. Only the UART bridge reaches the
+// target (docs/boards.md).
 inline constexpr Definition openMuppV1{
    .name = "openmuppv1",
    .hseFrequency = 8'000'000,

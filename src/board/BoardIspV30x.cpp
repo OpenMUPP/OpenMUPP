@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "board/BoardIsp.h"
+#include "board/BoardTargetDrive.h"
 #include "protocol/avr/IspScope.h"
 
 #include <peripherals/Rcc.h>
@@ -61,16 +62,20 @@ void IspPins::init() {
    // RESET first: the target must not run while SCK and MOSI change. The
    // positive pulse of enableProgramming() comes with SCK low.
    reset(true);
-   configureOutput(pins.tck, false);
-   configureOutput(pins.tdi, false);
+   driveTargetOutputs(true, [&] {
+      configureOutput(pins.tck, false);
+      configureOutput(pins.tdi, false);
+   });
    gpioPin(pins.tdo).configure(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
 }
 
 void IspPins::fini() {
    const DebugPins &pins = current.debug;
-   for(const Pin pin : { pins.tck, pins.tdi }) {
-      gpioPin(pin).configure(GpioPin::Mode::Input);
-   }
+   driveTargetOutputs(false, [&] {
+      for(const Pin pin : { pins.tck, pins.tdi }) {
+         gpioPin(pin).configure(GpioPin::Mode::Input);
+      }
+   });
    // The target runs.
    reset(false);
    if(current.debug.srstActive == Active::Low) {

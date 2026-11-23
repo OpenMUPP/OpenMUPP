@@ -62,6 +62,7 @@ add_executable(mupp-tests
         TestUsbToAll.cpp
         TestReplay.cpp
         TestGpioBlock.cpp
+        TestTargetDrive.cpp
         TestJtagRawBlock.cpp
         TestJtagBitBang.cpp
         TestJtagFastPath.cpp

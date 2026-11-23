@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "board/BoardRvSwd.h"
+#include "board/BoardTargetDrive.h"
 
 #include <array>
 #include <peripherals/Dma.h>
@@ -158,9 +159,12 @@ void RvSwdPins::init() {
    if(pins.tmsIn != pins.tmsOut) {
       gpioPin(pins.tmsIn).configure(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
    }
-   const GpioPin tck = gpioPin(pins.tck);
-   tck.write(false);
-   tck.configure(GpioPin::Mode::Output, GpioPin::OutputType::PushPull, GpioPin::Pull::None, GpioPin::Speed::VeryHigh);
+   // SWCLK only: SWDIO has its own shifter direction (DIR_SWDIO).
+   driveTargetOutputs(true, [&] {
+      const GpioPin tck = gpioPin(pins.tck);
+      tck.write(false);
+      tck.configure(GpioPin::Mode::Output, GpioPin::OutputType::PushPull, GpioPin::Pull::None, GpioPin::Speed::VeryHigh);
+   });
    // The pull-up holds a released SWDIO high (SwdPins::swdioRelease()). The
    // AF number counts only in the alternate function mode of a frame; the
    // JTAG fast path sets its own in JtagSpi::init().

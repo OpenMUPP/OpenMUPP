@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "board/BoardSwd.h"
+#include "board/BoardTargetDrive.h"
 
 // The SWD engine, compiled with -O2 (CMakeLists.txt).
 template class swd::BitBangPort<board::SwdPins>;
@@ -26,7 +27,9 @@ void SwdPins::init() {
    if(pins.tmsIn != pins.tmsOut) {
       gpioPin(pins.tmsIn).configure(GpioPin::Mode::Input, GpioPin::OutputType::PushPull, GpioPin::Pull::Up);
    }
-   configureOutput(pins.tck, true);
+   // SWDIO has its own shifter direction (DIR_SWDIO): only SWCLK is in the
+   // shifter group of driveTargetOutputs().
+   driveTargetOutputs(true, [&] { configureOutput(pins.tck, true); });
    configureOutput(pins.tmsOut, true);
 #if !defined(STM32F1) && !defined(__riscv)
    // The pull-up of swdioRelease() (board/BoardSwd.h). A pull-up on a
@@ -43,9 +46,11 @@ void SwdPins::init() {
 
 void SwdPins::fini() {
    const DebugPins &pins = current.debug;
-   for(const Pin pin : { pins.tck, pins.tmsOut }) {
-      gpioPin(pin).configure(GpioPin::Mode::Input);
-   }
+   driveTargetOutputs(false, [&] {
+      for(const Pin pin : { pins.tck, pins.tmsOut }) {
+         gpioPin(pin).configure(GpioPin::Mode::Input);
+      }
+   });
 }
 
 #if defined(__riscv)
