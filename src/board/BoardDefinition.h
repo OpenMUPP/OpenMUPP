@@ -236,6 +236,73 @@ struct PowerSwitch {
    constexpr bool operator==(const PowerSwitch &) const = default;
 };
 
+// Level shifters between the debug pins and the target connector. A
+// direction pin high: the shifter drives the target. Low (external
+// pull-down): the target side is high-impedance and the shifter drives the
+// MCU pins. Thus an MCU pin of a shifter group must be an input while its
+// direction pin is low.
+struct Shifters {
+   Pin dirOut;    // TCK, TDI, TRST, AUX1 and AUX2
+   Pin dirSwdio;  // TMS / SWDIO
+   Pin uartTxDir; // UART TX. External pull-up: drives the target by default.
+   Pin aux1;
+   Pin aux2;
+   // Inputs that read the connector side of TCK, TDI and AUX1
+   Pin tckReadBack;
+   Pin tdiReadBack;
+   Pin aux1ReadBack;
+
+   constexpr bool operator==(const Shifters &) const = default;
+};
+
+// Target supply with a 3.3 V and a 5 V switch on one output. An enable pin
+// high turns its switch on. The fault inputs are open-drain and active low,
+// with no external pull-up. The 5 V sense input has an ADC channel.
+struct TargetSupply {
+   Pin enable3v3;
+   Pin enable5v;
+   Pin fault3v3;
+   Pin fault5v;
+   VrefSense v5Sense;
+
+   constexpr bool operator==(const TargetSupply &) const = default;
+};
+
+// High-voltage (VPP) supply: a boost converter that a DAC output adjusts.
+// VPP is on the target pin only while enable (boost on) and on (output
+// switch on) are both high. pullDown high pulls the target pin to 0 V. The
+// sense inputs have ADC channels: sense before the output switch, sense2 on
+// the target pin.
+struct Vpp {
+   Pin dac;
+   Pin enable;
+   Pin on;
+   Pin pullDown;
+   Pin sense;
+   Pin sense2;
+
+   constexpr bool operator==(const Vpp &) const = default;
+};
+
+// Resistor dividers that identify the adapter on the target connector and
+// the board revision. Both pins have ADC channels.
+struct IdSense {
+   Pin adapterId;
+   Pin boardId;
+
+   constexpr bool operator==(const IdSense &) const = default;
+};
+
+// DAC output channel of a pin: PA4 is channel 1, PA5 is channel 2 on the
+// CH32V307 (CH32V307DS0 pin table) and the STM32H5 (DS14539 table 14). The
+// STM32F103 of the boards (medium density) has no DAC.
+constexpr std::optional<uint8_t> dacChannelOf(Family family, Pin pin) {
+   if(family == Family::Stm32F1 || pin.port != Port::A || (pin.number != 4 && pin.number != 5)) {
+      return std::nullopt;
+   }
+   return static_cast<uint8_t>(pin.number - 3);
+}
+
 struct Leds {
    std::optional<Signal> power;
    std::optional<Signal> state;
@@ -293,6 +360,12 @@ struct Definition {
    std::optional<Signal> usbPullUp;
    // The pull-up pin is an open-drain output: the board sets the high level.
    bool usbPullUpOpenDrain = false;
+   // Empty: the board has no level shifters, no switchable 3.3 V and 5 V
+   // supply, no VPP supply or no ID dividers.
+   std::optional<Shifters> shifters = std::nullopt;
+   std::optional<TargetSupply> targetSupply = std::nullopt;
+   std::optional<Vpp> vpp = std::nullopt;
+   std::optional<IdSense> idSense = std::nullopt;
    // False: the debug pins must not become outputs, because the board layer
    // does not drive the level shifters of the board yet. The firmware then
    // keeps the target pins (main.cpp), so no host command drives them.
@@ -307,20 +380,20 @@ struct Definition {
    constexpr bool operator==(const Definition &) const = default;
 };
 
-// Pins that no board signal can use: USB D- and D+ (PA11, PA12) and the
-// crystal (PD0 and PD1 on the STM32F103 and the CH32V307, PH0 and PH1 on
-// the STM32H5). The CH32V307 also reserves the USBHS pins PB6 and PB7. The
-// crystal pins stay reserved on a board without a crystal. The SWD pins of
-// the dongle MCU (PA13, PA14) are not in this list, because a release
-// build of the Mini uses PA14 for an LED.
-constexpr std::array<std::optional<Pin>, 6> reservedPins(Family family) {
+// Pins that no board signal can use: the crystal (PD0 and PD1 on the
+// STM32F103 and the CH32V307, PH0 and PH1 on the STM32H5) and the pins of
+// the USB port: USB D- and D+ (PA11, PA12) on the STM32F103 and the
+// STM32H5, the USBHS pins PB6 and PB7 on the CH32V307. The CH32V307
+// firmware keeps USBFS off (initialize_hardware.cpp), so PA11 and PA12 are
+// normal pins there. The crystal pins stay reserved on a board without a
+// crystal. The SWD pins of the dongle MCU (PA13, PA14) are not in this
+// list, because a release build of the Mini uses PA14 for an LED.
+constexpr std::array<Pin, 4> reservedPins(Family family) {
    const Port crystal = family == Family::Stm32H5 ? Port::H : Port::D;
-   std::array<std::optional<Pin>, 6> pins{ { Pin{ Port::A, 11 }, Pin{ Port::A, 12 }, Pin{ crystal, 0 }, Pin{ crystal, 1 } } };
    if(family == Family::Ch32V30x) {
-      pins[4] = Pin{ Port::B, 6 };
-      pins[5] = Pin{ Port::B, 7 };
+      return { { { crystal, 0 }, { crystal, 1 }, { Port::B, 6 }, { Port::B, 7 } } };
    }
-   return pins;
+   return { { { crystal, 0 }, { crystal, 1 }, { Port::A, 11 }, { Port::A, 12 } } };
 }
 
 namespace detail {
@@ -330,8 +403,15 @@ constexpr bool isValidPin(const Pin &pin) {
 }
 
 // All pins of a definition. Unused optional pins are empty.
-constexpr std::array<std::optional<Pin>, 20> allPins(const Definition &def) {
+constexpr std::array<std::optional<Pin>, 41> allPins(const Definition &def) {
    auto pinOf = [](const auto &opt) -> std::optional<Pin> { return opt ? std::optional<Pin>(opt->pin) : std::nullopt; };
+   // The pin at member m of an optional block
+   auto in = [](const auto &opt, auto m) -> std::optional<Pin> {
+      return opt ? std::optional<Pin>((*opt).*m) : std::nullopt;
+   };
+   using S = Shifters;
+   using T = TargetSupply;
+   using V = Vpp;
    return { {
    def.debug.tck,
    def.debug.tmsOut,
@@ -354,6 +434,27 @@ constexpr std::array<std::optional<Pin>, 20> allPins(const Definition &def) {
    pinOf(def.leds.usb),
    pinOf(def.key),
    pinOf(def.usbPullUp),
+   in(def.shifters, &S::dirOut),
+   in(def.shifters, &S::dirSwdio),
+   in(def.shifters, &S::uartTxDir),
+   in(def.shifters, &S::aux1),
+   in(def.shifters, &S::aux2),
+   in(def.shifters, &S::tckReadBack),
+   in(def.shifters, &S::tdiReadBack),
+   in(def.shifters, &S::aux1ReadBack),
+   in(def.targetSupply, &T::enable3v3),
+   in(def.targetSupply, &T::enable5v),
+   in(def.targetSupply, &T::fault3v3),
+   in(def.targetSupply, &T::fault5v),
+   def.targetSupply ? std::optional<Pin>(def.targetSupply->v5Sense.pin) : std::nullopt,
+   in(def.vpp, &V::dac),
+   in(def.vpp, &V::enable),
+   in(def.vpp, &V::on),
+   in(def.vpp, &V::pullDown),
+   in(def.vpp, &V::sense),
+   in(def.vpp, &V::sense2),
+   in(def.idSense, &IdSense::adapterId),
+   in(def.idSense, &IdSense::boardId),
    } };
 }
 
@@ -395,8 +496,9 @@ constexpr SwjConfig swjConfig(const Definition &def) {
 }
 
 // True when the pins of the definition are valid: pin numbers 0-15, no pin
-// used twice (TMS out and in can be one pin), no reserved pin, a Vref pin
-// with an ADC channel, and the fixed fast path pins when the board has the
+// used twice (TMS out and in can be one pin), no reserved pin, ADC channels
+// on the Vref pin and the sense pins, a DAC channel on the VPP DAC pin,
+// and the fixed fast path pins when the board has the
 // JTAG fast path. The crystal must be in the range of the family, and an
 // STM32F103 or CH32V307 board must have one. A CH32V307 board must not use
 // PA13 and PA14 (SWD). Each board
@@ -411,7 +513,7 @@ constexpr bool isValid(const Definition &def) {
          return false;
       }
       for(const auto &reserved : reservedPins(def.family)) {
-         if(reserved && *pins[i] == *reserved) {
+         if(*pins[i] == reserved) {
             return false;
          }
       }
@@ -434,7 +536,18 @@ constexpr bool isValid(const Definition &def) {
          return false;
       }
    }
-   if(def.vref && (!adcChannelOf(def.family, def.vref->pin) || def.vref->divider == 0)) {
+   auto isSense = [&](const VrefSense &sense) { return adcChannelOf(def.family, sense.pin) && sense.divider != 0; };
+   auto hasAdc = [&](Pin pin) { return adcChannelOf(def.family, pin).has_value(); };
+   if(def.vref && !isSense(*def.vref)) {
+      return false;
+   }
+   if(def.targetSupply && !isSense(def.targetSupply->v5Sense)) {
+      return false;
+   }
+   if(def.vpp && (!dacChannelOf(def.family, def.vpp->dac) || !hasAdc(def.vpp->sense) || !hasAdc(def.vpp->sense2))) {
+      return false;
+   }
+   if(def.idSense && (!hasAdc(def.idSense->adapterId) || !hasAdc(def.idSense->boardId))) {
       return false;
    }
    // The CH32V30x keeps PA13/PA14 as SWD: the firmware does not write

@@ -56,6 +56,35 @@ inline constexpr Definition openMuppV1{
    // SW1 on the BOOT0 net
    .key = Signal{ { Port::B, 3 }, Active::High },
    .usbPullUp = std::nullopt,
+   .shifters{ {
+   .dirOut{ Port::B, 10 },
+   .dirSwdio{ Port::C, 3 },
+   .uartTxDir{ Port::C, 9 },
+   .aux1{ Port::A, 2 },
+   .aux2{ Port::A, 0 },
+   .tckReadBack{ Port::C, 6 },
+   .tdiReadBack{ Port::C, 7 },
+   .aux1ReadBack{ Port::C, 8 },
+   } },
+   // U12 (3.3 V) and U14 (5 V). Q4 gives 3.3 V priority. R45, R46: +5V / 2.
+   .targetSupply{ {
+   .enable3v3{ Port::B, 8 },
+   .enable5v{ Port::B, 5 },
+   .fault3v3{ Port::A, 11 },
+   .fault5v{ Port::A, 12 },
+   .v5Sense{ .pin{ Port::C, 0 }, .divider = 2 },
+   } },
+   // VPP_12V_ADJ on DAC channel 2: a higher DAC voltage gives a lower VPP.
+   // PC14 and PC15 are backup-domain pins (3 mA, 2 MHz): static levels only.
+   .vpp{ {
+   .dac{ Port::A, 5 },
+   .enable{ Port::C, 14 },
+   .on{ Port::C, 15 },
+   .pullDown{ Port::C, 5 },
+   .sense{ Port::A, 4 },
+   .sense2{ Port::C, 1 },
+   } },
+   .idSense = IdSense{ .adapterId{ Port::B, 1 }, .boardId{ Port::C, 2 } },
    .debugOutputs = false,
 };
 

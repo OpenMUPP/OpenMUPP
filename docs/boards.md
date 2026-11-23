@@ -41,6 +41,13 @@ The board definition holds all board-specific data:
 
 - The pin map: JTAG and SWD, UART, Vref sense, power switch, LEDs, key and USB pull-up.
 - The MCU family.
+- Optional blocks for the board functions of OpenMUPP v1 (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)):
+  - `shifters`: the direction pins of the level shifters, the `AUX1` and `AUX2` pins, and the read-back inputs of TCK, TDI and `AUX1`.
+  - `targetSupply`: the enable pins of the 3.3 V and 5 V target switches, their fault inputs and the 5 V sense input.
+  - `vpp`: the DAC pin, the enable, on and pull-down pins, and the two sense inputs of the VPP supply.
+  - `idSense`: the adapter ID and the board ID inputs.
+
+  The other boards do not have these blocks.
 - `debugOutputs`: false when the debug pins must not become outputs (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)).
 - The crystal frequency. The value 0 is a board without a crystal. Only an STM32H5 board can have no crystal: its USB clock comes from the HSI48 and the clock recovery system (CRS).
 - The JTAG fast path (SPI and DMA, see [JTAG fast path](usb-device.md#jtag-fast-path)). It is only available when the board links TCK (PB13) to PB3.
@@ -52,20 +59,23 @@ The protocol and the engines read board data only through `board::current`.
 `src/board/BoardPins.h` maps a board pin to the system-stm32 `GpioPin` and `FastPin` drivers.
 
 The family and the crystal share one 32-bit word.
-Thus a board definition stays 68 bytes, the same size as before the family field.
+Thus the family adds no byte to the board definition.
 The firmware keeps the definition of the board in the flash.
 
 Some functions come from the pin map and the family, not from a separate field:
 
-- `board::adcChannelOf()` gives the ADC channel of the Vref pin.
+- `board::adcChannelOf()` gives the ADC channel of the Vref pin and of the sense pins.
   The channels of the STM32F103 come from RM0008. The channels of the STM32H523/H533 come from DS14539.
   The CH32V307 has the same channels as the STM32F103 (CH32V307DS0 pin table).
+- `board::dacChannelOf()` gives the DAC channel of the VPP DAC pin: PA4 is channel 1 and PA5 is channel 2.
+  The CH32V307 and the STM32H5 have these channels. The STM32F103 of the boards has no DAC.
 - `board::oneWireTimerOf()` gives the timer of the one-wire engine (WCH-Link) on the SWDIO output pin.
   On the STM32H5, only PA6 (TIM3_CH1) has a timer.
   On the CH32V307, only PC11 (TIM10_CH4) has a timer.
-- `board::reservedPins()` gives the pins that no signal can use: USB D- and D+ (PA11, PA12) and the crystal pins.
+- `board::reservedPins()` gives the pins that no signal can use: the crystal pins and the pins of the USB port.
   The crystal pins are PD0 and PD1 on the STM32F103 and the CH32V307, and PH0 and PH1 on the STM32H5.
-  On the CH32V307, the USB high-speed pins PB6 and PB7 are also reserved.
+  The USB pins are D- and D+ (PA11, PA12) on the STM32F103 and the STM32H5, and the USB high-speed pins PB6 and PB7 on the CH32V307.
+  The CH32V307 firmware keeps the full-speed USB port (USBFS) off. Thus PA11 and PA12 are normal pins on the CH32V307.
 - `board::swjConfig()` gives the debug port (SWJ) setting of the dongle MCU.
   The setting frees all debug port pins that the board uses, and keeps the rest.
   The Mini uses PA14 for an LED, so it disables the debug port.
@@ -80,6 +90,7 @@ Some functions come from the pin map and the family, not from a separate field:
 
 The build fails when a board definition is not valid.
 Examples are a pin that is used two times, or a crystal that is different from `SYSTEM_STM32_HSE_VALUE`.
+Each sense pin (Vref, 5 V, VPP, adapter ID, board ID) must have an ADC channel, and the VPP DAC pin must have a DAC channel.
 The build also fails when the family of the board definition is different from `STM32_FAMILY` (or the CH32 device, `CH32_DEVICE`).
 The JTAG fast path has fixed pins. TMS is on SPI1 MISO: PB4 on the STM32F103, PA6 on the STM32H5.
 PB4 can also be SPI1 MISO on the STM32H5. The pin map of the H5 boards uses PB4 for TRST, so the firmware uses PA6.
@@ -391,7 +402,6 @@ The schematics, the design notes and the full pin map are in the repository [ope
 
 The board `openmuppv1` is the board definition `src/board/boards/OpenMuppV1.h`.
 The preset `openmuppv1-cmsis-dap` builds its firmware image.
-The image is not tested on hardware.
 The YD-CH32V307VCT6 board is the test board for the same MCU.
 The definition uses the pin map of the YD board for the JTAG, SWD and debugWIRE pins and the TCK link (PC10, through R10).
 These items are different:
@@ -403,11 +413,12 @@ These items are different:
 - The key (SW1) is on the `BOOT0` net. PB3 reads it, active high.
 - SWO: the TDO net also goes to PA3 (USART2 RX). The YD board needs a wire for this (see [YD-CH32V307VCT6 development board](#yd-ch32v307vct6-development-board)).
 
-The board layer does not know the direction pins and the power functions yet.
+The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definition hold the pins of the level shifters, the power functions and the ID dividers (see the table below).
+The firmware does not drive the direction pins and the power functions yet.
 Thus only the UART bridge reaches the target:
 
 - `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) have external pull-downs. The firmware does not drive them.
-  Thus the TCK, TDI, TRST, AUX and SWDIO shifters work from the target to the probe. The target side stays high-impedance, and the shifters drive PB13, PB15, PB9 and PC11.
+  Thus the TCK, TDI, TRST, AUX and SWDIO shifters work from the target to the probe. The target side stays high-impedance, and the shifters drive PB13, PB15, PB9, PA2, PA0 and PC11.
 - An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
   `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.
 - Only the CMSIS-DAP personality has this lock. A build with the Versaloon or WCH-Link personality fails for this board.
