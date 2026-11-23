@@ -24,6 +24,12 @@
 // - The requests are on DMA2: TIM10_UP on channel 11, TIM10_CH2 (the
 //   sample) on channel 10 (RM table 11-4). The UART bridge uses channels 8
 //   and 9 (UART7).
+// - On a board with level shifters (OpenMUPP v1), TIM10_CH3 (PC3) is
+//   DIR_SWDIO during a frame. CH3CVR is already in the burst, so the
+//   burst stays 6 words and CH3 needs no DMA request of its own (DMA2
+//   channel 9 is UART7 RX). The edges of the direction pin come from
+//   rvswd::oneWireDriveTicks(). Between the frames, DIR_SWDIO is a GPIO
+//   output that SwdPins sets (board/BoardSwd.h).
 //
 // TIM10 runs at the core clock: PCLK2 is HCLK (initialize_hardware.cpp), and
 // the timer clock is PCLK2 when the APB2 prescaler is 1 (RM clock tree).
@@ -44,6 +50,14 @@ static_assert(oneWire.timer == 10 && !oneWire.complementary && !oneWire.partialR
 
 using OneWireOut = FastPinOf<current.debug.tmsOut>;
 using OneWireIn = FastPinOf<current.debug.tmsIn>;
+
+constexpr bool hasDirSwdio = current.shifters.has_value();
+// TIM10_CH3 (default map) on PC3
+constexpr uint32_t dirChannel = 3;
+static_assert(!hasDirSwdio || current.shifters->dirSwdio == Pin{ Port::C, 3 }, "DIR_SWDIO must be TIM10_CH3 (PC3)");
+static_assert(dirChannel < oneWire.channel && dirChannel != oneWire.sampleChannel,
+              "the direction compare must be in the burst and not the sample channel");
+using DirSwdio = FastPinOf<hasDirSwdio ? current.shifters->dirSwdio : current.debug.tmsOut>;
 
 // The output register first, so the pin starts at its level.
 void configureOutput(Pin pin, bool level) {
@@ -97,20 +111,39 @@ volatile uint32_t &ccr(TIM_TypeDef &tim, uint32_t channel) {
    return (&tim.CH1CVR)[channel - 1];
 }
 
-// ATRLR, the low time and the sample compare of a bit, as a burst entry
-void fillEntry(uint16_t *entry, uint32_t period, uint32_t low) {
+// ATRLR, the low time, the sample compare and the direction compare of a
+// bit, as a burst entry. Without level shifters, CH3CVR stays 0.
+void fillEntry(uint16_t *entry, uint32_t period, uint32_t low, uint32_t drive) {
    entry[0] = static_cast<uint16_t>(period - 1);
    entry[1] = 0;
    for(uint32_t channel = 1; channel <= oneWire.channel; ++channel) {
-      entry[1 + channel] = channel == oneWire.channel       ? static_cast<uint16_t>(low) :
-                           channel == oneWire.sampleChannel ? static_cast<uint16_t>(ticks.sample) :
-                                                              0;
+      entry[1 + channel] = channel == oneWire.channel           ? static_cast<uint16_t>(low) :
+                           channel == oneWire.sampleChannel     ? static_cast<uint16_t>(ticks.sample) :
+                           hasDirSwdio && channel == dirChannel ? static_cast<uint16_t>(drive) :
+                                                                  0;
    }
 }
 
 void fillBit(uint16_t *entry, uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t i) {
    const rvswd::OneWireBit bit = rvswd::oneWireBit(ticks, bits, count, readFrom, i);
-   fillEntry(entry, bit.period, bit.low);
+   fillEntry(entry, bit.period, bit.low, rvswd::oneWireDriveTicks(ticks, bits, count, readFrom, i));
+}
+
+// The direction pin from the timer (AF) or as a GPIO output at its level.
+// The level is the same at the change, so the pin does not glitch.
+constexpr uint8_t gpioPushPull =
+hw::gpio_f1::pinConfig(GpioPin::Mode::Output, GpioPin::OutputType::PushPull, GpioPin::Pull::None, GpioPin::Speed::VeryHigh);
+
+void dirFromTimer() {
+   if constexpr(hasDirSwdio) {
+      DirSwdio::setConfig<afPushPull>();
+   }
+}
+void dirToGpio(bool level) {
+   if constexpr(hasDirSwdio) {
+      DirSwdio::write(level);
+      DirSwdio::setConfig<gpioPushPull>();
+   }
 }
 
 void stop(TIM_TypeDef &tim) {
@@ -139,6 +172,13 @@ void initOneWire() {
    t.enableOcPreload(sample);
    // Inverted output: OCREF high (CNT < CVR) is the low level.
    tim.CCER = (TIM_CC1E | TIM_CC1P) << ((oneWire.channel - 1) * 4);
+   if constexpr(hasDirSwdio) {
+      // The direction pin: OCREF high (CNT < CVR) is DIR_SWDIO high.
+      const auto dir = static_cast<hw::Timer::Channel>(dirChannel - 1);
+      t.setOcMode(dir, hw::Timer::OcMode::Pwm1);
+      t.enableOcPreload(dir);
+      tim.CCER |= TIM_CC1E << ((dirChannel - 1) * 4);
+   }
    t.enableMainOutput();
    tim.DMACFGR = (burstWords - 1) << dblShift | arrIndex;
    tim.DMAINTENR = TIM_UDE;
@@ -165,7 +205,9 @@ void RvSwdPins::init() {
    }
    // SWCLK only: SWDIO has its own shifter direction (DIR_SWDIO).
    driveTargetOutputs(true, [&] { configureOutput(pins.tck, false); });
+   // SWDIO driven high: the MCU pin first, then DIR_SWDIO
    configureOutput(pins.tmsOut, true);
+   SwdioDir::set();
    initOneWire();
 }
 
@@ -182,6 +224,7 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    TIM_TypeDef &tim = timer();
    stop(tim);
    if(!usable) {
+      SwdioDir::clear();
       OneWireOut::set();
       OneWireOut::setConfig<releasedInput>();
       return false;
@@ -191,6 +234,10 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    tim.ATRLR = ticks.lead - 1u;
    ccr(tim, oneWire.channel) = 0;
    ccr(tim, oneWire.sampleChannel) = ticks.sample;
+   // The direction pin stays high in the lead-in and in bit 0 (a write bit)
+   if constexpr(hasDirSwdio) {
+      ccr(tim, dirChannel) = rvswd::oneWireDriveAlways;
+   }
    tim.CNT = 0;
    // URS: the update generation loads the registers without a DMA request.
    tim.SWEVGR = TIM_UG;
@@ -198,19 +245,24 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    fillBit(first.data(), bits, count, readFrom, 0);
    tim.ATRLR = first[0];
    ccr(tim, oneWire.channel) = first[1 + oneWire.channel];
+   if constexpr(hasDirSwdio) {
+      ccr(tim, dirChannel) = first[1 + dirChannel];
+   }
 
    uint32_t entries = 0;
    for(uint32_t i = 1; i < count; ++i) {
       fillBit(&table[entries++ * burstWords], bits, count, readFrom, i);
    }
-   // The end: see BoardRvSwd.cpp. Two end entries, and an end period that
-   // is long enough to stop the counter before the next update event.
-   fillEntry(&table[entries++ * burstWords], 0x1'0000, 0);
-   fillEntry(&table[entries++ * burstWords], 0x1'0000, 0);
-
    // The times from the counter start, in ticks (= core cycles)
    const rvswd::OneWireTimes times = rvswd::oneWireTimes(ticks, bits, count, readFrom);
    const bool reads = readFrom < count;
+
+   // The end: see BoardRvSwd.cpp. Two end entries, and an end period that
+   // is long enough to stop the counter before the next update event. The
+   // direction pin stays low after read bits, else high.
+   const uint32_t endDrive = reads ? 0 : rvswd::oneWireDriveAlways;
+   fillEntry(&table[entries++ * burstWords], 0x1'0000, 0, endDrive);
+   fillEntry(&table[entries++ * burstWords], 0x1'0000, 0, endDrive);
 
    const Dma::Channel update = updateDma();
    update.setMemoryAddress(reinterpret_cast<uint32_t>(table.data()));
@@ -226,6 +278,7 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    }
    tim.INTFR = 0;
    OneWireOut::setConfig<afPushPull>();
+   dirFromTimer();
    const uint32_t start = cycleCount();
    tim.CTLR1 |= TIM_CEN;
    if(reads) {
@@ -250,12 +303,15 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    tim.CTLR1 &= ~TIM_CEN;
    const uint32_t taken = sampleWords - sample.getDataCount();
    const bool ok = done && (!reads || taken >= count - readFrom);
+   // Released: DIR_SWDIO low first, then the MCU pin to input
    if(reads || !ok) {
+      dirToGpio(false);
       OneWireOut::set();
       OneWireOut::setConfig<releasedInput>();
    } else {
       OneWireOut::write(true);
       OneWireOut::setOutput();
+      dirToGpio(true);
    }
    stop(tim);
    if(!ok) {

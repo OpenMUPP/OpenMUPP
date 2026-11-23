@@ -424,7 +424,7 @@ These items are different:
 
 The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definition hold the pins of the level shifters, the power functions and the ID dividers (see the table below).
 The start-up sets these pins to a safe state (see [Start-up and LEDs](#start-up-and-leds)).
-The engines use the `shifters` block for `DIR_OUT` (see the direction rule below).
+The engines use the `shifters` block for `DIR_OUT` and `DIR_SWDIO` (see the direction rule below).
 The power functions do not use the blocks yet.
 Only the UART bridge reaches the target:
 
@@ -434,7 +434,9 @@ Only the UART bridge reaches the target:
   Then the engine sets `DIR_OUT` high.
   At the end, the engine sets `DIR_OUT` and `DIR_SWDIO` low first. Then it sets the MCU pins to inputs.
   The JTAG engines also set `DIR_SWDIO` high, because TMS is always an output.
-  The SWD and one-wire engines do not set `DIR_SWDIO` yet.
+  The SWD engine sets `DIR_SWDIO` at each turnaround. To drive SWDIO, it sets PC11 to an output first and then `DIR_SWDIO` high. To release SWDIO, it sets `DIR_SWDIO` low first and then PC11 to an input.
+  The one-wire engine makes `DIR_SWDIO` with TIM10_CH3 during a frame. The value of the CH3 compare is in the DMA burst of each bit, so CH3 needs no DMA request.
+  In each read bit, `DIR_SWDIO` goes high with the falling edge of the host pulse. It goes low one timer tick before the host releases the line.
 - An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
   `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.
 - Only the CMSIS-DAP personality has this lock. A build with the Versaloon or WCH-Link personality fails for this board.
@@ -446,7 +448,7 @@ The firmware must follow these rules when it adds these functions:
 | Function | Pins | Rule for the firmware |
 |---|---|---|
 | Direction of the level shifters | `DIR_OUT` PB10, `DIR_SWDIO` PC3 | External pull-downs keep the target side high-impedance at reset. Set `DIR_OUT` high only while an engine runs. |
-| One-wire SWDIO | `DIR_SWDIO` PC3 (TIM10_CH3), SWDIO PC11 | A timer channel can change the direction in each bit. TIM10_CH3 has its DMA request on DMA2 channel 9, which UART7 RX uses. The SWDIO pull-up to `VTREF` is 2.2 kΩ. |
+| One-wire SWDIO | `DIR_SWDIO` PC3 (TIM10_CH3), SWDIO PC11 | The one-wire engine changes the direction in each bit with TIM10_CH3. Do not enable the DMA request of TIM10_CH3: it is on DMA2 channel 9, which UART7 RX uses. The SWDIO pull-up to `VTREF` is 2.2 kΩ. |
 | UART TX direction | `UART_TX_DIR` PC9 | High (pull-up) drives the target. Set it low to read the line, for example for a single-wire UART. |
 | Target power, 3.3 V | `TARGET_PWR_EN` PB8 | The limit is about 300 mA. With both switches off, `VTREF_SENSE` (PB0) shows half of the target voltage. |
 | Target power, 5 V | `TARGET_5V_EN` PB5 | The limit is about 300 mA. See the sequence below. |

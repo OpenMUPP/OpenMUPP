@@ -45,6 +45,8 @@ void configureOutput(Pin pin, bool level) {
 // register during the frame.
 
 static_assert(oneWireTimerOf(current.family, current.debug.tmsOut), "the SWDIO output pin has no one-wire timer");
+// The frame does not drive a SWDIO direction pin (BoardRvSwdV30x.cpp does).
+static_assert(!current.shifters, "the one-wire frame of this family has no DIR_SWDIO control");
 constexpr OneWireTimer oneWire = *oneWireTimerOf(current.family, current.debug.tmsOut);
 
 using OneWireOut = FastPinOf<current.debug.tmsOut>;
