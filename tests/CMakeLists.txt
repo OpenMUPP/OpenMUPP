@@ -79,6 +79,7 @@ add_executable(mupp-tests
         TestWchLinkFlash.cpp
         TestPowerBlock.cpp
         TestDapTargetPower.cpp
+        TestDapVppSetting.cpp
         TestTargetPower.cpp
         TestAvrIsp.cpp
         TestAvrIspScope.cpp

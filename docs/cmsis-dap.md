@@ -458,6 +458,7 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 | `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image without the bootloader entry replies `0xFF` to it. An image with one personality and without the bootloader entry replies `ID_DAP_Invalid` to each code. Only the `app-8k` image and the images of the STM32H5 have the bootloader entry. See [Multi image](usb-device.md#multi-image). |
 | `0x81` | `ID_DAP_Vendor1` | Only in an image with `MUPP_CMSIS_DAP_RV_BRIDGE`: sets the mode of the RISC-V bridge, `[0x81][mode u8]`, `0` off, `1` on, `2` auto, `3` the stored mode. Bit 7 of the mode also stores the mode. The response is `[0x81][status u8]`: `0` when the mode is set, `0xFF` for another value or a failed store. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
 | `0x82` | `ID_DAP_Vendor2` | Switches the supply of the target and reads the target voltage (Vref): `[0x82][op u8]`. Op `0` switches the supply off, `1` switches it on at 3.3 V, `2` only reads. `[0x82][3][mV u16]` switches it on at 3.3 V or 5 V. The response is `[0x82][status u8][mV u16][state u8]`. See [Target power](#target-power). |
+| `0x83` | `ID_DAP_Vendor3` | Only on a board with an adapter ID (OpenMUPP v1): reads and writes the setting "VPP without an adapter", `[0x83][op u8]`. Op `0` stores off, `1` stores on, `2` only reads. The response is `[0x83][status u8][setting u8]`. Other boards reply `ID_DAP_Invalid`. See [VPP without an adapter](#vpp-without-an-adapter). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
@@ -600,6 +601,33 @@ cmsis-dap cmd 0x82 0x00
 sleep 200
 cmsis-dap cmd 0x82 0x01
 ```
+
+## VPP without an adapter
+
+The vendor command `ID_DAP_Vendor3` (`0x83`) reads and writes the setting "VPP without an adapter" (decision D2 of the v1 plan).
+Only boards with an adapter ID have the command: OpenMUPP v1.
+The image must also have the settings page: a multi image, or an image with the RISC-V bridge (the default).
+Other images reply `ID_DAP_Invalid`.
+
+| Request | Operation |
+|---|---|
+| `83 00` | Store the setting off. |
+| `83 01` | Store the setting on. |
+| `83 02` | No change. Only read the setting. |
+
+The response is `[0x83][status u8][setting u8]`.
+The status is `0x00` when the operation is done.
+It is `0xFF` for another op and for a failed store.
+`setting` is the stored value after the operation: `0` off, `1` on.
+
+The firmware stores the setting in the settings page, together with the personality and the bridge mode.
+The default is off.
+An older image does not know a stored "on" value, so it then starts with its default personality and bridge mode.
+A store stalls the CPU for the flash write (see `src/board/SettingsFlashPage.h`).
+
+When the setting is on, VPP is also allowed with no adapter on J4 (pin 16 open).
+The setting never allows VPP on an adapter fault (pin 16 shorted), an unknown adapter or an adapter that is not slot 8 or 9.
+See [Adapter ID and board ID](boards.md#adapter-id-and-board-id).
 
 ## UART commands
 
@@ -1545,6 +1573,8 @@ The last tests of `tests/TestDapSwo.cpp` run the SWO trace endpoint through `Cms
 
 `tests/TestDapTargetPower.cpp` runs `ID_DAP_Vendor2` through the processor, on the fake power switch and voltage sense of `tests/FakePower.h`.
 The tests cover off, on and read, each protection, a board without a switch or a sense, an unknown op, the host that goes away, and a response that does not fit.
+
+`tests/TestDapVppSetting.cpp` runs `ID_DAP_Vendor3` through the processor, on a fake store.
 
 `tests/TestEdbg.cpp` runs the AVR commands through the HID function, on the ISP engine with the mock AVR of `tests/MockIspTarget.h`.
 The tests run the avrdude session, a flash page in 5 command fragments and a read in 5 response fragments.

@@ -460,6 +460,12 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       }
       out.u8(command::invalid);
       return true;
+   case command::vendor3:
+      if(vppSetting_ != nullptr) {
+         return vppSettingCommand(in, out);
+      }
+      out.u8(command::invalid);
+      return true;
    case command::executeCommands:
    case command::queueCommands:
       if(!nested) {
@@ -604,6 +610,27 @@ bool Processor::targetPower(PacketReader &in, PacketWriter &out) {
    out.u8(status);
    out.u16(power_->millivolts());
    out.u8(state);
+   return true;
+}
+
+// [0x83][op u8] -> [0x83][status u8][setting u8]
+bool Processor::vppSettingCommand(PacketReader &in, PacketWriter &out) {
+   constexpr uint8_t opRead = 2;
+   const uint8_t op = in.u8();
+   if(!in.ok() || out.room() < 3) {
+      return false;
+   }
+   uint8_t status = statusOk;
+   if(op < opRead) {
+      if(!vppSetting_->store(op == 1)) {
+         status = statusError;
+      }
+   } else if(op != opRead) {
+      status = statusError;
+   }
+   out.u8(command::vendor3);
+   out.u8(status);
+   out.u8(vppSetting_->load() ? 1 : 0);
    return true;
 }
 
