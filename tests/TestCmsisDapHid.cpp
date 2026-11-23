@@ -249,22 +249,6 @@ TEST_CASE("HID: DAP_Connect does not drive the pins before the first transfer") 
    CHECK(bench.swd.finis == 2);
 }
 
-TEST_CASE("HID: no interface gets the pins while the board keeps them") {
-   HidBench bench;
-   // A board without debug outputs (board::Definition::debugOutputs, main.cpp)
-   REQUIRE(bench.owner.acquire(protocol::PinClient::Board));
-   bench.enumerate();
-   CHECK(bench.hidCommand({ 0x02, 0x01 }) == report({ 0x02, 0x00 }));
-   CHECK(bench.bulkCommand({ 0x02, 0x01 }) == Bytes{ 0x02, 0x00 });
-   CHECK(bench.bulkCommand({ 0x02, 0x02 }) == Bytes{ 0x02, 0x00 });
-   CHECK(bench.swd.inits == 0);
-   // Neither a disconnect nor a bus reset frees the pins.
-   CHECK(bench.bulkCommand({ 0x03 }) == Bytes{ 0x03, 0x00 });
-   bench.enumerate();
-   CHECK(bench.owner.owner() == protocol::PinClient::Board);
-   CHECK(bench.bulkCommand({ 0x02, 0x01 }) == Bytes{ 0x02, 0x00 });
-}
-
 TEST_CASE("HID: DAP_TransferAbort stops a running DAP_TransferBlock") {
    HidBench bench;
    bench.enumerate();

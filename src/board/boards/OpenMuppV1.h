@@ -16,10 +16,9 @@ namespace board {
 // the probe and drive PB13, PB15, PB9, PA2, PA0 and PC11. The engines set
 // DIR_OUT through board::driveTargetOutputs() (board/TargetDrive.h). The
 // SWD engine sets DIR_SWDIO at each turnaround (board/BoardSwd.h), and the
-// one-wire frame makes it on TIM10_CH3 (board/BoardRvSwdV30x.cpp).
-// debugOutputs stays false until the connect self-test on the read-back
-// pins exists, so the debug engines do not run. Only the UART bridge
-// reaches the target (docs/boards.md).
+// one-wire frame makes it on TIM10_CH3 (board/BoardRvSwdV30x.cpp). The gpio
+// requests set them too, and the read-back pins give the connect
+// self-test (docs/boards.md).
 inline constexpr Definition openMuppV1{
    .name = "openmuppv1",
    .hseFrequency = 8'000'000,
@@ -88,7 +87,6 @@ inline constexpr Definition openMuppV1{
    .sense2{ Port::C, 1 },
    } },
    .idSense = IdSense{ .adapterId{ Port::B, 1 }, .boardId{ Port::C, 2 } },
-   .debugOutputs = false,
 };
 
 static_assert(isValid(openMuppV1));

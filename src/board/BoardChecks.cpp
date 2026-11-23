@@ -16,13 +16,6 @@ static_assert(board::current.family == board::Family::Ch32V30x, "the board is no
 #error "Unsupported MCU family"
 #endif
 
-// Only the CMSIS-DAP processor keeps the pins of a board without debug
-// outputs (main.cpp). The Versaloon and WCH-Link personalities would drive
-// them.
-#if defined(MUPP_WITH_VERSALOON) || defined(MUPP_WITH_WCH_LINK)
-static_assert(board::current.debugOutputs, "this board allows only the cmsis-dap personality: its debug pins must not become outputs");
-#endif
-
 // CMake sets HSE_VALUE (SYSTEM_STM32_HSE_VALUE or CH32V00X_SYSTEM_HSE_VALUE)
 // from BOARD. The CMSIS clock
 // code and the board definition must agree on the crystal. A board without

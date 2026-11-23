@@ -372,12 +372,6 @@ void startDap() {
    // The bulk interface has the SWO trace endpoint (usb/CmsisDapDescriptors.h).
    dapProcessor.setSwo(dapSwo, true);
 #endif
-   if constexpr(!board::current.debugOutputs) {
-      // No DAP command can take the pins: DAP_Connect gives port 0, and
-      // DAP_SWJ_Pins only reads.
-      static_cast<void>(dapPinOwner.acquire(protocol::PinClient::Board));
-      dapProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapBulk);
-   }
 #if defined(MUPP_CMSIS_DAP_HID)
    dapProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapBulk);
    dapHidProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapHid);
