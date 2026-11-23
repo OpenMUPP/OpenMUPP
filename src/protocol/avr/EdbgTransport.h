@@ -72,7 +72,9 @@
 // gives them back, unless the HID processor is connected (DAP_Connect):
 // then its DAP_Disconnect gives them back. The target supply switches on
 // only for the owner, or while nobody owns the pins; the switch-off always
-// works.
+// works. With a target gate (setTargetGate(), protocol/TargetGate.h),
+// ENTER_PROGMODE and ACTIVATE_PHYSICAL ask it first (TargetProtocol::Avr),
+// and give the same failure when it refuses.
 //
 // releasePins() (the HID processor gives the pins back: DAP_Disconnect, USB
 // suspend, bus reset) ends the programming mode and the debugWIRE or JTAG
@@ -85,6 +87,7 @@
 
 #include <utils/compat/span.h>
 
+#include "protocol/TargetGate.h"
 #include "protocol/TargetPinOwner.h"
 #include "protocol/TargetPower.h"
 #include "protocol/avr/Avr8Scope.h"
@@ -153,6 +156,12 @@ class EdbgTransport final : public cmsisdap::VendorCommands {
                  protocol::TargetPower *power,
                  protocol::TargetPinOwner *owner);
 
+   // Asks `gate` before the transport takes the pins. The gate must outlive
+   // the transport.
+   void setTargetGate(protocol::TargetGate &gate) {
+      gate_ = &gate;
+   }
+
    std::size_t command(uint8_t id, art::span<const uint8_t> fields, art::span<uint8_t> response) override;
    void releasePins() override;
    void hostGone() override;
@@ -181,6 +190,7 @@ class EdbgTransport final : public cmsisdap::VendorCommands {
    const cmsisdap::Processor &dap_;
    protocol::TargetPower *power_;
    protocol::TargetPinOwner *owner_;
+   protocol::TargetGate *gate_{ nullptr };
 
    std::array<uint8_t, maxFrameBytes> frame_{};
    std::size_t frameLength_{ 0 };

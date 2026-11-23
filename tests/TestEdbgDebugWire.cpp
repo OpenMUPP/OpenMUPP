@@ -5,6 +5,7 @@
 // break events, the breakpoints, the target pins and a host that goes away.
 
 #include "EdbgBench.h"
+#include "FakeTargetGate.h"
 
 #include <doctest/doctest.h>
 
@@ -274,6 +275,12 @@ TEST_CASE("EDBG debugWIRE: ACTIVATE_PHYSICAL checks the parameters and the pins"
    SUBCASE("the ISP programming mode uses the pins") {
       b.avrdudeOpen();
       b.enterProgmode();
+   }
+   mupptest::FakeTargetGate gate;
+   SUBCASE("the target gate refuses") {
+      b.avrdudeOpen();
+      gate.allow = false;
+      b.edbg.setTargetGate(gate);
    }
    CHECK(b.signOn() == failed(0x33));
    CHECK(b.dwPins.inits == 0);
