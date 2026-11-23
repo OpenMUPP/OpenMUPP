@@ -424,9 +424,9 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 
 | ID | Command | Note |
 |---|---|---|
-| `0x00` | `DAP_Info` | Vendor, product, serial number, protocol version `2.1.0`, firmware version, capabilities, packet size and count. Other information has length 0. |
+| `0x00` | `DAP_Info` | Vendor, product, serial number, protocol version `2.1.0`, firmware version, capabilities, packet size and count. Other information has length 0. On OpenMUPP v1, the vendor string also shows the adapter on J4 (see [Adapter ID and board ID](boards.md#adapter-id-and-board-id)). |
 | `0x01` | `DAP_HostStatus` | Connect and running LED. |
-| `0x02` | `DAP_Connect` | Port 0 and 1 give SWD. Port 2 gives JTAG. The command sets the pin owner and the port only. The pins change at the first transfer, sequence or IDCODE command. Until then, SWCLK and SWDIO (TCK and TMS) keep their state. |
+| `0x02` | `DAP_Connect` | Port 0 and 1 give SWD. Port 2 gives JTAG. The command sets the pin owner and the port only. The pins change at the first transfer, sequence or IDCODE command. Until then, SWCLK and SWDIO (TCK and TMS) keep their state. On OpenMUPP v1, the command reads the adapter ID. It replies port 0 on an adapter fault and on an unknown board revision (see [Adapter ID and board ID](boards.md#adapter-id-and-board-id)). |
 | `0x03` | `DAP_Disconnect` | Release the pins of the port, when a command drove them. Release the pins that `DAP_SWJ_Pins` drove: nRESET and nTRST get the pull-up. |
 | `0x04` | `DAP_TransferConfigure` | Idle cycles, WAIT retries, match retries. |
 | `0x05` | `DAP_Transfer` | Read, write, posted AP read, value match, match mask. On JTAG, the device index selects the device. |
@@ -606,7 +606,7 @@ cmsis-dap cmd 0x82 0x01
 
 The vendor command `ID_DAP_Vendor3` (`0x83`) reads and writes the setting "VPP without an adapter" (decision D2 of the v1 plan).
 Only boards with an adapter ID have the command: OpenMUPP v1.
-The image must also have the settings page: a multi image, or an image with the RISC-V bridge (the default).
+The image must also have the RISC-V bridge (`MUPP_CMSIS_DAP_RV_BRIDGE`, on by default): the setting is in its settings page.
 Other images reply `ID_DAP_Invalid`.
 
 | Request | Operation |

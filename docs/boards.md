@@ -425,7 +425,8 @@ These items are different:
 The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definition hold the pins of the level shifters, the power functions and the ID dividers (see the table below).
 The start-up sets these pins to a safe state (see [Start-up and LEDs](#start-up-and-leds)).
 The engines use the `shifters` block for `DIR_OUT` and `DIR_SWDIO` (see the direction rule below).
-The target supply uses the `targetSupply` block (see [Target power on OpenMUPP v1](#target-power-on-openmupp-v1)). VPP and the ID dividers do not use their blocks yet.
+The target supply uses the `targetSupply` block (see [Target power on OpenMUPP v1](#target-power-on-openmupp-v1)).
+The ID dividers use the `idSense` block (see [Adapter ID and board ID](#adapter-id-and-board-id)). VPP does not use its block yet.
 All personalities build for this board.
 The engines, the gpio requests and the UART bridge reach the target with these rules:
 
@@ -464,8 +465,73 @@ The firmware must follow these rules when it adds these functions:
 | Target power, 5 V | `TARGET_5V_EN` PB5 | The limit is about 300 mA. See the sequence below. |
 | Power faults | `3V3_OUT_FAULT` PA11, `5V_OUT_FAULT` PA12 | Open-drain, active low, no external pull-up. Turn on the internal pull-ups. Turn off the switch when its fault line goes low. Keep USBFS off: PA11 and PA12 are its pins. |
 | High voltage (VPP) | `VPP_EN` PC14, `VPP_ON` PC15, `VPP_12V_ADJ` PA5 (DAC), `VPP_SENSE` PA4, `VPP_SENSE2` PC1, `VPP_PD` PC5 | Set the DAC before `VPP_EN`. Check `VPP_SENSE` before `VPP_ON`. Both `VPP_EN` and `VPP_ON` must be high. VPP is on J4 pin 19. See the sequence below. |
-| Adapter ID, board ID | `ADAPTER_ID` PB1, `BOARD_ID` PC2 (ADC) | Dividers. The ID table is in the README of the board repository. |
+| Adapter ID, board ID | `ADAPTER_ID` PB1, `BOARD_ID` PC2 (ADC) | Dividers. The ID table is in the README of the board repository. Analog inputs (no internal pull), longest ADC sample time. See [Adapter ID and board ID](#adapter-id-and-board-id). |
 | SWIM input | PA1 (TIM2_CH2) | R55 connects PA1 to SWDIO. Keep PA1 a floating input when SWIM does not run. |
+
+### Adapter ID and board ID
+
+Two dividers identify the target adapter on J4 and the board revision.
+Each divider has a 10 kΩ pull-up to 3.3 V and an ID resistor to GND.
+The ADC reads the ratio x = R<sub>ID</sub> / (R<sub>ID</sub> + 10 kΩ).
+The ADC reference is the same 3.3 V, so the ratio does not change with the supply.
+The pins are analog inputs, with no internal pull resistor.
+The firmware uses the longest ADC sample time and the mean of 8 conversions.
+`src/board/IdSense.h` has the windows, and `src/board/BoardIdSense.h` reads the pins.
+
+| x | Reading |
+|---|---|
+| Below 0.05 | Fault: pin 16 is shorted to GND, for example an adapter that is rotated by 180°. |
+| 0.1 n ± 0.05 (n = 1 to 9) | Slot n. Slots 6 and 7 are free: the firmware reads them as an unknown adapter. A value on the edge between two slots is in the higher slot. |
+| Above 0.95 | No adapter: pin 16 is open. |
+
+The slot table is in the README of the [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1) repository.
+
+**Board ID.** The firmware reads the board ID (PC2) once at start-up.
+Revision 1 is slot 1 (R3 1 kΩ, x = 0.091).
+**Adapter ID.** The firmware reads the adapter ID (PB1) at start-up and again at each connect, because a user can change the adapter while the probe runs.
+These commands are a connect:
+
+- CMSIS-DAP: `DAP_Connect`.
+- AVR commands: `ENTER_PROGMODE` and `ACTIVATE_PHYSICAL`.
+- WCH-Link: the connect command.
+- Versaloon: `INIT` of the SWD block and of the JTAG block.
+- Target power: each switch-on (`ID_DAP_Vendor2`, the EDBG control scope, the Versaloon `POWER` block).
+
+The firmware refuses the connect in these cases:
+
+- The board ID is not a known revision.
+- The adapter ID is a fault.
+- The ADC fails.
+
+A refused connect does not drive the target pins, and the target power stays off. A supply that is on goes off.
+The refusal is an error in the debug log.
+The host sees the refusal as follows:
+
+- `DAP_Connect` replies port 0. `DAP_SWJ_Pins` then only reads the pins, and `DAP_ResetTarget` replies `DAP_ERROR`.
+- `ENTER_PROGMODE` replies `STATUS_CMD_FAILED`, and `ACTIVATE_PHYSICAL` fails with code `0x33`.
+- The WCH-Link connect replies the error frame.
+- The Versaloon `INIT` replies `FAILED`. The other sub-commands of the block then reply `FAILED` until an `INIT` that the firmware allows.
+  A GPIO `CONFIG` of an output replies `FAILED`.
+- A switch-on of the target power is refused.
+
+This state stays until the next connect that the firmware allows.
+The USB device still enumerates, and the commands that do not drive the target still work.
+
+In the other cases, the protocol starts, also with a wrong adapter.
+The debug log then has one warning for each connect:
+
+- No adapter.
+- An unknown adapter (slot 6 or 7).
+- An adapter without a connector for the protocol. Slot 1 (AVR) has JTAG, ISP, debugWIRE and AVR JTAG. Slot 4 (Arm) and slot 5 (pin header) have SWD, JTAG and the RISC-V wire (one-wire and two-wire).
+
+The vendor string of `DAP_Info` also shows the adapter of the last reading: `OpenMUPP, adapter 4`, `OpenMUPP, adapter 6 (unknown)`, `OpenMUPP, no adapter` or `OpenMUPP, adapter fault`.
+Most host tools do not show this string, so the debug log is the main warning.
+
+**VPP rule.** VPP is allowed only on slot 8 (AVR high-voltage adapter) and slot 9 (PIC high-voltage adapter).
+The setting "VPP without an adapter" also allows VPP when pin 16 is open.
+The default is off. `ID_DAP_Vendor3` reads and writes the setting (see [VPP without an adapter](cmsis-dap.md#vpp-without-an-adapter)).
+A fault and an unknown slot never allow VPP.
+`board::isVppAllowed()` has this rule for the VPP driver. The firmware does not turn VPP on yet.
 
 ### Target power sequence
 
