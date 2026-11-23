@@ -7,6 +7,7 @@
 
 #include "board/Board.h"
 #include "board/BoardPins.h"
+#include "board/CycleCounter.h"
 #include "board/TargetDrive.h"
 
 namespace board {
@@ -26,12 +27,35 @@ struct BoardTargetIo {
    static void input(Pin pin) {
       gpioPin(pin).configure(hw::GpioPin::Mode::Input);
    }
+   static void write(Pin pin, bool level) {
+      gpioPin(pin).write(level);
+   }
+   static bool read(Pin pin) {
+      return gpioPin(pin).read();
+   }
+   // About 2 us: the round trip through the shifters is about 34 ns at
+   // 1.8 V, and the target line has its capacitance.
+   static void settle() {
+      startCycleCounter();
+      const uint32_t start = cycleCount();
+      while(cycleCount() - start < SystemCoreClock / 500'000) {
+      }
+   }
 };
+
+// The users of DIR_OUT: the engines and BoardGpio
+inline DirOutUsers dirOutUsers;
+// The failed connect self-tests (connectSelfTest()). It counts as a probe
+// error (main.cpp, error LED). The engine still runs: its transfers then
+// fail, and the host sees the error.
+inline uint32_t selfTestErrors;
 
 template <class SetMcuPins>
 void driveTargetOutputs(bool on, SetMcuPins &&setMcuPins, ShifterGroups groups = ShifterGroups::Out) {
    BoardTargetIo io;
-   driveTargetOutputs(current.debug, current.shifters, groups, on, io, setMcuPins);
+   if(!driveTargetOutputs(current.debug, current.shifters, dirOutUsers, groups, on, io, setMcuPins)) {
+      ++selfTestErrors;
+   }
 }
 
 } // namespace board

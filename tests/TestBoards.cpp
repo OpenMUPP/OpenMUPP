@@ -245,9 +245,6 @@ TEST_CASE("OpenMUPP v1 has the pin map of docs/hardware.md of openmupp-v1") {
    CHECK_FALSE(v1.powerSwitch);
    CHECK_FALSE(v1.usbPullUp);
    CHECK(board::swjConfig(v1) == board::SwjConfig::NoJtag);
-   // The shifters drive the debug pins until the board layer sets their direction
-   CHECK_FALSE(v1.debugOutputs);
-   CHECK(board::ydCh32V307.debugOutputs);
 }
 
 TEST_CASE("OpenMUPP v1 has the shifter, power, VPP and ID pins of docs/hardware.md of openmupp-v1") {

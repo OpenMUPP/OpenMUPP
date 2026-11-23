@@ -18,6 +18,7 @@
 #include "board/BoardJtag.h"
 #include "board/BoardPower.h"
 #include "board/BoardSwd.h"
+#include "board/BoardTargetDrive.h"
 #include "board/Leds.h"
 #include "boot/Bootloader.h"
 #include "boot/BootloaderEntry.h"
@@ -371,12 +372,6 @@ void startDap() {
    // The bulk interface has the SWO trace endpoint (usb/CmsisDapDescriptors.h).
    dapProcessor.setSwo(dapSwo, true);
 #endif
-   if constexpr(!board::current.debugOutputs) {
-      // No DAP command can take the pins: DAP_Connect gives port 0, and
-      // DAP_SWJ_Pins only reads.
-      static_cast<void>(dapPinOwner.acquire(protocol::PinClient::Board));
-      dapProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapBulk);
-   }
 #if defined(MUPP_CMSIS_DAP_HID)
    dapProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapBulk);
    dapHidProcessor.sharePins(dapPinOwner, protocol::PinClient::CmsisDapHid);
@@ -543,9 +538,10 @@ void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
 #endif
 }
 
-// Number of JTAG and SWD errors of the active personality, for the error
-// LED. It wraps at 2^32: only the difference between two values counts.
-uint32_t probeErrorCount() {
+// Number of JTAG and SWD errors of the active personality and of the failed
+// connect self-tests (board/BoardTargetDrive.h), for the error LED. It
+// wraps at 2^32: only the difference between two values counts.
+uint32_t personalityErrorCount() {
 #if defined(MUPP_WITH_VERSALOON)
    if(isActive(Personality::Versaloon)) {
       return swdBlock.errorCount();
@@ -561,6 +557,10 @@ uint32_t probeErrorCount() {
    }
 #endif
    return 0;
+}
+
+uint32_t probeErrorCount() {
+   return personalityErrorCount() + board::selfTestErrors;
 }
 
 constexpr Heartbeat clockFaultBlink{ Heartbeat::clockFault };

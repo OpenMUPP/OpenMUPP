@@ -49,7 +49,6 @@ The board definition holds all board-specific data:
 
   The other boards do not have these blocks.
 - `debugUart`: the UART of the debug log. Only OpenMUPP v1 has it: UART5 on PC12 (TX) and PD2 (RX). See [Debug log](debug-log.md#debug-uart).
-- `debugOutputs`: false when the debug pins must not become outputs (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)).
 - The crystal frequency. The value 0 is a board without a crystal. Only an STM32H5 board can have no crystal: its USB clock comes from the HSI48 and the clock recovery system (CRS).
 - The JTAG fast path (SPI and DMA, see [JTAG fast path](usb-device.md#jtag-fast-path)). It is only available when the board links TCK (PB13) to PB3.
 - The hardware ID that `VERSALOON_GET_HARDWARE` returns.
@@ -186,7 +185,8 @@ In the Versaloon personality, these are the failed `IN_OUT` transfers of the `SW
 The `JTAG_RAW` block has no acknowledge, so the Versaloon personality does not show JTAG errors.
 A host can cause probe errors in normal operation, for example when it scans for access ports that are not there.
 Thus a short double flash at the connection is not always a problem.
-The WCH-Link personality counts no probe errors, so it never shows the double flash.
+The WCH-Link personality counts no transfer errors.
+On OpenMUPP v1, a failed connect self-test is also a probe error, in all personalities (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)).
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (openmupp-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
@@ -426,7 +426,8 @@ The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definiti
 The start-up sets these pins to a safe state (see [Start-up and LEDs](#start-up-and-leds)).
 The engines use the `shifters` block for `DIR_OUT` and `DIR_SWDIO` (see the direction rule below).
 The power functions do not use the blocks yet.
-Only the UART bridge reaches the target:
+All personalities build for this board.
+The engines, the gpio requests and the UART bridge reach the target with these rules:
 
 - The start-up sets `DIR_OUT` (PB10) and `DIR_SWDIO` (PC3) low. The external pull-downs hold them low while the MCU is in reset.
   Thus the TCK, TDI, TRST, AUX and SWDIO shifters work from the target to the probe. The target side stays high-impedance, and the shifters drive PB13, PB15, PB9, PA2, PA0 and PC11.
@@ -437,9 +438,18 @@ Only the UART bridge reaches the target:
   The SWD engine sets `DIR_SWDIO` at each turnaround. To drive SWDIO, it sets PC11 to an output first and then `DIR_SWDIO` high. To release SWDIO, it sets `DIR_SWDIO` low first and then PC11 to an input.
   The one-wire engine makes `DIR_SWDIO` with TIM10_CH3 during a frame. The value of the CH3 compare is in the DMA burst of each bit, so CH3 needs no DMA request.
   In each read bit, `DIR_SWDIO` goes high with the falling edge of the host pulse. It goes low one timer tick before the host releases the line.
-- An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
-  `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.
-- Only the CMSIS-DAP personality has this lock. A build with the Versaloon or WCH-Link personality fails for this board.
+- Connect self-test: when an engine starts, it sets TCK and TDI to the inverse level and back, one pin at a time. The test also runs when a gpio output already set `DIR_OUT` high, for example a TRST release of OpenOCD before the first transfer.
+  After each step, the read-back inputs PC6 (TCK) and PC7 (TDI) must show the levels of both pins.
+  A mismatch shows a short, or a target that drives against the probe. The firmware then counts a probe error, and the state LED shows the double flash.
+  The engine continues, so the host sees the error in the transfers.
+  The test gives one pulse on TCK and on TDI. At that time, JTAG holds TMS high, SWD and RVSWD have SWDIO released, and ISP holds RESET.
+- `DAP_SWJ_Pins`, `DAP_Disconnect` and the Versaloon GPIO block follow the same rule for TCK, TDI, TRST and TMS.
+  An output request on a pin of the `DIR_OUT` group sets the other pins of the group to their idle level, and TCK low. Then the pin becomes an output, and `DIR_OUT` goes high.
+  `DIR_OUT` goes low again when the last of these outputs becomes an input and no engine runs. Then all pins of the group become inputs.
+  While an engine runs or other outputs remain, an input request gives the pin its released level as an output: TCK low, TDI and TRST high.
+  An engine start keeps the levels of these outputs. Thus a TRST that `DAP_SWJ_Pins` asserted stays asserted.
+  A TMS output sets `DIR_SWDIO` high after the pin. A TMS input sets `DIR_SWDIO` low before the pin.
+  Behind a shifter, an open-drain request gives a push-pull output, because an open-drain high leaves the shifter input open.
 - The start-up sets `UART_TX_DIR` (PC9) high, as its pull-up does in reset. Thus UART TX drives the target. UART RX has a fixed shifter.
 - The start-up turns off the target power switches and VPP. The firmware does not turn them on.
 
@@ -447,7 +457,7 @@ The firmware must follow these rules when it adds these functions:
 
 | Function | Pins | Rule for the firmware |
 |---|---|---|
-| Direction of the level shifters | `DIR_OUT` PB10, `DIR_SWDIO` PC3 | External pull-downs keep the target side high-impedance at reset. Set `DIR_OUT` high only while an engine runs. |
+| Direction of the level shifters | `DIR_OUT` PB10, `DIR_SWDIO` PC3 | External pull-downs keep the target side high-impedance at reset. Set `DIR_OUT` high only while an engine runs or a gpio request drives a pin of its group. |
 | One-wire SWDIO | `DIR_SWDIO` PC3 (TIM10_CH3), SWDIO PC11 | The one-wire engine changes the direction in each bit with TIM10_CH3. Do not enable the DMA request of TIM10_CH3: it is on DMA2 channel 9, which UART7 RX uses. The SWDIO pull-up to `VTREF` is 2.2 kΩ. |
 | UART TX direction | `UART_TX_DIR` PC9 | High (pull-up) drives the target. Set it low to read the line, for example for a single-wire UART. |
 | Target power, 3.3 V | `TARGET_PWR_EN` PB8 | The limit is about 300 mA. With both switches off, `VTREF_SENSE` (PB0) shows half of the target voltage. |
