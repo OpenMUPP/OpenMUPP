@@ -28,10 +28,13 @@ struct BoardTargetIo {
    }
 };
 
+// The users of DIR_OUT: the engines and BoardGpio
+inline DirOutUsers dirOutUsers;
+
 template <class SetMcuPins>
 void driveTargetOutputs(bool on, SetMcuPins &&setMcuPins, ShifterGroups groups = ShifterGroups::Out) {
    BoardTargetIo io;
-   driveTargetOutputs(current.debug, current.shifters, groups, on, io, setMcuPins);
+   driveTargetOutputs(current.debug, current.shifters, dirOutUsers, groups, on, io, setMcuPins);
 }
 
 } // namespace board

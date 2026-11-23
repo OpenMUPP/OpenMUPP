@@ -3,7 +3,8 @@
 #pragma once
 
 // The drive of the target pins: the order of the level shifter direction
-// pins (board::Shifters) against the MCU pins of an engine, and the SRST pin
+// pins (board::Shifters) against the MCU pins of an engine and of the gpio
+// requests, and the SRST pin
 // with the polarity of DebugPins::srstActive. Hardware-independent: the
 // host unit tests check it. board/BoardTargetDrive.h applies it to
 // board::current on target.
@@ -12,6 +13,7 @@
 #include <optional>
 
 #include "board/BoardDefinition.h"
+#include "board/DebugGpio.h"
 #include "protocol/GpioPins.h"
 
 namespace board {
@@ -21,44 +23,81 @@ namespace board {
 // TMS is always an output.
 enum class ShifterGroups : uint8_t { Out, OutAndSwdio };
 
+// The gpio bits (protocol/GpioPins.h) of the DIR_OUT group
+inline constexpr uint16_t dirOutGpioBits = protocol::gpio::tck | protocol::gpio::tdi | protocol::gpio::trst;
+
+// The users that keep DIR_OUT high. DIR_OUT is high while one of them uses
+// it. Thus all MCU pins of the DIR_OUT group are outputs while it is high.
+struct DirOutUsers {
+   // An engine: driveTargetOutputs() on, until driveTargetOutputs() off
+   bool engine = false;
+   // The gpio bits of the DIR_OUT group that driveGpioPin() made outputs
+   uint16_t gpio = 0;
+
+   [[nodiscard]] constexpr bool any() const {
+      return engine || gpio != 0;
+   }
+};
+
+namespace detail {
+
+struct IdlePin {
+   Pin pin;
+   bool level;
+};
+
+// The pins of the DIR_OUT group that get a level before DIR_OUT goes high:
+// TRST high (released), TDI high, AUX1 and AUX2 low. With tck, also TCK
+// low: an engine sets TCK itself, the gpio does not.
+constexpr std::array<std::optional<IdlePin>, 5> dirOutIdlePins(const DebugPins &pins, const Shifters &shifters, bool tck) {
+   return { {
+   tck ? std::optional<IdlePin>(IdlePin{ pins.tck, false }) : std::nullopt,
+   pins.trst ? std::optional<IdlePin>(IdlePin{ *pins.trst, true }) : std::nullopt,
+   IdlePin{ pins.tdi, true },
+   IdlePin{ shifters.aux1, false },
+   IdlePin{ shifters.aux2, false },
+   } };
+}
+
+} // namespace detail
+
 // Drives the target outputs of an engine (on) or releases them (off).
 // Without shifters, only setMcuPins() runs. With shifters:
 // - on: first the pins of the DIR_OUT group get a defined output level,
 //   because DIR_OUT high also drives the pins that the engine does not use:
 //   TRST high (released), TDI high, AUX1 and AUX2 low. Then setMcuPins()
 //   sets the pins of the engine, and then the direction pins of groups go
-//   high.
+//   high. When DIR_OUT is high already (users), the group pins are outputs
+//   and keep their levels: a TRST that DAP_SWJ_Pins asserted stays
+//   asserted.
 // - off: both direction pins go low first (low is the safe state of each),
 //   then setMcuPins() sets the pins of the engine to inputs, and then the
-//   pins of the first step become inputs again.
+//   pins of the first step become inputs again. Also the gpio outputs of
+//   the group are inputs then.
 // Thus a shifter does not drive the target from a floating MCU pin, and an
 // MCU output does not drive against a shifter. Io has direction(pin, level)
 // (write a direction pin), output(pin, level) and input(pin).
-// Limit: on also releases a TRST that DAP_SWJ_Pins asserted before.
 template <class Io, class SetMcuPins>
-void driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &shifters, ShifterGroups groups, bool on, Io &io, SetMcuPins &&setMcuPins) {
+void driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &shifters, DirOutUsers &users, ShifterGroups groups, bool on, Io &io, SetMcuPins &&setMcuPins) {
    if(!shifters) {
       setMcuPins();
       return;
    }
-   struct Idle {
-      Pin pin;
-      bool level;
-   };
-   const std::array<std::optional<Idle>, 4> idle{ {
-   pins.trst ? std::optional<Idle>(Idle{ *pins.trst, true }) : std::nullopt,
-   Idle{ pins.tdi, true },
-   Idle{ shifters->aux1, false },
-   Idle{ shifters->aux2, false },
-   } };
+   const auto idle = detail::dirOutIdlePins(pins, *shifters, false);
    if(on) {
-      for(const auto &pin : idle) {
-         if(pin) {
-            io.output(pin->pin, pin->level);
+      const bool high = users.any();
+      if(!high) {
+         for(const auto &pin : idle) {
+            if(pin) {
+               io.output(pin->pin, pin->level);
+            }
          }
       }
       setMcuPins();
-      io.direction(shifters->dirOut, true);
+      users.engine = true;
+      if(!high) {
+         io.direction(shifters->dirOut, true);
+      }
       if(groups == ShifterGroups::OutAndSwdio) {
          io.direction(shifters->dirSwdio, true);
       }
@@ -67,11 +106,89 @@ void driveTargetOutputs(const DebugPins &pins, const std::optional<Shifters> &sh
    io.direction(shifters->dirOut, false);
    io.direction(shifters->dirSwdio, false);
    setMcuPins();
-   for(const auto &pin : idle) {
+   const bool gpioTck = (users.gpio & protocol::gpio::tck) != 0;
+   for(const auto &pin : detail::dirOutIdlePins(pins, *shifters, gpioTck)) {
       if(pin) {
          io.input(pin->pin);
       }
    }
+   users = {};
+}
+
+// The pin mode of a gpio request. Behind a shifter an output is push-pull:
+// an open-drain high would leave the shifter input floating.
+constexpr protocol::PinMode gpioPinMode(const std::optional<Shifters> &shifters, uint16_t bit, protocol::PinMode mode) {
+   const bool shifted = (bit & (dirOutGpioBits | protocol::gpio::tms)) != 0;
+   return shifters && shifted && mode == protocol::PinMode::OpenDrain ? protocol::PinMode::PushPull : mode;
+}
+
+// A gpio request on one pin (DAP_SWJ_Pins, the release at DAP_Disconnect,
+// the Versaloon GPIO block). setPin() sets the MCU pin as requested. Without
+// shifters, or for a pin without shifter direction (SRST, TDO, RTCK), only
+// setPin() runs. With shifters:
+// - TMS: an output gets DIR_SWDIO high after setPin(), an input gets it low
+//   before setPin().
+// - An output in the DIR_OUT group: when DIR_OUT is low, the other pins of
+//   the group get the idle levels of driveTargetOutputs() and TCK low, then
+//   setPin() runs and DIR_OUT goes high.
+// - An input in the DIR_OUT group while DIR_OUT is high: when no other user
+//   keeps DIR_OUT high, DIR_OUT goes low, the other pins of the group become
+//   inputs and setPin() runs. Else the pin cannot be an input: it gets its
+//   released level as an output (TCK low, TDI and TRST high).
+template <class Io, class SetPin>
+void driveGpioPin(const DebugPins &pins, const std::optional<Shifters> &shifters, DirOutUsers &users, uint16_t bit, bool output, Io &io, SetPin &&setPin) {
+   if(shifters && bit == protocol::gpio::tms) {
+      if(!output) {
+         io.direction(shifters->dirSwdio, false);
+      }
+      setPin();
+      if(output) {
+         io.direction(shifters->dirSwdio, true);
+      }
+      return;
+   }
+   if(!shifters || (bit & dirOutGpioBits) == 0) {
+      setPin();
+      return;
+   }
+   const auto ownPin = gpioOutputPin(pins, bit);
+   if(!ownPin) {
+      return;
+   }
+   const Pin own = *ownPin;
+   const auto others = detail::dirOutIdlePins(pins, *shifters, true);
+   const bool high = users.any();
+   if(output) {
+      if(!high) {
+         for(const auto &pin : others) {
+            if(pin && pin->pin != own) {
+               io.output(pin->pin, pin->level);
+            }
+         }
+      }
+      setPin();
+      users.gpio = static_cast<uint16_t>(users.gpio | bit);
+      if(!high) {
+         io.direction(shifters->dirOut, true);
+      }
+      return;
+   }
+   users.gpio = static_cast<uint16_t>(users.gpio & ~bit);
+   if(!high) {
+      setPin();
+      return;
+   }
+   if(users.any()) {
+      io.output(own, bit != protocol::gpio::tck);
+      return;
+   }
+   io.direction(shifters->dirOut, false);
+   for(const auto &pin : others) {
+      if(pin && pin->pin != own) {
+         io.input(pin->pin);
+      }
+   }
+   setPin();
 }
 
 // The setting of the SRST pin.

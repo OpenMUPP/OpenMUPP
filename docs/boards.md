@@ -437,6 +437,13 @@ Only the UART bridge reaches the target:
   The SWD engine sets `DIR_SWDIO` at each turnaround. To drive SWDIO, it sets PC11 to an output first and then `DIR_SWDIO` high. To release SWDIO, it sets `DIR_SWDIO` low first and then PC11 to an input.
   The one-wire engine makes `DIR_SWDIO` with TIM10_CH3 during a frame. The value of the CH3 compare is in the DMA burst of each bit, so CH3 needs no DMA request.
   In each read bit, `DIR_SWDIO` goes high with the falling edge of the host pulse. It goes low one timer tick before the host releases the line.
+- `DAP_SWJ_Pins`, `DAP_Disconnect` and the Versaloon GPIO block follow the same rule for TCK, TDI, TRST and TMS.
+  An output request on a pin of the `DIR_OUT` group sets the other pins of the group to their idle level, and TCK low. Then the pin becomes an output, and `DIR_OUT` goes high.
+  `DIR_OUT` goes low again when the last of these outputs becomes an input and no engine runs. Then all pins of the group become inputs.
+  While an engine runs or other outputs remain, an input request gives the pin its released level as an output: TCK low, TDI and TRST high.
+  An engine start keeps the levels of these outputs. Thus a TRST that `DAP_SWJ_Pins` asserted stays asserted.
+  A TMS output sets `DIR_SWDIO` high after the pin. A TMS input sets `DIR_SWDIO` low before the pin.
+  Behind a shifter, an open-drain request gives a push-pull output, because an open-drain high leaves the shifter input open.
 - An MCU output on these pins would drive against the shifters. Thus the board definition sets `debugOutputs` to false, and the firmware keeps the target pins at the start.
   `DAP_Connect` gives port 0, `DAP_ResetTarget` gives an error, and `DAP_SWJ_Pins` only reads the pins. The AVR ISP commands do not start.
 - Only the CMSIS-DAP personality has this lock. A build with the Versaloon or WCH-Link personality fails for this board.

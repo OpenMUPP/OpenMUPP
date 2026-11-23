@@ -4,8 +4,8 @@
 
 #include "board/Board.h"
 #include "board/BoardPins.h"
+#include "board/BoardTargetDrive.h"
 #include "board/DebugGpio.h"
-#include "board/TargetDrive.h"
 
 namespace board {
 
@@ -56,11 +56,16 @@ void BoardGpio::configure(uint16_t bit, PinMode mode, bool level) {
       configurePin(current.debug.srst, setting.mode, setting.level);
       return;
    }
-   for(const auto &setting : gpioPinSettings(current.debug, bit, mode)) {
-      if(setting) {
-         configurePin(setting->pin, setting->mode, level);
+   // The shifter direction pins follow the request (board/TargetDrive.h).
+   const bool output = mode == PinMode::PushPull || mode == PinMode::OpenDrain;
+   BoardTargetIo io;
+   driveGpioPin(current.debug, current.shifters, dirOutUsers, bit, output, io, [&] {
+      for(const auto &setting : gpioPinSettings(current.debug, bit, gpioPinMode(current.shifters, bit, mode))) {
+         if(setting) {
+            configurePin(setting->pin, setting->mode, level);
+         }
       }
-   }
+   });
 }
 
 void BoardGpio::write(uint16_t mask, uint16_t value) {
