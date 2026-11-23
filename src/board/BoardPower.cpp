@@ -87,11 +87,15 @@ bool BoardPower::hasSwitch() const {
    return current.powerSwitch.has_value();
 }
 
-void BoardPower::setSwitch(bool on) {
+bool BoardPower::has5vSwitch() const {
+   return false;
+}
+
+void BoardPower::select(protocol::Supply supply) {
    if(!current.powerSwitch) {
       return;
    }
-   if(on) {
+   if(supply == protocol::Supply::V3v3) {
       // The output register first, so the pin starts at the active level.
       configureOutput(Signal{ current.powerSwitch->pin, current.powerSwitch->on }, true);
    } else {
@@ -119,6 +123,14 @@ std::optional<uint16_t> BoardPower::senseMillivolts() {
       sum += raw;
    }
    return vrefMillivolts((sum + conversions / 2) / conversions, current.vref->divider);
+}
+
+std::optional<uint16_t> BoardPower::fiveVoltInputMillivolts() {
+   return std::nullopt;
+}
+
+bool BoardPower::takeFault() {
+   return false;
 }
 
 } // namespace board

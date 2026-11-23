@@ -22,9 +22,12 @@ class BoardPower final : public protocol::PowerHardware {
    void init();
 
    [[nodiscard]] bool hasSwitch() const override;
-   void setSwitch(bool on) override;
+   [[nodiscard]] bool has5vSwitch() const override;
+   void select(protocol::Supply supply) override;
    [[nodiscard]] bool hasSense() const override;
    [[nodiscard]] std::optional<uint16_t> senseMillivolts() override;
+   [[nodiscard]] std::optional<uint16_t> fiveVoltInputMillivolts() override;
+   [[nodiscard]] bool takeFault() override;
 
    private:
    bool adcReady_{ false };

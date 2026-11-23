@@ -16,8 +16,25 @@ uint16_t TargetPower::millivolts() {
    return hardware_.senseMillivolts().value_or(0);
 }
 
+bool TargetPower::takeFaultReport() {
+   const bool report = faultReport_;
+   faultReport_ = false;
+   return report;
+}
+
+void TargetPower::takeHardwareFault() {
+   if(!hardware_.takeFault()) {
+      return;
+   }
+   // The interrupt switched the hardware off already.
+   supply_ = Supply::Off;
+   ++faults_;
+   faultReport_ = true;
+}
+
 void TargetPower::poll(uint64_t nowMs) {
-   if(!on_ || !hardware_.hasSense() || nowMs - lastCheckMs_ < pollIntervalMs) {
+   takeHardwareFault();
+   if(!isOn() || !hardware_.hasSense() || nowMs - lastCheckMs_ < pollIntervalMs) {
       return;
    }
    lastCheckMs_ = nowMs;
@@ -32,26 +49,51 @@ void TargetPower::poll(uint64_t nowMs) {
    }
 }
 
-TargetPower::Result TargetPower::switchOn() {
-   if(!hardware_.hasSwitch()) {
+TargetPower::Result TargetPower::switchOn(Supply supply) {
+   if(supply == Supply::Off) {
+      switchOff();
+      return Result::Ok;
+   }
+   if(!hardware_.hasSwitch() || (supply == Supply::V5 && !hardware_.has5vSwitch())) {
       return Result::NotSupported;
    }
-   if(on_) {
+   takeHardwareFault();
+   if(supply_ == supply) {
       return Result::Ok;
+   }
+   if(supply == Supply::V5) {
+      const auto input = hardware_.fiveVoltInputMillivolts();
+      if(!input || *input < min5vInputMillivolts) {
+         return Result::Refused;
+      }
    }
    if(!hardware_.hasSense()) {
-      hardware_.setSwitch(true);
-      on_ = true;
+      if(isOn()) {
+         hardware_.select(Supply::Off);
+         delay_.milliseconds(changeOffMs);
+      }
+      hardware_.select(supply);
+      supply_ = supply;
       return Result::Ok;
    }
-   // The voltage at the Vref pin is the target supply, as long as the
-   // switch is off.
-   const auto external = isLive();
-   if(!external || *external) {
-      return Result::Refused;
+   if(isOn()) {
+      // A change: the rail has the voltage of this supply, not of the target.
+      const Supply from = supply_;
+      switchOff();
+      delay_.milliseconds(changeOffMs);
+      if(from == Supply::V5 && !waitBelow3v3()) {
+         return Result::Refused;
+      }
+   } else {
+      // The voltage at the Vref pin is the target supply, as long as the
+      // switches are off.
+      const auto external = isLive();
+      if(!external || *external) {
+         return Result::Refused;
+      }
    }
-   hardware_.setSwitch(true);
-   on_ = true;
+   hardware_.select(supply);
+   supply_ = supply;
    lowChecks_ = 0;
    delay_.milliseconds(settleMs);
    const auto live = isLive();
@@ -63,9 +105,22 @@ TargetPower::Result TargetPower::switchOn() {
 }
 
 void TargetPower::switchOff() {
-   if(on_) {
-      hardware_.setSwitch(false);
-      on_ = false;
+   if(isOn()) {
+      hardware_.select(Supply::Off);
+      supply_ = Supply::Off;
+   }
+}
+
+bool TargetPower::waitBelow3v3() {
+   for(uint16_t waitedMs = 0;; ++waitedMs) {
+      const auto value = hardware_.senseMillivolts();
+      if(value && *value < max3v3Millivolts) {
+         return true;
+      }
+      if(waitedMs >= dischargeTimeoutMs) {
+         return false;
+      }
+      delay_.milliseconds(1);
    }
 }
 
