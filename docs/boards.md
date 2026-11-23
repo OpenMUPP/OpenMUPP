@@ -187,6 +187,7 @@ A host can cause probe errors in normal operation, for example when it scans for
 Thus a short double flash at the connection is not always a problem.
 The WCH-Link personality counts no transfer errors.
 On OpenMUPP v1, a failed connect self-test is also a probe error, in all personalities (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)).
+A target power fault is also a probe error, in the Versaloon and CMSIS-DAP personalities (see [Target power on OpenMUPP v1](#target-power-on-openmupp-v1)).
 
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (openmupp-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
@@ -424,7 +425,7 @@ These items are different:
 The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definition hold the pins of the level shifters, the power functions and the ID dividers (see the table below).
 The start-up sets these pins to a safe state (see [Start-up and LEDs](#start-up-and-leds)).
 The engines use the `shifters` block for `DIR_OUT` and `DIR_SWDIO` (see the direction rule below).
-The power functions do not use the blocks yet.
+The target supply uses the `targetSupply` block (see [Target power on OpenMUPP v1](#target-power-on-openmupp-v1)). VPP and the ID dividers do not use their blocks yet.
 All personalities build for this board.
 The engines, the gpio requests and the UART bridge reach the target with these rules:
 
@@ -450,7 +451,7 @@ The engines, the gpio requests and the UART bridge reach the target with these r
   A TMS output sets `DIR_SWDIO` high after the pin. A TMS input sets `DIR_SWDIO` low before the pin.
   Behind a shifter, an open-drain request gives a push-pull output, because an open-drain high leaves the shifter input open.
 - The start-up sets `UART_TX_DIR` (PC9) high, as its pull-up does in reset. Thus UART TX drives the target. UART RX has a fixed shifter.
-- The start-up turns off the target power switches and VPP. The firmware does not turn them on.
+- The start-up turns off the target power switches and VPP. The firmware does not turn VPP on.
 
 The firmware must follow these rules when it adds these functions:
 
@@ -477,6 +478,26 @@ Use this sequence for each change:
 3. Wait at least 10 ms.
 4. For a change from 5 V to 3.3 V, wait until `VTREF` is less than 3.4 V. `VTREF_SENSE` shows half of `VTREF`, so wait for less than 1.7 V.
 5. Turn on one switch.
+
+### Target power on OpenMUPP v1
+
+The firmware selects 3.3 V or 5 V with `src/protocol/TargetPower.h`, and `src/board/BoardPower.cpp` drives the pins.
+The host selects the voltage with `ID_DAP_Vendor2` (see [Target power](cmsis-dap.md#target-power)).
+The Versaloon `POWER` block and the EDBG control scope select 3.3 V only. The EDBG control scope keeps a supply that is on.
+The firmware uses the sequence above, with these values:
+
+- Both switches stay off for 10 ms.
+- For a change from 5 V to 3.3 V, the firmware reads `VTREF` each 1 ms.
+  When `VTREF` is not below 3.4 V after 500 ms, the firmware keeps both switches off and refuses the change.
+- Before 5 V, the firmware reads `V5_SENSE` (PC0, `+5V` divided by 2).
+  When `+5V` is below 4.4 V, or the firmware cannot read it, the firmware refuses 5 V. The supply then stays as it was.
+  4.4 V is the USB minimum at a low-power device.
+- 10 ms after the switch-on, `VTREF` must be above 1.8 V. Else the firmware turns the switch off again and refuses.
+
+The fault inputs PA11 and PA12 have an EXTI interrupt on the falling edge.
+The interrupt sets both enable pins low at once.
+The main loop then counts the fault, writes an error line to the debug log, and shows a probe error on the state LED (the double flash).
+The next `ID_DAP_Vendor2` response reports the fault to the host.
 
 ### VPP sequence
 

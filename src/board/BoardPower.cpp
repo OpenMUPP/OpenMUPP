@@ -3,9 +3,10 @@
 #include "board/BoardPower.h"
 
 #include <Adc.h>
+#include <utils/Interrupt.h>
 #if defined(CH32V30x_D8C)
 #include <cmsis_device.h>
-#include <utils/Interrupt.h>
+#include <utils/GpioInterrupt.h>
 #endif
 
 #include "board/Board.h"
@@ -17,6 +18,26 @@ namespace board {
 namespace {
 
 using hw::GpioPin;
+
+// Set by the fault interrupt, cleared by takeFault()
+volatile bool faulted = false;
+
+// Both target switches off. In the fault interrupt too.
+void targetSupplyOff() {
+   const auto &supply = *current.targetSupply;
+   gpioPin(supply.enable3v3).write(false);
+   gpioPin(supply.enable5v).write(false);
+}
+
+#if defined(CH32V30x_D8C)
+// The fault interrupt of PA11 and PA12. The TPS2553 does not latch off, so
+// the interrupt switches both off at once. The main loop then takes the
+// fault (takeFault()).
+void faultInterrupt(void * /*arg*/) {
+   targetSupplyOff();
+   faulted = true;
+}
+#endif
 
 // A source with the divider of the board has a high impedance: the longest
 // sample time keeps the error small.
@@ -63,6 +84,20 @@ void BoardPower::init() {
       // The supply is off: the switch pin floats.
       gpioPin(current.powerSwitch->pin).configure(GpioPin::Mode::Input);
    }
+   if(current.targetSupply) {
+      // The start-up switched both off and turned on the pull-ups of the
+      // fault inputs (initialize_hardware.cpp).
+      targetSupplyOff();
+      gpioPin(current.targetSupply->v5Sense.pin).configure(GpioPin::Mode::Analog);
+#if defined(CH32V30x_D8C)
+      for(const auto fault : { current.targetSupply->fault3v3, current.targetSupply->fault5v }) {
+         const auto port = reinterpret_cast<GPIO_TypeDef *>(portBase(fault.port));
+         // A pin of the same number on another port can take the line. No
+         // board does this: then the fault stays a level on the input only.
+         (void)GpioInterrupt::connectHandler(&faultInterrupt, nullptr, port, fault.number, Exti::TriggerEdge::Falling);
+      }
+#endif
+   }
    if(!current.vref) {
       return;
    }
@@ -71,27 +106,49 @@ void BoardPower::init() {
    Adc::enableClock();
    Adc::configureClock();
    const Adc adc(ADC1);
+   const auto setSampling = [&adc] {
+      adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin)), sampling);
+      if(current.targetSupply) {
+         adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.targetSupply->v5Sense.pin)), sampling);
+      }
+   };
 #if defined(STM32F1) || defined(__riscv)
    // The STM32F103 and the CH32V307 calibrate an enabled ADC (RM0008 11.4)
    adc.enable();
-   adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin)), sampling);
+   setSampling();
    adcReady_ = adc.calibrate();
 #else
    // The STM32H5 calibrates a disabled ADC (RM0481 28.4.8)
    adcReady_ = adc.powerUp() && adc.calibrate() && adc.enable();
-   adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin)), sampling);
+   setSampling();
 #endif
 }
 
 bool BoardPower::hasSwitch() const {
-   return current.powerSwitch.has_value();
+   return current.powerSwitch.has_value() || current.targetSupply.has_value();
 }
 
-void BoardPower::setSwitch(bool on) {
+bool BoardPower::has5vSwitch() const {
+   return current.targetSupply.has_value();
+}
+
+void BoardPower::select(protocol::Supply supply) {
+   if(current.targetSupply) {
+      // Not between the two writes: a fault interrupt there would switch
+      // off, and the second write could switch on again.
+      const Interrupt::CriticalSection cs;
+      targetSupplyOff();
+      if(supply == protocol::Supply::V3v3) {
+         gpioPin(current.targetSupply->enable3v3).write(true);
+      } else if(supply == protocol::Supply::V5) {
+         gpioPin(current.targetSupply->enable5v).write(true);
+      }
+      return;
+   }
    if(!current.powerSwitch) {
       return;
    }
-   if(on) {
+   if(supply == protocol::Supply::V3v3) {
       // The output register first, so the pin starts at the active level.
       configureOutput(Signal{ current.powerSwitch->pin, current.powerSwitch->on }, true);
    } else {
@@ -104,12 +161,19 @@ bool BoardPower::hasSense() const {
 }
 
 std::optional<uint16_t> BoardPower::senseMillivolts() {
-   if(!current.vref || !adcReady_) {
+   if(!current.vref) {
+      return std::nullopt;
+   }
+   return measure(*current.vref);
+}
+
+std::optional<uint16_t> BoardPower::measure(const VrefSense &sense) const {
+   if(!adcReady_) {
       return std::nullopt;
    }
    const AdcClockWindow window;
    const Adc adc(ADC1);
-   const auto channel = static_cast<Adc::Channel>(*adcChannelOf(current.family, current.vref->pin));
+   const auto channel = static_cast<Adc::Channel>(*adcChannelOf(current.family, sense.pin));
    uint32_t sum = 0;
    for(unsigned i = 0; i < conversions; ++i) {
       uint16_t raw = 0;
@@ -118,7 +182,21 @@ std::optional<uint16_t> BoardPower::senseMillivolts() {
       }
       sum += raw;
    }
-   return vrefMillivolts((sum + conversions / 2) / conversions, current.vref->divider);
+   return vrefMillivolts((sum + conversions / 2) / conversions, sense.divider);
+}
+
+std::optional<uint16_t> BoardPower::fiveVoltInputMillivolts() {
+   if(!current.targetSupply) {
+      return std::nullopt;
+   }
+   return measure(current.targetSupply->v5Sense);
+}
+
+bool BoardPower::takeFault() {
+   const Interrupt::CriticalSection cs;
+   const bool taken = faulted;
+   faulted = false;
+   return taken;
 }
 
 } // namespace board

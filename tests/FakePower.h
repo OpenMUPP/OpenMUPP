@@ -13,19 +13,30 @@
 #include <optional>
 #include <vector>
 
-// The rail of the target. With the switch off, the rail is at externalMv
-// (the supply of the target). With the switch on, it is at 3300 mV, or at
-// loadedMv when the target pulls it down.
+// The rail of the target. With the switches off, the rail is at externalMv
+// (the supply of the target). With a switch on, it is at 3300 mV or
+// 5000 mV, or at loadedMv when the target pulls it down. After a switch-off
+// from 5 V, the rail stays at 5000 mV for dischargeReads measurements.
 class FakePower final : public protocol::PowerHardware {
    public:
    [[nodiscard]] bool hasSwitch() const override {
       return hasSwitchPin;
    }
 
-   void setSwitch(bool on) override {
+   [[nodiscard]] bool has5vSwitch() const override {
+      return has5vSwitchPin;
+   }
+
+   void select(protocol::Supply supply) override {
       REQUIRE(hasSwitchPin);
-      isOn = on;
-      switches.push_back(on);
+      REQUIRE((supply != protocol::Supply::V5 || has5vSwitchPin));
+      if(supply == protocol::Supply::Off && selected == protocol::Supply::V5) {
+         charged = dischargeReads;
+      }
+      selected = supply;
+      isOn = supply != protocol::Supply::Off;
+      switches.push_back(isOn);
+      selections.push_back(supply);
    }
 
    [[nodiscard]] bool hasSense() const override {
@@ -38,16 +49,49 @@ class FakePower final : public protocol::PowerHardware {
       if(failSense) {
          return std::nullopt;
       }
-      return isOn ? loadedMv.value_or(3300) : externalMv;
+      if(!isOn && charged > 0) {
+         --charged;
+         return 5000;
+      }
+      if(!isOn) {
+         return externalMv;
+      }
+      return loadedMv.value_or(selected == protocol::Supply::V5 ? 5000 : 3300);
+   }
+
+   [[nodiscard]] std::optional<uint16_t> fiveVoltInputMillivolts() override {
+      REQUIRE(has5vSwitchPin);
+      return inputMv;
+   }
+
+   // The fault interrupt: all switches off
+   void fault() {
+      isOn = false;
+      selected = protocol::Supply::Off;
+      pendingFault = true;
+   }
+
+   [[nodiscard]] bool takeFault() override {
+      const bool taken = pendingFault;
+      pendingFault = false;
+      return taken;
    }
 
    bool hasSwitchPin{ true };
    bool hasSensePin{ true };
+   bool has5vSwitchPin{ false };
    bool isOn{ false };
+   protocol::Supply selected{ protocol::Supply::Off };
    bool failSense{ false };
    uint16_t externalMv{ 0 };
    std::optional<uint16_t> loadedMv;
+   std::optional<uint16_t> inputMv{ 5000 };
+   unsigned dischargeReads{ 0 };
+   unsigned charged{ 0 };
+   bool pendingFault{ false };
+   // On or off at each select()
    std::vector<bool> switches;
+   std::vector<protocol::Supply> selections;
    unsigned senses{ 0 };
 };
 

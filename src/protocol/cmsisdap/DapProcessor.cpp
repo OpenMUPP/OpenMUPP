@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <optional>
 
 #include "boot/BootloaderEntry.h"
 #include "personality/PersonalitySwitch.h"
@@ -547,24 +548,34 @@ bool Processor::switchBridge(PacketReader &in, PacketWriter &out) {
    return true;
 }
 
-// [0x82][op u8] -> [0x82][status u8][mV u16]
+// [0x82][op u8] or [0x82][3][mV u16] -> [0x82][status u8][mV u16][state u8]
 bool Processor::targetPower(PacketReader &in, PacketWriter &out) {
-   const uint8_t op = in.u8();
-   // The room before the switch: a response that does not fit changes
-   // nothing.
-   if(!in.ok() || out.room() < 4) {
-      return false;
-   }
    constexpr uint8_t opOff = 0;
    constexpr uint8_t opOn = 1;
    constexpr uint8_t opRead = 2;
+   constexpr uint8_t opSelect = 3;
    constexpr uint8_t statusRefused = 1;
+   constexpr uint8_t stateFault = 0x80;
+   const uint8_t op = in.u8();
+   // Only op 3 has the voltage: the old requests keep their length.
+   const uint16_t selectMv = op == opSelect ? in.u16() : 0;
+   // The room before the switch: a response that does not fit changes
+   // nothing.
+   if(!in.ok() || out.room() < 5) {
+      return false;
+   }
+   std::optional<protocol::Supply> supply;
+   if(op == opOn || (op == opSelect && selectMv == 3300)) {
+      supply = protocol::Supply::V3v3;
+   } else if(op == opSelect && selectMv == 5000) {
+      supply = protocol::Supply::V5;
+   }
    uint8_t status = statusOk;
-   if(op == opOn && otherOwnsPins()) {
+   if(supply && otherOwnsPins()) {
       // Only the owner of the pins, or anyone while nobody owns them
       status = statusRefused;
-   } else if(op == opOn) {
-      switch(power_->switchOn()) {
+   } else if(supply) {
+      switch(power_->switchOn(*supply)) {
       case protocol::TargetPower::Result::Ok:
          break;
       case protocol::TargetPower::Result::Refused:
@@ -583,9 +594,13 @@ bool Processor::targetPower(PacketReader &in, PacketWriter &out) {
    } else if(op != opRead) {
       status = statusError;
    }
+   // First: it also takes a fault that the main loop did not take yet.
+   const bool fault = power_->takeFaultReport();
+   const auto state = static_cast<uint8_t>(static_cast<uint8_t>(power_->supply()) | (fault ? stateFault : 0));
    out.u8(command::vendor2);
    out.u8(status);
    out.u16(power_->millivolts());
+   out.u8(state);
    return true;
 }
 
