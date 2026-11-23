@@ -881,11 +881,12 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
       out.u8(0);
       return true;
    }
-   if(port_ == Port::Swd) {
+   if(portActive_ && port_ == Port::Swd) {
       swd_.fini();
-   } else if(port_ == Port::Jtag) {
+   } else if(portActive_ && port_ == Port::Jtag) {
       jtag_.port().fini();
    }
+   portActive_ = false;
    // Another user of the engine may have changed it.
    applySettings();
    swd_.setAbort(*this);
@@ -896,7 +897,6 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
          swo_->stop();
       }
       setJtagClock();
-      jtag_.port().init();
       // The TAP state and the IR are not known.
       jtag_.invalidate();
       port_ = Port::Jtag;
@@ -904,13 +904,27 @@ bool Processor::connect(PacketReader &in, PacketWriter &out) {
       return true;
    }
    swd_.setClockHz(clockHz_);
+   port_ = Port::Swd;
+   out.u8(portSwd);
+   return true;
+}
+
+// DAP_Connect only sets the owner and the mode. The pins change here, at the
+// first command that uses the port: on some boards, driving them also turns
+// on the level shifters.
+void Processor::activatePort() {
+   if(portActive_ || port_ == Port::None) {
+      return;
+   }
+   portActive_ = true;
+   if(port_ == Port::Jtag) {
+      jtag_.port().init();
+      return;
+   }
    if((gpio_.available() & protocol::gpio::tdo) != 0) {
       gpio_.configure(protocol::gpio::tdo, protocol::PinMode::Input, false);
    }
    swd_.init();
-   port_ = Port::Swd;
-   out.u8(portSwd);
-   return true;
 }
 
 void Processor::disconnect() {
@@ -922,12 +936,10 @@ void Processor::disconnect() {
    if(vendor_ != nullptr) {
       vendor_->releasePins();
    }
-   if(port_ == Port::Swd) {
+   if(portActive_ && port_ == Port::Swd) {
       swd_.fini();
-      port_ = Port::None;
-   } else if(port_ == Port::Jtag) {
+   } else if(portActive_ && port_ == Port::Jtag) {
       jtag_.port().fini();
-      port_ = Port::None;
    } else {
       // DAP_SWJ_Pins can drive SWCLK and SWDIO without a connection.
       for(const uint16_t bit : { protocol::gpio::tck, protocol::gpio::tms }) {
@@ -936,6 +948,8 @@ void Processor::disconnect() {
          }
       }
    }
+   portActive_ = false;
+   port_ = Port::None;
    // Release the pins that DAP_SWJ_Pins drove, also without a connection:
    // a target must not stay in reset when the host stops. SRST and TRST
    // get the pull-up, as in the GPIO block.
@@ -1013,6 +1027,7 @@ bool Processor::swjSequence(PacketReader &in, PacketWriter &out) {
       return false;
    }
    out.u8(command::swjSequence);
+   activatePort();
    if(port_ == Port::Jtag) {
       // The sequence is on TMS.
       out.u8(jtag_.tmsSequence(static_cast<uint16_t>(bits), data) ? statusOk : statusError);
@@ -1055,6 +1070,8 @@ bool Processor::swdSequence(PacketReader &in, PacketWriter &out) {
    const bool swd = port_ == Port::Swd;
    if(!swd) {
       out.set(statusPosition, statusError);
+   } else {
+      activatePort();
    }
    for(uint8_t i = 0; i < count; ++i) {
       // A cycle count of 0 is 64 cycles. Bit 7: read SWDIO.
@@ -1107,6 +1124,8 @@ bool Processor::jtagSequence(PacketReader &in, PacketWriter &out) {
    const bool jtag = port_ == Port::Jtag;
    if(!jtag) {
       out.set(statusPosition, statusError);
+   } else {
+      activatePort();
    }
    for(uint8_t i = 0; i < count; ++i) {
       // A cycle count of 0 is 64 cycles. Bit 6: TMS. Bit 7: read TDO.
@@ -1149,6 +1168,9 @@ bool Processor::jtagIdcode(PacketReader &in, PacketWriter &out) {
    }
    out.u8(command::jtagIdcode);
    uint32_t value = 0;
+   if(port_ == Port::Jtag) {
+      activatePort();
+   }
    if(port_ != Port::Jtag || !jtag_.select(index) || !jtag_.readIdcode(value)) {
       out.u8(statusError);
       return true;
@@ -1242,6 +1264,7 @@ bool Processor::swjPins(PacketReader &in, PacketWriter &out) {
 }
 
 bool Processor::selectDevice(uint8_t index) {
+   activatePort();
    if(port_ == Port::Jtag) {
       return jtag_.select(index);
    }

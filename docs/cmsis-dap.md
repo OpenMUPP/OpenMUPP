@@ -162,7 +162,7 @@ The STM32F1 boards do not have it: their USB packet memory is full.
 - **Interface**: interface 3 (interface 0 with `MUPP_AVR_USB_ID=medbg`, see [avr.md](avr.md#bloom)), HID class, interrupt OUT `0x05` and interrupt IN `0x85` (see [usb-device.md](usb-device.md#cmsis-dap-personality)).
 - **Packet size**: one command or response is one report of 64 bytes, also at high speed. `DAP_Info` on this interface reports the packet size 64. The host pads a command with zeros, and the probe pads each response with zeros.
 - **Processor**: the interface has its own `cmsisdap::Processor`, on the same SWD and JTAG engines as the v2 interface. It has the commands of the v2 interface except `ID_DAP_Vendor0`, `ID_DAP_Vendor2`, the `DAP_UART_*` commands and the `DAP_SWO_*` commands: they reply `ID_DAP_Invalid`. It has the RISC-V bridge: `ID_DAP_Vendor1` sets its mode, and `DAP_SWJ_Pins` tells it that the pins changed.
-- **Target pins**: the first interface that drives the target pins owns them (`protocol/TargetPinOwner.h`). `DAP_Connect`, `DAP_SWJ_Pins` with an output and `DAP_ResetTarget` take the pins. While the other interface owns them, `DAP_Connect` replies port 0, `DAP_SWJ_Pins` only reads the pins, and `DAP_ResetTarget` replies `DAP_ERROR`. `DAP_Disconnect`, a bus reset or a suspend of the owner frees them. A host tool that stops without `DAP_Disconnect` (killed, crashed) keeps the pins until a bus reset or a replug. While the other interface owns the pins, `ID_DAP_Vendor1` replies `DAP_ERROR`, because the bridge is the JTAG port of both interfaces. The clock and transfer settings of an interface reach the engines only while it owns the pins, and `DAP_Connect` applies them.
+- **Target pins**: the first interface that drives the target pins owns them (`protocol/TargetPinOwner.h`). `DAP_Connect`, `DAP_SWJ_Pins` with an output and `DAP_ResetTarget` take the pins. `DAP_Connect` takes the owner role and sets the port, but it does not change the pins: the pins change at the first transfer or sequence command (see `DAP_Connect` in the command table). While the other interface owns them, `DAP_Connect` replies port 0, `DAP_SWJ_Pins` only reads the pins, and `DAP_ResetTarget` replies `DAP_ERROR`. `DAP_Disconnect`, a bus reset or a suspend of the owner frees them. A host tool that stops without `DAP_Disconnect` (killed, crashed) keeps the pins until a bus reset or a replug. While the other interface owns the pins, `ID_DAP_Vendor1` replies `DAP_ERROR`, because the bridge is the JTAG port of both interfaces. The clock and transfer settings of an interface reach the engines only while it owns the pins, and `DAP_Connect` applies them.
 - **Scheduling**: `UsbStack::poll()` runs one command of each interface per round, so one interface does not block the other.
 - **Transfer abort**: `DAP_TransferAbort` stops a running command on both interfaces. During a command, the serial-only event delivery also gives the packets of both CMSIS-DAP interfaces (`usb/SerialEventQueue.h`), so a report of one interface does not hold the serial port during a command of the other.
 - **Tools**: OpenOCD selects the v2 interface first. Use `cmsis-dap backend hid` for the v1 interface. pyOCD also selects v2 first.
@@ -427,8 +427,8 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 |---|---|---|
 | `0x00` | `DAP_Info` | Vendor, product, serial number, protocol version `2.1.0`, firmware version, capabilities, packet size and count. Other information has length 0. |
 | `0x01` | `DAP_HostStatus` | Connect and running LED. |
-| `0x02` | `DAP_Connect` | Port 0 and 1 give SWD. Port 2 gives JTAG. |
-| `0x03` | `DAP_Disconnect` | Release the pins of the port. Release the pins that `DAP_SWJ_Pins` drove: nRESET and nTRST get the pull-up. |
+| `0x02` | `DAP_Connect` | Port 0 and 1 give SWD. Port 2 gives JTAG. The command sets the pin owner and the port only. The pins change at the first transfer, sequence or IDCODE command. Until then, SWCLK and SWDIO (TCK and TMS) keep their state. |
+| `0x03` | `DAP_Disconnect` | Release the pins of the port, when a command drove them. Release the pins that `DAP_SWJ_Pins` drove: nRESET and nTRST get the pull-up. |
 | `0x04` | `DAP_TransferConfigure` | Idle cycles, WAIT retries, match retries. |
 | `0x05` | `DAP_Transfer` | Read, write, posted AP read, value match, match mask. On JTAG, the device index selects the device. |
 | `0x06` | `DAP_TransferBlock` | Read or write block. On JTAG, the device index selects the device. |
@@ -793,7 +793,7 @@ A Versaloon-only image has no `RetryStop`.
 
 ## JTAG
 
-`DAP_Connect` with port 2 releases the SWD pins and starts the JTAG engine.
+`DAP_Connect` with port 2 releases the SWD pins and selects the JTAG engine. The JTAG engine starts at the first JTAG command.
 The JTAG engine is the one of the Versaloon image (`board::BoardJtag`).
 On the boards with the fast path, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
 This starts at a TCK of 1125 kHz on the Mini, and at 3906 kHz on the STM32H5 boards. The other bits, and the slower rates, use GPIO bit-bang.
@@ -948,12 +948,14 @@ A failed store also gives `81 FF`, but the command still sets the mode.
 |---|---|
 | Off | The JTAG port of the board, as in an image without the bridge. |
 | On | The emulated TAP. |
-| Auto | At each `DAP_Connect` to JTAG, the probe finds the target (see [Auto mode](#auto-mode)). |
+| Auto | At the first JTAG command after each `DAP_Connect` to JTAG, the probe finds the target (see [Auto mode](#auto-mode)). |
 
 - The mode at power-up and after a USB reset is the stored mode. Auto is the stored mode until a store.
 - In the TAP, `DAP_Connect` to JTAG, `DAP_JTAG_Sequence`, `DAP_SWJ_Sequence` and the JTAG transfers use the emulated TAP.
   SWD (`DAP_Connect` to SWD) does not change in any mode.
-- A mode change while JTAG is connected stops the old port and starts the new one at once.
+- A mode change while the JTAG port is in use stops the old port and starts the new one at once.
+  The port is in use after the first JTAG command that follows `DAP_Connect`.
+  Between `DAP_Connect` and that command, a mode change only sets the mode: the next JTAG command starts the port.
   The TAP state and the IR of the new port are not known, as after `DAP_SWJ_Pins`.
   The change to auto keeps the port until the next `DAP_Connect`. Thus the OpenOCD `shutdown` causes no pin activity on the target when the stored mode is auto.
 - The change from the TAP to the board port releases SWCLK and SWDIO, and resets the timer of the one-wire engine.
@@ -1007,7 +1009,7 @@ python3 tools/mupp_probe.py bridge auto --store
 
 ### Auto mode
 
-In the auto mode, `DAP_Connect` to JTAG finds the target before it starts the port.
+In the auto mode, the first JTAG command after `DAP_Connect` finds the target before it starts the port.
 The steps are in this order. The first step that finds a target stops the search:
 
 1. JTAG: the probe goes to Test-Logic-Reset and shifts 64 bits through Shift-DR with TDI high.
@@ -1022,7 +1024,11 @@ The steps are in this order. The first step that finds a target stops the search
 
 Each step releases its pins before the next step.
 The result stays until the next `DAP_Connect`, `DAP_Disconnect`, mode change or USB reset.
-Thus connect the target, and switch on its supply, before the host connects.
+Thus connect the target, and switch on its supply, before the first JTAG command.
+
+The detection runs after the `DAP_SWJ_Pins` commands that the host sends between `DAP_Connect` and its first JTAG command.
+With `connect_assert_srst` in OpenOCD, the host asserts SRST first. The detection then runs with SRST asserted.
+A JTAG chain or an SW-DP normally answers while the target is in reset.
 
 - The detection uses the TCK of `DAP_SWJ_Clock`. The SWD step uses the SWD clock and the settings of the last `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure`.
 - The SWD step only runs when the JTAG step finds no chain.
@@ -1453,7 +1459,7 @@ OpenOCD uses `interface/cmsis-dap.cfg` with its own TAP and target lines, not th
 | STM32H523, SWD only | Mini 1 | Board port | Pass. The JTAG scan finds no chain. An SWD session reads DPIDR `0x6ba02477` |
 | No target | Mini 1 | Board port | Pass. The JTAG scan finds TDO low and no emulated TAP |
 
-Time of `DAP_Connect` to JTAG at 1000 kHz, 5 runs each, measured on the host with pyusb:
+Time of the auto detection at 1000 kHz, 5 runs each, measured on the host with pyusb as the time of `DAP_Connect` to JTAG. The detection now runs in the first JTAG command after `DAP_Connect`, with the same steps:
 
 | Target | Auto | Off |
 |---|---|---|

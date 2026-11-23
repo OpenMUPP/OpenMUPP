@@ -12,6 +12,7 @@
 #include "protocol/cmsisdap/RvDtmTap.h"
 #include "protocol/wchlink/WchLinkTarget.h"
 
+#include <algorithm>
 #include <doctest/doctest.h>
 
 #include <cstddef>
@@ -435,7 +436,9 @@ TEST_CASE("RV bridge: the processor reads the IDCODE of the TAP after the switch
    Dap d(&bridge, &bridge);
    // DAP_Connect to JTAG on the real port
    CHECK(d.run({ 0x02, 0x02 }) == Bytes{ 0x02, 0x02 });
-   REQUIRE(jtag.calls.back() == "init");
+   // The pins change at the first JTAG command.
+   CHECK(d.run({ 0x12, 0x08, 0xFF }) == Bytes{ 0x12, 0x00 });
+   REQUIRE(std::find(jtag.calls.begin(), jtag.calls.end(), "init") != jtag.calls.end());
    CHECK(d.run({ 0x81, 0x01 }) == Bytes{ 0x81, 0x00 });
    CHECK(jtag.calls.back() == "fini");
    // DAP_JTAG_Sequence: Test-Logic-Reset, Run-Test/Idle, Shift-DR, then
@@ -479,6 +482,28 @@ TEST_CASE("RV bridge: auto with an SWD target is the real port") {
    CHECK(swd.transfers == 1);
    CHECK(swd.finis == swd.inits);
    CHECK(w.pins.inits == 0);
+}
+
+TEST_CASE("RV bridge: DAP_Connect in auto does not detect, the first JTAG command does") {
+   FakeJtagPort jtag;
+   mupptest::FakeDapSwd swd;
+   swd.ack = cmsisdap::dap::ackNone;
+   Wire w;
+   FakeModeStore modes;
+   cmsisdap::RvBridge bridge{ jtag, swd, w.tap, modes, cmsisdap::BridgeMode::Auto };
+   Dap d(&bridge, &bridge);
+   CHECK(d.run({ 0x02, 0x02 }) == Bytes{ 0x02, 0x02 });
+   CHECK_FALSE(bridge.enabled());
+   CHECK(std::find(jtag.calls.begin(), jtag.calls.end(), "init") == jtag.calls.end());
+   CHECK(swd.sequences.empty());
+   CHECK(w.pins.inits == 0);
+   // DAP_JTAG_Sequence: the detection finds the WCH target.
+   static_cast<void>(d.run({ 0x14, 0x01, 0x08, 0x00 }));
+   CHECK(bridge.enabled());
+   CHECK(swd.sequences == std::vector<uint16_t>{ 136 });
+   // The next command does not detect again.
+   static_cast<void>(d.run({ 0x14, 0x01, 0x08, 0x00 }));
+   CHECK(swd.sequences == std::vector<uint16_t>{ 136 });
 }
 
 TEST_CASE("RV bridge: auto with a WCH target is the TAP") {

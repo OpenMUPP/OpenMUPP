@@ -379,9 +379,14 @@ TEST_CASE("DAP_Connect and DAP_Disconnect") {
    // The default port is SWD.
    CHECK(b.run({ 0x02, 0x00 }) == V{ 0x02, 0x01 });
    CHECK(b.dap.connected());
+   // DAP_Connect does not drive the pins: the first SWJ sequence does.
+   CHECK(b.pins.inits == 0);
+   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x00 });
    CHECK(b.pins.inits == 1);
    // Connect again: the pins are released and driven again.
    CHECK(b.run({ 0x02, 0x01 }) == V{ 0x02, 0x01 });
+   CHECK(b.pins.inits == 1);
+   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x00 });
    CHECK(b.pins.inits == 2);
    CHECK(b.pins.finis == 1);
    CHECK(b.run({ 0x03 }) == V{ 0x03, 0x00 });
@@ -1092,6 +1097,7 @@ TEST_CASE("Unknown commands, DAP_TransferAbort and bad packets") {
 TEST_CASE("hostGone disconnects") {
    Bench b;
    b.connect();
+   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x00 });
    b.dap.hostGone();
    CHECK_FALSE(b.dap.connected());
    CHECK(b.pins.finis == 1);
@@ -1391,6 +1397,7 @@ TEST_CASE("Shared pins: the first processor that connects owns the pins") {
    CHECK(s.owner.owner() == protocol::PinClient::None);
    s.b.connect();
    CHECK(s.owner.owner() == protocol::PinClient::CmsisDapBulk);
+   CHECK(s.b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x00 });
    CHECK(s.b.pins.inits == 1);
 
    // The other processor gets port 0 (failed) and touches no pin.
