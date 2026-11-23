@@ -5,6 +5,7 @@
 #include "board/Board.h"
 #include "board/BoardPins.h"
 #include "board/DebugGpio.h"
+#include "board/TargetDrive.h"
 
 namespace board {
 
@@ -47,6 +48,14 @@ uint16_t BoardGpio::available() const {
 }
 
 void BoardGpio::configure(uint16_t bit, PinMode mode, bool level) {
+   if(bit == protocol::gpio::srst) {
+      // All SRST users come here: DAP_ResetTarget, DAP_SWJ_Pins, the
+      // release at DAP_Disconnect and the Versaloon GPIO block.
+      srstMode_ = mode;
+      const SrstPinSetting setting = srstPinSetting(current.debug.srstActive, mode, level);
+      configurePin(current.debug.srst, setting.mode, setting.level);
+      return;
+   }
    for(const auto &setting : gpioPinSettings(current.debug, bit, mode)) {
       if(setting) {
          configurePin(setting->pin, setting->mode, level);
@@ -59,8 +68,11 @@ void BoardGpio::write(uint16_t mask, uint16_t value) {
       if((mask & bit) == 0) {
          continue;
       }
-      if(const auto pin = gpioOutputPin(current.debug, bit)) {
-         gpioPin(*pin).write((value & bit) != 0);
+      const bool level = (value & bit) != 0;
+      if(bit == protocol::gpio::srst) {
+         gpioPin(current.debug.srst).write(srstPinSetting(current.debug.srstActive, srstMode_, level).level);
+      } else if(const auto pin = gpioOutputPin(current.debug, bit)) {
+         gpioPin(*pin).write(level);
       }
    }
 }
@@ -69,6 +81,12 @@ uint16_t BoardGpio::read(uint16_t mask) const {
    uint16_t value = 0;
    for(uint16_t bit = 1; bit <= protocol::gpio::tms; bit = static_cast<uint16_t>(bit << 1)) {
       if((mask & bit) == 0) {
+         continue;
+      }
+      if(bit == protocol::gpio::srst) {
+         if(srstLineLevel(current.debug, gpioPin(srstReadPin(current.debug)).read())) {
+            value = static_cast<uint16_t>(value | bit);
+         }
          continue;
       }
       const auto pin = gpioInputPin(current.debug, bit);

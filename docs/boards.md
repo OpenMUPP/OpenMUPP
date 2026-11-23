@@ -413,6 +413,9 @@ These items are different:
 
 - UART bridge: UART7 on its remap pins, PA6 (TX) and PA7 (RX), with DMA (see [DMA on the CH32V307](uart-bridge.md#dma-on-the-ch32v307)).
 - `SRST` (PB12) drives the gate of a low-side FET (Q1). High pulls nRESET low (`srstActive` high).
+  `DAP_ResetTarget`, `DAP_SWJ_Pins`, `DAP_Disconnect` and the Versaloon GPIO block use this polarity.
+  These users set SRST as a push-pull output. A released SRST is a low output, not an input with pull-up.
+  A read of nRESET (`DAP_SWJ_Pins`, GPIO `IN`) uses the read-back pin PB11.
 - `VTREF_SENSE` (PB0) shows half of the target voltage.
 - LEDs: state on PA10 (red), USB on PA9 (green). Both are active high. The blue LED (PC4) is not used yet.
 - Debug log: UART5 on J2, PC12 (TX) and PD2 (RX), 115200 baud 8N1 (see [Debug log](debug-log.md#debug-uart)).

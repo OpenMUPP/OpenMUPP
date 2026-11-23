@@ -63,8 +63,8 @@ struct DebugPins {
    // The pin level that asserts SRST, for the AVR ISP RESET
    // (board/BoardIsp.h). Low: an open-drain output pulls the line low.
    // High: a push-pull output drives a transistor that pulls the line
-   // low. CMSIS-DAP and the GPIO block do not use it yet: they drive SRST
-   // open-drain and active low. A board with High must change them too.
+   // low. CMSIS-DAP and the GPIO block use it through board::BoardGpio
+   // (board::srstPinSetting()).
    Active srstActive = Active::Low;
    // The input that reads the RESET line back, for debugWIRE
    // (board/BoardDebugWire.h): USART3 RX (PB11) on the CH32V307. Empty: the

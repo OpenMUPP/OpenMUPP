@@ -42,4 +42,42 @@ void driveTargetOutputs(const std::optional<Shifters> &shifters, ShifterGroups g
    }
 }
 
+// The setting of the SRST pin.
+struct SrstPinSetting {
+   protocol::PinMode mode;
+   bool level;
+
+   constexpr bool operator==(const SrstPinSetting &) const = default;
+};
+
+// The SRST pin setting for a request on the SRST gpio bit. The CMSIS-DAP
+// processor and the Versaloon GPIO block see SRST as nRESET: open-drain and
+// active low, a low level asserts the reset, an input releases it. With
+// Active::Low, the pin is nRESET and the request stays. With Active::High,
+// the pin drives a transistor that pulls nRESET low: the pin is a push-pull
+// output with the inverse level, and a released line (an input request) is
+// a low output, not an input with pull-up.
+constexpr SrstPinSetting srstPinSetting(Active active, protocol::PinMode mode, bool level) {
+   if(active == Active::Low) {
+      return { mode, level };
+   }
+   const bool output = mode == protocol::PinMode::PushPull || mode == protocol::PinMode::OpenDrain;
+   return { protocol::PinMode::PushPull, output && !level };
+}
+
+// The pin that reads nRESET. Active::Low: the SRST pin is nRESET. On the
+// YD board the read-back input needs a wire that only debugWIRE uses, so
+// it does not read SRST. Active::High: the read-back input when the board
+// has it, else the SRST pin.
+constexpr Pin srstReadPin(const DebugPins &pins) {
+   return pins.srstActive == Active::High ? pins.srstSense.value_or(pins.srst) : pins.srst;
+}
+
+// The nRESET level from the level of srstReadPin(). Without a read-back
+// input, the SRST pin of an Active::High board has the inverse level of
+// nRESET.
+constexpr bool srstLineLevel(const DebugPins &pins, bool pinLevel) {
+   return srstReadPin(pins) == pins.srst && pins.srstActive == Active::High ? !pinLevel : pinLevel;
+}
+
 } // namespace board
