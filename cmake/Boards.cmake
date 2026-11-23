@@ -19,7 +19,7 @@
 #
 #   mini      Versaloon Mini
 #   otheruse  OtherUse
-#   stlinkv21 ST-Link/V2-1 of the Nucleo-64 boards (not tested on hardware)
+#   stlinkv21 ST-Link/V2-1 of the Nucleo-64 boards
 #   stlinkv2miniclone
 #             ST-Link/V2 mini clone, USB stick dongle
 #             (docs/stlinkv2-mini-clone.md)

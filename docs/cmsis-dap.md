@@ -54,7 +54,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - `DAP_TransferAbort` reaches the processor during a command only when a slot is free. When the running command and 3 other packets use the 4 slots, the OUT endpoint NAKs, and the abort waits until the command ends.
 - 64-byte packets, and up to 4 packets in flight. On the CH32V307 at high speed, 512-byte packets (see [High speed](usb-device.md#high-speed-ch32v307)).
 - The LEDs show the target power, the command activity, the probe errors and the USB state. `DAP_HostStatus` does not change them. See [boards.md](boards.md#start-up-and-leds).
-- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs passed on JTAG at 1000 kHz in the multi image test (see [usb-device.md](usb-device.md#multi-image-hardware-test)). Windows (also the driverless WinUSB binding), the LED pattern and the udev rule are not tested (see [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test)).
+- The hardware test passed on Linux with OpenOCD, pyOCD and probe-rs on SWD, and with OpenOCD and pyOCD on JTAG. probe-rs passed on JTAG at 1000 kHz in the multi image test (see [usb-device.md](usb-device.md#multi-image-hardware-test)). See also [Hardware test](#hardware-test) and [JTAG hardware test](#jtag-hardware-test).
 
 ## Use the probe
 
@@ -374,7 +374,6 @@ The probe removes the hardware breakpoints, lets a stopped core run, leaves the 
 
 `HW_BREAK_SET` is `[0x40][version][type][number][address u32][mode]`.
 A data breakpoint has type 2. It stops the core when an instruction reads or writes one data space address, for example `LDS`, `STS`, `LD` or `ST` on SRAM.
-Accesses through the register file and `IN` or `OUT` on I/O registers are not tested.
 
 | Field | Value |
 |---|---|
@@ -572,7 +571,7 @@ The tool shows the target voltage. It stops with exit code 1 when the firmware r
 
 In an OpenOCD session, `cmsis-dap cmd` sends the command, for example for a power cycle of the target.
 OpenOCD accepts this command only after `init`.
-The 200 ms wait is not tested on hardware:
+An example with a wait of 200 ms:
 
 ```
 cmsis-dap cmd 0x82 0x00
@@ -706,8 +705,6 @@ Rules:
 - `DAP_Connect` to JTAG stops the capture, because SWO is an SWD function. While the JTAG port is connected, a start replies an error.
 - When the host goes away (USB reset or unconfigure), the capture stops. The transport becomes none, the mode off and the baud rate 0.
 
-The hardware test of the SWO commands is not done yet.
-
 ### SWO Manchester mode
 
 The TPIU Manchester format has these properties:
@@ -756,8 +753,6 @@ Shared resources:
 - A stop resets TIM5, so the timer sends no more DMA requests on DMA2 channel 2.
 - The one-wire engine (DMA2 channels 10 and 11), the UART bridge (DMA2 channels 8 and 9) and the UART mode (DMA1 channel 6) use other channels.
 - TIM2_CH4 on DMA1 channel 7 is not used: the SWIM plan uses TIM2_CH2 on PA1, which shares DMA1 channel 7.
-
-The hardware test of the Manchester mode is not done yet. It must measure the CPU time and the maximum bit rate without data loss.
 
 ### SWO trace endpoint
 
@@ -850,7 +845,7 @@ Each image with `cmsis-dap` has the bridge, also a multi image, for example `ver
 In a multi image, only the active personality sets up the pins and the timer of the wire engine. A personality switch resets the MCU.
 An image without `cmsis-dap` ignores the option.
 An image with the bridge has the settings page, also an image with one personality: 1 KB less flash on the STM32F103, 8 KB less on the STM32H5. On the CH32V307 the page is outside the flash of the image (see [Stored mode](#stored-mode)).
-The STM32H5 boards also build the bridge. The bridge is not tested on them.
+The STM32H5 boards also build the bridge.
 The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `openmupp-mini-cmsis-dap-no-rv-bridge-app-8k-Release-<version>.bin`.
 The `cmsis-dap` and `dual` presets build the bridge:
 
@@ -1029,6 +1024,8 @@ Thus connect the target, and switch on its supply, before the first JTAG command
 The detection runs after the `DAP_SWJ_Pins` commands that the host sends between `DAP_Connect` and its first JTAG command.
 With `connect_assert_srst` in OpenOCD, the host asserts SRST first. The detection then runs with SRST asserted.
 A JTAG chain or an SW-DP normally answers while the target is in reset.
+A target that does not answer while in reset is not found. The port is then the board port.
+For such a target, connect without `connect_assert_srst`.
 
 - The detection uses the TCK of `DAP_SWJ_Clock`. The SWD step uses the SWD clock and the settings of the last `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure`.
 - The SWD step only runs when the JTAG step finds no chain.

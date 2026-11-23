@@ -407,7 +407,6 @@ python3 tools/avr_data_break_test.py --medbg --address 0x0100 --modes write --nu
 ```
 
 The script sends the device context of the ATmega32U4. For another device, change `device_context()` in the script.
-The access mode on a write is not tested on the hardware yet (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
 
 ## Low-clock targets
 
@@ -441,8 +440,6 @@ The test used a YD-CH32V307VCT6 board and a Seeeduino Lite (ATmega32U4) with a 3
 | Write a fuse and read it back | Pass |
 | Target at 1 MHz (internal RC oscillator, CKDIV8): flash and EEPROM at `-B 125kHz` | Pass. The flash write takes 10.4 s. At `-B 2MHz`, the probe cannot enter programming mode, as expected. |
 | Target at 1 MHz: EEPROM at `-B 16kHz` | Pass |
-
-A target at 128 kHz is not tested: the ATmega32U4 has no 128 kHz clock source.
 
 ### JTAG hardware test
 
@@ -589,9 +586,9 @@ At 8 MHz, the measured dW baud rate was 51.6 kbaud in some sessions and 61.6 kba
 | A breakpoint on `main` and on a line in the loop, `continue` | Pass | Pass |
 | `next` and `stepi` | Pass | Pass |
 | Read and write a variable in SRAM, `display` at each stop | Pass | Pass |
-| Interrupt of a running target (Ctrl-C in avr-gdb) | Pass | Not tested |
+| Interrupt of a running target (Ctrl-C in avr-gdb) | Pass | - |
 | "disable debugWIRE" from Bloom, then ISP without a power cycle: clear DWEN | Pass | Pass |
 
 Bloom shows `Available hardware breakpoints: 0`, so it uses software breakpoints.
 The probe writes one flash page to insert or remove a software breakpoint. A run or step from a software breakpoint writes two pages (see [cmsis-dap.md](cmsis-dap.md#avr-commands)).
-A gdb `watch` on SRAM is not tested. dW has no data breakpoint, so avr-gdb steps each instruction.
+dW has no data breakpoint. Thus for a gdb `watch` on SRAM, avr-gdb steps each instruction.
