@@ -571,6 +571,8 @@ The sub-commands use port index 0. The values are `u16`, little-endian:
 
 OpenOCD releases SRST as an input with pull-up, and asserts SRST as a push-pull output at the low level.
 When the host closes the Versaloon interface, the firmware releases SRST and TRST: they become inputs with pull-up.
+On a board with `srstActive` high, SRST becomes a low output (see [OpenMUPP v1 probe board](boards.md#openmupp-v1-probe-board)).
+The `JTAG_RAW` and `SWD` blocks also stop their engines: the JTAG and SWD pins become inputs, and the shifter direction pins go low.
 The host closes the interface with a USB bus reset, with `SET_CONFIGURATION 0`, or with a USB suspend.
 For example, this occurs when OpenOCD stops during `reset halt`, or when the cable is disconnected.
 Thus the target does not stay in reset until the next OpenOCD session.
