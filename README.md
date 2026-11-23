@@ -68,7 +68,7 @@ OpenMUPP v1 is the main target. The other boards are for development, tests and 
 | `ydch32v307` | YD-CH32V307VCT6 development board, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board) | 8 MHz | Test board for the CH32V307 port | target |
 
 [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
-The board layer needs `DIR_SWDIO` for SWD and one wire, and the power functions, before the firmware can drive the debug signals of the board.
+The board layer needs the connect self-test and the power functions before the firmware can drive the debug signals of the board.
 The YD-CH32V307VCT6 board uses the same MCU family as the OpenMUPP v1 probe.
 The WeAct STM32H523 core board uses an STM32H523CC.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
