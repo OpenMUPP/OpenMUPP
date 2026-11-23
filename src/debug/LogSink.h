@@ -136,4 +136,28 @@ class LogSink final : public Writable {
    uint32_t droppedBytes_ = 0;
 };
 
+// Writes each log line into two sinks, for a build with the CDC port and
+// the UART. Each sink keeps its own drop count.
+class TeeSink final : public Writable {
+   public:
+   TeeSink(Writable &first, Writable &second)
+      : first_(first)
+      , second_(second) {
+   }
+
+   art::expected<size_t, Error> write(art::span<const uint8_t> data) override {
+      static_cast<void>(first_.write(data));
+      static_cast<void>(second_.write(data));
+      return data.size();
+   }
+
+   art::expected<void, Error> flush() override {
+      return {};
+   }
+
+   private:
+   Writable &first_;
+   Writable &second_;
+};
+
 } // namespace debug

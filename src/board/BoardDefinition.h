@@ -352,6 +352,9 @@ struct Definition {
    std::optional<Uart> uart;
    // Empty: the board has no SWO receiver.
    std::optional<Swo> swo = std::nullopt;
+   // The UART of the debug log (debug/DebugUart.h). Empty: the board has no
+   // log UART. Only the CH32V307 UART5 on its default pins (PC12, PD2).
+   std::optional<Uart> debugUart = std::nullopt;
    std::optional<VrefSense> vref;
    std::optional<PowerSwitch> powerSwitch;
    Leds leds;
@@ -403,7 +406,7 @@ constexpr bool isValidPin(const Pin &pin) {
 }
 
 // All pins of a definition. Unused optional pins are empty.
-constexpr std::array<std::optional<Pin>, 41> allPins(const Definition &def) {
+constexpr std::array<std::optional<Pin>, 43> allPins(const Definition &def) {
    auto pinOf = [](const auto &opt) -> std::optional<Pin> { return opt ? std::optional<Pin>(opt->pin) : std::nullopt; };
    // The pin at member m of an optional block
    auto in = [](const auto &opt, auto m) -> std::optional<Pin> {
@@ -427,6 +430,8 @@ constexpr std::array<std::optional<Pin>, 41> allPins(const Definition &def) {
    def.uart ? std::optional<Pin>(def.uart->tx) : std::nullopt,
    def.uart ? std::optional<Pin>(def.uart->rx) : std::nullopt,
    def.swo ? std::optional<Pin>(def.swo->rx) : std::nullopt,
+   def.debugUart ? std::optional<Pin>(def.debugUart->tx) : std::nullopt,
+   def.debugUart ? std::optional<Pin>(def.debugUart->rx) : std::nullopt,
    pinOf(def.vref),
    pinOf(def.powerSwitch),
    pinOf(def.leds.power),
@@ -535,6 +540,11 @@ constexpr bool isValid(const Definition &def) {
          d.tmsOut != slaveMiso || def.jtagFastPath->tckLink != slaveSck) {
          return false;
       }
+   }
+   // UART5 of the CH32V307 with its default pins (CH32FV2x_V3xRM table 10-30)
+   if(def.debugUart && (def.family != Family::Ch32V30x || def.debugUart->usart != 5 ||
+                        def.debugUart->tx != Pin{ Port::C, 12 } || def.debugUart->rx != Pin{ Port::D, 2 })) {
+      return false;
    }
    auto isSense = [&](const VrefSense &sense) { return adcChannelOf(def.family, sense.pin) && sense.divider != 0; };
    auto hasAdc = [&](Pin pin) { return adcChannelOf(def.family, pin).has_value(); };

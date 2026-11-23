@@ -763,3 +763,29 @@ TEST_CASE("The Vref scale gives the target voltage from the ADC reading") {
    CHECK(board::vrefMillivolts(4095, 1) == 3300);
    CHECK(board::vrefMillivolts(4095, 255) == 0xFFFF);
 }
+
+TEST_CASE("Only OpenMUPP v1 has the debug log UART, UART5 on PC12 and PD2") {
+   const Definition &v1 = board::openMuppV1;
+   REQUIRE(v1.debugUart);
+   CHECK(v1.debugUart->usart == 5);
+   CHECK(v1.debugUart->tx == Pin{ Port::C, 12 });
+   CHECK(v1.debugUart->rx == Pin{ Port::D, 2 });
+   for(const Definition &def :
+       { board::mini, board::otherUse, board::stLinkV21, board::stLinkV2MiniClone, board::weActH523, board::ydCh32V307 }) {
+      CHECK_FALSE(def.debugUart);
+   }
+}
+
+TEST_CASE("isValid checks the debug log UART") {
+   Definition def = board::openMuppV1;
+   def.debugUart = board::Uart{ .usart = 5, .tx{ Port::C, 12 }, .rx{ Port::D, 2 } };
+   CHECK(board::isValid(def));
+   def.debugUart->usart = 4;
+   CHECK_FALSE(board::isValid(def));
+   def.debugUart = board::Uart{ .usart = 5, .tx{ Port::C, 12 }, .rx{ Port::A, 7 } }; // PA7 is the UART7 RX
+   CHECK_FALSE(board::isValid(def));
+   // A pin that another signal uses
+   def.debugUart = board::Uart{ .usart = 5, .tx{ Port::C, 12 }, .rx{ Port::D, 2 } };
+   def.leds.state = board::Signal{ Pin{ Port::C, 12 }, board::Active::High };
+   CHECK_FALSE(board::isValid(def));
+}

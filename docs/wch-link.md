@@ -24,7 +24,8 @@ The `wch-link` image has these properties:
 - USB interface 0 is the WCH-Link interface: bulk OUT `0x01` and IN `0x81` for commands, bulk OUT `0x02` and IN `0x82` for data.
 - The image has no CDC-ACM serial port. The packet memory of the USB peripheral (512 bytes) has no room for it.
   Thus the UART bridge and the debug log are off.
-  A `Debug` build of this image needs `-DMUPP_DEBUG_CDC=OFF`, and it has no debug log. CMake stops with an error when `MUPP_DEBUG_CDC` is on.
+  A `Debug` build of this image needs `-DMUPP_DEBUG_CDC=OFF`. CMake stops with an error when `MUPP_DEBUG_CDC` is on.
+  The image has a debug log only on a board with a debug UART (`-DMUPP_DEBUG_UART=ON`, see [Debug log](debug-log.md#debug-uart)).
 - The image does not link the Versaloon and CMSIS-DAP code. The SWD and JTAG engines of these personalities are not used.
 - The LEDs show the target power, the command activity and the USB state. They show no probe error pattern.
 - The image has no `VERSALOON_FW_UPDATE` command. To start the bootloader, send the switch request on EP0 with the bootloader code `0xB0`, or use the key (see [Bootloader code](firmware-update.md#bootloader-code)).

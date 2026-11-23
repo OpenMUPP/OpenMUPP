@@ -48,6 +48,7 @@ The board definition holds all board-specific data:
   - `idSense`: the adapter ID and the board ID inputs.
 
   The other boards do not have these blocks.
+- `debugUart`: the UART of the debug log. Only OpenMUPP v1 has it: UART5 on PC12 (TX) and PD2 (RX). See [Debug log](debug-log.md#debug-uart).
 - `debugOutputs`: false when the debug pins must not become outputs (see [OpenMUPP v1 probe board](#openmupp-v1-probe-board)).
 - The crystal frequency. The value 0 is a board without a crystal. Only an STM32H5 board can have no crystal: its USB clock comes from the HSI48 and the clock recovery system (CRS).
 - The JTAG fast path (SPI and DMA, see [JTAG fast path](usb-device.md#jtag-fast-path)). It is only available when the board links TCK (PB13) to PB3.
@@ -414,6 +415,7 @@ These items are different:
 - `SRST` (PB12) drives the gate of a low-side FET (Q1). High pulls nRESET low (`srstActive` high).
 - `VTREF_SENSE` (PB0) shows half of the target voltage.
 - LEDs: state on PA10 (red), USB on PA9 (green). Both are active high. The blue LED (PC4) is not used yet.
+- Debug log: UART5 on J2, PC12 (TX) and PD2 (RX), 115200 baud 8N1 (see [Debug log](debug-log.md#debug-uart)).
 - The key (SW1) is on the `BOOT0` net. PB3 reads it, active high.
 - SWO: the TDO net also goes to PA3 (USART2 RX). The YD board needs a wire for this (see [YD-CH32V307VCT6 development board](#yd-ch32v307vct6-development-board)).
 

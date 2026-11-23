@@ -42,6 +42,8 @@ inline constexpr Definition openMuppV1{
    .uart = Uart{ .usart = 7, .tx{ Port::A, 6 }, .rx{ Port::A, 7 } },
    // SWO: the TDO net also goes to PA3 (USART2 RX). PB14 cannot receive it.
    .swo = Swo{ .usart = 2, .rx{ Port::A, 3 } },
+   // J2: the debug log (debug/DebugUart.h)
+   .debugUart = Uart{ .usart = 5, .tx{ Port::C, 12 }, .rx{ Port::D, 2 } },
    // R5, R6: VTREF / 2
    .vref = VrefSense{ .pin{ Port::B, 0 }, .divider = 2 },
    .powerSwitch = std::nullopt,
