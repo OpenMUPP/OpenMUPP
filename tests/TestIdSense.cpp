@@ -89,14 +89,14 @@ TEST_CASE("The adapter slots of the protocols") {
    CHECK(board::adapterMatches(TargetProtocol::Jtag, avr));
    CHECK(board::adapterMatches(TargetProtocol::Jtag, arm));
    CHECK(board::adapterMatches(TargetProtocol::Jtag, header));
-   for(const auto protocol : { TargetProtocol::AvrIsp, TargetProtocol::DebugWire }) {
-      CHECK(board::adapterMatches(protocol, avr));
-      CHECK_FALSE(board::adapterMatches(protocol, arm));
-      CHECK_FALSE(board::adapterMatches(protocol, header));
-   }
+   CHECK(board::adapterMatches(TargetProtocol::Avr, avr));
+   CHECK_FALSE(board::adapterMatches(TargetProtocol::Avr, arm));
+   CHECK_FALSE(board::adapterMatches(TargetProtocol::Avr, header));
    // No match without a known adapter
    for(const IdReading other : { IdReading{ IdKind::Fault, 0 }, IdReading{ IdKind::None, 0 }, IdReading{ IdKind::Unknown, 6 } }) {
       CHECK_FALSE(board::adapterMatches(TargetProtocol::Jtag, other));
+      // No protocol: never a mismatch
+      CHECK(board::adapterMatches(TargetProtocol::None, other));
    }
 }
 

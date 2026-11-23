@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include "board/VrefScale.h"
+#include "protocol/TargetGate.h"
 
 namespace board {
 
@@ -60,43 +61,47 @@ constexpr bool isKnownBoardRevision(IdReading reading) {
    return reading == IdReading{ IdKind::Slot, 1 };
 }
 
-// The protocols of the engines, for the adapter check
-enum class TargetProtocol : uint8_t { Swd, Jtag, RvSwd, AvrIsp, DebugWire };
+using protocol::TargetProtocol;
+
+// True when the adapter has a connector for the protocol: slot 1 (AVR JTAG
+// and ISP) has JTAG and the AVR protocols (ISP, debugWIRE, AVR JTAG). Slot 4
+// (Arm) and slot 5 (pin header) have SWD, JTAG and the RISC-V wire. Each
+// adapter matches TargetProtocol::None.
+constexpr bool adapterMatches(TargetProtocol protocol, IdReading adapter) {
+   if(protocol == TargetProtocol::None) {
+      return true;
+   }
+   if(adapter.kind != IdKind::Slot) {
+      return false;
+   }
+   switch(protocol) {
+   case TargetProtocol::None:
+      return true;
+   case TargetProtocol::Swd:
+   case TargetProtocol::RvSwd:
+      return adapter.slot == 4 || adapter.slot == 5;
+   case TargetProtocol::Jtag:
+      return adapter.slot == 1 || adapter.slot == 4 || adapter.slot == 5;
+   case TargetProtocol::Avr:
+      return adapter.slot == 1;
+   }
+   return false;
+}
 
 constexpr const char *nameOf(TargetProtocol protocol) {
    switch(protocol) {
+   case TargetProtocol::None:
+      return "none";
    case TargetProtocol::Swd:
       return "SWD";
    case TargetProtocol::Jtag:
       return "JTAG";
    case TargetProtocol::RvSwd:
       return "RISC-V wire";
-   case TargetProtocol::AvrIsp:
-      return "AVR ISP";
-   case TargetProtocol::DebugWire:
-      return "debugWIRE";
+   case TargetProtocol::Avr:
+      return "AVR";
    }
    return "";
-}
-
-// True when the adapter has a connector for the protocol: slot 1 (AVR JTAG
-// and ISP) has JTAG, ISP and debugWIRE. Slot 4 (Arm) and slot 5 (pin header)
-// have SWD, JTAG and the RISC-V wire.
-constexpr bool adapterMatches(TargetProtocol protocol, IdReading adapter) {
-   if(adapter.kind != IdKind::Slot) {
-      return false;
-   }
-   switch(protocol) {
-   case TargetProtocol::Swd:
-   case TargetProtocol::RvSwd:
-      return adapter.slot == 4 || adapter.slot == 5;
-   case TargetProtocol::Jtag:
-      return adapter.slot == 1 || adapter.slot == 4 || adapter.slot == 5;
-   case TargetProtocol::AvrIsp:
-   case TargetProtocol::DebugWire:
-      return adapter.slot == 1;
-   }
-   return false;
 }
 
 // The VPP rule (decision D2): VPP only on slot 8 (AVR high voltage) and
