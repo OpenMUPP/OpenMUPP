@@ -105,13 +105,15 @@ This function does these steps:
    The STM32H5 runs at 250 MHz, with the instruction cache on.
    On the CH32V307, `SystemInit()` of ch32v00x-system already set 144 MHz in `os_startup_initialize_hardware_early()`.
    The function only reads the clock source: the PLL means that the crystal runs.
-2. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
+2. On the CH32V307, it resets USBFS and turns off its clock, so PA11 and PA12 are free for the board.
+   The firmware uses only the USB high-speed port.
+3. It sets the debug port (SWJ) of the dongle MCU from `board::swjConfig()`.
    The CH32V307 skips this step, so SWD stays on.
    A CH32V307 board must not use PA13 and PA14 (`isValid()`).
    The Mini disables the debug port. A debug probe can then connect only under reset.
    With `MUPP_DEBUG_SWD` (default in a `Debug` build), SWD stays on and JTAG is off.
    Then a debug probe can run and step the firmware.
-3. It puts the board pins into a safe state:
+4. It puts the board pins into a safe state:
    - All LEDs are off, but the power LED is on. The main loop then drives the LEDs (see below).
    - The USB pull-up is off, so the host does not see the device.
    - The target power is off (the switch pin floats).

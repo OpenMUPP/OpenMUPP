@@ -25,6 +25,21 @@ namespace {
 
 bool clockFromCrystal = false;
 
+#if defined(CH32V30x_D8C)
+// RCC bits that ch32v30x.h does not define (CH32FV2x_V3xRM 3.4.6,
+// 3.4.11): the clock enable and the reset of USBFS (USBOTG_FS).
+constexpr uint32_t rccOtgFs = 1ul << 12; // RCC_AHBPCENR, RCC_AHBRSTR
+
+// USBFS off: the firmware uses USBHS, and a board can use the USBFS pins
+// PA11 and PA12 (board::reservedPins()). The reset also releases the pins
+// when a bootloader used USBFS.
+void disableUsbFs() {
+   RCC->AHBRSTR |= rccOtgFs;
+   RCC->AHBRSTR &= ~rccOtgFs;
+   RCC->AHBPCENR &= ~rccOtgFs;
+}
+#endif
+
 void configureClocks() {
 #if defined(STM32F1)
    // SYSCLK 72 MHz, USB 48 MHz. On failure the clock stays on HSI.
@@ -117,6 +132,9 @@ void os_startup_initialize_hardware() {
    boot::startRomBootloaderOnRequest();
 #endif
    configureClocks();
+#if defined(CH32V30x_D8C)
+   disableUsbFs();
+#endif
 
    // Set the debug port before the pins: the JTAG-DP and the SW-DP own
    // their pins (PA13-PA15, PB3, PB4) until SWJ_CFG releases them. The
