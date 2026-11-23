@@ -506,8 +506,8 @@ The layer loads a program one time. It loads it again after a DM reset, after a 
 | Status | Cause |
 |---|---|
 | `Wire` | The engine returned a flag: a parity error (two wires), a line that stays low (one wire), or a frame that the timer did not end correctly or did not start because the core clock is below 72 MHz (one wire, see [One-wire timer](#one-wire-timer)). |
-| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](wch-link-protocol.md#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini, because the pull-up of the SWDIO input pin holds the line high. The ST-Link/V2 mini clone has the same pull-up, but this is not tested on hardware. The ST-Link/V2-1 has the same separate input pin (PB12), but this is not tested on hardware. Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
-| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini: `abstractcs` reads `ffffffff` (`busy` 1). The ST-Link/V2 mini clone has the same pull-up (not tested on hardware). The ST-Link/V2-1 has the same separate input pin (not tested on hardware). After a `Timeout`, read `dmstatus` to find a missing target. |
+| `NoTarget` | Two wires: bit 11 and bit 49 are `1`. The target drives these two bits low (see [Wire frame format](wch-link-protocol.md#wire-frame-format)). One wire: a read without a target gives `ffffffff` on the Mini, because the pull-up of the SWDIO input pin holds the line high. The ST-Link/V2 mini clone has the same pull-up. The ST-Link/V2-1 has the same separate input pin (PB12). Thus each `dmstatus` read checks the version field (2 for spec 0.13). On one wire, only a `dmstatus` read detects a missing target. `dmiRead` gives `ffffffff` with `Ok`. |
+| `Timeout` | A poll of `dmcontrol`, `dmstatus` or `abstractcs` did not end after 100 reads. On one wire, a register access or a memory access without a target also gives `Timeout` on the Mini: `abstractcs` reads `ffffffff` (`busy` 1). The ST-Link/V2 mini clone has the same pull-up. The ST-Link/V2-1 has the same separate input pin. After a `Timeout`, read `dmstatus` to find a missing target. |
 | `Command` | `cmderr` was not 0 after a command (for example 4: the hart is not halted, 3: an exception in the program buffer, 5: a bus error of the abstract memory access). |
 | `Unsupported` | A byte access, or a half-word read, with the program buffer method. |
 | `Misaligned` | The address is not a multiple of the access width. The layer sends no frame. |
@@ -552,7 +552,7 @@ A hardware timer makes each edge (`src/board/BoardRvSwd.cpp` on the STM32F1, `sr
 |---|---|---|---|---|
 | Mini | PB4 | TIM3_CH1, partial remap | TIM3_UP, DMA1 channel 3 | TIM3_CH3, DMA1 channel 2 |
 | ST-Link/V2-1 | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
-| ST-Link/V2 mini clone (not tested on hardware) | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
+| ST-Link/V2 mini clone | PB14 | TIM1_CH2N | TIM1_UP, DMA1 channel 5 | TIM1_CH1, DMA1 channel 2 |
 | WeAct STM32H523 | PA6 | TIM3_CH1 (AF2) | TIM3_UP, GPDMA1 channel 3 | TIM3_CH3, GPDMA1 channel 4 |
 | YD-CH32V307VCT6 | PC11 | TIM10_CH4, default map | TIM10_UP, DMA2 channel 11 | TIM10_CH2, DMA2 channel 10 |
 

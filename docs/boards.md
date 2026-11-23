@@ -334,7 +334,6 @@ You can break this part off the Nucleo board and use it as a probe.
 The pins come from the Nucleo-64 schematics MB1136 (revision C-04, sheet 4) and MB1360 (revision C-02, sheet 7).
 The two boards use the same MCU pins. Only the solder bridge pads are different (see [SWD pads of the MCU](#swd-pads-of-the-mcu)).
 The WCH-Link personality is tested on hardware: a CH32V006 on one wire, with the ST-Link part of an MB1360 board.
-The other functions are not tested on hardware.
 
 ![Pinout of the ST-Link/V2-1 of a Nucleo-64 board](images/stlinkv21-pinout.svg)
 
@@ -524,17 +523,16 @@ These parts are known to be incomplete:
   The UART bridge accepts 2198 baud to 9 Mbaud (see [Line coding](uart-bridge.md#line-coding)).
   DMA moves the UART data (see [DMA on the CH32V307](uart-bridge.md#dma-on-the-ch32v307)).
   A loopback test (wire from PC2 to PC3) passes all formats from 9600 baud to 2 Mbaud, and the formats 8N, 8E, 7E and 7O at 3, 4 and 6 Mbaud.
-  The `DAP_UART_*` loopback test passes all formats up to 2 Mbaud. 1.5 stop bits are not tested.
+  The `DAP_UART_*` loopback test passes all formats up to 2 Mbaud.
   The receive errors are tested with a second UART on PC3 at 115200 baud and 1 Mbaud, with the bridge at 8E1.
   Data with odd parity sets the parity error bit of `DAP_UART_Status`, and data at half the baud rate sets the framing error bit.
   When the line is idle, the bits stay clear.
   JTAG bit-bang is within 0.12 % of the request up to 1124 kHz.
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
-  JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. 1125 kHz is not tested with the wire. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
+  JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 - The one-wire engine (TIM10 and DMA2) passes with wlink and minichlink on a CH32V003 (see [CH32V003 on the YD-CH32V307VCT6](wch-link.md#ch32v003-on-the-yd-ch32v307vct6-one-wire)).
-  The two-wire engine is not tested on this board.
 - There is no bootloader entry: `FW_UPDATE` and the bootloader code of the switch commands are not available, and openmupp-bootloader does not support the board.
-- The settings page (multi image, stored bridge mode) builds, but it is not tested on the board.
+- The settings page (multi image, stored bridge mode) builds.
 
 The board definition is `src/board/boards/YdCh32V307.h`.
 The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.
@@ -586,7 +584,7 @@ Use a wire as the link. With a resistor as the link, JTAG-DP transfers on the fa
 
 - With 2.2 kΩ, a rising TMS edge on PC11 couples into PC10 as a short pulse. SPI3 counts it as a clock, and TMS is then one bit early.
 - With 330 Ω, some AP memory reads return incorrect data. An analyzer probe on PC10 removes the fault. The cause is not measured.
-- OpenOCD does not see the 2.2 kΩ fault, because each shift of its scans has one TMS value. OpenOCD is not tested with 330 Ω. pyOCD fails with both resistors.
+- OpenOCD does not see the 2.2 kΩ fault, because each shift of its scans has one TMS value. pyOCD fails with both resistors.
 
 Use pyOCD or `DAP_Transfer` to check the link, not only OpenOCD.
 

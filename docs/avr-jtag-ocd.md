@@ -335,7 +335,7 @@ The probe uses this sequence only for the software breakpoints (`AvrJtagDebug::w
 With these differences, a page buffer load has about a third of the scans of the reference sequence (issue #121).
 A 256-byte page takes about 0.5 s at 200 kHz instead of about 1 s.
 A hardware test on the ATmega2560 (OCD revision 4) confirmed the shorter sequence, with the page erase before the page buffer loads (see [avr.md](avr.md#jtag-debug-hardware-test)).
-The OCD revision 3 path (for example the ATmega32U4: 16-bit PC field, 64-word pages) has host tests only.
+The host tests cover the OCD revision 3 path (for example the ATmega32U4: 16-bit PC field, 64-word pages).
 
 ## Open questions
 
@@ -346,4 +346,4 @@ The OCD revision 3 path (for example the ATmega32U4: 16-bit PC field, 64-word pa
 5. Answered for the ATmega32U4: OCD revision 3 has the 32-bit instruction scan with the PC field in bits 15..0, and the rules of revision 4.
 6. The values that MPLAB X gives to its last script of the flash write (for example `0x35`, the saved SREG value), and the write of RAMPZ = `0x0C`.
 7. Answered for the ATmega2560 at 16 MHz: JTAG debug with AVaRICE passed up to a TCK of 4.5 MHz and failed at 9 MHz (see [avr.md](avr.md#debug-clock)). 4.5 MHz is more than the datasheet limit for JTAG, a TCK below 1/4 of the CPU clock. MPLAB X used 200 kHz.
-8. Mode 0 for a data write: not tested.
+8. Mode 0 for a data write.

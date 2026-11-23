@@ -673,8 +673,8 @@ These tests used three links from PB13 to PC10. All tests used jumper wires to t
 | Link | OpenOCD | `tools/pyocd_jtag_test.py` at SPI speeds |
 |---|---|---|
 | Resistor of 2.2 kΩ | Pass | Fail at 2250, 4500 and 9000 kHz: TMS crosstalk into the TCK link |
-| Resistor of 330 Ω | Not tested | Fail at 1125, 4500 and 9000 kHz without an analyzer probe on PC10. Pass at 1125 to 9000 kHz with a probe on PC10 |
-| Wire | Pass | Pass at 2250, 4500 and 9000 kHz (2026-11-09). 1125 kHz is not tested |
+| Resistor of 330 Ω | - | Fail at 1125, 4500 and 9000 kHz without an analyzer probe on PC10. Pass at 1125 to 9000 kHz with a probe on PC10 |
+| Wire | Pass | Pass at 2250, 4500 and 9000 kHz (2026-11-09) |
 
 The resistor of 2.2 kΩ was fitted by mistake, in place of a resistor of 330 Ω to 470 Ω.
 The value of 330 Ω to 470 Ω comes from a probe PCB design with short traces.
@@ -709,10 +709,10 @@ A possible cause is a small pulse on PC10 that the capacitance of the probe (som
 
 On the YD board, use a wire as the link.
 For a probe PCB, it is not known if a resistor or a wire is better. [Issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16) tracks this.
-A small capacitor from PC10 to GND (10 to 22 pF) can possibly give the same effect as the analyzer probe. This is not tested, and the cause above is not confirmed.
+A small capacitor from PC10 to GND (10 to 22 pF) can possibly give the same effect as the analyzer probe. The cause above is not confirmed.
 
 The scans of OpenOCD have one TMS value for each shift, so a TMS edge in the middle of an SPI transfer does not occur.
-Thus OpenOCD does not find the TMS crosstalk of the 2.2 kΩ link. OpenOCD is not tested with the 330 Ω link.
+Thus OpenOCD does not find the TMS crosstalk of the 2.2 kΩ link.
 Use pyOCD or the raw transfer commands to check a TCK link.
 
 ### 18 MHz

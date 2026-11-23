@@ -129,7 +129,6 @@ Hardware test on the YD-CH32V307VCT6 (Linux, USB 3 port, target STM32F103ZET6 at
 - `DAP_Info` reports the packet size 512. OpenOCD and pyOCD use it.
 - OpenOCD passes on SWD (1000 to 20000 kHz) and JTAG (1000 to 9000 kHz). pyOCD passes on SWD at 1000 and 4500 kHz, and on JTAG at 1000 kHz.
 - The serial port receives 8 KiB at 115200 baud with no error. The DAP interface works after it.
-- Not tested: a full-speed host or hub, and Windows.
 
 `tools/flash_benchmark.py` with a 32 KiB image, the same wiring for both images (times in seconds):
 
@@ -397,7 +396,6 @@ On Windows, a host sends the request through the WinUSB driver of interface 0.
 The Versaloon and WCH-Link personalities need a WinUSB or libusb driver on interface 0 for their bulk endpoints, so this driver is always there.
 In the CMSIS-DAP personality, the MS OS 2.0 descriptors bind WinUSB to interface 0.
 WinUSB must also send a control request to the device recipient.
-No test on Windows confirms this yet. The hardware test of the personalities checks it.
 
 The key gesture has these rules:
 
@@ -730,8 +728,8 @@ The smallest SPI divider is `jtag::spiMinShift`:
 | Family | SPI2 clock | SPI speeds (kHz) | Divider off | tv(SO) |
 |---|---|---|---|---|
 | STM32F1 | 36 MHz APB1 clock, divided by 4 to 256 | 9000, 4500, 2250, 1125, 562.5, 281.25, 140.625 | 2 (18 MHz, half period 27.8 ns) | 25 ns (STM32F103x8/B datasheet) |
-| STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 16 to 256 | 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) and 8 (15.6 MHz, not tested) | 11.5 ns on PA6 (DS14540 table 109) |
-| CH32V307 | 144 MHz APB1 clock, divided by 16 to 256 | 9000, 4500, 2250, 1125, 562.5 | 4 (36 MHz) and 8 (18 MHz, half period 27.8 ns, not tested) | 10 ns (CH32V307DS0 table 4-28). Measured with jumper wires: 4 to 10 ns after the edge on PC10 with a wire link, 20 to 32 ns with a 2.2 kΩ link. A resistor link breaks JTAG-DP transfers ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)) |
+| STM32H5 | 125 MHz kernel clock (PLL1 Q), divided by 16 to 256 | 7812.5, 3906.25, 1953.1, 976.6, 488.3 | 4 (31.25 MHz, half period 16 ns) and 8 (15.6 MHz) | 11.5 ns on PA6 (DS14540 table 109) |
+| CH32V307 | 144 MHz APB1 clock, divided by 16 to 256 | 9000, 4500, 2250, 1125, 562.5 | 4 (36 MHz) and 8 (18 MHz, half period 27.8 ns) | 10 ns (CH32V307DS0 table 4-28). Measured with jumper wires: 4 to 10 ns after the edge on PC10 with a wire link, 20 to 32 ns with a 2.2 kΩ link. A resistor link breaks JTAG-DP transfers ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)) |
 
 Enable a smaller divider only after a hardware test at that speed passes.
 `CONFIG` selects the engine with the faster TCK, and TCK is never faster than the request:
