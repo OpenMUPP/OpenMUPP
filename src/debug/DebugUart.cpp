@@ -41,13 +41,14 @@ void DebugUart::start() {
    RCC->APB2PCENR |= RCC_IOPDEN;
    RCC->APB1PCENR |= RCC_UART5EN;
    Rcc::enableDMA2Clock();
-   board::gpioPin(pins.tx)
-   .configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::None, hw::GpioPin::Speed::High);
+   board::gpioPin(pins.tx).configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull,
+                                     hw::GpioPin::Pull::None, hw::GpioPin::Speed::High);
    board::gpioPin(pins.rx).configure(hw::GpioPin::Mode::Input, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::Up);
 
    const Dma::Channel dma = txDma();
    dma.disable();
-   dma.configure(const_cast<uint16_t *>(&UART5->DATAR), nullptr, Dma::DataSize::Size8Bits, Dma::Direction::MemoryToPeripheral, true, false);
+   dma.configure(const_cast<uint16_t *>(&UART5->DATAR), nullptr, Dma::DataSize::Size8Bits,
+                 Dma::Direction::MemoryToPeripheral, true, false);
    dma.setPriority(Dma::ChannelPriority::low);
    dma.setTransferCount(0);
 

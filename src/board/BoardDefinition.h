@@ -542,8 +542,8 @@ constexpr bool isValid(const Definition &def) {
       }
    }
    // UART5 of the CH32V307 with its default pins (CH32FV2x_V3xRM table 10-30)
-   if(def.debugUart && (def.family != Family::Ch32V30x || def.debugUart->usart != 5 || def.debugUart->tx != Pin{ Port::C, 12 } ||
-                        def.debugUart->rx != Pin{ Port::D, 2 })) {
+   if(def.debugUart && (def.family != Family::Ch32V30x || def.debugUart->usart != 5 ||
+                        def.debugUart->tx != Pin{ Port::C, 12 } || def.debugUart->rx != Pin{ Port::D, 2 })) {
       return false;
    }
    auto isSense = [&](const VrefSense &sense) { return adcChannelOf(def.family, sense.pin) && sense.divider != 0; };
