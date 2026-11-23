@@ -265,6 +265,8 @@ TEST_CASE("DAP JTAG: DAP_Connect and DAP_Disconnect") {
    Bench b;
    CHECK(b.run({ 0x02, 0x02 }) == V{ 0x02, 0x02 });
    CHECK(b.dap.connected());
+   CHECK(b.pins.inits == 0);
+   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x00 });
    CHECK(b.pins.inits == 1);
    CHECK(b.swd.inits == 0);
    // The clock after a reset of the debug unit: 1 MHz
@@ -273,9 +275,11 @@ TEST_CASE("DAP JTAG: DAP_Connect and DAP_Disconnect") {
    // SWD releases the JTAG pins first, and JTAG the SWD pins.
    CHECK(b.run({ 0x02, 0x01 }) == V{ 0x02, 0x01 });
    CHECK(b.pins.finis == 1);
+   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x00 });
    CHECK(b.swd.inits == 1);
    CHECK(b.run({ 0x02, 0x02 }) == V{ 0x02, 0x02 });
    CHECK(b.swd.finis == 1);
+   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x00 });
    CHECK(b.pins.inits == 2);
 
    CHECK(b.run({ 0x03 }) == V{ 0x03, 0x00 });
@@ -283,6 +287,7 @@ TEST_CASE("DAP JTAG: DAP_Connect and DAP_Disconnect") {
    CHECK(b.pins.finis == 2);
 
    CHECK(b.run({ 0x02, 0x02 }) == V{ 0x02, 0x02 });
+   CHECK(b.run({ 0x12, 0x08, 0xFF }) == V{ 0x12, 0x00 });
    b.dap.hostGone();
    CHECK_FALSE(b.dap.connected());
    CHECK(b.pins.finis == 3);

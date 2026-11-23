@@ -207,7 +207,6 @@ TEST_CASE("HID: the first interface that connects owns the target pins") {
    CHECK(bench.owner.owner() == protocol::PinClient::CmsisDapHid);
    // A second tool on the bulk interface gets port 0.
    CHECK(bench.bulkCommand({ 0x02, 0x01 }) == Bytes{ 0x02, 0x00 });
-   CHECK(bench.swd.inits == 1);
    // DAP_Disconnect on HID frees the pins.
    CHECK(bench.hidCommand({ 0x03 }) == report({ 0x03, 0x00 }));
    CHECK(bench.bulkCommand({ 0x02, 0x01 }) == Bytes{ 0x02, 0x01 });
@@ -215,6 +214,39 @@ TEST_CASE("HID: the first interface that connects owns the target pins") {
    // A bus reset: both hosts are gone, the pins are free.
    bench.enumerate();
    CHECK(bench.owner.owner() == protocol::PinClient::None);
+}
+
+TEST_CASE("HID: DAP_Connect does not drive the pins before the first transfer") {
+   HidBench bench;
+   bench.enumerate();
+   // avrdude: DAP_Connect, then its own commands (#45)
+   CHECK(bench.hidCommand({ 0x02, 0x01 }) == report({ 0x02, 0x01 }));
+   CHECK(bench.owner.owner() == protocol::PinClient::CmsisDapHid);
+   CHECK(bench.swd.inits == 0);
+   // DAP_Disconnect without a transfer: nothing to release.
+   CHECK(bench.hidCommand({ 0x03 }) == report({ 0x03, 0x00 }));
+   CHECK(bench.swd.inits == 0);
+   CHECK(bench.swd.finis == 0);
+   CHECK(bench.owner.owner() == protocol::PinClient::None);
+   // The first transfer drives the pins, once.
+   CHECK(bench.hidCommand({ 0x02, 0x01 }) == report({ 0x02, 0x01 }));
+   CHECK(bench.hidCommand({ 0x05, 0x00, 0x01, 0x02 })->at(2) == 0x01);
+   CHECK(bench.swd.inits == 1);
+   CHECK(bench.swd.transfers == 1);
+   CHECK(bench.hidCommand({ 0x05, 0x00, 0x01, 0x02 })->at(2) == 0x01);
+   CHECK(bench.swd.inits == 1);
+   // A second DAP_Connect releases the pins that were driven.
+   CHECK(bench.hidCommand({ 0x02, 0x01 }) == report({ 0x02, 0x01 }));
+   CHECK(bench.swd.finis == 1);
+   CHECK(bench.hidCommand({ 0x03 }) == report({ 0x03, 0x00 }));
+   CHECK(bench.swd.finis == 1);
+   // A bulk interface drives the pins at its first sequence.
+   CHECK(bench.bulkCommand({ 0x02, 0x01 }) == Bytes{ 0x02, 0x01 });
+   CHECK(bench.swd.inits == 1);
+   CHECK(bench.bulkCommand({ 0x12, 0x08, 0xFF }) == Bytes{ 0x12, 0x00 });
+   CHECK(bench.swd.inits == 2);
+   CHECK(bench.bulkCommand({ 0x03 }) == Bytes{ 0x03, 0x00 });
+   CHECK(bench.swd.finis == 2);
 }
 
 TEST_CASE("HID: no interface gets the pins while the board keeps them") {

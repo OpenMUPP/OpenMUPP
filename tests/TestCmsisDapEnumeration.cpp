@@ -327,6 +327,8 @@ TEST_CASE("A bus reset disconnects the target and drops the queue and the respon
    REQUIRE(bench.write({ 0x02, 0x01 }));
    CHECK(bench.read() == Bytes{ 0x02, 0x01 });
    CHECK(bench.processor.connected());
+   REQUIRE(bench.write({ 0x12, 0x08, 0xFF }));
+   CHECK(bench.read() == Bytes{ 0x12, 0x00 });
    CHECK(bench.swd.inits == 1);
 
    REQUIRE(bench.write({ 0x7E, 0x01, 0x00, 0xFE }));
@@ -366,6 +368,8 @@ TEST_CASE("A suspend disconnects the target") {
    REQUIRE(bench.write({ 0x02, 0x01 }));
    CHECK(bench.read() == Bytes{ 0x02, 0x01 });
    REQUIRE(bench.processor.connected());
+   REQUIRE(bench.write({ 0x12, 0x08, 0xFF }));
+   CHECK(bench.read() == Bytes{ 0x12, 0x00 });
 
    bench.controller().busSuspend();
    CHECK_FALSE(bench.processor.connected());

@@ -12,6 +12,7 @@
 #include "protocol/cmsisdap/RvDtmTap.h"
 #include "protocol/wchlink/WchLinkTarget.h"
 
+#include <algorithm>
 #include <doctest/doctest.h>
 
 #include <cstddef>
@@ -435,7 +436,9 @@ TEST_CASE("RV bridge: the processor reads the IDCODE of the TAP after the switch
    Dap d(&bridge, &bridge);
    // DAP_Connect to JTAG on the real port
    CHECK(d.run({ 0x02, 0x02 }) == Bytes{ 0x02, 0x02 });
-   REQUIRE(jtag.calls.back() == "init");
+   // The pins change at the first JTAG command.
+   CHECK(d.run({ 0x12, 0x08, 0xFF }) == Bytes{ 0x12, 0x00 });
+   REQUIRE(std::find(jtag.calls.begin(), jtag.calls.end(), "init") != jtag.calls.end());
    CHECK(d.run({ 0x81, 0x01 }) == Bytes{ 0x81, 0x00 });
    CHECK(jtag.calls.back() == "fini");
    // DAP_JTAG_Sequence: Test-Logic-Reset, Run-Test/Idle, Shift-DR, then
