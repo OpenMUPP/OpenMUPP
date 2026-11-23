@@ -4,6 +4,7 @@
 // with two switches.
 
 #include "FakePower.h"
+#include "FakeTargetGate.h"
 #include "protocol/TargetPower.h"
 
 #include <doctest/doctest.h>
@@ -175,4 +176,18 @@ TEST_CASE("Target supply: switchOn(Off) switches off") {
    CHECK(b.power.switchOn(Supply::Off) == Result::Ok);
    CHECK_FALSE(b.power.isOn());
    CHECK(b.hardware.selections == Selections{ Supply::V5, Supply::Off });
+}
+
+TEST_CASE("Target supply: the target gate refuses the switch-on and switches off") {
+   Bench b;
+   mupptest::FakeTargetGate gate;
+   b.power.setTargetGate(gate);
+   CHECK(b.power.switchOn(Supply::V3v3) == Result::Ok);
+   CHECK(gate.checks == std::vector{ protocol::TargetProtocol::None });
+   gate.allow = false;
+   CHECK(b.power.switchOn(Supply::V3v3) == Result::Refused);
+   CHECK_FALSE(b.power.isOn());
+   CHECK(b.hardware.selections == Selections{ Supply::V3v3, Supply::Off });
+   CHECK(b.power.switchOn(Supply::V5) == Result::Refused);
+   CHECK(b.hardware.selections.size() == 2);
 }

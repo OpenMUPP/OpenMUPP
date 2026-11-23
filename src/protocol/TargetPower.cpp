@@ -59,6 +59,10 @@ TargetPower::Result TargetPower::switchOn(Supply supply) {
       return Result::NotSupported;
    }
    takeHardwareFault();
+   if(gate_ != nullptr && !gate_->check(TargetProtocol::None)) {
+      switchOff();
+      return Result::Refused;
+   }
    if(supply_ == supply) {
       return Result::Ok;
    }
