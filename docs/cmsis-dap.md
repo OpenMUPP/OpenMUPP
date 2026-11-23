@@ -1028,7 +1028,7 @@ Thus connect the target, and switch on its supply, before the first JTAG command
 
 The detection runs after the `DAP_SWJ_Pins` commands that the host sends between `DAP_Connect` and its first JTAG command.
 With `connect_assert_srst` in OpenOCD, the host asserts SRST first. The detection then runs with SRST asserted.
-A JTAG chain or an SW-DP normally answers while the target is in reset. The behaviour of a WCH target with nRST on the probe is not known.
+A JTAG chain or an SW-DP normally answers while the target is in reset.
 
 - The detection uses the TCK of `DAP_SWJ_Clock`. The SWD step uses the SWD clock and the settings of the last `DAP_SWJ_Clock`, `DAP_SWD_Configure` and `DAP_TransferConfigure`.
 - The SWD step only runs when the JTAG step finds no chain.
