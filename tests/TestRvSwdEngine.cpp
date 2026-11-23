@@ -523,6 +523,44 @@ TEST_CASE("RVSWD one wire: the frame layout of the timer") {
    }
 }
 
+TEST_CASE("RVSWD one wire: the drive window of the SWDIO direction pin") {
+   // The lowest supported clock and the CH32V307 clock
+   for(const uint32_t hz : { rvswd::oneWireMinClockHz, 144'000'000u }) {
+      CAPTURE(hz);
+      const rvswd::OneWireTicks t = rvswd::oneWireTicks(hz);
+      const uint64_t read = (uint64_t{ 1u << 8 | 0x11u << 1 } << 32) | 0xFFFF'FFFFu;
+      const uint64_t write = (uint64_t{ 1u << 8 | 0x7Eu << 1 | 1u } << 32) | 0x5AA5'0400u;
+      const uint32_t n = rvswd::oneWireFrameBits;
+      const uint32_t head = rvswd::oneWireHeadBits;
+      for(const bool isRead : { true, false }) {
+         CAPTURE(isRead);
+         const uint64_t bits = isRead ? read : write;
+         const uint32_t readFrom = isRead ? head : n;
+         const rvswd::OneWireTimes times = rvswd::oneWireTimes(t, bits, n, readFrom);
+         uint32_t start = t.lead;
+         for(uint32_t i = 0; i < n; ++i) {
+            CAPTURE(i);
+            const rvswd::OneWireBit bit = rvswd::oneWireBit(t, bits, n, readFrom, i);
+            const uint32_t drive = rvswd::oneWireDriveTicks(t, bits, n, readFrom, i);
+            if(i >= readFrom) {
+               // Low first, then the line release at bit.low
+               CHECK(drive > 0);
+               CHECK(drive < bit.low);
+            } else if(isRead && i + 1 == readFrom) {
+               // After the rising edge, low before the switch to open drain
+               CHECK(drive > bit.low);
+               CHECK(start + drive < times.switchAt);
+            } else {
+               // The full bit: above each timer period (ATRLR + 1)
+               CHECK(drive == rvswd::oneWireDriveAlways);
+               CHECK(drive >= bit.period);
+            }
+            start += bit.period;
+         }
+      }
+   }
+}
+
 TEST_CASE("RVSWD one wire: a frame that the timer does not end gives frameFlag") {
    Bench bench(Wire::One);
    bench.pins.failOneWireFrame = true;

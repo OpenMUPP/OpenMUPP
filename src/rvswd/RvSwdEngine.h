@@ -233,6 +233,30 @@ constexpr OneWireBit oneWireBit(const OneWireTicks &t, uint64_t bits, uint32_t c
    return { low, low + (turnaround ? t.turnaroundHigh : t.high) };
 }
 
+// A board with a SWDIO level shifter (board::Shifters): the direction pin
+// comes from a second channel of the one-wire timer, in the same burst as
+// the line. oneWireDriveTicks() gives the ticks from the start of bit i in
+// which the direction pin is high (the shifter drives the target):
+// - Write bits: the full bit (oneWireDriveAlways, above each period).
+// - The bit before readFrom: until a quarter of its high level, before the
+//   switch to open drain at half of it (oneWireTimes()). Thus the
+//   direction pin goes low first, and then the MCU pin releases the line.
+// - Read bits: the low pulse less one tick. The direction pin goes low one
+//   tick before the line release. The rise comes with the falling edge of
+//   the low pulse, at the update event of the bit.
+inline constexpr uint32_t oneWireDriveAlways = 0xFFFF;
+
+constexpr uint32_t oneWireDriveTicks(const OneWireTicks &t, uint64_t bits, uint32_t count, uint32_t readFrom, uint32_t i) {
+   const OneWireBit bit = oneWireBit(t, bits, count, readFrom, i);
+   if(i >= readFrom) {
+      return bit.low - 1u;
+   }
+   if(readFrom < count && i + 1 == readFrom) {
+      return bit.low + t.high / 4u;
+   }
+   return oneWireDriveAlways;
+}
+
 // From the counter start (the start of the lead-in): the switch to open
 // drain, in the high level after bit readFrom-1 (0 without read bits), and
 // the end, after the last bit and before the sample compare of the end
