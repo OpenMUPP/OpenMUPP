@@ -116,6 +116,19 @@ Dma::Channel rxDma() {
 // The longest TX block. A shorter block gives its part of the tx ring back
 // earlier, so the main loop can fill it while the DMA sends.
 constexpr std::size_t maxTxBlock = 256;
+
+// UART_TX_DIR of a board with a TX shifter (single-wire mode)
+constexpr bool hasTxDir = board::current.shifters.has_value();
+
+void configureTxPin(bool uart) {
+   if(uart) {
+      board::gpioPin(uartPins.tx)
+      .configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::None, hw::GpioPin::Speed::High);
+   } else {
+      // The shifter drives the pin. The external pull-up (R53 on OpenMUPP v1) keeps it high while the shifter turns.
+      board::gpioPin(uartPins.tx).configure(hw::GpioPin::Mode::Input);
+   }
+}
 #endif
 
 constexpr hw::Usart::DataBits toUsart(DataBits dataBits) {
@@ -162,6 +175,28 @@ UartPort *UartPort::instance_ = nullptr;
 [[gnu::interrupt, gnu::flatten]] void UartPort::txInterruptEntry() {
    instance_->serviceTx();
 }
+
+[[gnu::interrupt, gnu::flatten]] void UartPort::uartInterruptEntry() {
+   instance_->serviceUart();
+}
+
+void UartPort::LinePins::driveTarget(bool on) {
+   if constexpr(hasTxDir) {
+      board::gpioPin(board::current.shifters->uartTxDir).write(on);
+   }
+}
+
+void UartPort::LinePins::connectTx(bool on) {
+   configureTxPin(on);
+}
+
+void UartPort::LinePins::enableReceiver(bool on) {
+   if(on) {
+      usart.enableRx();
+   } else {
+      usart.disableRx();
+   }
+}
 #endif
 
 UartPort::UartPort(Buffers &buffers)
@@ -173,7 +208,10 @@ void UartPort::start() {
    enableClock();
    // The TX pin idles high. The pull-up keeps an open RX pin at the idle
    // level, so it receives no noise.
-#if defined(STM32F1) || defined(__riscv)
+#if defined(__riscv)
+   configureTxPin(true);
+   board::gpioPin(uartPins.rx).configure(hw::GpioPin::Mode::Input, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::Up);
+#elif defined(STM32F1)
    board::gpioPin(uartPins.tx)
    .configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::None, hw::GpioPin::Speed::High);
    board::gpioPin(uartPins.rx).configure(hw::GpioPin::Mode::Input, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::Up);
@@ -209,7 +247,9 @@ void UartPort::start() {
    tx.enableTransferCompleteInterrupt();
    Interrupt::connectHandler(rxDmaIrq, &UartPort::rxInterruptEntry);
    Interrupt::connectHandler(txDmaIrq, &UartPort::txInterruptEntry);
-   for(const IRQn_Type irq : { rxDmaIrq, txDmaIrq }) {
+   // Only the TC interrupt of single-wire mode: the DMA moves the data.
+   Interrupt::connectHandler(peripheral.irq, &UartPort::uartInterruptEntry);
+   for(const IRQn_Type irq : { rxDmaIrq, txDmaIrq, peripheral.irq }) {
       NVIC_SetPriority(irq, hardware::uartIrqPriority);
       NVIC_ClearPendingIRQ(irq);
       NVIC_EnableIRQ(irq);
@@ -247,7 +287,21 @@ void UartPort::setFormat(const FrameFormat &format) {
 
 #if defined(__riscv)
 bool UartPort::isTxIdle() const {
-   return txLength_ == 0 && usart_.isTransferComplete();
+   // In single-wire mode also after the TC interrupt: the interrupt writes CTLR1, as setFormat() does.
+   return txLength_ == 0 && usart_.isTransferComplete() && !line_.sending();
+}
+
+void UartPort::setSingleWire(bool on) {
+   if constexpr(!hasTxDir) {
+      return;
+   }
+   Interrupt::CriticalSection cs;
+   const bool busy = txLength_ != 0 || !usart_.isTransferComplete();
+   line_.setSingleWire(on, busy);
+   if(line_.sending() && txLength_ == 0) {
+      // The last frame is in the shift register: TC ends the transmission.
+      usart_.enableTxCompleteInterrupt();
+   }
 }
 
 void UartPort::startTx() {
@@ -266,6 +320,10 @@ void UartPort::stopTx() {
       // The bytes that the DMA has written to the UART leave tx.
       buffers_.tx.commit_read(txLength_ - dma.getDataCount());
       txLength_ = 0;
+   }
+   if(line_.sending()) {
+      // The byte in the shift register still goes out: TC ends the transmission.
+      usart_.enableTxCompleteInterrupt();
    }
 }
 
@@ -355,21 +413,32 @@ void UartPort::serviceTx() {
       buffers_.tx.commit_read(txLength_);
       txLength_ = 0;
    }
-   if(!txEnabled_) {
-      return;
-   }
    std::size_t length = 0;
-   const uint8_t *data = buffers_.tx.read_ptr(length);
+   const uint8_t *data = txEnabled_ ? buffers_.tx.read_ptr(length) : nullptr;
    if(length == 0) {
+      if(line_.sending()) {
+         // No block follows: TC comes after the last stop bit.
+         usart_.enableTxCompleteInterrupt();
+      }
       return;
    }
    length = length < maxTxBlock ? length : maxTxBlock;
+   // The same priority as serviceUart(): no TC interrupt between these two lines.
+   usart_.disableTxCompleteInterrupt();
+   line_.txStart();
    // TC is set from the last block. isTxIdle() reads it after this block.
    usart_.clearStatusFlag(USART_STATR_TC);
    dma.setMemoryAddress(reinterpret_cast<uintptr_t>(data));
    dma.setTransferCount(static_cast<uint16_t>(length));
    txLength_ = length;
    dma.enable();
+}
+
+void UartPort::serviceUart() {
+   if(usart_.isTxCompleteInterruptEnabled() && usart_.isTransferComplete()) {
+      usart_.disableTxCompleteInterrupt();
+      line_.txComplete();
+   }
 }
 #else
 bool UartPort::isTxIdle() const {

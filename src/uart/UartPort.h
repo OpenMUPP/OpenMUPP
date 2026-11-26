@@ -22,6 +22,11 @@
 // - TX: startTx() requests the interrupt of the TX channel. The interrupt
 //   gives the DMA the next contiguous block of tx, and at the end of the
 //   block it commits the block and starts the next one.
+// - Single-wire mode (setSingleWire(), only on a board with UART_TX_DIR):
+//   uart/SingleWireLine.h sets the pins. The TX channel interrupt calls
+//   txStart() before each block. After the last block, it enables the
+//   transfer complete interrupt (TC) of UART7, and that interrupt calls
+//   txComplete() after the last stop bit.
 
 #include <array>
 #include <cstddef>
@@ -29,6 +34,7 @@
 #include <peripherals/Usart.h>
 
 #include "uart/FrameFormat.h"
+#include "uart/SingleWireLine.h"
 #include "uart/UartBridge.h"
 
 namespace uart {
@@ -62,6 +68,16 @@ class UartPort {
    // before the main loop reads rx. Empty without RX DMA (STM32).
    void pollRx();
 
+#if defined(__riscv)
+   // Single-wire mode on the board pin UART_TX_DIR (uart/SingleWireLine.h).
+   // Only on a board with a TX shifter (Definition::shifters). A change
+   // while the UART sends takes effect after the last stop bit.
+   void setSingleWire(bool on);
+   [[nodiscard]] bool singleWire() const {
+      return line_.singleWire();
+   }
+#endif
+
    private:
 #if defined(__riscv)
    // Size of the circular RX DMA buffer. The half-transfer interrupt comes
@@ -71,11 +87,21 @@ class UartPort {
    // baud) loses data: serviceRx() counts one overrun for the lap.
    static constexpr std::size_t rxDmaSize = 256;
 
+   // The pins of SingleWireLine (UartPort.cpp)
+   struct LinePins {
+      hw::Usart &usart;
+      void driveTarget(bool on);
+      void connectTx(bool on);
+      void enableReceiver(bool on);
+   };
+
    void serviceRx();
    void serviceTx();
-   // The direct interrupt entries of the DMA channels (see UartPort.cpp)
+   void serviceUart();
+   // The direct interrupt entries of the DMA channels and of UART7 (see UartPort.cpp)
    static void rxInterruptEntry();
    static void txInterruptEntry();
+   static void uartInterruptEntry();
    static UartPort *instance_;
 
    std::array<uint8_t, rxDmaSize> rxDma_{};
@@ -96,6 +122,10 @@ class UartPort {
 
    hw::Usart usart_;
    Buffers &buffers_;
+#if defined(__riscv)
+   LinePins linePins_{ usart_ };
+   SingleWireLine<LinePins> line_{ linePins_ };
+#endif
 };
 
 } // namespace uart
