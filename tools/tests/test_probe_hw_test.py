@@ -298,9 +298,6 @@ class ProbeRsVerdictTest(unittest.TestCase):
                          [("probe-rs jtag 1333 kHz", hw.PASS), ("probe-rs jtag 1334 kHz", hw.SKIP)])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class ScriptPathTest(unittest.TestCase):
     """The scripts and files that the runner starts exist: the unit tests mock the runs."""
@@ -317,3 +314,7 @@ class ScriptPathTest(unittest.TestCase):
         self.assertIn("pyocd_jtag_test.py", scripts)
         for path in [os.path.join(hw.TOOLS_DIR, p) for p in tools] + [os.path.join(hw.HWTEST_DIR, p) for p in scripts]:
             self.assertTrue(os.path.isfile(path), path)
+
+
+if __name__ == "__main__":
+    unittest.main()
