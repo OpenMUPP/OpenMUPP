@@ -18,6 +18,9 @@
 //     board with a sense;
 //   - 5 V is selected and the input of the 5 V switch is below
 //     min5vInputMillivolts, or cannot be measured: the USB supply is weak;
+//   - 5 V is selected and the input of the 5 V switch is above
+//     max5vInputMillivolts: the switch would pass the overvoltage to the
+//     target;
 //   - the target gate refuses (setTargetGate(), protocol/TargetGate.h). The
 //     supply then also goes off when it is on. poll() also switches the
 //     supply off after a check of a protocol that the gate refused.
@@ -71,6 +74,9 @@ class TargetPower {
    // The lowest input of the 5 V switch for a switch-on. 4.4 V is the USB
    // minimum at a low-power device.
    static constexpr uint16_t min5vInputMillivolts = 4400;
+   // The highest input of the 5 V switch for a switch-on. 5.5 V is the
+   // USB-C maximum (vSafe5V) and the maximum of many 5 V targets.
+   static constexpr uint16_t max5vInputMillivolts = 5500;
 
    enum class Result : uint8_t {
       Ok,

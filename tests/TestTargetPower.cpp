@@ -52,10 +52,13 @@ TEST_CASE("Target supply: 5 V from off checks the target, then switches on and s
    CHECK(b.delay.delays[0].switchOn);
 }
 
-TEST_CASE("Target supply: 5 V is refused when the 5 V input is low or cannot be measured") {
+TEST_CASE("Target supply: 5 V is refused when the 5 V input is low, high or cannot be measured") {
    Bench b;
    SUBCASE("Low") {
       b.hardware.inputMv = TargetPower::min5vInputMillivolts - 1;
+   }
+   SUBCASE("High") {
+      b.hardware.inputMv = TargetPower::max5vInputMillivolts + 1;
    }
    SUBCASE("No measurement") {
       b.hardware.inputMv = std::nullopt;
@@ -65,18 +68,28 @@ TEST_CASE("Target supply: 5 V is refused when the 5 V input is low or cannot be 
    CHECK_FALSE(b.power.isOn());
 }
 
-TEST_CASE("Target supply: a low 5 V input keeps 3.3 V on") {
+TEST_CASE("Target supply: a low or high 5 V input keeps 3.3 V on") {
    Bench b;
    REQUIRE(b.power.switchOn(Supply::V3v3) == Result::Ok);
-   b.hardware.inputMv = 4000;
+   SUBCASE("Low") {
+      b.hardware.inputMv = 4000;
+   }
+   SUBCASE("High") {
+      b.hardware.inputMv = 5800;
+   }
    CHECK(b.power.switchOn(Supply::V5) == Result::Refused);
    CHECK(b.power.supply() == Supply::V3v3);
    CHECK(b.hardware.selections == Selections{ Supply::V3v3 });
 }
 
-TEST_CASE("Target supply: 5 V at the minimum input switches on") {
+TEST_CASE("Target supply: 5 V at the minimum or maximum input switches on") {
    Bench b;
-   b.hardware.inputMv = TargetPower::min5vInputMillivolts;
+   SUBCASE("Minimum") {
+      b.hardware.inputMv = TargetPower::min5vInputMillivolts;
+   }
+   SUBCASE("Maximum") {
+      b.hardware.inputMv = TargetPower::max5vInputMillivolts;
+   }
    CHECK(b.power.switchOn(Supply::V5) == Result::Ok);
 }
 
