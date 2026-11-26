@@ -25,7 +25,8 @@ class UsbStack;
 
 namespace cmsisdap {
 class DapUart;
-}
+class UartWire;
+} // namespace cmsisdap
 
 namespace uart {
 
@@ -43,6 +44,10 @@ void pollBridge();
 // The UART for the DAP_UART_* commands of the CMSIS-DAP processor. Valid
 // at any time, also before startBridge(). Until then it has no owner.
 cmsisdap::DapUart *dapUart();
+
+// The wire mode of the UART for ID_DAP_Vendor6 (uart/SingleWireLine.h).
+// nullptr on a board without UART_TX_DIR. Use it after startBridge().
+cmsisdap::UartWire *uartWire();
 #endif
 #else
 inline void startBridge(usb::UsbStack & /*usbStack*/) {
@@ -52,6 +57,10 @@ inline void pollBridge() {
 }
 
 inline cmsisdap::DapUart *dapUart() {
+   return nullptr;
+}
+
+inline cmsisdap::UartWire *uartWire() {
    return nullptr;
 }
 #endif

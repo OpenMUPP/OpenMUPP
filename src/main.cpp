@@ -422,6 +422,10 @@ void startDap() {
 #if defined(MUPP_CMSIS_DAP_AVR)
    dapHidProcessor.setVendorCommands(edbgTransport);
 #endif
+   // ID_DAP_Vendor6: only on a board with UART_TX_DIR
+   if(cmsisdap::UartWire *wire = uart::uartWire(); wire != nullptr) {
+      dapProcessor.setUartWire(*wire);
+   }
    if constexpr(hasTargetGate) {
       dapProcessor.setTargetGate(targetGate);
       dapProcessor.setIdSource(dapIdSource);

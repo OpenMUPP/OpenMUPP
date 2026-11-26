@@ -32,6 +32,7 @@
 //   0x1C DAP_SWO_Data           0x82 ID_DAP_Vendor2
 //                               0x83 ID_DAP_Vendor3
 //                               0x84 ID_DAP_Vendor4
+//                               0x86 ID_DAP_Vendor6
 //   0x1E DAP_SWO_ExtendedStatus
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
@@ -119,6 +120,12 @@
 //   DAP_ERROR (0xFF) when the ADC fails on the adapter ID: the adapter
 //   fields and allowed are then 0. Without an IdSource, the command
 //   replies ID_DAP_Invalid.
+// - ID_DAP_Vendor6 [0x86][op u8] -> [0x86][status u8][mode u8] sets the
+//   wire mode of the UART (UartWire, setUartWire()): op 0 normal (two
+//   wires), 1 single wire, 2 only read. The status is DAP_OK (0), or
+//   DAP_ERROR (0xFF) for another op. mode is the mode after the operation:
+//   0 normal, 1 single wire. hostGone() keeps the mode. Without a UartWire,
+//   the command replies ID_DAP_Invalid.
 // - With vendor commands (setVendorCommands()), 0x80-0x82 go to that
 //   object instead (the EDBG commands AVR_CMD, AVR_RSP, AVR_EVT on the HID
 //   interface). They take the rest of the packet, so in a
@@ -277,6 +284,7 @@ inline constexpr uint8_t vendor1 = 0x81;
 inline constexpr uint8_t vendor2 = 0x82;
 inline constexpr uint8_t vendor3 = 0x83;
 inline constexpr uint8_t vendor4 = 0x84;
+inline constexpr uint8_t vendor6 = 0x86;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
 inline constexpr uint8_t invalid = 0xFF;
@@ -402,6 +410,16 @@ class IdSource {
 
    protected:
    ~IdSource() = default;
+};
+
+// The wire mode of the UART of ID_DAP_Vendor6 (uart/SingleWireLine.h)
+class UartWire {
+   public:
+   virtual void setSingleWire(bool on) = 0;
+   [[nodiscard]] virtual bool singleWire() const = 0;
+
+   protected:
+   ~UartWire() = default;
 };
 
 // The vendor commands 0x80-0x82 of one processor (setVendorCommands())
@@ -537,6 +555,12 @@ class Processor final : private TransferAbort {
       idSource_ = &source;
    }
 
+   // Gives ID_DAP_Vendor6 to `wire`, which must outlive the processor.
+   // Call it before the first packet.
+   void setUartWire(UartWire &wire) {
+      uartWire_ = &wire;
+   }
+
    // Sends the commands 0x80-0x82 to `vendor`, which must outlive the
    // processor. Call it before the first packet.
    void setVendorCommands(VendorCommands &vendor) {
@@ -607,6 +631,7 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool targetPower(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool vppSettingCommand(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool idCommand(PacketWriter &out);
+   [[nodiscard]] bool uartWireCommand(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartCommand(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool swoCommand(uint8_t id, PacketReader &in, PacketWriter &out);
@@ -646,6 +671,7 @@ class Processor final : private TransferAbort {
    protocol::TargetGate *gate_{ nullptr };
    VppSetting *vppSetting_{ nullptr };
    IdSource *idSource_{ nullptr };
+   UartWire *uartWire_{ nullptr };
    DapSwo *swo_{ nullptr };
    bool swoStreaming_{ false };
    protocol::TargetPinOwner *pinOwner_{ nullptr };

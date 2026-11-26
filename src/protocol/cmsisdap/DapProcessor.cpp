@@ -472,6 +472,12 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       }
       out.u8(command::invalid);
       return true;
+   case command::vendor6:
+      if(uartWire_ != nullptr) {
+         return uartWireCommand(in, out);
+      }
+      out.u8(command::invalid);
+      return true;
    case command::executeCommands:
    case command::queueCommands:
       if(!nested) {
@@ -654,6 +660,25 @@ bool Processor::idCommand(PacketWriter &out) {
    out.u8(read ? report.adapterKind : 0);
    out.u8(read ? report.adapterSlot : 0);
    out.u8(read && report.allowed ? 1 : 0);
+   return true;
+}
+
+// [0x86][op u8] -> [0x86][status u8][mode u8]
+bool Processor::uartWireCommand(PacketReader &in, PacketWriter &out) {
+   constexpr uint8_t opRead = 2;
+   const uint8_t op = in.u8();
+   if(!in.ok() || out.room() < 3) {
+      return false;
+   }
+   uint8_t status = statusOk;
+   if(op < opRead) {
+      uartWire_->setSingleWire(op == 1);
+   } else if(op != opRead) {
+      status = statusError;
+   }
+   out.u8(command::vendor6);
+   out.u8(status);
+   out.u8(uartWire_->singleWire() ? 1 : 0);
    return true;
 }
 

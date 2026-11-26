@@ -46,6 +46,7 @@ add_executable(mupp-tests
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
+        TestSingleWireLine.cpp
         TestSwoRing.cpp
         TestManchesterDecoder.cpp
         TestSharedDmaChannel.cpp
@@ -81,6 +82,7 @@ add_executable(mupp-tests
         TestDapTargetPower.cpp
         TestDapIdReport.cpp
         TestDapVppSetting.cpp
+        TestDapUartWire.cpp
         TestTargetPower.cpp
         TestAvrIsp.cpp
         TestAvrIspScope.cpp
