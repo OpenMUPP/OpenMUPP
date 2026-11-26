@@ -38,6 +38,11 @@
 
 #include "protocol/cmsisdap/BitBangDapSwd.h"
 #include "protocol/cmsisdap/DapProcessor.h"
+#if defined(CH32V30x_D8C)
+#include "board/BoardVpp.h"
+#include "protocol/Vpp.h"
+#include "protocol/cmsisdap/DapVpp.h"
+#endif
 #if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
 #include "board/BoardRvSwd.h"
 #include "protocol/cmsisdap/RvBridge.h"
@@ -315,6 +320,44 @@ class VppSettingFlash final : public cmsisdap::VppSetting {
 VppSettingFlash dapVppSetting;
 cmsisdap::RvBridge dapRvBridge{ boardJtag, dapSwd, dapRvTap, dapRvModeStore, BridgeModeFlash::load() };
 #endif
+
+// VPP on J4 pin 19 (protocol/Vpp.h) for ID_DAP_Vendor5. Only a board with a
+// vpp block and a target gate has it. Only the CH32V307 has the DAC code
+// (board/BoardVpp.cpp), and the STM32F1 images have no room for it.
+#if defined(CH32V30x_D8C)
+constexpr bool hasVpp = board::current.vpp.has_value() && hasTargetGate;
+
+// The setting "VPP without an adapter" (ID_DAP_Vendor3): off in an image
+// without the settings page of the bridge
+bool vppWithoutAdapter() {
+#if defined(MUPP_CMSIS_DAP_RV_BRIDGE)
+   return dapVppSetting.load();
+#else
+   return false;
+#endif
+}
+
+// The VPP rule of the target gate (board/BoardIdSense.h). A switch-on is a
+// connect without a protocol: it reads the adapter ID again.
+class GateVpp final : public protocol::VppGate {
+   public:
+   [[nodiscard]] std::optional<uint16_t> check() override {
+      if(!targetGate.check(protocol::TargetProtocol::None) || !targetGate.isVppAllowed(vppWithoutAdapter())) {
+         LOG_ERROR(debug::appLog, "VPP: the adapter does not allow VPP");
+         return std::nullopt;
+      }
+      return board::vppLimitMillivolts(targetGate.adapter());
+   }
+   [[nodiscard]] bool isAllowed() const override {
+      return targetGate.isVppAllowed(vppWithoutAdapter());
+   }
+};
+
+GateVpp dapVppGate;
+board::BoardVpp boardVpp{ boardPower };
+protocol::Vpp dapVpp{ boardVpp, busyWaitDelay, dapVppGate };
+cmsisdap::DapVpp dapVppCommand{ dapVpp };
+#endif
 const cmsisdap::DeviceInfo dapInfo{
    .vendor = dapVendor,
    .product = dapProduct,
@@ -426,6 +469,11 @@ void startDap() {
    if(cmsisdap::UartWire *wire = uart::uartWire(); wire != nullptr) {
       dapProcessor.setUartWire(*wire);
    }
+#if defined(CH32V30x_D8C)
+   if constexpr(hasVpp) {
+      dapProcessor.setVpp(dapVppCommand);
+   }
+#endif
    if constexpr(hasTargetGate) {
       dapProcessor.setTargetGate(targetGate);
       dapProcessor.setIdSource(dapIdSource);
@@ -620,6 +668,29 @@ void beforeUsbPoll(uint64_t nowMs) {
    pollReset(nowMs);
 }
 
+uint32_t probeErrorCount();
+
+#if defined(MUPP_WITH_CMSIS_DAP) && defined(CH32V30x_D8C)
+// VPP goes off when the VPP rule does not allow it any more, at a short or
+// an overvoltage (protocol/Vpp.h), and at each probe error.
+void pollVpp(uint64_t nowMs) {
+   if constexpr(hasVpp) {
+      if(dapVpp.poll(nowMs)) {
+         LOG_ERROR(debug::appLog, "VPP: off: the VPP rule, a short on pin 19 or an overvoltage");
+      }
+      static uint32_t seenErrors = 0;
+      const uint32_t errors = probeErrorCount();
+      if(errors != seenErrors) {
+         seenErrors = errors;
+         if(dapVpp.isOn()) {
+            dapVpp.switchOff();
+            LOG_ERROR(debug::appLog, "VPP: off after a probe error");
+         }
+      }
+   }
+}
+#endif
+
 void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
 #if defined(MUPP_CMSIS_DAP_SWO)
    // The Manchester decoder (swo/SwoReceiver.h). The DMA interrupts of the
@@ -635,6 +706,9 @@ void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
       loggedFaults = targetPower.faultCount();
       LOG_ERROR(debug::appLog, "target power: a switch fault turned the supply off");
    }
+#endif
+#if defined(MUPP_WITH_CMSIS_DAP) && defined(CH32V30x_D8C)
+   pollVpp(nowMs);
 #endif
 }
 

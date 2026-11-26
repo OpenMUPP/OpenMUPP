@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Host control of the probe: the USB personality of a multi image
 (MUPP_PERSONALITIES), the bootloader, the RISC-V bridge, the target power,
-the wire mode of the UART, and the firmware version, the board revision and
-the adapter.
+VPP, the wire mode of the UART, and the firmware version, the board
+revision and the adapter.
 
 "switch" switches the personality or starts the bootloader:
 openmupp-bootloader on the STM32F1 boards, the ROM USB DFU on the STM32H5
@@ -67,6 +67,21 @@ rail has a short circuit or an overload. After "off", the rail can stay above
 The supply stays on after the script ends. See docs/cmsis-dap.md,
 "Target power".
 
+"vpp" sets VPP on J4 pin 19 of OpenMUPP v1 for the hardware test, switches
+it off, or reads the VPP senses. The script sends the vendor command
+ID_DAP_Vendor5 of the CMSIS-DAP personality on interface 0:
+
+    [0x85][0] off, [0x85][1][mV u16] on at mV, [0x85][2] only read
+    -> response [0x85][status][level mV u16][sense mV u16][sense2 mV u16],
+       0 = done, 1 = refused, 2 = no level in 2 s, 3 = short on pin 19
+
+The firmware accepts 5000 mV to 14700 mV. It refuses VPP when the adapter
+does not allow it: only slot 8 (12.5 V at most), slot 9 (13.5 V at most),
+and no adapter with the setting "VPP without an adapter" on. VPP stays on
+after the script ends, until "vpp off", a USB reset or a suspend of the
+dongle.
+See docs/cmsis-dap.md, "VPP control".
+
 "reset" resets the dongle: the switch request on EP0 with the reset code
 0xB1. Each personality of each image accepts it. The dongle starts again
 with its stored personality and bridge mode, and with the target supply and
@@ -116,6 +131,9 @@ Usage:
     python3 mupp_probe.py adapter
     python3 mupp_probe.py uart single
     python3 mupp_probe.py uart status
+    python3 mupp_probe.py vpp on 12000
+    python3 mupp_probe.py vpp off
+    python3 mupp_probe.py vpp status
     python3 mupp_probe.py reset --serial 0123456789AB
 
 A device with a known ID, but with strings that the tool cannot read, is
@@ -188,6 +206,7 @@ DAP_VENDOR0 = 0x80
 DAP_VENDOR1 = 0x81
 DAP_VENDOR2 = 0x82
 DAP_VENDOR4 = 0x84
+DAP_VENDOR5 = 0x85
 DAP_VENDOR6 = 0x86
 DAP_INFO = 0x00
 DAP_INFO_FIRMWARE_VERSION = 0x09
@@ -203,6 +222,11 @@ POWER_NOT_SUPPORTED = 0xFF
 # The operations of ID_DAP_Vendor6, and the names of its modes
 UART_OPS = {"normal": 0, "single": 1, "status": 2}
 UART_MODES = {0: "normal (two wires)", 1: "single wire"}
+# The operations and the status codes of ID_DAP_Vendor5
+VPP_OPS = {"off": 0, "on": 1, "status": 2}
+VPP_REFUSED, VPP_NO_LEVEL, VPP_TARGET_FAULT = 1, 2, 3
+# A switch-on of VPP waits up to 2 s for the level
+VPP_TIMEOUT_MS = 3000
 # The kind codes of ID_DAP_Vendor4
 ID_OPEN, ID_SLOT, ID_FAULT, ID_FREE_SLOT = 0, 1, 2, 3
 # The board revisions that the firmware knows, by board ID slot
@@ -328,6 +352,41 @@ def check_uart_reply(reply):
     if reply[:1] == bytes([DAP_INVALID]):
         raise ProbeError("the firmware does not know ID_DAP_Vendor6: the board has no UART_TX_DIR, or the firmware is too old")
     if len(reply) < 3 or reply[0] != DAP_VENDOR6 or reply[1] != 0 or reply[2] not in UART_MODES:
+        raise ProbeError("unexpected response %s" % reply.hex())
+
+
+def vpp_request(operation, millivolts=None):
+    if operation == "on":
+        return bytes([DAP_VENDOR5, VPP_OPS["on"]]) + millivolts.to_bytes(2, "little")
+    return bytes([DAP_VENDOR5, VPP_OPS[operation]])
+
+
+def vpp_fields(reply):
+    """The level, VPP_SENSE and VPP_SENSE2 in mV of an ID_DAP_Vendor5 response."""
+    reply = bytes(reply)
+    return tuple(int.from_bytes(reply[i:i + 2], "little") for i in (2, 4, 6))
+
+
+def check_vpp_reply(reply):
+    """Raises ProbeError when the response does not confirm the VPP operation."""
+    reply = bytes(reply)
+    if reply[:1] == bytes([DAP_INVALID]):
+        raise ProbeError("the firmware does not know ID_DAP_Vendor5: the board has no VPP, or the firmware is too old")
+    if len(reply) < 8 or reply[0] != DAP_VENDOR5:
+        raise ProbeError("unexpected response %s" % reply.hex())
+    _, sense, sense2 = vpp_fields(reply)
+    senses = " VPP_SENSE %d mV, VPP_SENSE2 %d mV" % (sense, sense2)
+    if reply[1] == VPP_REFUSED:
+        raise ProbeError(
+            "the firmware refused VPP: the level is out of range (5000 mV to 14700 mV) or above the limit of the adapter, "
+            "the adapter does not allow VPP (see the adapter command), or another interface owns the target pins."
+            + senses
+        )
+    if reply[1] == VPP_NO_LEVEL:
+        raise ProbeError("VPP_SENSE did not show the level in 2 s, or the ADC failed: VPP is off." + senses)
+    if reply[1] == VPP_TARGET_FAULT:
+        raise ProbeError("VPP_SENSE2 shows a short or an overload on J4 pin 19: VPP is off." + senses)
+    if reply[1] != 0:
         raise ProbeError("unexpected response %s" % reply.hex())
 
 
@@ -593,7 +652,7 @@ def find_cmsis_dap(usb, args):
     return devices[0]
 
 
-def run_dap_command(usb, args, request, check):
+def run_dap_command(usb, args, request, check, timeout_ms=TIMEOUT_MS):
     """Sends a CMSIS-DAP vendor command to the selected dongle.
 
     Returns the response after check(response) accepts it, or None after a
@@ -606,7 +665,7 @@ def run_dap_command(usb, args, request, check):
         with claimed_interface(usb, device):
             device.write(OUT_ENDPOINT, request, TIMEOUT_MS)
             try:
-                reply = device.read(IN_ENDPOINT, 64, TIMEOUT_MS)
+                reply = device.read(IN_ENDPOINT, 64, timeout_ms)
             except usb.core.USBError as error:
                 raise ProbeError("No response (%s): the command can have run, so the state is not known" % error)
         check(reply)
@@ -756,6 +815,17 @@ def command_adapter(usb, args):
     return 0
 
 
+def command_vpp(usb, args):
+    reply = run_dap_command(usb, args, vpp_request(args.operation, args.millivolts), check_vpp_reply, VPP_TIMEOUT_MS)
+    if reply is None:
+        return 1
+    level, sense, sense2 = vpp_fields(reply)
+    print("VPP: on at %d mV" % level if level else "VPP: off")
+    print("VPP_SENSE:  %d mV (boost output)" % sense)
+    print("VPP_SENSE2: %d mV (J4 pin 19)" % sense2)
+    return 0
+
+
 def add_selection_options(parser, default):
     parser.add_argument("--serial", default=default, help="the serial number of the dongle (the chip UID)")
     parser.add_argument("--id", default=default, type=parse_usb_id, metavar="VID:PID", help="select the dongle by this USB ID (hexadecimal), without the product string check")
@@ -777,19 +847,26 @@ def main(argv=None, usb=None):
     uart = commands.add_parser("uart", help="set or show the wire mode of the UART (CMSIS-DAP personality)")
     uart.add_argument("mode", choices=tuple(UART_OPS))
     adapter = commands.add_parser("adapter", help="show the firmware version, the board revision and the adapter (CMSIS-DAP personality)")
+    vpp = commands.add_parser("vpp", help="set VPP on J4 pin 19, switch it off or read the VPP senses, for the hardware test (OpenMUPP v1)")
+    vpp.add_argument("operation", choices=tuple(VPP_OPS))
+    vpp.add_argument("millivolts", nargs="?", type=int, help="the VPP level for on, 5000 to 14700")
     reset = commands.add_parser("reset", help="reset the dongle")
     # The options also work after the command. SUPPRESS keeps a value from
     # before the command.
-    for subparser in (show, switch, bridge, power, uart, adapter, reset):
+    for subparser in (show, switch, bridge, power, uart, adapter, vpp, reset):
         add_selection_options(subparser, argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.active is not None and (args.id is None or personality_of(*args.id) is not None):
         parser.error("--active needs --id with an ID that is unknown or shared")
     if args.command == "bridge" and args.store and args.mode == "stored":
         parser.error("the stored mode is stored already: use --store with off, on or auto")
+    if args.command == "vpp" and (args.operation == "on") != (args.millivolts is not None):
+        parser.error("give the level in mV with on, and only with on")
+    if args.command == "vpp" and args.millivolts is not None and not 0 <= args.millivolts <= 0xFFFF:
+        parser.error("the level is 0 to 65535 mV")
     if usb is None:
         usb = import_usb()
-    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power, "uart": command_uart, "adapter": command_adapter, "reset": command_reset}[args.command](usb, args)
+    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power, "uart": command_uart, "adapter": command_adapter, "vpp": command_vpp, "reset": command_reset}[args.command](usb, args)
 
 
 if __name__ == "__main__":

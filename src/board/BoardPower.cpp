@@ -103,6 +103,12 @@ void BoardPower::init() {
       gpioPin(current.idSense->adapterId).configure(GpioPin::Mode::Analog);
       gpioPin(current.idSense->boardId).configure(GpioPin::Mode::Analog);
    }
+   if(current.vpp) {
+      // The VPP senses (board/BoardVpp.h) and the DAC pin, high-impedance
+      for(const Pin pin : { current.vpp->sense, current.vpp->sense2, current.vpp->dac }) {
+         gpioPin(pin).configure(GpioPin::Mode::Analog);
+      }
+   }
    if(!current.vref) {
       return;
    }
@@ -118,6 +124,11 @@ void BoardPower::init() {
       }
       if(current.idSense) {
          for(const Pin pin : { current.idSense->adapterId, current.idSense->boardId }) {
+            adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, pin)), sampling);
+         }
+      }
+      if(current.vpp) {
+         for(const Pin pin : { current.vpp->sense, current.vpp->sense2 }) {
             adc.setSamplingTime(static_cast<Adc::Channel>(*adcChannelOf(current.family, pin)), sampling);
          }
       }

@@ -82,8 +82,10 @@ add_executable(mupp-tests
         TestDapTargetPower.cpp
         TestDapIdReport.cpp
         TestDapVppSetting.cpp
+        TestDapVpp.cpp
         TestDapUartWire.cpp
         TestTargetPower.cpp
+        TestVpp.cpp
         TestAvrIsp.cpp
         TestAvrIspScope.cpp
         TestDebugWire.cpp
@@ -99,6 +101,7 @@ add_executable(mupp-tests
         ../src/protocol/versaloon/CommandProcessor.cpp
         ../src/protocol/cmsisdap/DapJtag.cpp
         ../src/protocol/cmsisdap/DapProcessor.cpp
+        ../src/protocol/cmsisdap/DapVpp.cpp
         ../src/protocol/cmsisdap/RvDtmTap.cpp
         ../src/protocol/cmsisdap/RvBridge.cpp
         ../src/protocol/wchlink/WchLinkFlash.cpp
@@ -107,6 +110,7 @@ add_executable(mupp-tests
         ../src/protocol/versaloon/JtagRawBlock.cpp
         ../src/protocol/versaloon/PowerBlock.cpp
         ../src/protocol/TargetPower.cpp
+        ../src/protocol/Vpp.cpp
         ../src/protocol/avr/EdbgTransport.cpp
         ../src/protocol/versaloon/SwdBlock.cpp
         ../src/protocol/versaloon/UsbToAll.cpp

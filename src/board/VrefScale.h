@@ -31,4 +31,19 @@ static_assert(vrefMillivolts(adcMaxRaw, 2) == 6600);
 static_assert(vrefMillivolts(2048, 2) == 3301);
 static_assert(vrefMillivolts(adcMaxRaw, 255) == 0xFFFF);
 
+// The VPP senses of OpenMUPP v1: R47 (100 kOhm) and R48 (27 kOhm), the same
+// ratio for R50 and R51. The voltage in mV at the divider input, rounded.
+constexpr uint16_t vppSenseMillivolts(uint32_t raw) {
+   constexpr uint32_t top = 100;
+   constexpr uint32_t bottom = 27;
+   constexpr uint32_t den = adcMaxRaw * bottom;
+   return static_cast<uint16_t>((raw * vddaMillivolts * (top + bottom) + den / 2) / den);
+}
+
+static_assert(vppSenseMillivolts(0) == 0);
+// The full scale is about 15.5 V (docs/hardware.md of openmupp-v1)
+static_assert(vppSenseMillivolts(adcMaxRaw) == 15522);
+// 1.06 V at the pin is about 5 V
+static_assert(vppSenseMillivolts(1315) == 4985);
+
 } // namespace board

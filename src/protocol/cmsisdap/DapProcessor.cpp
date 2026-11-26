@@ -270,6 +270,9 @@ void Processor::hostGone() {
    responses_ = 0;
    responseFirst_ = 0;
    disconnect();
+   if(vpp_ != nullptr) {
+      vpp_->hostGone();
+   }
    if(vendor_ != nullptr) {
       vendor_->hostGone();
    }
@@ -282,6 +285,13 @@ void Processor::hostGone() {
       uart_->hostGone();
    }
    swoReset();
+}
+
+void Processor::release() {
+   disconnect();
+   if(vpp_ != nullptr) {
+      vpp_->hostGone();
+   }
 }
 
 void Processor::submit(art::span<const uint8_t> request) {
@@ -376,7 +386,7 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
    if(!in.ok()) {
       return false;
    }
-   if(vendor_ != nullptr && id >= command::vendor0 && id <= command::vendor2) {
+   if((vendor_ != nullptr && id >= command::vendor0 && id <= command::vendor2) || (vpp_ != nullptr && id == command::vendor5)) {
       return vendorCommand(id, in, out, nested);
    }
    switch(id) {
@@ -513,7 +523,12 @@ bool Processor::executeCommands(uint8_t id, PacketReader &in, PacketWriter &out)
 
 bool Processor::vendorCommand(uint8_t id, PacketReader &in, PacketWriter &out, bool nested) {
    const auto fields = in.bytes(in.remaining());
-   const std::size_t length = nested ? 0 : vendor_->command(id, fields, out.free());
+   // ID_DAP_Vendor5 (VppCommand) or the commands 0x80-0x82 (VendorCommands)
+   std::size_t length = 0;
+   if(!nested) {
+      length = id == command::vendor5 ? vpp_->command(fields, out.free(), !otherOwnsPins()) :
+                                        vendor_->command(id, fields, out.free());
+   }
    if(length == 0) {
       out.u8(command::invalid);
    } else {

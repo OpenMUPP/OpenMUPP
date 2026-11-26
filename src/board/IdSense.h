@@ -141,6 +141,21 @@ constexpr bool isVppAllowed(IdReading adapter, bool vppWithoutAdapter) {
    return adapter.kind == IdKind::Slot && (adapter.slot == 8 || adapter.slot == 9);
 }
 
+// The highest VPP level in mV on an adapter that isVppAllowed() allows
+// (docs/boards.md, "VPP driver"). Slot 8: 12.5 V, a margin below the 13 V
+// absolute maximum of the AVR RESET pin. Slot 9: 13.5 V, the typical VIHH
+// maximum of the PIC parts, until the driver has a limit for each part.
+// No adapter: the hardware maximum, 14.7 V.
+constexpr uint16_t vppLimitMillivolts(IdReading adapter) {
+   if(adapter.kind == IdKind::Slot && adapter.slot == 8) {
+      return 12500;
+   }
+   if(adapter.kind == IdKind::Slot && adapter.slot == 9) {
+      return 13500;
+   }
+   return 14700;
+}
+
 // The vendor string of DAP_Info with the adapter: "OpenMUPP, adapter 4",
 // "OpenMUPP, adapter 6 (unknown)", "OpenMUPP, no adapter" or
 // "OpenMUPP, adapter fault". The text is cut to the buffer and ends with a

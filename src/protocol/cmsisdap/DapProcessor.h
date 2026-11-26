@@ -32,6 +32,7 @@
 //   0x1C DAP_SWO_Data           0x82 ID_DAP_Vendor2
 //                               0x83 ID_DAP_Vendor3
 //                               0x84 ID_DAP_Vendor4
+//                               0x85 ID_DAP_Vendor5
 //                               0x86 ID_DAP_Vendor6
 //   0x1E DAP_SWO_ExtendedStatus
 //
@@ -120,6 +121,15 @@
 //   DAP_ERROR (0xFF) when the ADC fails on the adapter ID: the adapter
 //   fields and allowed are then 0. Without an IdSource, the command
 //   replies ID_DAP_Invalid.
+// - ID_DAP_Vendor5 [0x85][op u8] -> [0x85][status u8][level mV u16][sense mV
+//   u16][sense2 mV u16] controls VPP for the hardware test (VppCommand,
+//   setVpp(); DapVpp.h has the fields). It takes the rest of the packet,
+//   so in a DAP_ExecuteCommands it replies ID_DAP_Invalid. With a pin
+//   owner, a switch-on is refused while the other processor owns the
+//   pins. Without a VppCommand, the command replies ID_DAP_Invalid.
+//   hostGone() and release() switch VPP off (VppCommand::hostGone()).
+//   The VPP code is not in the processor: the images without VPP do not
+//   link it.
 // - ID_DAP_Vendor6 [0x86][op u8] -> [0x86][status u8][mode u8] sets the
 //   wire mode of the UART (UartWire, setUartWire()): op 0 normal (two
 //   wires), 1 single wire, 2 only read. The status is DAP_OK (0), or
@@ -284,6 +294,7 @@ inline constexpr uint8_t vendor1 = 0x81;
 inline constexpr uint8_t vendor2 = 0x82;
 inline constexpr uint8_t vendor3 = 0x83;
 inline constexpr uint8_t vendor4 = 0x84;
+inline constexpr uint8_t vendor5 = 0x85;
 inline constexpr uint8_t vendor6 = 0x86;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
@@ -412,6 +423,21 @@ class IdSource {
    ~IdSource() = default;
 };
 
+// ID_DAP_Vendor5 of one processor (setVpp(), DapVpp.h)
+class VppCommand {
+   public:
+   // Runs the command with the bytes after the ID (the rest of the
+   // packet). Writes the response, with the ID, and returns its length:
+   // at most response.size(), 0 for ID_DAP_Invalid. pinsFree: false while
+   // the other processor owns the target pins.
+   virtual std::size_t command(art::span<const uint8_t> fields, art::span<uint8_t> response, bool pinsFree) = 0;
+   // The host went away or suspended the device: switch VPP off.
+   virtual void hostGone() = 0;
+
+   protected:
+   ~VppCommand() = default;
+};
+
 // The wire mode of the UART of ID_DAP_Vendor6 (uart/SingleWireLine.h)
 class UartWire {
    public:
@@ -519,11 +545,10 @@ class Processor final : private TransferAbort {
    // UART goes back to its default transport.
    void hostGone();
 
-   // Like DAP_Disconnect: releases the pins. The queued packets and the
-   // responses stay. For a suspend, where the transport keeps its state.
-   void release() {
-      disconnect();
-   }
+   // Like DAP_Disconnect: releases the pins and switches VPP off. The
+   // queued packets and the responses stay. For a suspend, where the
+   // transport keeps its state.
+   void release();
 
    [[nodiscard]] bool connected() const {
       return port_ != Port::None;
@@ -553,6 +578,12 @@ class Processor final : private TransferAbort {
    // Call it before the first packet.
    void setIdSource(IdSource &source) {
       idSource_ = &source;
+   }
+
+   // Gives ID_DAP_Vendor5 to `vpp`, which must outlive the processor.
+   // Call it before the first packet.
+   void setVpp(VppCommand &vpp) {
+      vpp_ = &vpp;
    }
 
    // Gives ID_DAP_Vendor6 to `wire`, which must outlive the processor.
@@ -671,6 +702,7 @@ class Processor final : private TransferAbort {
    protocol::TargetGate *gate_{ nullptr };
    VppSetting *vppSetting_{ nullptr };
    IdSource *idSource_{ nullptr };
+   VppCommand *vpp_{ nullptr };
    UartWire *uartWire_{ nullptr };
    DapSwo *swo_{ nullptr };
    bool swoStreaming_{ false };
