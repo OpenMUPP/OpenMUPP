@@ -390,7 +390,7 @@ The OCD has the mask only in register 2, for register 3.
 Thus the probe writes the address to register 3 and the mask to register 2.
 The mask mode on a data address passed the hardware test: AVaRICE sends a data breakpoint with a mask for `rwatch` on a 2-byte variable (see [JTAG debug hardware test](#jtag-debug-hardware-test)). The program address test also passed (see [avr-jtag-ocd.md](avr-jtag-ocd.md#bcr-reg-8)).
 
-`tools/avr_data_break_test.py` tests the data breakpoints on the hardware.
+`tools/hwtest/avr_data_break_test.py` tests the data breakpoints on the hardware.
 Load a test program that reads and writes a known SRAM address, and program OCDEN.
 For each mode, the script resets the core, sets the data breakpoint and runs the core.
 It then shows the PC and the cause of the break event.
@@ -401,9 +401,9 @@ To prevent this, put the test variable in `.noinit`.
 
 ```sh
 # All modes, breakpoint number 2, on the data address 0x0100
-python3 tools/avr_data_break_test.py --address 0x0100
+python3 tools/hwtest/avr_data_break_test.py --address 0x0100
 # Write mode only, breakpoint number 3, with the medbg build
-python3 tools/avr_data_break_test.py --medbg --address 0x0100 --modes write --number 3
+python3 tools/hwtest/avr_data_break_test.py --medbg --address 0x0100 --modes write --number 3
 ```
 
 The script sends the device context of the ATmega32U4. For another device, change `device_context()` in the script.

@@ -95,7 +95,7 @@ USART1 is also on APB2, and each Vref measurement changes the APB2 clock.
 
 ## Loopback test
 
-`tools/serial_loopback_test.py` tests the serial port on the dongle.
+`tools/hwtest/serial_loopback_test.py` tests the serial port on the dongle.
 It sends a byte pattern at each line coding and checks that the same bytes come back.
 It needs the pyserial Python package and Python 3.
 
@@ -103,8 +103,8 @@ It needs the pyserial Python package and Python 3.
 2. Run the script with the serial port of the dongle:
 
 ```sh
-python3 tools/serial_loopback_test.py /dev/ttyACM0   # Linux
-py tools\serial_loopback_test.py COM5                # Windows
+python3 tools/hwtest/serial_loopback_test.py /dev/ttyACM0   # Linux
+py tools\hwtest\serial_loopback_test.py COM5                # Windows
 ```
 
 The default run tests all combinations of these settings:

@@ -70,5 +70,5 @@ Until 76 ms, the probe tries two wires and the V006 does not answer. After that,
 
 | Tool | Input | Output |
 |---|---|---|
-| `tools/wch_link_frames_2wire.py` | The CH32V208 digital files | The DMI accesses of the 54-clock frames (see [Wire frame format](../wch-link-protocol.md#wire-frame-format)) |
-| `tools/wch_link_frames_1wire.py` | The CH32V003 digital files | The DMI accesses of the one-wire frames (see [One-wire frame format](../wch-link-protocol.md#one-wire-frame-format-ch32v003)) |
+| `tools/analysis/wch_link_frames_2wire.py` | The CH32V208 digital files | The DMI accesses of the 54-clock frames (see [Wire frame format](../wch-link-protocol.md#wire-frame-format)) |
+| `tools/analysis/wch_link_frames_1wire.py` | The CH32V003 digital files | The DMI accesses of the one-wire frames (see [One-wire frame format](../wch-link-protocol.md#one-wire-frame-format-ch32v003)) |

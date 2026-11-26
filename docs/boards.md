@@ -284,7 +284,7 @@ A debug probe on the SWD header P3 can also write the `standalone` image at `0x0
 
 ### Hardware test
 
-`tools/probe_hw_test.py` tests the multi image with the Versaloon and the CMSIS-DAP personalities on an STM32F1 target (see [Multi image hardware test](usb-device.md#multi-image-hardware-test)).
+`tools/hwtest/probe_hw_test.py` tests the multi image with the Versaloon and the CMSIS-DAP personalities on an STM32F1 target (see [Multi image hardware test](usb-device.md#multi-image-hardware-test)).
 Connect TMS, TCK, TDI, TDO, TRST, SRST and GND to the JTAG connector of the target.
 Connect the wire from PA6 to PB12, and the wire from PB13 to PB3.
 Connect PA9 to PA10 for the UART loopback.
@@ -680,7 +680,7 @@ Use a wire as the link. With a resistor as the link, JTAG-DP transfers on the fa
 Use pyOCD or `DAP_Transfer` to check the link, not only OpenOCD.
 
 A resistor limits the current when other code drives PC10 as an output (for example UART4_TX or the microSD card). The wire gives no such protection.
-For a probe PCB, it is not known if a resistor or a wire is better. Test the link on the PCB with pyOCD (`tools/pyocd_jtag_test.py`) at 9000 kHz, not only with OpenOCD.
+For a probe PCB, it is not known if a resistor or a wire is better. Test the link on the PCB with pyOCD (`tools/hwtest/pyocd_jtag_test.py`) at 9000 kHz, not only with OpenOCD.
 Keep the microSD slot empty: PC10 and PC11 are also DAT2 and DAT3 of the card.
 
 The board uses the [ch32v00x-system](https://github.com/armint/ch32v00x-system) library (submodule `dependencies/ch32v00x-system`), not system-stm32.

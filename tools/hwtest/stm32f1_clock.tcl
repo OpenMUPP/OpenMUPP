@@ -13,7 +13,7 @@
 # A reset sets the clock back to 8 MHz. Thus call the procedure after each
 # reset, and set the adapter speed after the procedure.
 #
-# Usage: openocd ... -f tools/stm32f1_clock.tcl -c init -c "reset halt" \
+# Usage: openocd ... -f tools/hwtest/stm32f1_clock.tcl -c init -c "reset halt" \
 #                    -c stm32f1_clock_max -c "adapter speed 9000"
 
 set _STM32F1_RCC_CR    0x40021000

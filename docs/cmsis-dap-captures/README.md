@@ -15,7 +15,7 @@ This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode for t
 | OpenOCD | `0.12.0+dev-01707-gf7037392b` (local build, 2026-10-24), `interface/cmsis-dap.cfg` and [ch32v-minimal.cfg](ch32v-minimal.cfg) |
 | probe-rs | 0.32.0 |
 | USB capture | Linux `usbmon` with `tshark -i usbmonN`, for the bus of the probe |
-| Decoder | [tools/usb-pcap/dap.py](../../tools/usb-pcap/dap.py) |
+| Decoder | [tools/analysis/usbpcap/dap.py](../../tools/analysis/usbpcap/dap.py) |
 
 ## Captures
 
@@ -30,14 +30,14 @@ This directory holds the USB captures of OpenOCD and probe-rs in JTAG mode for t
 To list the commands of a capture:
 
 ```
-python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3
-python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3 --scans
+python3 tools/analysis/usbpcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3
+python3 tools/analysis/usbpcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3 --scans
 ```
 
 To print the requests of a capture as a trace for the host tests (`tests/replay/dap-*.trace`):
 
 ```
-python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3 --trace
+python3 tools/analysis/usbpcap/dap.py docs/cmsis-dap-captures/<file> <device address> 3 --trace
 ```
 
 The device address is 35 in all captures.
@@ -138,12 +138,12 @@ Image A has no marker: its failed accesses show the data of the last good read (
 | Target | CH32V208 on two wires (SWDIO, SWCLK), or CH32V006 on one wire (SWDIO). Each target has its own supply |
 | OpenOCD | `0.12.0+dev-01707-gf7037392b` (local build), `interface/cmsis-dap.cfg` and [ch32v-minimal.cfg](ch32v-minimal.cfg) |
 | probe-rs | 0.32.0 |
-| Decoder | [tools/usb-pcap/dtm.py](../../tools/usb-pcap/dtm.py): the IR, DR and DMI scans, with the TDO bits of the replies |
+| Decoder | [tools/analysis/usbpcap/dtm.py](../../tools/analysis/usbpcap/dtm.py): the IR, DR and DMI scans, with the TDO bits of the replies |
 
 To list the DTM scans of a capture:
 
 ```
-python3 tools/usb-pcap/dtm.py docs/cmsis-dap-captures/<file> <device address>
+python3 tools/analysis/usbpcap/dtm.py docs/cmsis-dap-captures/<file> <device address>
 ```
 
 | File | Device address | Image | Command | Result |

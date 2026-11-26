@@ -1,6 +1,6 @@
 # CMSIS-DAP requests of probe-rs info --protocol jtag, with no target.
 # From docs/cmsis-dap-captures/probe-rs-info-jtag-no-target.pcapng:
-#   python3 tools/usb-pcap/dap.py docs/cmsis-dap-captures/probe-rs-info-jtag-no-target.pcapng 35 3 --trace
+#   python3 tools/analysis/usbpcap/dap.py docs/cmsis-dap-captures/probe-rs-info-jtag-no-target.pcapng 35 3 --trace
 # Requests only: the replies of the capture are those of an empty chain.
 
 > 00ff

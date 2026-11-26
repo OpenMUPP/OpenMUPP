@@ -16,7 +16,7 @@ The build writes these files into the build directory:
 - `openmupp-<image>.map`, the linker map of each image.
 - `openmupp-bootloader/openmupp-bootloader-<board>.elf`, `.hex` and `.bin`: the bootloader for the board.
 - `openmupp-with-bootloader.hex` and `.bin`, and copies with the board, the build type and the version in the name: the combined image of the bootloader and the `app-8k` image.
-  `tools/mupp_combine_images.py` makes it. The tests are in `tools/test_mupp_combine_images.py`.
+  `tools/mupp_combine_images.py` makes it. The tests are in `tools/tests/test_mupp_combine_images.py`.
 - `mupp-images.txt`: each image with its size limit. CI runs `ci/check-size.sh` on each line.
 
 An image that does not fit its limit has no `.hex` and `.bin` files, and no copies (see [Images that do not fit](cmake.md#images-that-do-not-fit)).
@@ -94,7 +94,7 @@ To replace a trace with a capture, do these steps:
 
 ## Flash speed benchmark
 
-`tools/flash_benchmark.py` measures the flash speed of the dongle with OpenOCD.
+`tools/hwtest/flash_benchmark.py` measures the flash speed of the dongle with OpenOCD.
 Use it to compare the old firmware and this firmware on the same target.
 The target is an STM32F1, with JTAG, SWD and SRST connected.
 
@@ -106,7 +106,7 @@ It compares the read-back data with the image.
 
 After reset, the target core runs at 8 MHz (HSI), and JTAG must not be faster than F_CPU / 6.
 Thus the target speed limits the measurement.
-For this reason, `tools/stm32f1_clock.tcl` sets the target clock before the measurement:
+For this reason, `tools/hwtest/stm32f1_clock.tcl` sets the target clock before the measurement:
 
 1. OpenOCD connects and halts the target at 1000 kHz.
 2. The `stm32f1_clock_max` procedure sets 64 MHz: HSI / 2 × 16 with the PLL, two flash wait states, APB1 at 32 MHz.
@@ -132,19 +132,19 @@ Do these steps:
 1. Write the old firmware into the dongle. Then run:
 
    ```sh
-   python3 tools/flash_benchmark.py run --label old --output old.json
+   python3 tools/hwtest/flash_benchmark.py run --label old --output old.json
    ```
 
 2. Write this firmware into the dongle. Then run:
 
    ```sh
-   python3 tools/flash_benchmark.py run --label new --output new.json
+   python3 tools/hwtest/flash_benchmark.py run --label new --output new.json
    ```
 
 3. Make the table for the merge request:
 
    ```sh
-   python3 tools/flash_benchmark.py compare old.json new.json
+   python3 tools/hwtest/flash_benchmark.py compare old.json new.json
    ```
 
 Each `run` prints a line for each run, and a Markdown table with the median times.
@@ -168,7 +168,7 @@ These options change the run:
 - `--no-clock-setup`: do not change the target clock.
 
 Write the results into a directory outside the source tree.
-`python3 tools/flash_benchmark.py run --help` shows all options.
+`python3 tools/hwtest/flash_benchmark.py run --help` shows all options.
 
 ## Code format
 

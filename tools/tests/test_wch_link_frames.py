@@ -3,12 +3,14 @@
 """Tests for the WCH-LinkE wire frame decoders. They use the captures in docs/wch-link-captures."""
 import collections
 import os
+import sys
 import unittest
 
-import wch_link_frames_1wire as one
-import wch_link_frames_2wire as two
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'analysis'))
+import wch_link_frames_1wire as one  # noqa: E402
+import wch_link_frames_2wire as two  # noqa: E402
 
-CAPTURES = os.path.join(os.path.dirname(__file__), '..', 'docs', 'wch-link-captures')
+CAPTURES = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'wch-link-captures')
 
 
 def capture(name):

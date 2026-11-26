@@ -401,7 +401,7 @@ The EDBG protocol specification (DS50002630A, Table 7-31) gives only type 1 and 
 The type 2 and mode values come from [AVaRICE](https://github.com/avrdudes/avarice) at commit `6ca2ef5` (`src/jtag3bp.cc`, the JTAGICE3 and EDBG driver).
 They are the same as the values of `CMND_SET_BREAK` of the JTAGICE mkII (AVaRICE `src/jtag2bp.cc`).
 No host tool that we know sends data breakpoints over EDBG to this probe today.
-`tools/avr_data_break_test.py` sends them for the hardware test (see [avr.md](avr.md#jtag-data-breakpoints)).
+`tools/hwtest/avr_data_break_test.py` sends them for the hardware test (see [avr.md](avr.md#jtag-data-breakpoints)).
 
 ### Target pins
 
@@ -734,7 +734,7 @@ Other rules:
 - When the host goes away (USB reset or unconfigure), the serial port gets the UART again.
   A host tool that ends without this event must send `DAP_UART_Transport` `1` itself.
 
-`tools/dap_uart_loopback_test.py` tests the commands with a loopback wire from TX to RX (see [UART hardware test](#uart-hardware-test)).
+`tools/hwtest/dap_uart_loopback_test.py` tests the commands with a loopback wire from TX to RX (see [UART hardware test](#uart-hardware-test)).
 
 ## SWO commands
 
@@ -1504,7 +1504,7 @@ OpenOCD sets the debug reason to "undefined" at examine (`examine()` in `src/tar
 This step checks that the JTAG port of the board works after the bridge was on.
 The probe and OpenOCD are the same as for the CH32V006.
 The target is the STM32F103 of the [JTAG hardware test](#jtag-hardware-test) (DBGMCU IDCODE `10036414`), with `interface/cmsis-dap.cfg` and `target/stm32f1x.cfg`.
-The flash test uses a random image of 32 KiB, as in the JTAG hardware test. At 9000 kHz, `tools/stm32f1_clock.tcl` sets the target clock to 64 MHz first.
+The flash test uses a random image of 32 KiB, as in the JTAG hardware test. At 9000 kHz, `tools/hwtest/stm32f1_clock.tcl` sets the target clock to 64 MHz first.
 
 | Test | Result |
 |---|---|
@@ -1719,7 +1719,7 @@ The DAP is next to TDO, so it is device 0.
 The OpenOCD flash checks use a random 32 KiB image.
 The OpenOCD debug checks use a 2 KiB image that has a vector table and the loop `adds r1, #1` / `b`.
 The pyOCD script builds one 32 KiB image for all checks: the vector table, the same loop and random data.
-The pyOCD checks come from `tools/pyocd_jtag_test.py`.
+The pyOCD checks come from `tools/hwtest/pyocd_jtag_test.py`.
 
 All runs passed (0 failures).
 OpenOCD uses `DAP_JTAG_Sequence` for all JTAG scans.
@@ -1727,7 +1727,7 @@ pyOCD uses `DAP_Transfer` and `DAP_TransferBlock`.
 Thus the pyOCD run is the test of the JTAG-DP transfers of this firmware.
 
 The target runs at 8 MHz after a reset, and TCK must not be above F_CPU / 6.
-Thus each run above 1000 kHz sets the target clock to 64 MHz first (`tools/stm32f1_clock.tcl` for OpenOCD, the same register writes in the pyOCD script).
+Thus each run above 1000 kHz sets the target clock to 64 MHz first (`tools/hwtest/stm32f1_clock.tcl` for OpenOCD, the same register writes in the pyOCD script).
 The target clock goes back to 8 MHz at each reset.
 The two requests above 1125 kHz use the SPI and DMA fast path of the firmware.
 This test did not measure the real TCK.
@@ -1743,7 +1743,7 @@ JTAG flash time of 32 KiB (target at 64 MHz, one run per rate):
 The OpenOCD verify time is much shorter than the read time. Thus OpenOCD probably checks a CRC on the target and does not read the flash data over the probe. This test did not confirm it.
 The pyOCD write time at 1000 kHz was 1.67 s in an earlier run of the same check. Thus the write times vary by about 40%.
 
-`DAP_JTAG_Configure` and `DAP_JTAG_IDCODE` checks (raw commands in `tools/pyocd_jtag_test.py`):
+`DAP_JTAG_Configure` and `DAP_JTAG_IDCODE` checks (raw commands in `tools/hwtest/pyocd_jtag_test.py`):
 
 | Check | Result |
 |---|---|
@@ -1754,7 +1754,7 @@ The pyOCD write time at 1000 kHz was 1.67 s in an earlier run of the same check.
 Findings:
 
 - OpenOCD in JTAG mode is slow. The write rate is about 4 KiB/s and the read rate about 4.5 KiB/s. The rate does not depend on TCK from 1000 kHz to 9000 kHz. pyOCD is 4 to 8 times faster with the same probe. SWD with OpenOCD (see [Hardware test](#hardware-test)) is faster too. The cause is not measured. OpenOCD sends one `DAP_JTAG_Sequence` per scan, so the USB round trips probably limit the rate. This test did not check whether the firmware or the host causes it.
-- pyOCD 0.45.1 does not work with the STM32F1 on JTAG without a change. It sends `DAP_JTAG_Configure` with one device of IR length 4, and the chain has two TAPs. The first transfer fails with ACK 0. With the chain set to the IR lengths 4 and 5, all transfers pass. The test script `tools/pyocd_jtag_test.py` sets the chain to the IR lengths 4 and 5 in a patch of the pyOCD protocol class.
+- pyOCD 0.45.1 does not work with the STM32F1 on JTAG without a change. It sends `DAP_JTAG_Configure` with one device of IR length 4, and the chain has two TAPs. The first transfer fails with ACK 0. With the chain set to the IR lengths 4 and 5, all transfers pass. The test script `tools/hwtest/pyocd_jtag_test.py` sets the chain to the IR lengths 4 and 5 in a patch of the pyOCD protocol class.
 - The pyOCD target `stm32f103ze` (from the Keil DFP) fails on JTAG before the first transfer with `'bytes' object cannot be interpreted as an integer`. The error is in the debug sequence code of pyOCD (`hex()` of a `bytes` result in a trace call). It is not a probe problem. The test uses the built-in target `stm32f103rc`.
 - `DAP_JTAG_IDCODE` for device 1 (the boundary-scan TAP) returns 0. The firmware loads the IR value `0x0E`, as the reference implementation of Arm does. This is the IDCODE instruction of the Cortex-M3 DAP. The boundary-scan TAP of the STM32F1 probably does not decode it as IDCODE. OpenOCD reads `0x06414041` from this TAP with its own scan, so the TAP does answer. No debug host uses `DAP_JTAG_IDCODE` of this TAP.
 - The probe re-enumerated once on the USB bus, about 2 minutes after the firmware started (device number 7 to 8). The first OpenOCD tries failed with "No such device" in that time. It then stayed on device number 8 for the rest of the test. The cause is not known. A second run did not repeat it.
@@ -1762,7 +1762,7 @@ Findings:
 
 ## UART hardware test
 
-`tools/dap_uart_loopback_test.py` tests the `DAP_UART_*` commands on the dongle.
+`tools/hwtest/dap_uart_loopback_test.py` tests the `DAP_UART_*` commands on the dongle.
 pyOCD, OpenOCD and probe-rs do not use these commands, so the script sends them directly on interface 0.
 It needs the pyusb Python package and Python 3.
 
@@ -1771,8 +1771,8 @@ It needs the pyusb Python package and Python 3.
 3. Run the script:
 
 ```sh
-python3 tools/dap_uart_loopback_test.py
-python3 tools/dap_uart_loopback_test.py --serial-port /dev/ttyACM0
+python3 tools/hwtest/dap_uart_loopback_test.py
+python3 tools/hwtest/dap_uart_loopback_test.py --serial-port /dev/ttyACM0
 ```
 
 The script gets the UART with `DAP_UART_Transport` `2`.
