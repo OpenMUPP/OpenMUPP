@@ -71,7 +71,7 @@ The supply stays on after the script ends. See docs/cmsis-dap.md,
 with its stored personality and bridge mode, and with the target supply and
 VPP off. Firmware from before the reset code stalls it: then unplug the
 dongle. The script waits until the dongle enumerates again, at a new USB
-address. See docs/usb-device.md, "Switch request on EP0".
+address. While the key of the dongle is down, the reset waits. See docs/usb-device.md, "Switch request on EP0".
 
 "adapter" shows the firmware version (DAP_Info 0x09), the board revision
 (board ID) and the target adapter on J4 (adapter ID) of the CMSIS-DAP
@@ -684,7 +684,7 @@ def command_reset(usb, args):
     print("Resetting the dongle ...")
     name = wait_for_reset(usb, serial, args.id, location, ENUMERATION_TIMEOUT_S)
     if name is None:
-        print("The dongle did not enumerate again", file=sys.stderr)
+        print("The dongle did not enumerate again. If the key of the dongle is down, release it: the reset waits for the release", file=sys.stderr)
         return 1
     print("The dongle has the %s personality" % name)
     return 0
