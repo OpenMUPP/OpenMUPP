@@ -93,8 +93,9 @@ ID_DAP_Vendor6 on interface 0:
     [0x86][0] normal (two wires), [0x86][1] single wire, [0x86][2] only read
     -> response [0x86][status][mode], 0 = done
 
-Single-wire mode needs a link from J4 pin 13 (TX) to pin 14 (RX). The mode
-stays after the script ends, until a reset of the probe or the next command.
+Single-wire mode uses only J4 pin 13 (TX). The line needs a pull-up to
+VTREF: board revision 2 has it, on revision 1 the target or the adapter
+must have it (15 kOhm or less). The mode stays after the script ends, until a reset of the probe or the next command.
 Only a board with UART_TX_DIR (OpenMUPP v1) has the command. See
 docs/uart-bridge.md, "Single-wire mode".
 

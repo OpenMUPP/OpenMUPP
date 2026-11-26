@@ -99,25 +99,34 @@ OpenMUPP v1 can use the UART on one wire, for example for a half-duplex bus.
 `ID_DAP_Vendor6` selects the mode (see [UART wire mode](cmsis-dap.md#uart-wire-mode)).
 Other boards do not have the mode, because they have no TX level shifter with a direction pin.
 
-Connect J4 pin 13 (UART TX) to J4 pin 14 (UART RX), and connect the target to this joined line.
-On an adapter, connect J5 pin 2 (RX) to J5 pin 3 (TX).
-The board has no link between TX and RX.
-The link is necessary for these reasons:
+Single-wire mode uses the half-duplex mode of UART7 (`HDSEL`).
+UART7 sends and receives on its TX pin (PA6), so the target connects only to J4 pin 13 (UART TX).
+On an adapter, this is J5 pin 3 (TX).
+J4 pin 14 (UART RX) is not used in single-wire mode.
 
-- RX has a 10 kΩ pull-up to `VTREF` (R25). Thus the joined line stays high when no side drives it.
-  The TX line has no pull-up on the target side.
-- RX has a fixed level shifter (U4), so the probe always reads the line through RX.
+The line needs a pull-up to `VTREF`, because no side drives it between the frames.
+Without a pull-up, the dynamic 100 kΩ pull-downs of U6 pull the line low, and the UART receives a break.
+
+- Board revision 2 (board ID slot 2) has a 10 kΩ pull-up from `T_UART_TX` to `VTREF`.
+- Board revision 1 (board ID slot 1) has no pull-up on `T_UART_TX`.
+  Single-wire mode also operates on revision 1, but the target or the adapter must pull the line up to `VTREF`.
+  The pull-up must be 15 kΩ or less, because of the pull-downs of U6.
+
+`python3 tools/mupp_probe.py adapter` shows the board revision (see [Board ID and adapter ID](cmsis-dap.md#board-id-and-adapter-id)).
 
 The firmware sets the TX level shifter (U6) with `UART_TX_DIR` (PC9), in `src/uart/SingleWireLine.h`:
 
+- The switch to single-wire mode sets `HDSEL` and makes PA6 an alternate-function open-drain output.
 - While the UART does not send, `UART_TX_DIR` is low, so U6 does not drive the target.
-  U6 then drives PA6, so PA6 is a floating input. R53 keeps PA6 high while U6 changes direction.
-- Before the UART sends a block, the firmware disables the receiver, sets `UART_TX_DIR` high and gives PA6 back to UART7.
+  U6 then drives PA6, and UART7 reads the line on PA6.
+  PA6 is open-drain and idles high, so it does not drive against U6. R53 keeps PA6 high while U6 changes direction.
+- Before the UART sends a block, the firmware disables the receiver, sets `UART_TX_DIR` high and makes PA6 push-pull.
   The DMA interrupt of the TX channel does this.
 - After the last block, the firmware enables the transfer complete interrupt (TC) of UART7.
-  After the last stop bit, this interrupt sets PA6 to an input, sets `UART_TX_DIR` low and enables the receiver.
+  After the last stop bit, this interrupt makes PA6 open-drain, sets `UART_TX_DIR` low and enables the receiver.
 
-PA6 is an output only while U6 drives the target. Thus PA6 and U6 never drive against each other.
+PA6 is push-pull while the UART sends, because R53 (100 kΩ) gives a rising edge that is too slow for 1 Mbaud.
+PA6 is push-pull only while U6 drives the target. Thus PA6 and U6 never drive against each other.
 The receiver is off while the UART sends, so the host does not receive its own data (no echo).
 A mode change while the UART sends takes effect after the last stop bit.
 The mode applies to the serial port and to the `DAP_UART_*` commands.
@@ -126,7 +135,7 @@ The probe does not check if the line is free before it sends.
 The protocol on the line must prevent collisions.
 Data from the target while the probe sends is lost.
 
-Status: the host tests pass. The hardware test of [issue #148](https://github.com/OpenMUPP/OpenMUPP/issues/148) is not done yet.
+Status: the host tests pass. The hardware test of [issue #151](https://github.com/OpenMUPP/OpenMUPP/issues/151) is not done yet.
 
 ## Loopback test
 
