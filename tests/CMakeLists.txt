@@ -84,6 +84,7 @@ add_executable(mupp-tests
         TestDapVppSetting.cpp
         TestDapUartWire.cpp
         TestTargetPower.cpp
+        TestVpp.cpp
         TestAvrIsp.cpp
         TestAvrIspScope.cpp
         TestDebugWire.cpp
@@ -107,6 +108,7 @@ add_executable(mupp-tests
         ../src/protocol/versaloon/JtagRawBlock.cpp
         ../src/protocol/versaloon/PowerBlock.cpp
         ../src/protocol/TargetPower.cpp
+        ../src/protocol/Vpp.cpp
         ../src/protocol/avr/EdbgTransport.cpp
         ../src/protocol/versaloon/SwdBlock.cpp
         ../src/protocol/versaloon/UsbToAll.cpp
