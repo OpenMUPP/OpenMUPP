@@ -31,6 +31,7 @@
 //   0x1B DAP_SWO_Status         0x81 ID_DAP_Vendor1
 //   0x1C DAP_SWO_Data           0x82 ID_DAP_Vendor2
 //                               0x83 ID_DAP_Vendor3
+//                               0x84 ID_DAP_Vendor4
 //   0x1E DAP_SWO_ExtendedStatus
 //
 // The transfer commands follow the reference implementation (CMSIS-DAP
@@ -107,6 +108,16 @@
 //   status is DAP_OK (0), or DAP_ERROR (0xFF) for another op and for a
 //   failed store. setting is the stored value after the operation: 0 off,
 //   1 on. Without a VppSetting, the command replies ID_DAP_Invalid.
+// - ID_DAP_Vendor4 [0x84] -> [0x84][status u8][board kind u8][board slot
+//   u8][adapter kind u8][adapter slot u8][allowed u8] reads the board ID
+//   and the adapter ID (IdSource, setIdSource()). The adapter ID is read
+//   now. The command is not a connect: the target gate keeps its decision.
+//   kind: 0 no ID resistor (open), 1 a known slot, 2 a fault (short), 3 a
+//   free slot. slot is 1 to 9 for kinds 1 and 3, else 0. allowed is 1 when
+//   a connect would start the protocol now. The status is DAP_OK (0), or
+//   DAP_ERROR (0xFF) when the ADC fails on the adapter ID: the adapter
+//   fields and allowed are then 0. Without an IdSource, the command
+//   replies ID_DAP_Invalid.
 // - With vendor commands (setVendorCommands()), 0x80-0x82 go to that
 //   object instead (the EDBG commands AVR_CMD, AVR_RSP, AVR_EVT on the HID
 //   interface). They take the rest of the packet, so in a
@@ -264,6 +275,7 @@ inline constexpr uint8_t vendor0 = 0x80;
 inline constexpr uint8_t vendor1 = 0x81;
 inline constexpr uint8_t vendor2 = 0x82;
 inline constexpr uint8_t vendor3 = 0x83;
+inline constexpr uint8_t vendor4 = 0x84;
 inline constexpr uint8_t queueCommands = 0x7E;
 inline constexpr uint8_t executeCommands = 0x7F;
 inline constexpr uint8_t invalid = 0xFF;
@@ -369,6 +381,26 @@ class VppSetting {
 
    protected:
    ~VppSetting() = default;
+};
+
+// The board ID and the adapter ID of ID_DAP_Vendor4. The kind codes are
+// the ones of the command.
+struct IdReport {
+   uint8_t boardKind;
+   uint8_t boardSlot;
+   uint8_t adapterKind;
+   uint8_t adapterSlot;
+   bool allowed;
+   // False when the ADC fails on the adapter ID
+   bool adapterRead;
+};
+
+class IdSource {
+   public:
+   [[nodiscard]] virtual IdReport read() = 0;
+
+   protected:
+   ~IdSource() = default;
 };
 
 // The vendor commands 0x80-0x82 of one processor (setVendorCommands())
@@ -498,6 +530,12 @@ class Processor final : private TransferAbort {
       vppSetting_ = &setting;
    }
 
+   // Gives ID_DAP_Vendor4 to `source`, which must outlive the processor.
+   // Call it before the first packet.
+   void setIdSource(IdSource &source) {
+      idSource_ = &source;
+   }
+
    // Sends the commands 0x80-0x82 to `vendor`, which must outlive the
    // processor. Call it before the first packet.
    void setVendorCommands(VendorCommands &vendor) {
@@ -567,6 +605,7 @@ class Processor final : private TransferAbort {
    [[nodiscard]] bool switchBridge(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool targetPower(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool vppSettingCommand(PacketReader &in, PacketWriter &out);
+   [[nodiscard]] bool idCommand(PacketWriter &out);
    [[nodiscard]] bool uartCommand(uint8_t id, PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool uartTransfer(PacketReader &in, PacketWriter &out);
    [[nodiscard]] bool swoCommand(uint8_t id, PacketReader &in, PacketWriter &out);
@@ -605,6 +644,7 @@ class Processor final : private TransferAbort {
    VendorCommands *vendor_{ nullptr };
    protocol::TargetGate *gate_{ nullptr };
    VppSetting *vppSetting_{ nullptr };
+   IdSource *idSource_{ nullptr };
    DapSwo *swo_{ nullptr };
    bool swoStreaming_{ false };
    protocol::TargetPinOwner *pinOwner_{ nullptr };

@@ -152,3 +152,10 @@ TEST_CASE("VPP needs the gate decision and the VPP rule") {
    // The ADC fails: the old reading (no adapter) does not allow VPP
    CHECK_FALSE(vpp(true, std::nullopt, open, true));
 }
+
+TEST_CASE("The kind codes of ID_DAP_Vendor4") {
+   CHECK(board::idKindCode(IdKind::None) == 0);
+   CHECK(board::idKindCode(IdKind::Slot) == 1);
+   CHECK(board::idKindCode(IdKind::Fault) == 2);
+   CHECK(board::idKindCode(IdKind::Unknown) == 3);
+}

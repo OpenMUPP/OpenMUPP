@@ -204,6 +204,24 @@ wchlink::Processor wchProcessor{ wchTarget, wchPlatform };
 const char *const dapVendor = hasTargetGate ? targetGate.vendorText() : "OpenMUPP";
 constexpr const char *dapProduct = "OpenMUPP CMSIS-DAP";
 
+// ID_DAP_Vendor4: the board ID and the adapter ID of the target gate
+class GateIdSource final : public cmsisdap::IdSource {
+   public:
+   [[nodiscard]] cmsisdap::IdReport read() override {
+      const board::IdReading board = targetGate.board();
+      const auto adapter = targetGate.readAdapterNow();
+      const board::IdReading shown = adapter.value_or(board::IdReading{ board::IdKind::Fault, 0 });
+      return { .boardKind = board::idKindCode(board.kind),
+               .boardSlot = board.slot,
+               .adapterKind = board::idKindCode(shown.kind),
+               .adapterSlot = shown.slot,
+               .allowed = board::isTargetAllowed(targetGate.isBoardKnown(), adapter),
+               .adapterRead = adapter.has_value() };
+   }
+};
+
+GateIdSource dapIdSource;
+
 std::array<char, 2 * hw::Uid::SizeBytes + 1> dapSerialNumber{};
 
 // Time of the processor. It is the uptime in microseconds (1 ms per
@@ -406,6 +424,7 @@ void startDap() {
 #endif
    if constexpr(hasTargetGate) {
       dapProcessor.setTargetGate(targetGate);
+      dapProcessor.setIdSource(dapIdSource);
 #if defined(MUPP_CMSIS_DAP_HID)
       dapHidProcessor.setTargetGate(targetGate);
 #endif

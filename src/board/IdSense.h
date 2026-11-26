@@ -32,6 +32,21 @@ struct IdReading {
 
 inline constexpr uint8_t idSlotCount = 9;
 
+// The kind code of ID_DAP_Vendor4 (protocol/cmsisdap/DapProcessor.h)
+constexpr uint8_t idKindCode(IdKind kind) {
+   switch(kind) {
+   case IdKind::None:
+      return 0;
+   case IdKind::Slot:
+      return 1;
+   case IdKind::Fault:
+      return 2;
+   case IdKind::Unknown:
+      return 3;
+   }
+   return 2;
+}
+
 // The slots with no adapter yet
 constexpr bool isFreeSlot(uint8_t slot) {
    return slot == 6 || slot == 7;

@@ -20,26 +20,34 @@ BoardTargetGate::BoardTargetGate(const BoardPower &power)
 void BoardTargetGate::init() {
    if constexpr(current.idSense.has_value()) {
       const auto raw = power_.meanRaw(current.idSense->boardId);
-      const IdReading board = raw ? idReadingOf(*raw) : IdReading{ IdKind::Fault, 0 };
-      boardKnown_ = raw && isKnownBoardRevision(board);
+      board_ = raw ? idReadingOf(*raw) : IdReading{ IdKind::Fault, 0 };
+      boardKnown_ = raw && isKnownBoardRevision(board_);
       if(!boardKnown_) {
-         LOG_ERROR(debug::appLog, "board ID: not a known revision (slot %u): the probe does not drive the target", board.slot);
+         LOG_ERROR(debug::appLog, "board ID: not a known revision (slot %u): the probe does not drive the target",
+                   board_.slot);
       }
       static_cast<void>(check(protocol::TargetProtocol::None));
    }
 }
 
-bool BoardTargetGate::readAdapter() {
+std::optional<IdReading> BoardTargetGate::readAdapterNow() const {
    if constexpr(current.idSense.has_value()) {
       const auto raw = power_.meanRaw(current.idSense->adapterId);
-      if(!raw) {
-         return false;
+      if(raw) {
+         return idReadingOf(*raw);
       }
-      adapter_ = idReadingOf(*raw);
-      formatAdapterVendor(vendorText_, vendor, adapter_);
-      return true;
    }
-   return false;
+   return std::nullopt;
+}
+
+bool BoardTargetGate::readAdapter() {
+   const auto reading = readAdapterNow();
+   if(!reading) {
+      return false;
+   }
+   adapter_ = *reading;
+   formatAdapterVendor(vendorText_, vendor, adapter_);
+   return true;
 }
 
 bool BoardTargetGate::check(protocol::TargetProtocol protocol) {

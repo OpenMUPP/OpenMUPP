@@ -51,6 +51,19 @@ class BoardTargetGate final : public protocol::TargetGate {
       return adapter_;
    }
 
+   // The board ID of init(): a fault when the ADC failed
+   [[nodiscard]] IdReading board() const {
+      return board_;
+   }
+
+   [[nodiscard]] bool isBoardKnown() const {
+      return boardKnown_;
+   }
+
+   // Reads the adapter ID now, but keeps the last reading and the decision
+   // of the gate: it is not a connect. No value when the ADC fails.
+   [[nodiscard]] std::optional<IdReading> readAdapterNow() const;
+
    // "OpenMUPP" with the adapter of the last reading. The text stays at
    // this address.
    [[nodiscard]] const char *vendorText() const {
@@ -61,6 +74,7 @@ class BoardTargetGate final : public protocol::TargetGate {
    [[nodiscard]] bool readAdapter();
 
    const BoardPower &power_;
+   IdReading board_{ IdKind::Fault, 0 };
    bool boardKnown_{ false };
    bool allowed_{ false };
    IdReading adapter_{ IdKind::None, 0 };
