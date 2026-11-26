@@ -365,7 +365,7 @@ The request has no data stage:
 |---|---|
 | `bmRequestType` | `0x40`: vendor request, host to device, recipient device |
 | `bRequest` | `0x0E` (`usb::switchRequestCode`, the same code as `SWITCH_PERSONALITY`) |
-| `wValue` | The personality code, or the bootloader code `0xB0` (see [Bootloader code](firmware-update.md#bootloader-code)) |
+| `wValue` | The personality code, the bootloader code `0xB0` (see [Bootloader code](firmware-update.md#bootloader-code)), or the reset code `0xB1` |
 | `wIndex` | `0` |
 | `wLength` | `0` |
 
@@ -377,9 +377,16 @@ The firmware stalls the request in these conditions:
 - `wIndex` or `wLength` is not `0`, or the direction is device to host.
 
 A stall means that the firmware does not switch.
+Each image accepts the reset code `0xB1` (`boot::resetCode`), also an image with one personality.
+After the status stage and the 10 ms, the firmware disconnects from USB and resets.
+When the key is down, the reset waits until you release the key, because a key that is down at the reset starts the bootloader.
+The probe then starts with its stored personality and the stored bridge mode.
+The start-up turns off the target supply and VPP.
+`SWITCH_PERSONALITY` and `ID_DAP_Vendor0` do not accept the reset code.
+Firmware from before the reset code stalls it.
 The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
 An image with one personality stalls the request for each personality code.
-It accepts the bootloader code, when it is an `app-8k` image or an image of the STM32H5.
+It accepts the bootloader code, when it is an `app-8k` image or an image of the STM32H5, and the reset code.
 
 With libusb, the call is:
 

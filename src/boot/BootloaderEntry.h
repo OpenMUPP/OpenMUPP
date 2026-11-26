@@ -47,12 +47,21 @@ inline constexpr uint16_t bootRequest = 0xB007;
 inline constexpr uint8_t bootloaderCode = 0xB0;
 static_assert(bootloaderCode >= personality::maxPersonalities);
 
-class BootloaderEntry {
+// The code in the switch request on EP0 (usb/SwitchRequest.h) that resets
+// the probe. The probe starts again with its stored personality. Only the
+// switch request takes it: SWITCH_PERSONALITY and ID_DAP_Vendor0 refuse it.
+inline constexpr uint8_t resetCode = 0xB1;
+static_assert(resetCode >= personality::maxPersonalities && resetCode != bootloaderCode);
+
+// A request that the main loop runs replyDelayMs after it first sees it:
+// the bootloader entry, and the reset of the switch request on EP0
+// (usb/SwitchRequest.h).
+class DelayedRequest {
    public:
    // Time for the host to read the reply before the reset.
    static constexpr uint32_t replyDelayMs = 10;
 
-   // Requests the bootloader. A second request does not move the time.
+   // A second request does not move the time.
    void request() {
       requested_ = true;
    }
@@ -61,7 +70,7 @@ class BootloaderEntry {
       return requested_;
    }
 
-   // True when the main loop must enter the bootloader at the uptime nowMs.
+   // True when the main loop must run the request at the uptime nowMs.
    [[nodiscard]] bool isDue(uint64_t nowMs) {
       if(!requested_) {
          return false;
@@ -76,5 +85,7 @@ class BootloaderEntry {
    bool requested_ = false;
    std::optional<uint64_t> dueMs_;
 };
+
+class BootloaderEntry final : public DelayedRequest {};
 
 } // namespace boot
