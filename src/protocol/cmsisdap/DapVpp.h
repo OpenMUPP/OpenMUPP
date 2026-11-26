@@ -27,8 +27,12 @@ class DapVpp final : public VppCommand {
    }
 
    std::size_t command(art::span<const uint8_t> fields, art::span<uint8_t> response, bool pinsFree) override;
+   // Only a VPP that is on: a switch-off sets VPP_PD high, which holds
+   // the target in reset.
    void hostGone() override {
-      vpp_.switchOff();
+      if(vpp_.isOn()) {
+         vpp_.switchOff();
+      }
    }
 
    private:

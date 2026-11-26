@@ -136,3 +136,12 @@ TEST_CASE("VPP control: the host gone and a suspend switch VPP off") {
    CHECK_FALSE(d.vpp.isOn());
    CHECK(d.board.pullDown);
 }
+
+TEST_CASE("VPP control: the host gone without VPP on writes no pin") {
+   Dap d;
+   d.dap.hostGone();
+   d.dap.release();
+   // VPP_PD stays low: the target pin stays at the run level
+   CHECK(d.board.events.empty());
+   CHECK_FALSE(d.board.pullDown);
+}
