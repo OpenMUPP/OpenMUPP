@@ -165,10 +165,39 @@ TEST_CASE("VPP: switch-off sets VPP_PD high, then VPP_ON low and VPP_EN low") {
 TEST_CASE("VPP: poll switches VPP off when the gate does not allow it any more") {
    Bench b;
    REQUIRE(b.vpp.switchOn(12000) == Result::Ok);
-   b.vpp.poll();
+   CHECK_FALSE(b.vpp.poll(b.board.nowMs));
    CHECK(b.vpp.isOn());
    b.gate.limit.reset();
-   b.vpp.poll();
+   CHECK(b.vpp.poll(b.board.nowMs));
    CHECK_FALSE(b.vpp.isOn());
    CHECK_FALSE(b.board.enable);
+   CHECK_FALSE(b.vpp.poll(b.board.nowMs));
+}
+
+TEST_CASE("VPP: poll switches VPP off at a short on the target pin after the switch-on") {
+   Bench b;
+   REQUIRE(b.vpp.switchOn(13500) == Result::Ok);
+   uint64_t now = 1000;
+   CHECK_FALSE(b.vpp.poll(now));
+   b.board.shortedPin = true;
+   // At most one check each correctIntervalMs
+   CHECK_FALSE(b.vpp.poll(now + protocol::Vpp::correctIntervalMs - 1));
+   CHECK(b.vpp.isOn());
+   CHECK(b.vpp.poll(now + protocol::Vpp::correctIntervalMs));
+   CHECK_FALSE(b.vpp.isOn());
+   CHECK_FALSE(b.board.on);
+   CHECK(b.board.pullDown);
+}
+
+TEST_CASE("VPP: poll switches VPP off at an overvoltage and at a failed read") {
+   Bench b;
+   REQUIRE(b.vpp.switchOn(12500, 12500) == Result::Ok);
+   // A DAC fault: the boost goes to its maximum
+   b.board.outputMv = 12500 + protocol::Vpp::toleranceMillivolts + 1;
+   CHECK(b.vpp.poll(1000));
+   CHECK_FALSE(b.vpp.isOn());
+   REQUIRE(b.vpp.switchOn(12000) == Result::Ok);
+   b.board.failSense = true;
+   CHECK(b.vpp.poll(2000));
+   CHECK_FALSE(b.vpp.isOn());
 }

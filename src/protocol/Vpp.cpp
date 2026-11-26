@@ -26,7 +26,8 @@ Vpp::Result Vpp::switchOn(uint16_t millivolts, uint16_t familyLimit) {
    hardware_.setPullDown(true);
    hardware_.setOn(false);
    level_ = 0;
-   if(!reachLevel(millivolts, std::min(limit, *gateLimit))) {
+   limit_ = std::min(limit, *gateLimit);
+   if(!reachLevel(millivolts, limit_)) {
       switchOff();
       return Result::NoLevel;
    }
@@ -93,10 +94,25 @@ void Vpp::switchOff() {
    level_ = 0;
 }
 
-void Vpp::poll() {
-   if(isOn() && !gate_.isAllowed()) {
-      switchOff();
+bool Vpp::poll(uint64_t nowMs) {
+   if(!isOn()) {
+      return false;
    }
+   if(!gate_.isAllowed()) {
+      switchOff();
+      return true;
+   }
+   if(nowMs - lastCheckMs_ < correctIntervalMs) {
+      return false;
+   }
+   lastCheckMs_ = nowMs;
+   const auto boost = hardware_.senseMillivolts();
+   const auto pin = hardware_.sense2Millivolts();
+   if(!boost || !pin || *pin + maxDropMillivolts < *boost || *boost > limit_ + toleranceMillivolts) {
+      switchOff();
+      return true;
+   }
+   return false;
 }
 
 } // namespace protocol

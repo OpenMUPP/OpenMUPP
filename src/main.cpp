@@ -671,11 +671,13 @@ void beforeUsbPoll(uint64_t nowMs) {
 uint32_t probeErrorCount();
 
 #if defined(MUPP_WITH_CMSIS_DAP) && defined(CH32V30x_D8C)
-// VPP goes off when the VPP rule does not allow it any more, and at each
-// probe error.
-void pollVpp() {
+// VPP goes off when the VPP rule does not allow it any more, at a short or
+// an overvoltage (protocol/Vpp.h), and at each probe error.
+void pollVpp(uint64_t nowMs) {
    if constexpr(hasVpp) {
-      dapVpp.poll();
+      if(dapVpp.poll(nowMs)) {
+         LOG_ERROR(debug::appLog, "VPP: off: the VPP rule, a short on pin 19 or an overvoltage");
+      }
       static uint32_t seenErrors = 0;
       const uint32_t errors = probeErrorCount();
       if(errors != seenErrors) {
@@ -706,7 +708,7 @@ void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {
    }
 #endif
 #if defined(MUPP_WITH_CMSIS_DAP) && defined(CH32V30x_D8C)
-   pollVpp();
+   pollVpp(nowMs);
 #endif
 }
 

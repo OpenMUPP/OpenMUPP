@@ -38,7 +38,11 @@
 // to 0 V directly and stays there. The DAC goes off.
 //
 // poll() switches VPP off when the gate does not allow it any more, for
-// example after a refused connect.
+// example after a refused connect. While VPP is on, it also reads both
+// senses each correctIntervalMs, and switches VPP off when a read fails,
+// when VPP_SENSE2 is more than maxDropMillivolts below VPP_SENSE (a short
+// or an overload on the target pin), or when VPP_SENSE is more than
+// toleranceMillivolts above the limit of the switch-on.
 
 #include <cstdint>
 #include <optional>
@@ -134,8 +138,9 @@ class Vpp {
    [[nodiscard]] Result switchOn(uint16_t millivolts, uint16_t familyLimit = hardwareMaxMillivolts);
    void switchOff();
 
-   // Call it in the main loop.
-   void poll();
+   // Call it in the main loop. nowMs is a millisecond counter. True when
+   // the call switched VPP off.
+   [[nodiscard]] bool poll(uint64_t nowMs);
 
    [[nodiscard]] bool isOn() const {
       return level_ != 0;
@@ -158,6 +163,9 @@ class Vpp {
    Delay &delay_;
    VppGate &gate_;
    uint16_t level_{ 0 };
+   // The limit of the last switch-on, for the check in poll()
+   uint16_t limit_{ 0 };
+   uint64_t lastCheckMs_{ 0 };
 };
 
 } // namespace protocol

@@ -622,6 +622,7 @@ To turn VPP off, the driver sets `VPP_PD` high, then `VPP_ON` low, then `VPP_EN`
 VPP goes off in these cases:
 
 - The host goes away: a USB reset or a suspend.
+- A short or an overvoltage while VPP is on. Each 10 ms, the main loop reads both senses. VPP goes off when a read fails, when `VPP_SENSE2` is more than 0.5 V below `VPP_SENSE`, or when `VPP_SENSE` is more than 100 mV above the limit of the switch-on.
 - A probe error: the error count of the state LED increases (see [Start-up and LEDs](#start-up-and-leds)).
 - The VPP rule does not allow VPP any more, for example after a refused connect or a change of the setting.
 
