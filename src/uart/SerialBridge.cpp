@@ -7,6 +7,8 @@
 #include <optional>
 
 #if defined(MUPP_WITH_CMSIS_DAP)
+#include "board/Board.h"
+#include "protocol/cmsisdap/DapProcessor.h"
 #include "uart/DapUartChannel.h"
 #endif
 #include "uart/UartBridge.h"
@@ -26,6 +28,20 @@ UartPort port{ buffers };
 std::optional<Bridge> bridge;
 #if defined(MUPP_WITH_CMSIS_DAP)
 DapUartChannel<UartPort, bridgeBufferSize> dapChannel{ port, buffers };
+
+#if defined(__riscv)
+class PortWire final : public cmsisdap::UartWire {
+   public:
+   void setSingleWire(bool on) override {
+      port.setSingleWire(on);
+   }
+   [[nodiscard]] bool singleWire() const override {
+      return port.singleWire();
+   }
+};
+
+PortWire portWire;
+#endif
 #endif
 
 } // namespace
@@ -52,6 +68,15 @@ void pollBridge() {
 #if defined(MUPP_WITH_CMSIS_DAP)
 cmsisdap::DapUart *dapUart() {
    return &dapChannel;
+}
+
+cmsisdap::UartWire *uartWire() {
+#if defined(__riscv)
+   if constexpr(board::current.shifters.has_value()) {
+      return &portWire;
+   }
+#endif
+   return nullptr;
 }
 #endif
 

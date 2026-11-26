@@ -161,7 +161,7 @@ The STM32F1 boards do not have it: their USB packet memory is full.
 
 - **Interface**: interface 3 (interface 0 with `MUPP_AVR_USB_ID=medbg`, see [avr.md](avr.md#bloom)), HID class, interrupt OUT `0x05` and interrupt IN `0x85` (see [usb-device.md](usb-device.md#cmsis-dap-personality)).
 - **Packet size**: one command or response is one report of 64 bytes, also at high speed. `DAP_Info` on this interface reports the packet size 64. The host pads a command with zeros, and the probe pads each response with zeros.
-- **Processor**: the interface has its own `cmsisdap::Processor`, on the same SWD and JTAG engines as the v2 interface. It has the commands of the v2 interface except `ID_DAP_Vendor0`, `ID_DAP_Vendor2`, `ID_DAP_Vendor3`, `ID_DAP_Vendor4`, the `DAP_UART_*` commands and the `DAP_SWO_*` commands: they reply `ID_DAP_Invalid`. It has the RISC-V bridge: `ID_DAP_Vendor1` sets its mode, and `DAP_SWJ_Pins` tells it that the pins changed.
+- **Processor**: the interface has its own `cmsisdap::Processor`, on the same SWD and JTAG engines as the v2 interface. It has the commands of the v2 interface except `ID_DAP_Vendor0`, `ID_DAP_Vendor2`, `ID_DAP_Vendor3`, `ID_DAP_Vendor4`, `ID_DAP_Vendor6`, the `DAP_UART_*` commands and the `DAP_SWO_*` commands: they reply `ID_DAP_Invalid`. It has the RISC-V bridge: `ID_DAP_Vendor1` sets its mode, and `DAP_SWJ_Pins` tells it that the pins changed.
 - **Target pins**: the first interface that drives the target pins owns them (`protocol/TargetPinOwner.h`). `DAP_Connect`, `DAP_SWJ_Pins` with an output and `DAP_ResetTarget` take the pins. `DAP_Connect` takes the owner role and sets the port, but it does not change the pins: the pins change at the first transfer or sequence command (see `DAP_Connect` in the command table). While the other interface owns them, `DAP_Connect` replies port 0, `DAP_SWJ_Pins` only reads the pins, and `DAP_ResetTarget` replies `DAP_ERROR`. `DAP_Disconnect`, a bus reset or a suspend of the owner frees them. A host tool that stops without `DAP_Disconnect` (killed, crashed) keeps the pins until a bus reset or a replug. While the other interface owns the pins, `ID_DAP_Vendor1` replies `DAP_ERROR`, because the bridge is the JTAG port of both interfaces. The clock and transfer settings of an interface reach the engines only while it owns the pins, and `DAP_Connect` applies them.
 - **Scheduling**: `UsbStack::poll()` runs one command of each interface per round, so one interface does not block the other.
 - **Transfer abort**: `DAP_TransferAbort` stops a running command on both interfaces. During a command, the serial-only event delivery also gives the packets of both CMSIS-DAP interfaces (`usb/SerialEventQueue.h`), so a report of one interface does not hold the serial port during a command of the other.
@@ -460,6 +460,7 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 | `0x82` | `ID_DAP_Vendor2` | Switches the supply of the target and reads the target voltage (Vref): `[0x82][op u8]`. Op `0` switches the supply off, `1` switches it on at 3.3 V, `2` only reads. `[0x82][3][mV u16]` switches it on at 3.3 V or 5 V. The response is `[0x82][status u8][mV u16][state u8]`. See [Target power](#target-power). |
 | `0x83` | `ID_DAP_Vendor3` | Only on a board with an adapter ID (OpenMUPP v1), in an image with the RISC-V bridge (`MUPP_CMSIS_DAP_RV_BRIDGE`): reads and writes the setting "VPP without an adapter", `[0x83][op u8]`. Op `0` stores off, `1` stores on, `2` only reads. The response is `[0x83][status u8][setting u8]`. Other boards and images reply `ID_DAP_Invalid`. See [VPP without an adapter](#vpp-without-an-adapter). |
 | `0x84` | `ID_DAP_Vendor4` | Only on a board with an adapter ID (OpenMUPP v1): reads the board ID and the adapter ID, `[0x84]`. The response is `[0x84][status u8][board kind u8][board slot u8][adapter kind u8][adapter slot u8][allowed u8]`. Other boards reply `ID_DAP_Invalid`. See [Board ID and adapter ID](#board-id-and-adapter-id). |
+| `0x86` | `ID_DAP_Vendor6` | Only on a board with `UART_TX_DIR` (OpenMUPP v1): sets the wire mode of the UART, `[0x86][op u8]`. Op `0` sets normal mode (two wires), `1` single-wire mode, `2` only reads. The response is `[0x86][status u8][mode u8]`. Other boards reply `ID_DAP_Invalid`. See [UART wire mode](#uart-wire-mode). |
 | `0x7E` | `DAP_QueueCommands` | The packet waits. The next packet with another command runs the queue. A queued packet in the last free slot also runs the queue. |
 | `0x7F` | `DAP_ExecuteCommands` | The commands do not nest. |
 
@@ -735,6 +736,26 @@ Other rules:
   A host tool that ends without this event must send `DAP_UART_Transport` `1` itself.
 
 `tools/hwtest/dap_uart_loopback_test.py` tests the commands with a loopback wire from TX to RX (see [UART hardware test](#uart-hardware-test)).
+
+## UART wire mode
+
+The vendor command `ID_DAP_Vendor6` (`0x86`) selects the wire mode of the UART (see [Single-wire mode](uart-bridge.md#single-wire-mode)).
+Only boards with a TX level shifter and its direction pin `UART_TX_DIR` have the command: OpenMUPP v1.
+Other boards reply `ID_DAP_Invalid`.
+Only the v2 interface has the command. The HID interface replies `ID_DAP_Invalid`.
+
+The request is `[0x86][op u8]`.
+The response is `[0x86][status u8][mode u8]`.
+
+| Field | Value |
+|---|---|
+| `op` | `0`: normal mode, TX and RX on two wires (the default). `1`: single-wire mode. `2`: only read the mode. |
+| `status` | `0x00`, or `0xFF` for another op. |
+| `mode` | The mode after the command: `0` normal, `1` single wire. |
+
+The mode applies to the UART bridge and to the `DAP_UART_*` commands.
+When the UART sends at the time of the command, the new mode takes effect after the last stop bit.
+The mode stays when the host goes away. A reset of the probe sets normal mode.
 
 ## SWO commands
 
@@ -1613,6 +1634,9 @@ The tests cover off, on and read, each protection, a board without a switch or a
 `tests/TestDapVppSetting.cpp` runs `ID_DAP_Vendor3` through the processor, on a fake store.
 
 `tests/TestDapIdReport.cpp` runs `ID_DAP_Vendor4` through the processor, on a fake ID source.
+
+`tests/TestDapUartWire.cpp` runs `ID_DAP_Vendor6` through the processor, on a fake UART.
+`tests/TestSingleWireLine.cpp` checks the order of the pin changes in single-wire mode (`src/uart/SingleWireLine.h`).
 
 `tests/TestEdbg.cpp` runs the AVR commands through the HID function, on the ISP engine with the mock AVR of `tests/MockIspTarget.h`.
 The tests run the avrdude session, a flash page in 5 command fragments and a read in 5 response fragments.
