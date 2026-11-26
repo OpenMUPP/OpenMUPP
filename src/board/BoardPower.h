@@ -9,9 +9,9 @@
 // supply is off, and drives the active level of PowerSwitch::on when it is
 // on. A board with a TargetSupply has a 3.3 V and a 5 V switch: one enable
 // pin is high, or both are low. A falling edge on a fault input switches
-// both off in the interrupt (CH32V307 only). The senses (Vref, 5 V input)
-// and the ID dividers (board/BoardIdSense.h) read with ADC1. A board without a switch or without a sense reports that
-// to TargetPower.
+// both off in the interrupt (CH32V307 only). The senses (Vref, 5 V input),
+// the ID dividers (board/BoardIdSense.h) and the VPP senses (board/BoardVpp.h) read with ADC1. A board without a
+// switch or without a sense reports that to TargetPower.
 
 #include <optional>
 
