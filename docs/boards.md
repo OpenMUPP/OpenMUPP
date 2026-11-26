@@ -489,6 +489,7 @@ The slot table is in the README of the [openmupp-v1](https://github.com/OpenMUPP
 
 **Board ID.** The firmware reads the board ID (PC2) once at start-up.
 Revision 1 is slot 1 (R3 1 kΩ, x = 0.091).
+Revision 2 is slot 2 (R3 2.4 kΩ, x = 0.194). Revision 2 adds a 10 kΩ pull-up from `T_UART_TX` to `VTREF` (see [Single-wire mode](uart-bridge.md#single-wire-mode)).
 **Adapter ID.** The firmware reads the adapter ID (PB1) at start-up and again at each connect, because a user can change the adapter while the probe runs.
 These commands are a connect:
 

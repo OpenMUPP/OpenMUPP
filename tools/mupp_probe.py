@@ -205,7 +205,7 @@ UART_MODES = {0: "normal (two wires)", 1: "single wire"}
 # The kind codes of ID_DAP_Vendor4
 ID_OPEN, ID_SLOT, ID_FAULT, ID_FREE_SLOT = 0, 1, 2, 3
 # The board revisions that the firmware knows, by board ID slot
-BOARD_REVISIONS = {1: "OpenMUPP v1, revision 1"}
+BOARD_REVISIONS = {1: "OpenMUPP v1, revision 1", 2: "OpenMUPP v1, revision 2 (pull-up on UART TX)"}
 # The adapters by adapter ID slot (README of the openmupp-v1 repository)
 ADAPTERS = {
     1: "AVR adapter, variant A (JTAG, ISP, debugWIRE)",
