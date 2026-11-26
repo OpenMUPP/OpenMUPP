@@ -558,8 +558,9 @@ The firmware uses the sequence above, with these values:
 - For a change from 5 V to 3.3 V, the firmware reads `VTREF` each 1 ms.
   When `VTREF` is not below 3.4 V after 500 ms, the firmware keeps both switches off and refuses the change.
 - Before 5 V, the firmware reads `V5_SENSE` (PC0, `+5V` divided by 2).
-  When `+5V` is below 4.4 V, or the firmware cannot read it, the firmware refuses 5 V. The supply then stays as it was.
+  When `+5V` is below 4.4 V or above 5.5 V, or the firmware cannot read it, the firmware refuses 5 V. The supply then stays as it was.
   4.4 V is the USB minimum at a low-power device.
+  5.5 V is the USB-C maximum. The 5 V switch does not decrease the voltage, so a higher `+5V` goes directly to the target.
 - 10 ms after the switch-on, `VTREF` must be above 1.8 V. Else the firmware turns the switch off again and refuses.
 
 The fault inputs PA11 and PA12 have an EXTI interrupt on the falling edge.

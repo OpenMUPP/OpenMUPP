@@ -560,7 +560,7 @@ A switch-on from off is refused, and the supply stays off, in these cases:
 
 A board without a Vref sense switches on without these checks.
 
-A switch-on at 5 V is also refused when the USB supply of the probe is below 4.4 V. The supply then stays as it was.
+A switch-on at 5 V is also refused when the USB supply of the probe is below 4.4 V or above 5.5 V. The supply then stays as it was.
 A change from 5 V to 3.3 V is refused, and the supply stays off, when the voltage does not go below 3.4 V in 500 ms.
 
 With the HID interface, one rule covers both interfaces.

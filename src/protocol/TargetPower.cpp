@@ -74,7 +74,7 @@ TargetPower::Result TargetPower::switchOn(Supply supply) {
    }
    if(supply == Supply::V5) {
       const auto input = hardware_.fiveVoltInputMillivolts();
-      if(!input || *input < min5vInputMillivolts) {
+      if(!input || *input < min5vInputMillivolts || *input > max5vInputMillivolts) {
          return Result::Refused;
       }
    }
