@@ -9,6 +9,7 @@ import argparse
 import contextlib
 import io
 import os
+import re
 import shutil
 import struct
 import sys
@@ -299,3 +300,20 @@ class ProbeRsVerdictTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScriptPathTest(unittest.TestCase):
+    """The scripts and files that the runner starts exist: the unit tests mock the runs."""
+
+    def test_clock_script(self):
+        self.assertTrue(os.path.isfile(hw.CLOCK_SCRIPT), hw.CLOCK_SCRIPT)
+
+    def test_python_tools(self):
+        with open(hw.__file__, encoding="utf-8") as source:
+            text = source.read()
+        tools = re.findall(r'python_tool\("([^"]+)"', text)
+        scripts = re.findall(r'os\.path\.join\(HWTEST_DIR, "([^"]+)"\)', text)
+        self.assertGreaterEqual(len(tools), 3)
+        self.assertIn("pyocd_jtag_test.py", scripts)
+        for path in [os.path.join(hw.TOOLS_DIR, p) for p in tools] + [os.path.join(hw.HWTEST_DIR, p) for p in scripts]:
+            self.assertTrue(os.path.isfile(path), path)
