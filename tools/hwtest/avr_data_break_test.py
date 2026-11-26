@@ -36,7 +36,7 @@ Usage:
 The data address is a data space address (SRAM starts at 0x0100 on the
 ATmega32U4). Needs pyusb (and libusb). On Linux the script detaches the
 usbhid driver from the interface. The unit tests in
-test_avr_data_break_test.py need no pyusb and no hardware.
+tools/tests/test_avr_data_break_test.py need no pyusb and no hardware.
 """
 
 import argparse

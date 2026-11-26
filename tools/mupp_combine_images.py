@@ -16,7 +16,7 @@ Usage:
 The inputs are binary files. --app-offset is the start of the application,
 from the start of the flash. The tool fails when the bootloader is larger
 than this offset, or when the combined image is larger than --flash-size.
-The unit tests are in test_mupp_combine_images.py.
+The unit tests are in tools/tests/test_mupp_combine_images.py.
 """
 
 import argparse

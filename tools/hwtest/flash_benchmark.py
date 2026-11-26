@@ -28,7 +28,7 @@ Usage:
 The default image is 32 KiB, so that it fits into all STM32F103 devices from
 the x6 (32 KiB) up. Use --size 65536 for an STM32F103x8 or larger.
 
-The unit tests in test_flash_benchmark.py need no OpenOCD and no hardware.
+The unit tests in tools/tests/test_flash_benchmark.py need no OpenOCD and no hardware.
 """
 
 import argparse

@@ -52,7 +52,7 @@ Usage:
     python3 probe_hw_test.py --full-uart --log-dir /tmp/hw-test
 
 Needs pyusb and pyserial, OpenOCD, pyOCD and probe-rs. Use --skip for a
-tool that is not installed. The unit tests in test_probe_hw_test.py need no
+tool that is not installed. The unit tests in tools/tests/test_probe_hw_test.py need no
 hardware.
 """
 

@@ -31,7 +31,7 @@ run as long as the transfer.
 
 To test the script without hardware, use the pyserial loopback URL:
     python3 serial_loopback_test.py loop://
-The unit tests in test_serial_loopback.py need no pyserial.
+The unit tests in tools/tests/test_serial_loopback.py need no pyserial.
 
 Requires the pyserial package to open a port.
 """

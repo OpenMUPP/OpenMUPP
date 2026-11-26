@@ -115,7 +115,7 @@ and "bridge", "power" and "adapter" do not find the dongle.
 The wait after a switch looks for the standard IDs of the target.
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
-The unit tests in test_mupp_probe.py need no pyusb and no hardware.
+The unit tests in tools/tests/test_mupp_probe.py need no pyusb and no hardware.
 """
 
 import argparse
