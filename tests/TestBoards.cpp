@@ -238,7 +238,7 @@ TEST_CASE("OpenMUPP v1 has the pin map of docs/hardware.md of openmupp-v1") {
    CHECK(v1.vref == board::VrefSense{ .pin{ Port::B, 0 }, .divider = 2 });
    CHECK(v1.leds.state == Signal{ { Port::A, 10 }, Active::High });
    CHECK(v1.leds.usb == Signal{ { Port::A, 9 }, Active::High });
-   CHECK_FALSE(v1.leds.power);
+   CHECK(v1.leds.power == Signal{ { Port::C, 4 }, Active::High });
    CHECK(v1.key == Signal{ { Port::B, 3 }, Active::High });
    REQUIRE(v1.hasJtagFastPath());
    CHECK(v1.jtagFastPath->tckLink == Pin{ Port::C, 10 });

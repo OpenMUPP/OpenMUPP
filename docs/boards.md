@@ -417,7 +417,7 @@ These items are different:
   These users set SRST as a push-pull output. A released SRST is a low output, not an input with pull-up.
   A read of nRESET (`DAP_SWJ_Pins`, GPIO `IN`) uses the read-back pin PB11.
 - `VTREF_SENSE` (PB0) shows half of the target voltage.
-- LEDs: state on PA10 (red), USB on PA9 (green). Both are active high. The blue LED (PC4) is not used yet.
+- LEDs: power on PC4 (blue, the target voltage), state on PA10 (red), USB on PA9 (green). All are active high.
 - Debug log: UART5 on J2, PC12 (TX) and PD2 (RX), 115200 baud 8N1 (see [Debug log](debug-log.md#debug-uart)).
 - The key (SW1) is on the `BOOT0` net. PB3 reads it, active high.
 - SWO: the TDO net also goes to PA3 (USART2 RX). The YD board needs a wire for this (see [YD-CH32V307VCT6 development board](#yd-ch32v307vct6-development-board)).

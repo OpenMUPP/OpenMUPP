@@ -50,8 +50,8 @@ inline constexpr Definition openMuppV1{
    .vref = VrefSense{ .pin{ Port::B, 0 }, .divider = 2 },
    .powerSwitch = std::nullopt,
    .leds{
-   .power = std::nullopt,
-   // D4 (red) and D2 (green). D1 (blue, PC4) is not used yet.
+   // D1 (blue) shows the target voltage, D4 (red) the state, D2 (green) USB
+   .power = Signal{ { Port::C, 4 }, Active::High },
    .state = Signal{ { Port::A, 10 }, Active::High },
    .usb = Signal{ { Port::A, 9 }, Active::High },
    },
