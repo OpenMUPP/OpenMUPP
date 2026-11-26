@@ -46,6 +46,7 @@ add_executable(mupp-tests
         TestLogSink.cpp
         TestFrameFormat.cpp
         TestUartBridge.cpp
+        TestSingleWireLine.cpp
         TestSwoRing.cpp
         TestManchesterDecoder.cpp
         TestSharedDmaChannel.cpp
