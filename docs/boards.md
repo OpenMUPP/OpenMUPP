@@ -611,13 +611,13 @@ The level is correct when three steady readings are in the window: the level ± 
 
 The driver uses the [VPP sequence](#vpp-sequence) with these steps:
 
-1. Set `VPP_ON` low.
+1. Set `VPP_PD` high, then `VPP_ON` low. Thus at a level change, pin 19 goes from VPP to 0 V, not to `VTREF`.
 2. Set the DAC. Then set `VPP_EN` high.
 3. Wait until `VPP_SENSE` shows the level. If this does not occur in 2 s, or the ADC fails, turn VPP off and report an error.
-4. Set `VPP_PD` high, then `VPP_ON` high. Wait 200 µs, then set `VPP_PD` low. Thus pin 19 goes from 0 V to VPP with no step at `VTREF`. The 200 µs are an estimate of the turn-on time of Q2. Measure it on the first board.
+4. Set `VPP_ON` high. `VPP_PD` is still high. Wait 200 µs, then set `VPP_PD` low. Thus pin 19 goes from 0 V to VPP with no step at `VTREF`. The 200 µs are an estimate of the turn-on time of Q2. Measure it on the first board.
 5. Wait 10 ms for the filter of `VPP_SENSE2`. Then `VPP_SENSE2` (pin 19) must be not more than 0.5 V below `VPP_SENSE`. Else pin 19 has a short or an overload: turn VPP off and report an error. 0.5 V includes the divider tolerances (0.3 V at 14 V) and some mA in R52.
 
-To turn VPP off, the driver sets `VPP_ON` low, then `VPP_EN` low, then `VPP_PD` high. Pin 19 then stays at 0 V. The DAC goes off.
+To turn VPP off, the driver sets `VPP_PD` high, then `VPP_ON` low, then `VPP_EN` low. This is the program exit of the board (see "Pin 19 states" in `docs/hardware.md` of openmupp-v1). Thus pin 19 goes from VPP to 0 V directly, and stays at 0 V. The DAC goes off.
 
 VPP goes off in these cases:
 

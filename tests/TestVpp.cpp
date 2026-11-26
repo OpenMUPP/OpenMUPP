@@ -38,13 +38,15 @@ TEST_CASE("VPP: switch-on follows the sequence and reaches the level") {
    CHECK(b.board.enable);
    CHECK(b.board.on);
    CHECK_FALSE(b.board.pullDown);
-   // VPP_ON low, the DAC, VPP_EN high, then VPP_PD high before VPP_ON high
+   // VPP_PD high, VPP_ON low, the DAC, VPP_EN high, then VPP_ON high with
+   // VPP_PD still high, and VPP_PD low
    const auto &e = b.board.events;
    REQUIRE(e.size() >= 6);
-   CHECK(e[0] == "on 0");
-   CHECK(e[1] == "dac " + std::to_string(protocol::vppDacCode(12000)));
-   CHECK(e[2] == "en 1");
-   CHECK(e[e.size() - 3] == "pd 1");
+   CHECK(e[0] == "pd 1");
+   CHECK(e[1] == "on 0");
+   CHECK(e[2] == "dac " + std::to_string(protocol::vppDacCode(12000)));
+   CHECK(e[3] == "en 1");
+   CHECK(std::count(e.begin(), e.end(), "pd 1") == 1);
    CHECK(e[e.size() - 2] == "on 1");
    CHECK(e[e.size() - 1] == "pd 0");
 }
@@ -68,8 +70,11 @@ TEST_CASE("VPP: a step down waits for the discharge and keeps VPP_ON low") {
    CHECK(near(b.board.outputMv, 5000));
    // 9 V at 13 mV/ms
    CHECK(b.board.nowMs - start > 600);
-   CHECK(b.board.events.front() == "on 0");
-   // VPP_ON goes high only after the level (pd 1, on 1, pd 0 at the end)
+   // The target pin goes from VPP to 0 V, never to the run level
+   REQUIRE(b.board.events.size() >= 2);
+   CHECK(b.board.events[0] == "pd 1");
+   CHECK(b.board.events[1] == "on 0");
+   // VPP_ON goes high only after the level (on 1, pd 0 at the end)
    CHECK(std::count(b.board.events.begin(), b.board.events.end(), "on 1") == 1);
    CHECK(b.board.events[b.board.events.size() - 2] == "on 1");
 }
@@ -147,12 +152,12 @@ TEST_CASE("VPP: a short on the target pin (VPP_SENSE2) switches VPP off") {
    CHECK(b.board.pullDown);
 }
 
-TEST_CASE("VPP: switch-off sets VPP_ON low, VPP_EN low, then VPP_PD high") {
+TEST_CASE("VPP: switch-off sets VPP_PD high, then VPP_ON low and VPP_EN low") {
    Bench b;
    REQUIRE(b.vpp.switchOn(12000) == Result::Ok);
    b.board.events.clear();
    b.vpp.switchOff();
-   CHECK(b.board.events == std::vector<std::string>{ "on 0", "en 0", "pd 1", "dac off" });
+   CHECK(b.board.events == std::vector<std::string>{ "pd 1", "on 0", "en 0", "dac off" });
    CHECK_FALSE(b.vpp.isOn());
    CHECK(b.vpp.level() == 0);
 }

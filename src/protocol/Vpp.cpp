@@ -22,14 +22,15 @@ Vpp::Result Vpp::switchOn(uint16_t millivolts, uint16_t familyLimit) {
       switchOff();
       return Result::Refused;
    }
+   // From VPP to 0 V, never to the run level
+   hardware_.setPullDown(true);
    hardware_.setOn(false);
    level_ = 0;
    if(!reachLevel(millivolts, std::min(limit, *gateLimit))) {
       switchOff();
       return Result::NoLevel;
    }
-   // From 0 V to VPP, with no step at the run level
-   hardware_.setPullDown(true);
+   // From 0 V to VPP (VPP_PD is high), with no step at the run level
    hardware_.setOn(true);
    delay_.microseconds(switchUs);
    hardware_.setPullDown(false);
@@ -85,9 +86,9 @@ bool Vpp::reachLevel(uint16_t millivolts, uint16_t limit) {
 }
 
 void Vpp::switchOff() {
+   hardware_.setPullDown(true);
    hardware_.setOn(false);
    hardware_.setEnable(false);
-   hardware_.setPullDown(true);
    hardware_.dacOff();
    level_ = 0;
 }

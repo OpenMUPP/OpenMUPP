@@ -15,7 +15,8 @@
 //
 // The change sequence:
 //
-//   1. VPP_ON low.
+//   1. VPP_PD high, then VPP_ON low: on a level change, the target pin
+//      goes from VPP to 0 V, never to the run level.
 //   2. The DAC to the level (vppDacCode()).
 //   3. VPP_EN high. Each correctIntervalMs, read VPP_SENSE. The resistor
 //      and reference tolerances make the DAC value inexact, so the driver
@@ -25,15 +26,16 @@
 //      is steady and in the window (level +- toleranceMillivolts, never
 //      above the limit) for settleReads reads. When this does not occur in
 //      levelTimeoutMs, VPP goes off and switchOn() replies NoLevel.
-//   4. VPP_PD high, VPP_ON high, wait switchUs, VPP_PD low: the target pin
-//      goes from 0 V to VPP with no step at the run level.
+//   4. VPP_ON high (VPP_PD is still high), wait switchUs, VPP_PD low: the
+//      target pin goes from 0 V to VPP with no step at the run level.
 //   5. After sense2SettleMs, VPP_SENSE2 (the target pin) must be at most
 //      maxDropMillivolts below VPP_SENSE. Else the pin has a short or an
 //      overload (the current limit of the output switch), VPP goes off and
 //      switchOn() replies TargetFault.
 //
-// switchOff(): VPP_ON low, VPP_EN low, then VPP_PD high: the target pin
-// goes to 0 V and stays there. The DAC goes off.
+// switchOff(): VPP_PD high, then VPP_ON low and VPP_EN low (the program
+// exit of docs/hardware.md of openmupp-v1): the target pin goes from VPP
+// to 0 V directly and stays there. The DAC goes off.
 //
 // poll() switches VPP off when the gate does not allow it any more, for
 // example after a refused connect.
