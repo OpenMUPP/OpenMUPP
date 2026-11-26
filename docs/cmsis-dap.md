@@ -662,6 +662,17 @@ The command takes the rest of the packet. Thus in `DAP_ExecuteCommands` and `DAP
 The firmware uses the sequence and the limits in [VPP sequence](boards.md#vpp-sequence).
 VPP goes off at a USB reset, a suspend and `85 00`.
 
+`tools/mupp_probe.py` sends the command from the host:
+
+```sh
+python3 tools/mupp_probe.py vpp on 12000
+python3 tools/mupp_probe.py vpp status
+python3 tools/mupp_probe.py vpp off
+```
+
+The script waits up to 3 s for the response of `vpp on`.
+VPP stays on after the script ends, until `vpp off`, a USB reset or a suspend.
+
 ## Board ID and adapter ID
 
 The vendor command `ID_DAP_Vendor4` (`0x84`) reads the board ID and the adapter ID (see [Adapter ID and board ID](boards.md#adapter-id-and-board-id)).

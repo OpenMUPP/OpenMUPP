@@ -122,6 +122,7 @@ class FakeDevice:
         self.interface_calls = []
         self.ctrl_transfers = []
         self.writes = []
+        self.read_timeouts = []
 
     def ctrl_transfer(self, *args):
         self.ctrl_transfers.append(args)
@@ -134,7 +135,8 @@ class FakeDevice:
     def write(self, endpoint, data, _timeout):
         self.writes.append((endpoint, bytes(data)))
 
-    def read(self, _endpoint, _size, _timeout):
+    def read(self, _endpoint, _size, timeout):
+        self.read_timeouts.append(timeout)
         if self.reply is None:
             raise FakeUsbError("Operation timed out", -7, errno.ETIMEDOUT)
         # A function gives the reply to the last request
@@ -720,6 +722,65 @@ class PowerCheckReplyTest(unittest.TestCase):
         for reply in ([], [0x81, 0x00, 0x00, 0x00], [0x82, 0x00], [0x82, 0x02, 0x00, 0x00]):
             with self.assertRaises(mp.ProbeError):
                 mp.check_power_reply(reply)
+
+
+class VppCheckReplyTest(unittest.TestCase):
+    def test_done(self):
+        mp.check_vpp_reply([0x85, 0x00, 0xE0, 0x2E, 0xE5, 0x2E, 0xC8, 0x2E])
+
+    def test_old_firmware(self):
+        with self.assertRaisesRegex(mp.ProbeError, "ID_DAP_Vendor5"):
+            mp.check_vpp_reply([0xFF])
+
+    def test_errors_show_the_senses(self):
+        for status, text in ((1, "refused"), (2, "did not show the level"), (3, "short")):
+            with self.assertRaisesRegex(mp.ProbeError, text + ".*VPP_SENSE 4600 mV, VPP_SENSE2 0 mV"):
+                mp.check_vpp_reply([0x85, status, 0x00, 0x00, 0xF8, 0x11, 0x00, 0x00])
+
+    def test_other_response(self):
+        for reply in ([], [0x84] + [0] * 7, [0x85, 0x00, 0x00], [0x85, 0x04] + [0] * 6):
+            with self.assertRaises(mp.ProbeError):
+                mp.check_vpp_reply(reply)
+
+
+class VppCommandTest(unittest.TestCase):
+    def run_main(self, argv, devices):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = mp.main(["vpp", *argv], fake_usb(devices))
+        return result, stdout.getvalue(), stderr.getvalue()
+
+    def test_on(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x85, 0x00, 0xE0, 0x2E, 0xE5, 0x2E, 0xC8, 0x2E])
+        result, out, _ = self.run_main(["on", "12000"], [device])
+        self.assertEqual(result, 0)
+        self.assertEqual(device.writes, [(0x03, bytes([0x85, 0x01, 0xE0, 0x2E]))])
+        # The switch-on can take 2 s
+        self.assertEqual(device.read_timeouts, [mp.VPP_TIMEOUT_MS])
+        self.assertIn("VPP: on at 12000 mV", out)
+        self.assertIn("VPP_SENSE:  12005 mV", out)
+        self.assertIn("VPP_SENSE2: 11976 mV", out)
+
+    def test_off_and_status(self):
+        for operation, code in (("off", 0), ("status", 2)):
+            device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x85, 0x00, 0, 0, 0xF8, 0x11, 0, 0])
+            result, out, _ = self.run_main([operation], [device])
+            self.assertEqual(result, 0)
+            self.assertEqual(device.writes, [(0x03, bytes([0x85, code]))])
+            self.assertIn("VPP: off", out)
+            self.assertIn("VPP_SENSE:  4600 mV", out)
+
+    def test_refused(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0x85, 0x01, 0, 0, 0, 0, 0, 0])
+        result, out, err = self.run_main(["on", "14000"], [device])
+        self.assertEqual(result, 1)
+        self.assertEqual(out, "")
+        self.assertIn("refused VPP", err)
+
+    def test_level_only_with_on(self):
+        for argv in (["on"], ["off", "5000"], ["status", "5000"], ["on", "70000"]):
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                mp.main(["vpp", *argv], fake_usb([]))
 
 
 class PowerCommandTest(unittest.TestCase):
