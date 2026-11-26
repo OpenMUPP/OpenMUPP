@@ -757,6 +757,14 @@ The mode applies to the UART bridge and to the `DAP_UART_*` commands.
 When the UART sends at the time of the command, the new mode takes effect after the last stop bit.
 The mode stays when the host goes away. A reset of the probe sets normal mode.
 
+`tools/mupp_probe.py` sends the command from the host:
+
+```sh
+python3 tools/mupp_probe.py uart single   # single-wire mode
+python3 tools/mupp_probe.py uart normal   # normal mode
+python3 tools/mupp_probe.py uart status   # only show the mode
+```
+
 ## SWO commands
 
 The `DAP_SWO_*` commands of CMSIS-DAP v2.1 capture the SWO trace output of the target (issue [#5](https://github.com/OpenMUPP/OpenMUPP/issues/5)).

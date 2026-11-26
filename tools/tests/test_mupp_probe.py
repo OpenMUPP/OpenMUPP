@@ -781,6 +781,43 @@ class PowerCommandTest(unittest.TestCase):
         self.assertIn("not known", err)
 
 
+class UartCheckReplyTest(unittest.TestCase):
+    def test_done(self):
+        mp.check_uart_reply([0x86, 0x00, 0x01])
+
+    def test_no_command(self):
+        with self.assertRaisesRegex(mp.ProbeError, "UART_TX_DIR"):
+            mp.check_uart_reply([0xFF])
+
+    def test_other_response(self):
+        for reply in ([], [0x84, 0x00, 0x00], [0x86, 0x00], [0x86, 0xFF, 0x00], [0x86, 0x00, 0x02]):
+            with self.assertRaises(mp.ProbeError):
+                mp.check_uart_reply(reply)
+
+
+class UartCommandTest(unittest.TestCase):
+    def run_main(self, argv, devices):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = mp.main(["uart", *argv], fake_usb(devices))
+        return result, stdout.getvalue(), stderr.getvalue()
+
+    def test_modes(self):
+        for mode, code, shown in (("normal", 0, "normal (two wires)"), ("single", 1, "single wire"), ("status", 2, "single wire")):
+            reply = [0x86, 0x00, 0 if mode == "normal" else 1]
+            device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=reply)
+            result, out, _ = self.run_main([mode], [device])
+            self.assertEqual(result, 0)
+            self.assertEqual(device.writes, [(0x03, bytes([0x86, code]))])
+            self.assertEqual(out, "UART mode: %s\n" % shown)
+
+    def test_board_without_the_command(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", reply=[0xFF])
+        result, out, err = self.run_main(["single"], [device])
+        self.assertEqual(result, 1)
+        self.assertEqual(out, "")
+        self.assertIn("ID_DAP_Vendor6", err)
+
 
 class IdReportLinesTest(unittest.TestCase):
     def test_known_board_and_adapter(self):

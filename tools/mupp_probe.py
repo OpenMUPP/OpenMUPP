@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Host control of the probe: the USB personality of a multi image
 (MUPP_PERSONALITIES), the bootloader, the RISC-V bridge, the target power,
-and the firmware version, the board revision and the adapter.
+the wire mode of the UART, and the firmware version, the board revision and
+the adapter.
 
 "switch" switches the personality or starts the bootloader:
 openmupp-bootloader on the STM32F1 boards, the ROM USB DFU on the STM32H5
@@ -86,6 +87,17 @@ connect. "Connect" shows if a connect would start a protocol now. Only a
 board with an adapter ID (OpenMUPP v1) has the command. See
 docs/cmsis-dap.md, "Board ID and adapter ID".
 
+"uart" sets the wire mode of the UART of the CMSIS-DAP personality. It sends
+ID_DAP_Vendor6 on interface 0:
+
+    [0x86][0] normal (two wires), [0x86][1] single wire, [0x86][2] only read
+    -> response [0x86][status][mode], 0 = done
+
+Single-wire mode needs a link from J4 pin 13 (TX) to pin 14 (RX). The mode
+stays after the script ends, until a reset of the probe or the next command.
+Only a board with UART_TX_DIR (OpenMUPP v1) has the command. See
+docs/uart-bridge.md, "Single-wire mode".
+
 Usage:
     python3 mupp_probe.py show
     python3 mupp_probe.py switch cmsis-dap
@@ -101,6 +113,8 @@ Usage:
     python3 mupp_probe.py power off --serial 0123456789AB
     python3 mupp_probe.py power status
     python3 mupp_probe.py adapter
+    python3 mupp_probe.py uart single
+    python3 mupp_probe.py uart status
     python3 mupp_probe.py reset --serial 0123456789AB
 
 A device with a known ID, but with strings that the tool cannot read, is
@@ -111,7 +125,7 @@ for a dongle with an ID or a product string that the tool does not know.
 An ID that the tool does not know, or that two personalities share (1209:0001),
 has an unknown personality: --active names
 it. Without it, the EP0 request still works, but not the fallback command,
-and "bridge", "power" and "adapter" do not find the dongle.
+and "bridge", "power", "uart" and "adapter" do not find the dongle.
 The wait after a switch looks for the standard IDs of the target.
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
@@ -173,6 +187,7 @@ DAP_VENDOR0 = 0x80
 DAP_VENDOR1 = 0x81
 DAP_VENDOR2 = 0x82
 DAP_VENDOR4 = 0x84
+DAP_VENDOR6 = 0x86
 DAP_INFO = 0x00
 DAP_INFO_FIRMWARE_VERSION = 0x09
 DAP_INVALID = 0xFF
@@ -184,6 +199,9 @@ BRIDGE_STORE_FLAG = 0x80
 POWER_OPS = {"off": 0, "on": 1, "status": 2}
 POWER_REFUSED = 1
 POWER_NOT_SUPPORTED = 0xFF
+# The operations of ID_DAP_Vendor6, and the names of its modes
+UART_OPS = {"normal": 0, "single": 1, "status": 2}
+UART_MODES = {0: "normal (two wires)", 1: "single wire"}
 # The kind codes of ID_DAP_Vendor4
 ID_OPEN, ID_SLOT, ID_FAULT, ID_FREE_SLOT = 0, 1, 2, 3
 # The board revisions that the firmware knows, by board ID slot
@@ -301,6 +319,15 @@ def check_power_reply(reply):
 def power_millivolts(reply):
     """The target voltage of an ID_DAP_Vendor2 response. 0 without a Vref sense."""
     return int.from_bytes(bytes(reply)[2:4], "little")
+
+
+def check_uart_reply(reply):
+    """Raises ProbeError when the response does not confirm the UART wire mode."""
+    reply = bytes(reply)
+    if reply[:1] == bytes([DAP_INVALID]):
+        raise ProbeError("the firmware does not know ID_DAP_Vendor6: the board has no UART_TX_DIR, or the firmware is too old")
+    if len(reply) < 3 or reply[0] != DAP_VENDOR6 or reply[1] != 0 or reply[2] not in UART_MODES:
+        raise ProbeError("unexpected response %s" % reply.hex())
 
 
 def check_info_reply(reply):
@@ -707,6 +734,14 @@ def command_power(usb, args):
     return 0
 
 
+def command_uart(usb, args):
+    reply = run_dap_command(usb, args, bytes([DAP_VENDOR6, UART_OPS[args.mode]]), check_uart_reply)
+    if reply is None:
+        return 1
+    print("UART mode: %s" % UART_MODES[bytes(reply)[2]])
+    return 0
+
+
 def command_adapter(usb, args):
     version = run_dap_command(usb, args, bytes([DAP_INFO, DAP_INFO_FIRMWARE_VERSION]), check_info_reply)
     if version is None:
@@ -738,11 +773,13 @@ def main(argv=None, usb=None):
     bridge.add_argument("--store", action="store_true", help="also store the mode: the mode at power-up and after a USB reset")
     power = commands.add_parser("power", help="switch the 3.3 V target supply or read the target voltage (CMSIS-DAP personality)")
     power.add_argument("operation", choices=tuple(POWER_OPS))
+    uart = commands.add_parser("uart", help="set or show the wire mode of the UART (CMSIS-DAP personality)")
+    uart.add_argument("mode", choices=tuple(UART_OPS))
     adapter = commands.add_parser("adapter", help="show the firmware version, the board revision and the adapter (CMSIS-DAP personality)")
     reset = commands.add_parser("reset", help="reset the dongle")
     # The options also work after the command. SUPPRESS keeps a value from
     # before the command.
-    for subparser in (show, switch, bridge, power, adapter, reset):
+    for subparser in (show, switch, bridge, power, uart, adapter, reset):
         add_selection_options(subparser, argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.active is not None and (args.id is None or personality_of(*args.id) is not None):
@@ -751,7 +788,7 @@ def main(argv=None, usb=None):
         parser.error("the stored mode is stored already: use --store with off, on or auto")
     if usb is None:
         usb = import_usb()
-    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power, "adapter": command_adapter, "reset": command_reset}[args.command](usb, args)
+    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power, "uart": command_uart, "adapter": command_adapter, "reset": command_reset}[args.command](usb, args)
 
 
 if __name__ == "__main__":
