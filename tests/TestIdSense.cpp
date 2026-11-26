@@ -118,6 +118,12 @@ TEST_CASE("VPP only on slots 8 and 9, and on no adapter with the setting") {
    CHECK_FALSE(board::isVppAllowed({ IdKind::Fault, 0 }, true));
 }
 
+TEST_CASE("The VPP limit of the adapter: 13 V on the AVR adapter") {
+   CHECK(board::vppLimitMillivolts({ IdKind::Slot, 8 }) == 13000);
+   CHECK(board::vppLimitMillivolts({ IdKind::Slot, 9 }) == 14700);
+   CHECK(board::vppLimitMillivolts({ IdKind::None, 0 }) == 14700);
+}
+
 TEST_CASE("The DAP_Info vendor string shows the adapter") {
    CHECK(vendor({ IdKind::Slot, 4 }) == "OpenMUPP, adapter 4");
    CHECK(vendor({ IdKind::Unknown, 7 }) == "OpenMUPP, adapter 7 (unknown)");

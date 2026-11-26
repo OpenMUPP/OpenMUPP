@@ -426,7 +426,7 @@ The `shifters`, `targetSupply`, `vpp` and `idSense` blocks of the board definiti
 The start-up sets these pins to a safe state (see [Start-up and LEDs](#start-up-and-leds)).
 The engines use the `shifters` block for `DIR_OUT` and `DIR_SWDIO` (see the direction rule below).
 The target supply uses the `targetSupply` block (see [Target power on OpenMUPP v1](#target-power-on-openmupp-v1)).
-The ID dividers use the `idSense` block (see [Adapter ID and board ID](#adapter-id-and-board-id)). VPP does not use its block yet.
+The ID dividers use the `idSense` block (see [Adapter ID and board ID](#adapter-id-and-board-id)). The VPP driver uses the `vpp` block (see [VPP driver](#vpp-driver)).
 All personalities build for this board.
 The engines, the gpio requests and the UART bridge reach the target with these rules:
 
@@ -453,7 +453,7 @@ The engines, the gpio requests and the UART bridge reach the target with these r
   Behind a shifter, an open-drain request gives a push-pull output, because an open-drain high leaves the shifter input open.
 - The start-up sets `UART_TX_DIR` (PC9) high, as its pull-up does in reset. Thus UART TX drives the target. UART RX has a fixed shifter.
   In single-wire mode of the UART, the firmware sets `UART_TX_DIR` high only while UART7 sends (see [Single-wire mode](uart-bridge.md#single-wire-mode)).
-- The start-up turns off the target power switches and VPP. The firmware does not turn VPP on.
+- The start-up turns off the target power switches and VPP. Only the host control `ID_DAP_Vendor5` turns VPP on (see [VPP driver](#vpp-driver)).
 
 The firmware must follow these rules when it adds these functions:
 
@@ -535,8 +535,8 @@ Most host tools do not show this string, so the debug log is the main warning.
 The setting "VPP without an adapter" also allows VPP when pin 16 is open.
 The default is off. `ID_DAP_Vendor3` reads and writes the setting (see [VPP without an adapter](cmsis-dap.md#vpp-without-an-adapter)).
 A fault and an unknown slot never allow VPP.
-The VPP driver must use `BoardTargetGate::isVppAllowed()` (`src/board/BoardIdSense.h`). It also refuses VPP in each case that refuses the connect: an unknown board revision, an adapter fault or an ADC failure.
-The firmware does not turn VPP on yet.
+The VPP driver uses `BoardTargetGate::isVppAllowed()` (`src/board/BoardIdSense.h`). It also refuses VPP in each case that refuses the connect: an unknown board revision, an adapter fault or an ADC failure.
+Each switch-on of VPP is a connect without a protocol: the firmware reads the adapter ID again.
 
 ### Target power sequence
 
@@ -584,6 +584,46 @@ The boost converter cannot pull its output down. Use this sequence for each chan
 
 Apply VPP only when the adapter ID shows a high-voltage adapter and the protocol needs VPP.
 Limit the DAC setting to the maximum VPP of each target family.
+
+### VPP driver
+
+`src/protocol/Vpp.h` is the VPP driver, and `src/board/BoardVpp.cpp` drives the pins, the DAC and the ADC.
+The host sets VPP with `ID_DAP_Vendor5` for the hardware test (see [VPP control](cmsis-dap.md#vpp-control)).
+The AVR and PIC high-voltage protocols do not use the driver yet.
+
+The driver accepts a level from 5 V to 14.7 V.
+It refuses a level above the limit of the target family and above the limit of the adapter:
+
+| Adapter | Limit |
+|---|---|
+| Slot 8 (AVR high-voltage adapter) | 13 V, the absolute maximum of the AVR `RESET` pin. |
+| Slot 9 (PIC high-voltage adapter) | 14.7 V. The limits of the PIC parts are different, so a PIC protocol gives its own lower limit. |
+| No adapter, with the setting "VPP without an adapter" on | 14.7 V. |
+
+The host control uses no family limit, only the limit of the adapter.
+
+The driver maps the level to the DAC value with VPP = 14.1 V − 4.5 × V<sub>DAC</sub>.
+This equation uses the typical values of the feedback divider and the 0.6 V reference of the boost.
+The tolerances make this value inexact. Thus the driver reads `VPP_SENSE` each 10 ms and corrects the DAC by half of the error.
+It corrects the DAC only while the output is steady (a change of 20 mV or less in 10 ms).
+In a step down, only the dividers discharge the output capacitors, so the DAC stays until the output stops its fall.
+The level is correct when three steady readings are in the window: the level ± 100 mV, but never above the limit.
+
+The driver uses the [VPP sequence](#vpp-sequence) with these steps:
+
+1. Set `VPP_ON` low.
+2. Set the DAC. Then set `VPP_EN` high.
+3. Wait until `VPP_SENSE` shows the level. If this does not occur in 2 s, or the ADC fails, turn VPP off and report an error.
+4. Set `VPP_PD` high, then `VPP_ON` high. Wait 200 µs, then set `VPP_PD` low. Thus pin 19 goes from 0 V to VPP with no step at `VTREF`. The 200 µs are an estimate of the turn-on time of Q2. Measure it on the first board.
+5. Wait 10 ms for the filter of `VPP_SENSE2`. Then `VPP_SENSE2` (pin 19) must be not more than 0.5 V below `VPP_SENSE`. Else pin 19 has a short or an overload: turn VPP off and report an error. 0.5 V includes the divider tolerances (0.3 V at 14 V) and some mA in R52.
+
+To turn VPP off, the driver sets `VPP_ON` low, then `VPP_EN` low, then `VPP_PD` high. Pin 19 then stays at 0 V. The DAC goes off.
+
+VPP goes off in these cases:
+
+- The host goes away: a USB reset or a suspend.
+- A probe error: the error count of the state LED increases (see [Start-up and LEDs](#start-up-and-leds)).
+- The VPP rule does not allow VPP any more, for example after a refused connect or a change of the setting.
 
 ## YD-CH32V307VCT6 development board
 
