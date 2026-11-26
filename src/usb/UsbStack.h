@@ -199,6 +199,13 @@ class UsbStack {
       }
    }
 
+   // True when the main loop must reset the probe at the uptime nowMs: the
+   // switch request on EP0 with boot::resetCode (usb/SwitchRequest.h)
+   // keyDown: the key is down (boot::DelayedRequest::isDue()).
+   [[nodiscard]] bool isResetDue(uint64_t nowMs, bool keyDown) {
+      return switchRequest_.isResetDue(nowMs, keyDown);
+   }
+
    // True when the active personality has the CDC-ACM serial port
    [[nodiscard]] bool hasSerialPort() const {
       return !personality::has(personality::Personality::WchLink) || personality() != personality::Personality::WchLink;

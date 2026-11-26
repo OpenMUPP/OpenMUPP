@@ -489,6 +489,94 @@ class CommandSwitchTest(unittest.TestCase):
         self.assertEqual(device.ctrl_transfers, [])
 
 
+class WaitForResetTest(unittest.TestCase):
+    def test_waits_for_a_new_address(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP")
+        self.assertIsNone(mp.wait_for_reset(fake_usb([device]), "SN1", None, (1, 7), 0.0))
+        device.address = 8
+        self.assertEqual(mp.wait_for_reset(fake_usb([device]), "SN1", None, (1, 7), 1.0), "cmsis-dap")
+
+    def test_checks_the_serial(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", serial="SN2")
+        device.address = 8
+        self.assertIsNone(mp.wait_for_reset(fake_usb([device]), "SN1", None, (1, 7), 0.0))
+
+
+class CommandResetTest(unittest.TestCase):
+    def setUp(self):
+        self.waited = []
+        self.wait_result = "cmsis-dap"
+        original = mp.wait_for_reset
+
+        def wait_for_reset(_usb, serial, usb_id, location, _timeout_s):
+            self.waited.append((serial, usb_id, location))
+            return self.wait_result
+
+        mp.wait_for_reset = wait_for_reset
+        self.addCleanup(setattr, mp, "wait_for_reset", original)
+
+    def reset(self, devices, usb_id=None):
+        args = argparse.Namespace(serial=None, id=usb_id, active=None)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = mp.command_reset(fake_usb(devices), args)
+        self.stdout, self.stderr = stdout.getvalue(), stderr.getvalue()
+        return result
+
+    def test_sends_the_reset_code_and_waits(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP")
+        self.assertEqual(self.reset([device]), 0)
+        self.assertEqual(device.ctrl_transfers, [(0x40, 0x0E, 0xB1, 0, None, mp.TIMEOUT_MS)])
+        self.assertEqual(device.writes, [])
+        self.assertEqual(self.waited, [("SN1", None, (1, 7))])
+        self.assertIn("cmsis-dap personality", self.stdout)
+
+    def test_works_in_each_personality(self):
+        for vid, pid, product in ((0x0483, 0xA038, ""), (0x1209, 0x0001, "OpenMUPP WCH-Link")):
+            device = FakeDevice(vid, pid, product)
+            self.assertEqual(self.reset([device]), 0)
+            self.assertEqual(device.ctrl_transfers, [(0x40, 0x0E, 0xB1, 0, None, mp.TIMEOUT_MS)])
+
+    def test_stall_is_old_firmware(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", ctrl_error=stall())
+        self.assertEqual(self.reset([device]), 1)
+        self.assertIn("before the reset code", self.stderr)
+        self.assertEqual(self.waited, [])
+
+    def test_no_status_stage_waits(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", ctrl_error=FakeUsbError("No such device", -4, errno.ENODEV))
+        self.assertEqual(self.reset([device]), 0)
+        self.assertEqual(len(self.waited), 1)
+
+    def test_other_error_fails(self):
+        device = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", ctrl_error=FakeUsbError("Access denied", -3, errno.EACCES))
+        self.assertEqual(self.reset([device]), 1)
+        self.assertIn("udev", self.stderr)
+        self.assertEqual(self.waited, [])
+
+    def test_no_return_fails(self):
+        self.wait_result = None
+        self.assertEqual(self.reset([FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP")]), 1)
+        self.assertIn("did not enumerate again", self.stderr)
+
+    def test_needs_one_dongle(self):
+        self.assertEqual(self.reset([]), 1)
+        two = [FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP", serial=s) for s in ("SN1", "SN2")]
+        self.assertEqual(self.reset(two), 1)
+        self.assertIn("--serial", self.stderr)
+        self.assertEqual(two[0].ctrl_transfers + two[1].ctrl_transfers, [])
+
+    def test_no_reset_of_the_bootloader(self):
+        device = FakeDevice(0x0483, 0x5740, "Bootloader")
+        self.assertEqual(self.reset([device]), 1)
+        self.assertEqual(device.ctrl_transfers, [])
+
+    def test_unknown_id_waits_with_the_id(self):
+        device = FakeDevice(0x1234, 0x5678)
+        self.assertEqual(self.reset([device], usb_id=(0x1234, 0x5678)), 0)
+        self.assertEqual(self.waited, [("SN1", (0x1234, 0x5678), (1, 7))])
+
+
 class BridgeRequestTest(unittest.TestCase):
     def test_modes(self):
         self.assertEqual(mp.bridge_request("on"), bytes([0x81, 0x01]))

@@ -584,7 +584,26 @@ void startProtocol() {
 #endif
 }
 
-void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
+// The reset of the switch request on EP0 (boot::resetCode). The start-up
+// then turns off the target supply and VPP, and keeps the stored
+// personality and bridge mode. The reset waits for the release of the key
+// (boot::DelayedRequest::isDue()). A pending personality switch also
+// resets, so it goes first: a reset now would lose the switch.
+void pollReset(uint64_t nowMs) {
+#if defined(MUPP_MULTI_PERSONALITY)
+   if(personalitySwitch.requested()) {
+      return;
+   }
+#endif
+   const auto key = board::current.key;
+   if(usbStack.isResetDue(nowMs, key && board::isAsserted(*key))) {
+      LOG_INFO(debug::appLog, "Reset on the host request");
+      usbStack.disconnect();
+      NVIC_SystemReset();
+   }
+}
+
+void beforeUsbPoll(uint64_t nowMs) {
    // Only the images with the bootloader entry link boot::enterBootloader()
    if constexpr(hasBootloaderEntry) {
       if(bootloaderEntry.isDue(nowMs)) {
@@ -594,6 +613,7 @@ void beforeUsbPoll([[maybe_unused]] uint64_t nowMs) {
 #if defined(MUPP_MULTI_PERSONALITY)
    pollPersonality(nowMs);
 #endif
+   pollReset(nowMs);
 }
 
 void afterUsbPoll([[maybe_unused]] uint64_t nowMs) {

@@ -9,18 +9,19 @@
 // the request in each personality, so a host can leave a personality that
 // has no switch command of its own, for example WCH-Link. An image with a
 // bootloader accepts the bootloader code (boot::bootloaderCode), also with
-// one personality. The request is a USB vendor request to the device, with
-// no data stage:
+// one personality. Each image accepts the reset code (boot::resetCode).
+// The request is a USB vendor request to the device, with no data stage:
 //
 //   bmRequestType  0x40 (vendor, host-to-device, device)
 //   bRequest       switchRequestCode
-//   wValue         the personality code (personality/Personality.h), or
-//                  boot::bootloaderCode
+//   wValue         the personality code (personality/Personality.h),
+//                  boot::bootloaderCode or boot::resetCode
 //   wIndex         0
 //   wLength        0
 //
 // The handler calls PersonalitySwitch::request() or BootloaderEntry::request(),
-// as SWITCH_PERSONALITY and ID_DAP_Vendor0 do. The status stage of the
+// as SWITCH_PERSONALITY and ID_DAP_Vendor0 do. For the reset code, the main
+// loop resets the probe when isResetDue() is true. The status stage of the
 // request comes before the reset (replyDelayMs). A code that is not a
 // personality of the image, the bootloader code without a bootloader, or a
 // request in another form, stalls.
@@ -76,6 +77,11 @@ class SwitchRequestHandler final : public art::usb::VendorRequestHandler {
       if(setup.bmRequestType != switchRequestType || setup.wIndex != 0 || setup.wLength != 0 || setup.wValue > UINT8_MAX) {
          return std::nullopt;
       }
+      if(setup.wValue == boot::resetCode) {
+         // The main loop resets after the reply delay
+         reset_.request();
+         return art::span<const uint8_t>();
+      }
       if(setup.wValue == boot::bootloaderCode && bootloader_ != nullptr) {
          // The main loop enters the bootloader after the reply delay
          bootloader_->request();
@@ -92,11 +98,22 @@ class SwitchRequestHandler final : public art::usb::VendorRequestHandler {
       return art::span<const uint8_t>();
    }
 
+   // True when the main loop must reset the probe at the uptime nowMs.
+   // keyDown: the key is down (DelayedRequest::isDue()).
+   [[nodiscard]] bool isResetDue(uint64_t nowMs, bool keyDown = false) {
+      return reset_.isDue(nowMs, keyDown);
+   }
+
+   [[nodiscard]] bool isResetRequested() const {
+      return reset_.isRequested();
+   }
+
    private:
    personality::PersonalitySwitch *personalitySwitch_;
    boot::BootloaderEntry *bootloader_;
    art::usb::VendorRequestHandler *next_;
    art::span<const personality::Personality> personalities_;
+   boot::DelayedRequest reset_;
 };
 
 } // namespace usb

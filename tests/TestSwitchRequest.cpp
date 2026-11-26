@@ -160,3 +160,41 @@ TEST_CASE("Without a next handler, another vendor request stalls") {
          .controlIn(setupPacket(0xC0, usb::dap::msOs20VendorCode, 0, art::usb::msos20::kDescriptorIndex, 16))
          .stalled);
 }
+
+TEST_CASE("The reset code resets in an image with one personality and no bootloader") {
+   usb::SwitchRequestHandler handler(nullptr);
+   art::usb::SetupPacket setup{ .bmRequestType = usb::switchRequestType, .bRequest = usb::switchRequestCode, .wValue = boot::resetCode };
+
+   CHECK_FALSE(handler.isResetDue(0));
+   CHECK(handler.vendorRequest(setup, {}).has_value());
+   CHECK(handler.isResetRequested());
+   CHECK_FALSE(handler.isResetDue(100));
+   CHECK_FALSE(handler.isResetDue(100 + boot::DelayedRequest::replyDelayMs - 1));
+   CHECK(handler.isResetDue(100 + boot::DelayedRequest::replyDelayMs));
+}
+
+TEST_CASE("The reset code in another form stalls") {
+   usb::SwitchRequestHandler handler(nullptr);
+   art::usb::SetupPacket setup{ .bmRequestType = usb::switchRequestType,
+                                .bRequest = usb::switchRequestCode,
+                                .wValue = 0x0100 | boot::resetCode };
+   CHECK_FALSE(handler.vendorRequest(setup, {}).has_value());
+   setup.wValue = boot::resetCode;
+   setup.wIndex = 1;
+   CHECK_FALSE(handler.vendorRequest(setup, {}).has_value());
+   setup.wIndex = 0;
+   setup.wLength = 1;
+   CHECK_FALSE(handler.vendorRequest(setup, {}).has_value());
+   CHECK_FALSE(handler.isResetRequested());
+}
+
+TEST_CASE("The reset code does not request a personality or the bootloader") {
+   boot::BootloaderEntry bootloader;
+   PersonalitySwitch personalitySwitch{ Personality::Versaloon };
+   mupptest::Bench bench(&bootloader, nullptr, &personalitySwitch);
+   bench.enumerate();
+
+   CHECK_FALSE(switchRequest(bench.controller(), boot::resetCode).stalled);
+   CHECK_FALSE(personalitySwitch.requested().has_value());
+   CHECK_FALSE(bootloader.isRequested());
+}

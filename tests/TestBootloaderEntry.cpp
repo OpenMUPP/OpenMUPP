@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "boot/BootloaderEntry.h"
+#include "personality/PersonalitySwitch.h"
 
 #include <doctest/doctest.h>
 
@@ -38,4 +39,30 @@ TEST_CASE("A second request does not move the bootloader entry") {
    entry.request();
    CHECK_FALSE(entry.isDue(105));
    CHECK(entry.isDue(100 + BootloaderEntry::replyDelayMs));
+}
+
+TEST_CASE("A delayed request waits until the key is up for the debounce time") {
+   boot::DelayedRequest reset;
+   reset.request();
+
+   CHECK_FALSE(reset.isDue(100, true));
+   CHECK_FALSE(reset.isDue(200, true));
+   // A bounce: up, down again, then up for good at 300
+   CHECK_FALSE(reset.isDue(250, false));
+   CHECK_FALSE(reset.isDue(252, true));
+   CHECK_FALSE(reset.isDue(300, false));
+   CHECK_FALSE(reset.isDue(300 + boot::DelayedRequest::releaseDebounceMs - 1, false));
+   CHECK(reset.isDue(300 + boot::DelayedRequest::releaseDebounceMs, false));
+}
+
+TEST_CASE("A delayed request with the key up the whole time has no debounce wait") {
+   boot::DelayedRequest reset;
+   reset.request();
+
+   CHECK_FALSE(reset.isDue(100, false));
+   CHECK(reset.isDue(100 + boot::DelayedRequest::replyDelayMs, false));
+}
+
+TEST_CASE("The debounce time is the one of the personality switch") {
+   CHECK(boot::DelayedRequest::releaseDebounceMs == personality::PersonalitySwitch::releaseDebounceMs);
 }
