@@ -23,7 +23,7 @@ Usage:
 
 Needs pyusb (and libusb), and pyserial for --serial-port. On Windows,
 interface 0 uses WinUSB without a driver installation. The unit tests in
-test_dap_uart_loopback.py need no pyusb and no hardware.
+tools/tests/test_dap_uart_loopback.py need no pyusb and no hardware.
 """
 
 import argparse

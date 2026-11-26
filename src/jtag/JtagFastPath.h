@@ -72,7 +72,7 @@ inline constexpr uint8_t spiMaxShift = 8;
 // The bit-bang rate that the choice between bit-bang and SPI assumes. It is
 // not the fastest rate of the loop: that rate is not measured. 1000 kHz gave
 // the same OpenOCD flash times as the original firmware
-// (tools/flash_benchmark.py).
+// (tools/hwtest/flash_benchmark.py).
 // Too high a value selects bit-bang at a speed where the SPI is faster. Too
 // low a value selects the SPI, which can be up to 2 times slower than the
 // request (2000 kHz gives 1125 kHz). To raise the value, set it to 18000

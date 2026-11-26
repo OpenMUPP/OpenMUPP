@@ -64,11 +64,11 @@ The analog files have one row for each sample, with the voltages of SWDIO and SW
 The `v006-wlink-*-timing.csv` files use the same format and a 500 MS/s rate.
 Channel 0 is SWIO (SWDIO) on PD1 and channel 1 is SWCLK on PB3. Both channels are on the target board, not on the probe. Channels 2 and 3 are not connected.
 The trigger is a falling edge on SWDIO.
-Until 76 ms, the probe tries two wires and the V006 does not answer. After that, the traffic is on channel 0 only. `wch_link_frames_1wire.py` decodes it from 76 ms: `python3 wch_link_frames_1wire.py v006-wlink-status-timing.csv 76`.
+Until 76 ms, the probe tries two wires and the V006 does not answer. After that, the traffic is on channel 0 only. `tools/analysis/wch_link_frames_1wire.py` decodes it from 76 ms: `python3 tools/analysis/wch_link_frames_1wire.py docs/wch-link-captures/v006-wlink-status-timing.csv 76`.
 
 ## Decoders
 
 | Tool | Input | Output |
 |---|---|---|
-| `tools/wch_link_frames_2wire.py` | The CH32V208 digital files | The DMI accesses of the 54-clock frames (see [Wire frame format](../wch-link-protocol.md#wire-frame-format)) |
-| `tools/wch_link_frames_1wire.py` | The CH32V003 digital files | The DMI accesses of the one-wire frames (see [One-wire frame format](../wch-link-protocol.md#one-wire-frame-format-ch32v003)) |
+| `tools/analysis/wch_link_frames_2wire.py` | The CH32V208 digital files | The DMI accesses of the 54-clock frames (see [Wire frame format](../wch-link-protocol.md#wire-frame-format)) |
+| `tools/analysis/wch_link_frames_1wire.py` | The CH32V003 digital files | The DMI accesses of the one-wire frames (see [One-wire frame format](../wch-link-protocol.md#one-wire-frame-format-ch32v003)) |

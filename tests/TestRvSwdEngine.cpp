@@ -49,7 +49,7 @@ struct Bench {
    RvSwdEngine<MockRvSwdTarget> engine;
 };
 
-// Two wires: bits 1-53 of a capture line of tools/wch_link_frames_2wire.py
+// Two wires: bits 1-53 of a capture line of tools/analysis/wch_link_frames_2wire.py
 // (bit 0 is the clock before the start condition).
 std::vector<bool> bitsOf(const std::string &frame) {
    std::vector<bool> bits;
@@ -142,7 +142,7 @@ TEST_CASE("RVSWD two wires: a read gives the register, the response and the tail
 }
 
 TEST_CASE("RVSWD two wires: the frame bits are the bits of the capture") {
-   // tools/wch_link_frames_2wire.py on v208-wlink-status-timing.csv
+   // tools/analysis/wch_link_frames_2wire.py on v208-wlink-status-timing.csv
    struct Frame {
       uint8_t address;
       bool write;
@@ -387,7 +387,7 @@ TEST_CASE("RVSWD one wire: a read gives the register") {
 }
 
 TEST_CASE("RVSWD one wire: the pulses are the pulses of the capture") {
-   // tools/wch_link_frames_1wire.py on v003-wlink-status-timing.csv, and
+   // tools/analysis/wch_link_frames_1wire.py on v003-wlink-status-timing.csv, and
    // the duration from the first falling edge to the last rising edge
    struct Frame {
       uint8_t address;

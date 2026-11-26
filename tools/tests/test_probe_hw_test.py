@@ -9,6 +9,7 @@ import argparse
 import contextlib
 import io
 import os
+import re
 import shutil
 import struct
 import sys
@@ -16,7 +17,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hwtest"))
 import probe_hw_test as hw  # noqa: E402
 
 
@@ -295,6 +296,24 @@ class ProbeRsVerdictTest(unittest.TestCase):
         runner = self.verdict(self.good(hw.make_image(256)), ("--jtag-speeds", "1333,1334"))
         self.assertEqual([(step, status) for step, status, _ in runner.results][1:],
                          [("probe-rs jtag 1333 kHz", hw.PASS), ("probe-rs jtag 1334 kHz", hw.SKIP)])
+
+
+
+class ScriptPathTest(unittest.TestCase):
+    """The scripts and files that the runner starts exist: the unit tests mock the runs."""
+
+    def test_clock_script(self):
+        self.assertTrue(os.path.isfile(hw.CLOCK_SCRIPT), hw.CLOCK_SCRIPT)
+
+    def test_python_tools(self):
+        with open(hw.__file__, encoding="utf-8") as source:
+            text = source.read()
+        tools = re.findall(r'python_tool\("([^"]+)"', text)
+        scripts = re.findall(r'os\.path\.join\(HWTEST_DIR, "([^"]+)"\)', text)
+        self.assertGreaterEqual(len(tools), 3)
+        self.assertIn("pyocd_jtag_test.py", scripts)
+        for path in [os.path.join(hw.TOOLS_DIR, p) for p in tools] + [os.path.join(hw.HWTEST_DIR, p) for p in scripts]:
+            self.assertTrue(os.path.isfile(path), path)
 
 
 if __name__ == "__main__":

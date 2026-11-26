@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Tests for the TAP state machine of tools/usb-pcap/dap.py."""
+"""Tests for the TAP state machine of tools/analysis/usbpcap/dap.py."""
 import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'usb-pcap'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'analysis', 'usbpcap'))
 import dap
 
 
@@ -53,7 +53,7 @@ class TapTest(unittest.TestCase):
         self.assertEqual(tap.state, 'SHIR')
 
     def test_captures_decode(self):
-        d = os.path.join(os.path.dirname(__file__), '..', 'docs', 'cmsis-dap-captures')
+        d = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'cmsis-dap-captures')
         from pcap import usb
         tap, evs = dap.Tap(), []
         for p in usb(os.path.join(d, 'openocd-jtag-no-target.pcapng')):

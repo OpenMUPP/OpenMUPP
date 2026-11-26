@@ -119,19 +119,19 @@ The design does not use these options:
     Below 1125 kHz, the Mini uses the JTAG bit-bang engine.
   - RVSWD: `wlink status --chip CH32V20X --speed low|high` (WCH-Link personality)
 
-`tools/clock_rate.py` calculates the rate from a raw CSV export of Logic 2.
+`tools/analysis/clock_rate.py` calculates the rate from a raw CSV export of Logic 2.
 It counts only runs of 30 or more consecutive bits with periods below 1.3 times the nominal period.
 Thus the gaps between transfers, and the longer phases of an RVSWD frame, are not part of the rate.
 It also prints the median and the shortest of all periods (gaps included), also when there is no run.
 
 ```sh
-python3 tools/clock_rate.py digital.csv 1 1000
+python3 tools/analysis/clock_rate.py digital.csv 1 1000
 ```
 
 The nominal period is two half periods, each rounded up to full core cycles.
 For example, 235 kHz gives 154 cycles for each half period: 4277.8 ns.
 
-`tools/swd_timing.py` gives more SWD values from the same export, in the runs of consecutive bits:
+`tools/analysis/swd_timing.py` gives more SWD values from the same export, in the runs of consecutive bits:
 
 - The high half period and the low half period of SWCLK: the median and the shortest.
 - The SWDIO setup time: the time from an SWDIO change while SWCLK is low to the next rising edge. This is the setup time of the host writes.
@@ -141,7 +141,7 @@ For example, 235 kHz gives 154 cycles for each half period: 4277.8 ns.
 The arguments are the SWCLK column, the SWDIO column and the nominal period in ns:
 
 ```sh
-python3 tools/swd_timing.py digital.csv 1 0 250
+python3 tools/analysis/swd_timing.py digital.csv 1 0 250
 ```
 
 ### Results
@@ -295,7 +295,7 @@ Findings:
 - Up to 6 MHz, the mean rate with the local pacer is within 0.2 % of the nominal period, and the mean is never faster than the request.
   Below the code limit, the error is smaller than with the member pacer: −0.15 % instead of −0.60 % at 4 MHz.
 - At 6 MHz, the mean is 0.19 % above the nominal period (5952 kHz), but below the request.
-  This comes from the filter of `tools/clock_rate.py`: it drops the long periods after a late edge, and keeps the shorter periods that follow.
+  This comes from the filter of `tools/analysis/clock_rate.py`: it drops the long periods after a late edge, and keeps the shorter periods that follow.
 - Single periods at 5 and 6 MHz are often shorter than the request.
   At 5 MHz, the code is almost a full half period (24 of 25 cycles).
   Thus many edges are late within the slack, and the next half period is then shorter (see [Late edges](#late-edges)).
@@ -309,7 +309,7 @@ Findings:
 ### STM32H5 JTAG fast path
 
 Measured on 2026-10-25 with the setup above, with the `cmsis-dap` personality of the `weacth523-dual` image.
-The target ran at 64 MHz (`tools/stm32f1_clock.tcl`).
+The target ran at 64 MHz (`tools/hwtest/stm32f1_clock.tcl`).
 Each run read 8 KiB of the target flash with OpenOCD. All reads gave the same data.
 
 | Request | Engine | Measured TCK |
@@ -337,13 +337,13 @@ The QingKe V4F core has no counting `mcycle` CSR: on the YD-CH32V307VCT6, a debu
 ### Setup
 
 - Probe: YD-CH32V307VCT6 (CH32V307VCT6 at 144 MHz), the `ydch32v307-cmsis-dap` image. SWCLK is PB13, SWDIO is PC11.
-- Target: STM32F103ZET6 on SWD, at 64 MHz (`tools/stm32f1_clock.tcl`), or at its reset clock (8 MHz HSI) for the reads of the SWCLK test.
+- Target: STM32F103ZET6 on SWD, at 64 MHz (`tools/hwtest/stm32f1_clock.tcl`), or at its reset clock (8 MHz HSI) for the reads of the SWCLK test.
 - Logic analyzer: Saleae Logic Pro 8 at 500 MS/s (2 ns resolution), SWCLK on channel 5, SWDIO on channel 7.
   A glitch filter of 20 ns is on both channels.
 - Traffic: OpenOCD with `interface/cmsis-dap.cfg` and `target/stm32f1x.cfg`, two reads of 32 KiB of SRAM (`dump_image`) in each session.
   The capture is 1 s long.
 
-`tools/clock_rate.py` calculates the rate. The nominal period is two half periods of `ceil(144 MHz / (2 × request))` core cycles.
+`tools/analysis/clock_rate.py` calculates the rate. The nominal period is two half periods of `ceil(144 MHz / (2 × request))` core cycles.
 
 ### Results
 
@@ -373,7 +373,7 @@ Findings:
 - Before the fix, the untimed engine ran from 3 MHz. Thus a request of 3 MHz gave 3.98 MHz, 33 % faster than the request.
   `swd::maxClockHz` was then 4.5 MHz on the RISC-V build. The value was above the untimed rate, with a margin for a change of the code layout.
   A request from 2.8 MHz to 4.5 MHz then gave the timed code limit (2.44 to 2.76 MHz).
-- All reads were correct. `tools/flash_benchmark.py` passed at 250 to 20000 kHz before the fix, and at 2000 to 20000 kHz after the fix.
+- All reads were correct. `tools/hwtest/flash_benchmark.py` passed at 250 to 20000 kHz before the fix, and at 2000 to 20000 kHz after the fix.
   With the fix, the read of 32 KiB takes 0.26 s at 2000 kHz, 0.22 to 0.23 s at 3000 and 4000 kHz, and 0.16 s from 4500 kHz.
   The write takes 1.26 to 1.31 s from 1000 kHz: the flash of the STM32F103 limits it.
 
@@ -535,7 +535,7 @@ Findings:
 - The untimed engine: SWDIO setup time 18 ns at minimum, high half period before a read 48 ns at minimum.
 - Compared with the start (PCLK2 at 72 MHz, untimed 3.98 MHz), a read of 32 KiB at the fastest request takes 0.078 s instead of 0.139 s.
 - Not measured again: the JTAG bit-bang rate (`jtag::bitBangMaxKHz`, 1000 kHz). The JTAG engine does not use the SWD code, and [PCLK2 at 144 MHz](#pclk2-at-144-mhz) measured it without change.
-  `tools/flash_benchmark.py` supports only STM32F1 targets, so the benchmark did not run.
+  `tools/hwtest/flash_benchmark.py` supports only STM32F1 targets, so the benchmark did not run.
 
 ## CH32V307 padded untimed engine
 
@@ -633,7 +633,7 @@ Measured on 2026-11-09 and 2026-11-10 with the setup of [CH32V307](#ch32v307), w
 - Logic analyzer on 2026-11-09: TCK on channel 5 and TMS on channel 7. TDI and TDO are not measured.
 - Logic analyzer on 2026-11-10: TDO on channel 4, PB13 on channel 5, TMS on channel 6 and PC10 on channel 7.
 - Traffic: OpenOCD reads 8 KiB of SRAM in each session.
-- The checks of the JTAG-DP transfers of the firmware use `tools/pyocd_jtag_test.py`, and raw `DAP_JTAG_IDCODE` and `DAP_Transfer` commands.
+- The checks of the JTAG-DP transfers of the firmware use `tools/hwtest/pyocd_jtag_test.py`, and raw `DAP_JTAG_IDCODE` and `DAP_Transfer` commands.
   OpenOCD does not use these transfers: it sends `DAP_JTAG_Sequence` for all scans (see [JTAG hardware test](cmsis-dap.md#jtag-hardware-test)).
 
 ### Results
@@ -653,7 +653,7 @@ The bit-bang rate at 1124 kHz is the nominal rate: a half period of 65 core cycl
 A request of 1125 kHz or more selects the SPI.
 The SPI rows include the bit-bang tail of each shift, so the mean is a little below the SPI rate.
 
-`tools/flash_benchmark.py` (JTAG, 32 KiB) passed all runs at 250 to 9000 kHz:
+`tools/hwtest/flash_benchmark.py` (JTAG, 32 KiB) passed all runs at 250 to 9000 kHz:
 
 | kHz | Write s | Read s | Read KiB/s |
 |---:|---:|---:|---:|
@@ -663,14 +663,14 @@ The SPI rows include the bit-bang tail of each shift, so the mean is a little be
 | 4500 | 1.92 | 1.39 | 23.1 |
 | 9000 | 1.90 | 1.37 | 23.3 |
 
-On 2026-11-09, with a wire as the link, `tools/pyocd_jtag_test.py` passed at 1000, 2250, 4500 and 9000 kHz.
+On 2026-11-09, with a wire as the link, `tools/hwtest/pyocd_jtag_test.py` passed at 1000, 2250, 4500 and 9000 kHz.
 With a resistor as the link, it failed at the SPI speeds that were tested (see [TCK link](#tck-link)).
 
 ### TCK link
 
 These tests used three links from PB13 to PC10. All tests used jumper wires to the target. The analyzer probes are given for each test.
 
-| Link | OpenOCD | `tools/pyocd_jtag_test.py` at SPI speeds |
+| Link | OpenOCD | `tools/hwtest/pyocd_jtag_test.py` at SPI speeds |
 |---|---|---|
 | Resistor of 2.2 kΩ | Pass | Fail at 2250, 4500 and 9000 kHz: TMS crosstalk into the TCK link |
 | Resistor of 330 Ω | - | Fail at 1125, 4500 and 9000 kHz without an analyzer probe on PC10. Pass at 1125 to 9000 kHz with a probe on PC10 |

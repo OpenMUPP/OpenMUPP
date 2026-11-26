@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Decode the RISC-V DTM scans of a usbmon pcapng, with the TDO bits of the replies.

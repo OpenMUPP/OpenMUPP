@@ -333,7 +333,7 @@ The erase command needs no data transfer and no stub.
 ## Probe actions at connect, at chip information and at quit
 
 The probe does its own accesses to the target. The host does not send them. A personality must do the same, or the host tools get a different target state.
-The accesses below come from the wire captures. The decoders are `tools/wch_link_frames_2wire.py` (CH32V208) and `tools/wch_link_frames_1wire.py` (CH32V003).
+The accesses below come from the wire captures. The decoders are `tools/analysis/wch_link_frames_2wire.py` (CH32V208) and `tools/analysis/wch_link_frames_1wire.py` (CH32V003).
 
 ### Connect (`0d 01 02`)
 
@@ -442,7 +442,7 @@ Observations:
 ## Wire frame format
 
 The two-wire captures show one frame format on the wire, after the 85-clock frames. A frame has 54 clocks. SWDIO is stable at the rising edge of SWCLK. Bit 0 is the first clock.
-The decoder is `tools/wch_link_frames_2wire.py`. It works on the CSV files of the CH32V208. It skips the 85-clock frames and counts them.
+The decoder is `tools/analysis/wch_link_frames_2wire.py`. It works on the CSV files of the CH32V208. It skips the 85-clock frames and counts them.
 The format was checked against the 15 DMI accesses that the USB capture of the same run shows. The address and the data of every access match, and the order matches.
 The decoder decodes 147 frames of the status run, and the parity is right in all of them.
 It skips bursts that are not a multiple of 54 clocks (the 85-clock frames and a few short bursts) and counts them.
@@ -534,7 +534,7 @@ Each bit is one low pulse followed by a high level. The width of the low pulse g
 
 A frame lasts 27 to 48 µs (median 45 µs). A frame of only 1 bits is the shortest. Inside the burst of target reads, the next frame starts 4 to 12 µs after the end of a frame (median 7 µs).
 Between host accesses, the gap is 51 to 106 µs (median 61 µs). The connect phase has other pulse patterns (see above).
-The decoder is `tools/wch_link_frames_1wire.py`. It checks the start bit of each frame. A low pulse longer than 1.5 µs is a break, not a bit.
+The decoder is `tools/analysis/wch_link_frames_1wire.py`. It checks the start bit of each frame. A low pulse longer than 1.5 µs is a break, not a bit.
 It decodes the host phase of the status runs. It does not decode all frames of the `dump` captures.
 The first burst decodes 12 frames (`abstractauto`, `data1`, `progbuf0` to `progbuf7`, `command`, `data0`). Each later burst decodes 4 frames (`abstractauto`, `data1`, `command`, `data0`). Then the frames fall out of step. The decoder reports the pulses it could not decode.
 The cause is open. The frame length may differ for some access types.
@@ -657,7 +657,7 @@ Not measured on the CH32V208: the wire timing of a flash program.
 
 Source: the `v006-` captures. The target is a CH32V006K8U6 (chip ID `0x00600620`, 62 KB flash). The probe is the same WCH-LinkE (firmware 2.19).
 The USB commands are the same as for the CH32V003 (see the sections above). This section lists the differences.
-The one-wire decoder `tools/wch_link_frames_1wire.py` decodes the wire frames without change.
+The one-wire decoder `tools/analysis/wch_link_frames_1wire.py` decodes the wire frames without change.
 The USB captures hold 15 DMI accesses of the host. The one-wire decode of `v006-wlink-status-timing.csv` shows all 15, in the same order, with the same address and data.
 
 | Item | CH32V003 | CH32V006 |

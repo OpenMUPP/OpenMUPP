@@ -130,7 +130,7 @@ Hardware test on the YD-CH32V307VCT6 (Linux, USB 3 port, target STM32F103ZET6 at
 - OpenOCD passes on SWD (1000 to 20000 kHz) and JTAG (1000 to 9000 kHz). pyOCD passes on SWD at 1000 and 4500 kHz, and on JTAG at 1000 kHz.
 - The serial port receives 8 KiB at 115200 baud with no error. The DAP interface works after it.
 
-`tools/flash_benchmark.py` with a 32 KiB image, the same wiring for both images (times in seconds):
+`tools/hwtest/flash_benchmark.py` with a 32 KiB image, the same wiring for both images (times in seconds):
 
 | Transport | kHz | Write, full speed | Write, high speed | Read, full speed | Read, high speed |
 |---|---:|---:|---:|---:|---:|
@@ -303,7 +303,7 @@ If the flash write fails, the firmware starts again with the old personality.
 
 #### Multi image hardware test
 
-`tools/probe_hw_test.py` tests the Versaloon and the CMSIS-DAP personalities of a multi image on an STM32F1 target.
+`tools/hwtest/probe_hw_test.py` tests the Versaloon and the CMSIS-DAP personalities of a multi image on an STM32F1 target.
 Connect the target on SWD and JTAG, and connect the UART TX pin to the UART RX pin.
 The script runs SWD before JTAG with each tool.
 On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, and passed with them (see [Hardware test](boards.md#hardware-test)).
@@ -315,13 +315,13 @@ In the CMSIS-DAP personality on an STM32F1 probe, only 4000 kHz runs the untimed
 The script erases the flash of the target:
 
 ```sh
-python3 tools/probe_hw_test.py
-python3 tools/probe_hw_test.py --full-uart --skip probe-rs
+python3 tools/hwtest/probe_hw_test.py
+python3 tools/hwtest/probe_hw_test.py --full-uart --skip probe-rs
 ```
 
 OpenOCD writes, verifies and reads back a 32 KiB image.
 It then checks reset and halt, two single steps, a hardware breakpoint, RAM write and read, and run and halt.
-The pyOCD checks come from `tools/pyocd_jtag_test.py`.
+The pyOCD checks come from `tools/hwtest/pyocd_jtag_test.py`.
 probe-rs writes, verifies and reads back the image, writes and reads RAM, and resets the target.
 probe-rs cannot set the target clock, and the target runs at 8 MHz after a reset.
 Thus the script skips probe-rs on JTAG above 1333 kHz (8 MHz / 6).
@@ -782,7 +782,7 @@ Limits:
   The STM32H5 shift also fails when SPI2 loses a TDO byte (OVR).
 - At 9 MHz, the half period is 55.6 ns (at 7.8 MHz on the STM32H5, 64 ns). The target clock-to-output time and the cable delay must be less than this, else the TDO bits are wrong.
   Use a lower speed with a long cable.
-- The OpenOCD flash speed with the fast path is measured with `tools/flash_benchmark.py` (see [docs/development.md](development.md#flash-speed-benchmark)).
+- The OpenOCD flash speed with the fast path is measured with `tools/hwtest/flash_benchmark.py` (see [docs/development.md](development.md#flash-speed-benchmark)).
   On the STM32F1, at 4500 and 9000 kHz, the total flash time is 1 to 2 % longer than with the original firmware.
   The flash speed on the STM32H5 is not measured.
 

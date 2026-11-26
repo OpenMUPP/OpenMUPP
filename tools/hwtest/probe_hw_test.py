@@ -52,7 +52,7 @@ Usage:
     python3 probe_hw_test.py --full-uart --log-dir /tmp/hw-test
 
 Needs pyusb and pyserial, OpenOCD, pyOCD and probe-rs. Use --skip for a
-tool that is not installed. The unit tests in test_probe_hw_test.py need no
+tool that is not installed. The unit tests in tools/tests/test_probe_hw_test.py need no
 hardware.
 """
 
@@ -67,8 +67,9 @@ import sys
 import tempfile
 import time
 
-TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
-CLOCK_SCRIPT = os.path.join(TOOLS_DIR, "stm32f1_clock.tcl")
+HWTEST_DIR = os.path.dirname(os.path.abspath(__file__))
+TOOLS_DIR = os.path.dirname(HWTEST_DIR)
+CLOCK_SCRIPT = os.path.join(HWTEST_DIR, "stm32f1_clock.tcl")
 
 FLASH_BASE = 0x08000000
 LOOP_PC = FLASH_BASE + 0x40
@@ -378,8 +379,9 @@ class Runner:
         self.record(step, PASS if code == 0 else FAIL, tail)
         return code == 0
 
-    def python_tool(self, name, *tool_args):
-        return [sys.executable, os.path.join(TOOLS_DIR, name), *tool_args]
+    def python_tool(self, path, *tool_args):
+        """The command of a script. path is relative to the tools folder."""
+        return [sys.executable, os.path.join(TOOLS_DIR, path), *tool_args]
 
     def switch(self, personality):
         step = f"switch to {personality}"
@@ -415,13 +417,13 @@ class Runner:
             self.record(f"{personality} serial loopback", FAIL, ["no CDC-ACM port found (use --port)"])
         else:
             extra = [] if self.args.full_uart else QUICK_SERIAL_ARGS
-            self.run_simple(f"{personality} serial loopback", self.python_tool("serial_loopback_test.py", port, *extra))
+            self.run_simple(f"{personality} serial loopback", self.python_tool("hwtest/serial_loopback_test.py", port, *extra))
         if personality == "cmsis-dap":
             extra = [] if self.args.full_uart else QUICK_DAP_UART_ARGS
             if port is not None:
                 extra += ["--serial-port", port]
             self.run_simple("cmsis-dap DAP_UART loopback",
-                            self.python_tool("dap_uart_loopback_test.py", *self.serial_args(), *extra))
+                            self.python_tool("hwtest/dap_uart_loopback_test.py", *self.serial_args(), *extra))
 
     def speeds(self, transport):
         return self.args.jtag_speeds if transport == "jtag" else self.args.swd_speeds
@@ -465,7 +467,7 @@ class Runner:
         for transport in ("swd", "jtag"):
             for speed in self.speeds(transport):
                 step = f"pyocd {transport} {speed} kHz"
-                code, output = self.run(step, [self.args.pyocd_python, os.path.join(TOOLS_DIR, "pyocd_jtag_test.py"),
+                code, output = self.run(step, [self.args.pyocd_python, os.path.join(HWTEST_DIR, "pyocd_jtag_test.py"),
                                                str(speed * 1000), "--protocol", transport, "--target", target,
                                                *(["--uid", self.args.serial] if self.args.serial else [])])
                 fails = [line for line in output.splitlines() if line.startswith("FAIL ")]

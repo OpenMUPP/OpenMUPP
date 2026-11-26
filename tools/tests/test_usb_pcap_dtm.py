@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Tests for the DTM scan decoder of tools/usb-pcap/dtm.py."""
+"""Tests for the DTM scan decoder of tools/analysis/usbpcap/dtm.py."""
 import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'usb-pcap'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'analysis', 'usbpcap'))
 import dtm
 
-CAPTURES = os.path.join(os.path.dirname(__file__), '..', 'docs', 'cmsis-dap-captures')
+CAPTURES = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'cmsis-dap-captures')
 
 
 class ClocksTest(unittest.TestCase):
