@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Host control of the probe: the USB personality of a multi image
-(MUPP_PERSONALITIES), the bootloader, the RISC-V bridge and the target power.
+(MUPP_PERSONALITIES), the bootloader, the RISC-V bridge, the target power,
+and the firmware version, the board revision and the adapter.
 
 "switch" switches the personality or starts the bootloader:
 openmupp-bootloader on the STM32F1 boards, the ROM USB DFU on the STM32H5
@@ -65,6 +66,19 @@ rail has a short circuit or an overload. After "off", the rail can stay above
 The supply stays on after the script ends. See docs/cmsis-dap.md,
 "Target power".
 
+"adapter" shows the firmware version (DAP_Info 0x09), the board revision
+(board ID) and the target adapter on J4 (adapter ID) of the CMSIS-DAP
+personality. It sends ID_DAP_Vendor4 on interface 0:
+
+    [0x84] -> response [0x84][status][board kind][board slot]
+              [adapter kind][adapter slot][allowed]
+    kind: 0 open, 1 slot, 2 fault (short), 3 free slot
+
+The firmware reads the adapter ID for this command, but the command is not a
+connect. "Connect" shows if a connect would start a protocol now. Only a
+board with an adapter ID (OpenMUPP v1) has the command. See
+docs/cmsis-dap.md, "Board ID and adapter ID".
+
 Usage:
     python3 mupp_probe.py show
     python3 mupp_probe.py switch cmsis-dap
@@ -79,6 +93,7 @@ Usage:
     python3 mupp_probe.py power on
     python3 mupp_probe.py power off --serial 0123456789AB
     python3 mupp_probe.py power status
+    python3 mupp_probe.py adapter
 
 A device with a known ID, but with strings that the tool cannot read, is
 reported with its bus and address. On Linux this is a missing udev rule, and
@@ -88,7 +103,7 @@ for a dongle with an ID or a product string that the tool does not know.
 An ID that the tool does not know, or that two personalities share (1209:0001),
 has an unknown personality: --active names
 it. Without it, the EP0 request still works, but not the fallback command,
-and "bridge" and "power" do not find the dongle.
+and "bridge", "power" and "adapter" do not find the dongle.
 The wait after a switch looks for the standard IDs of the target.
 
 Needs pyusb (and libusb). On Windows, interface 0 needs the WinUSB driver.
@@ -147,6 +162,9 @@ FW_UPDATE_KEY = 0xAA
 DAP_VENDOR0 = 0x80
 DAP_VENDOR1 = 0x81
 DAP_VENDOR2 = 0x82
+DAP_VENDOR4 = 0x84
+DAP_INFO = 0x00
+DAP_INFO_FIRMWARE_VERSION = 0x09
 DAP_INVALID = 0xFF
 # The modes of ID_DAP_Vendor1
 BRIDGE_MODES = {"off": 0, "on": 1, "auto": 2, "stored": 3}
@@ -156,6 +174,20 @@ BRIDGE_STORE_FLAG = 0x80
 POWER_OPS = {"off": 0, "on": 1, "status": 2}
 POWER_REFUSED = 1
 POWER_NOT_SUPPORTED = 0xFF
+# The kind codes of ID_DAP_Vendor4
+ID_OPEN, ID_SLOT, ID_FAULT, ID_FREE_SLOT = 0, 1, 2, 3
+# The board revisions that the firmware knows, by board ID slot
+BOARD_REVISIONS = {1: "OpenMUPP v1, revision 1"}
+# The adapters by adapter ID slot (README of the openmupp-v1 repository)
+ADAPTERS = {
+    1: "AVR adapter, variant A (JTAG, ISP, debugWIRE)",
+    2: "AVR adapter, variant B (PDI)",
+    3: "AVR adapter, variant C (TPI, aWire)",
+    4: "Arm adapter",
+    5: "pin-header adapter",
+    8: "AVR high-voltage adapter",
+    9: "PIC high-voltage adapter",
+}
 LIBUSB_ERROR_PIPE = -9
 LIBUSB_ERROR_ACCESS = -3
 # libusb errors after which the request can have gone out: IO, NO_DEVICE,
@@ -259,6 +291,71 @@ def check_power_reply(reply):
 def power_millivolts(reply):
     """The target voltage of an ID_DAP_Vendor2 response. 0 without a Vref sense."""
     return int.from_bytes(bytes(reply)[2:4], "little")
+
+
+def check_info_reply(reply):
+    """Raises ProbeError when the response is not a DAP_Info response."""
+    reply = bytes(reply)
+    if len(reply) < 2 or reply[0] != DAP_INFO or len(reply) < 2 + reply[1]:
+        raise ProbeError("unexpected response %s" % reply.hex())
+
+
+def info_text(reply):
+    """The text of a DAP_Info response, empty when the firmware has none."""
+    reply = bytes(reply)
+    return reply[2:2 + reply[1]].rstrip(b"\0").decode("ascii", "replace")
+
+
+def check_id_reply(reply):
+    """Raises ProbeError when the response is not an ID_DAP_Vendor4 response.
+
+    ID_DAP_Invalid passes: the firmware or the board has no ID report.
+    """
+    reply = bytes(reply)
+    if reply[:1] == bytes([DAP_INVALID]):
+        return
+    if len(reply) < 7 or reply[0] != DAP_VENDOR4:
+        raise ProbeError("unexpected response %s" % reply.hex())
+
+
+def describe_id(kind, slot, names, open_text, fault_text="fault: pin shorted to GND"):
+    """The text of an ID reading: kind and slot of ID_DAP_Vendor4."""
+    if kind == ID_OPEN:
+        return open_text
+    if kind == ID_FAULT:
+        return fault_text
+    if kind == ID_FREE_SLOT:
+        return "slot %d, unknown (free slot)" % slot
+    if kind == ID_SLOT:
+        return "slot %d, %s" % (slot, names[slot]) if slot in names else "slot %d, unknown" % slot
+    return "unexpected kind %d" % kind
+
+
+def id_report_lines(reply):
+    """The lines of the "adapter" command for an ID_DAP_Vendor4 response."""
+    reply = bytes(reply)
+    if reply[:1] == bytes([DAP_INVALID]):
+        return ["Board:    no board ID and adapter ID (the board or the firmware has no ID_DAP_Vendor4)"]
+    status, board_kind, board_slot, adapter_kind, adapter_slot, allowed = reply[1:7]
+    if board_kind == ID_SLOT and board_slot in BOARD_REVISIONS:
+        board = BOARD_REVISIONS[board_slot]
+    else:
+        # The firmware also gives a fault when the ADC failed at start-up
+        board = "unknown revision (%s)" % describe_id(board_kind, board_slot, {}, "no board ID resistor", "fault: pin shorted to GND, or the ADC failed")
+    if status != 0:
+        adapter = "the ADC failed"
+    else:
+        adapter = describe_id(adapter_kind, adapter_slot, ADAPTERS, "no adapter")
+    if allowed:
+        connect = "allowed"
+    elif status != 0:
+        connect = "refused: the ADC failed"
+    elif adapter_kind == ID_FAULT:
+        connect = "refused: adapter fault"
+    else:
+        # The firmware refuses only an ADC failure, an adapter fault or a board revision that it does not know
+        connect = "refused: unknown board revision"
+    return ["Board:    " + board, "Adapter:  " + adapter, "Connect:  " + connect]
 
 
 def is_access_denied(error):
@@ -557,6 +654,19 @@ def command_power(usb, args):
     return 0
 
 
+def command_adapter(usb, args):
+    version = run_dap_command(usb, args, bytes([DAP_INFO, DAP_INFO_FIRMWARE_VERSION]), check_info_reply)
+    if version is None:
+        return 1
+    ids = run_dap_command(usb, args, bytes([DAP_VENDOR4]), check_id_reply)
+    if ids is None:
+        return 1
+    print("Firmware: " + (info_text(version) or "unknown"))
+    for line in id_report_lines(ids):
+        print(line)
+    return 0
+
+
 def add_selection_options(parser, default):
     parser.add_argument("--serial", default=default, help="the serial number of the dongle (the chip UID)")
     parser.add_argument("--id", default=default, type=parse_usb_id, metavar="VID:PID", help="select the dongle by this USB ID (hexadecimal), without the product string check")
@@ -575,9 +685,10 @@ def main(argv=None, usb=None):
     bridge.add_argument("--store", action="store_true", help="also store the mode: the mode at power-up and after a USB reset")
     power = commands.add_parser("power", help="switch the 3.3 V target supply or read the target voltage (CMSIS-DAP personality)")
     power.add_argument("operation", choices=tuple(POWER_OPS))
+    adapter = commands.add_parser("adapter", help="show the firmware version, the board revision and the adapter (CMSIS-DAP personality)")
     # The options also work after the command. SUPPRESS keeps a value from
     # before the command.
-    for subparser in (show, switch, bridge, power):
+    for subparser in (show, switch, bridge, power, adapter):
         add_selection_options(subparser, argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.active is not None and (args.id is None or personality_of(*args.id) is not None):
@@ -586,7 +697,7 @@ def main(argv=None, usb=None):
         parser.error("the stored mode is stored already: use --store with off, on or auto")
     if usb is None:
         usb = import_usb()
-    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power}[args.command](usb, args)
+    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power, "adapter": command_adapter}[args.command](usb, args)
 
 
 if __name__ == "__main__":

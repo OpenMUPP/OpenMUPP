@@ -466,6 +466,12 @@ bool Processor::processCommand(PacketReader &in, PacketWriter &out, bool nested)
       }
       out.u8(command::invalid);
       return true;
+   case command::vendor4:
+      if(idSource_ != nullptr) {
+         return idCommand(out);
+      }
+      out.u8(command::invalid);
+      return true;
    case command::executeCommands:
    case command::queueCommands:
       if(!nested) {
@@ -631,6 +637,23 @@ bool Processor::vppSettingCommand(PacketReader &in, PacketWriter &out) {
    out.u8(command::vendor3);
    out.u8(status);
    out.u8(vppSetting_->load() ? 1 : 0);
+   return true;
+}
+
+// [0x84] -> [0x84][status u8][board kind u8][board slot u8][adapter kind u8][adapter slot u8][allowed u8]
+bool Processor::idCommand(PacketWriter &out) {
+   if(out.room() < 7) {
+      return false;
+   }
+   const IdReport report = idSource_->read();
+   const bool read = report.adapterRead;
+   out.u8(command::vendor4);
+   out.u8(read ? statusOk : statusError);
+   out.u8(report.boardKind);
+   out.u8(report.boardSlot);
+   out.u8(read ? report.adapterKind : 0);
+   out.u8(read ? report.adapterSlot : 0);
+   out.u8(read && report.allowed ? 1 : 0);
    return true;
 }
 
