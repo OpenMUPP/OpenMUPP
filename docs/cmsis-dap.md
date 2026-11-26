@@ -161,7 +161,7 @@ The STM32F1 boards do not have it: their USB packet memory is full.
 
 - **Interface**: interface 3 (interface 0 with `MUPP_AVR_USB_ID=medbg`, see [avr.md](avr.md#bloom)), HID class, interrupt OUT `0x05` and interrupt IN `0x85` (see [usb-device.md](usb-device.md#cmsis-dap-personality)).
 - **Packet size**: one command or response is one report of 64 bytes, also at high speed. `DAP_Info` on this interface reports the packet size 64. The host pads a command with zeros, and the probe pads each response with zeros.
-- **Processor**: the interface has its own `cmsisdap::Processor`, on the same SWD and JTAG engines as the v2 interface. It has the commands of the v2 interface except `ID_DAP_Vendor0`, `ID_DAP_Vendor2`, `ID_DAP_Vendor4`, the `DAP_UART_*` commands and the `DAP_SWO_*` commands: they reply `ID_DAP_Invalid`. It has the RISC-V bridge: `ID_DAP_Vendor1` sets its mode, and `DAP_SWJ_Pins` tells it that the pins changed.
+- **Processor**: the interface has its own `cmsisdap::Processor`, on the same SWD and JTAG engines as the v2 interface. It has the commands of the v2 interface except `ID_DAP_Vendor0`, `ID_DAP_Vendor2`, `ID_DAP_Vendor3`, `ID_DAP_Vendor4`, the `DAP_UART_*` commands and the `DAP_SWO_*` commands: they reply `ID_DAP_Invalid`. It has the RISC-V bridge: `ID_DAP_Vendor1` sets its mode, and `DAP_SWJ_Pins` tells it that the pins changed.
 - **Target pins**: the first interface that drives the target pins owns them (`protocol/TargetPinOwner.h`). `DAP_Connect`, `DAP_SWJ_Pins` with an output and `DAP_ResetTarget` take the pins. `DAP_Connect` takes the owner role and sets the port, but it does not change the pins: the pins change at the first transfer or sequence command (see `DAP_Connect` in the command table). While the other interface owns them, `DAP_Connect` replies port 0, `DAP_SWJ_Pins` only reads the pins, and `DAP_ResetTarget` replies `DAP_ERROR`. `DAP_Disconnect`, a bus reset or a suspend of the owner frees them. A host tool that stops without `DAP_Disconnect` (killed, crashed) keeps the pins until a bus reset or a replug. While the other interface owns the pins, `ID_DAP_Vendor1` replies `DAP_ERROR`, because the bridge is the JTAG port of both interfaces. The clock and transfer settings of an interface reach the engines only while it owns the pins, and `DAP_Connect` applies them.
 - **Scheduling**: `UsbStack::poll()` runs one command of each interface per round, so one interface does not block the other.
 - **Transfer abort**: `DAP_TransferAbort` stops a running command on both interfaces. During a command, the serial-only event delivery also gives the packets of both CMSIS-DAP interfaces (`usb/SerialEventQueue.h`), so a report of one interface does not hold the serial port during a command of the other.
@@ -643,7 +643,7 @@ The response is `[0x84][status u8][board kind u8][board slot u8][adapter kind u8
 | Field | Value |
 |---|---|
 | `status` | `0x00`, or `0xFF` when the ADC fails on the adapter ID. The adapter fields and `allowed` are then `0`. |
-| `kind` | `0`: no ID resistor (pin open). `1`: a known slot. `2`: a fault (pin shorted to GND). `3`: a free slot (6 or 7). |
+| `kind` | `0`: no ID resistor (pin open). `1`: a known slot. `2`: a fault (pin shorted to GND). `3`: a free slot (6 or 7). For the board ID, `2` is also an ADC failure at start-up. |
 | `slot` | `1` to `9` for the kinds `1` and `3`. Else `0`. |
 | `allowed` | `1` when a connect starts the protocol now. `0` when the firmware refuses the connect. |
 

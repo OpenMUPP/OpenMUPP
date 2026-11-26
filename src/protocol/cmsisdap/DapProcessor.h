@@ -113,7 +113,8 @@
 //   and the adapter ID (IdSource, setIdSource()). The adapter ID is read
 //   now. The command is not a connect: the target gate keeps its decision.
 //   kind: 0 no ID resistor (open), 1 a known slot, 2 a fault (short), 3 a
-//   free slot. slot is 1 to 9 for kinds 1 and 3, else 0. allowed is 1 when
+//   free slot. For the board ID, kind 2 is also an ADC failure at
+//   start-up. slot is 1 to 9 for kinds 1 and 3, else 0. allowed is 1 when
 //   a connect would start the protocol now. The status is DAP_OK (0), or
 //   DAP_ERROR (0xFF) when the ADC fails on the adapter ID: the adapter
 //   fields and allowed are then 0. Without an IdSource, the command
