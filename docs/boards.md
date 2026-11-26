@@ -527,6 +527,7 @@ The debug log then has one warning for each connect:
 
 The vendor string of `DAP_Info` also shows the adapter of the last reading: `OpenMUPP, adapter 4`, `OpenMUPP, adapter 6 (unknown)`, `OpenMUPP, no adapter` or `OpenMUPP, adapter fault`.
 Most host tools do not show this string, so the debug log is the main warning.
+`ID_DAP_Vendor4` and `python3 tools/mupp_probe.py adapter` show the board ID and the adapter ID (see [Board ID and adapter ID](cmsis-dap.md#board-id-and-adapter-id)).
 
 **VPP rule.** VPP is allowed only on slot 8 (AVR high-voltage adapter) and slot 9 (PIC high-voltage adapter).
 The setting "VPP without an adapter" also allows VPP when pin 16 is open.

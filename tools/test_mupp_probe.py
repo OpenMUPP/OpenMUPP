@@ -137,6 +137,9 @@ class FakeDevice:
     def read(self, _endpoint, _size, _timeout):
         if self.reply is None:
             raise FakeUsbError("Operation timed out", -7, errno.ETIMEDOUT)
+        # A function gives the reply to the last request
+        if callable(self.reply):
+            return self.reply(self.writes[-1][1])
         return self.reply
 
 
@@ -689,6 +692,71 @@ class PowerCommandTest(unittest.TestCase):
         self.assertIn("No response", err)
         self.assertIn("not known", err)
 
+
+
+class IdReportLinesTest(unittest.TestCase):
+    def test_known_board_and_adapter(self):
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 1, 1, 5, 1]))
+        self.assertEqual(lines, ["Board:    OpenMUPP v1, revision 1", "Adapter:  slot 5, pin-header adapter", "Connect:  allowed"])
+
+    def test_no_adapter(self):
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 1, 0, 0, 1]))
+        self.assertEqual(lines[1], "Adapter:  no adapter")
+
+    def test_free_slot(self):
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 1, 3, 6, 1]))
+        self.assertEqual(lines[1], "Adapter:  slot 6, unknown (free slot)")
+
+    def test_adapter_fault_refuses(self):
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 1, 2, 0, 0]))
+        self.assertEqual(lines[1:], ["Adapter:  fault: pin shorted to GND", "Connect:  refused: adapter fault"])
+
+    def test_unknown_board_revision_refuses(self):
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 2, 1, 4, 0]))
+        self.assertEqual(lines[0], "Board:    unknown revision (slot 2, unknown)")
+        self.assertEqual(lines[2], "Connect:  refused: unknown board revision")
+
+    def test_failed_adc(self):
+        lines = mp.id_report_lines(bytes([0x84, 0xFF, 1, 1, 0, 0, 0]))
+        self.assertEqual(lines[1:], ["Adapter:  the ADC failed", "Connect:  refused: the ADC failed"])
+
+    def test_no_id_report(self):
+        lines = mp.id_report_lines(bytes([0xFF]))
+        self.assertEqual(len(lines), 1)
+        self.assertIn("no board ID", lines[0])
+
+
+class CommandAdapterTest(unittest.TestCase):
+    @staticmethod
+    def replies(request):
+        if request == bytes([0x00, 0x09]):
+            return bytes([0x00, 8]) + b"v0.13.0\0"
+        if request == bytes([0x84]):
+            return bytes([0x84, 0, 1, 1, 1, 4, 1])
+        return bytes([0xFF])
+
+    def run_adapter(self, device):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = mp.main(["adapter"], usb=fake_usb([device]))
+        return code, out.getvalue()
+
+    def test_prints_version_board_and_adapter(self):
+        device = FakeDevice(0x1209, 0x0001, product="OpenMUPP CMSIS-DAP", reply=self.replies)
+        code, out = self.run_adapter(device)
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), ["Firmware: v0.13.0", "Board:    OpenMUPP v1, revision 1", "Adapter:  slot 4, Arm adapter", "Connect:  allowed"])
+        self.assertEqual([data for _, data in device.writes], [bytes([0x00, 0x09]), bytes([0x84])])
+
+    def test_no_reply_fails(self):
+        device = FakeDevice(0x1209, 0x0001, product="OpenMUPP CMSIS-DAP")
+        code, _ = self.run_adapter(device)
+        self.assertEqual(code, 1)
+
+    def test_bad_info_reply_fails(self):
+        device = FakeDevice(0x1209, 0x0001, product="OpenMUPP CMSIS-DAP", reply=bytes([0x84, 0]))
+        code, _ = self.run_adapter(device)
+        self.assertEqual(code, 1)
 
 if __name__ == "__main__":
     unittest.main()

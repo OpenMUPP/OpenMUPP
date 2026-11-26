@@ -652,6 +652,19 @@ The firmware reads the adapter ID again for each command.
 The command is not a connect: it does not change the decision of the last connect, the vendor string of `DAP_Info` or the VPP rule.
 Thus the command does not release a refused connect.
 
+`tools/mupp_probe.py` sends the command from the host, together with `DAP_Info` `0x09` (the firmware version):
+
+```sh
+python3 tools/mupp_probe.py adapter
+```
+
+```text
+Firmware: v0.13.0-554-g6712cbe
+Board:    OpenMUPP v1, revision 1
+Adapter:  slot 4, Arm adapter
+Connect:  allowed
+```
+
 ## UART commands
 
 The `DAP_UART_*` commands of CMSIS-DAP v2.1 give access to the UART of the board.
