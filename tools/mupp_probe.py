@@ -66,6 +66,13 @@ rail has a short circuit or an overload. After "off", the rail can stay above
 The supply stays on after the script ends. See docs/cmsis-dap.md,
 "Target power".
 
+"reset" resets the dongle: the switch request on EP0 with the reset code
+0xB1. Each personality of each image accepts it. The dongle starts again
+with its stored personality and bridge mode, and with the target supply and
+VPP off. Firmware from before the reset code stalls it: then unplug the
+dongle. The script waits until the dongle enumerates again, at a new USB
+address. See docs/usb-device.md, "Switch request on EP0".
+
 "adapter" shows the firmware version (DAP_Info 0x09), the board revision
 (board ID) and the target adapter on J4 (adapter ID) of the CMSIS-DAP
 personality. It sends ID_DAP_Vendor4 on interface 0:
@@ -94,6 +101,7 @@ Usage:
     python3 mupp_probe.py power off --serial 0123456789AB
     python3 mupp_probe.py power status
     python3 mupp_probe.py adapter
+    python3 mupp_probe.py reset --serial 0123456789AB
 
 A device with a known ID, but with strings that the tool cannot read, is
 reported with its bus and address. On Linux this is a missing udev rule, and
@@ -154,6 +162,8 @@ NO_SERIAL_IDS = {(0x0483, 0xDF11)}
 
 SWITCH_REQUEST_TYPE = 0x40  # vendor, host to device, recipient device
 SWITCH_REQUEST = 0x0E
+# The wValue of the switch request that resets the dongle (boot::resetCode)
+RESET_CODE = 0xB1
 OUT_ENDPOINT = 0x03
 IN_ENDPOINT = 0x82
 SWITCH_PERSONALITY = 0x0E
@@ -437,15 +447,26 @@ def wait_for(usb, target, serial, timeout_s):
     return False
 
 
-def send_ep0_request(usb, device, target):
-    """Sends the switch request on EP0.
+def wait_for_reset(usb, serial, usb_id, location, timeout_s):
+    """The name of the dongle with this serial number at a USB address other than location, or None after the timeout."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        for name, device in find_devices(usb, serial, usb_id=usb_id):
+            if (device.bus, device.address) != location:
+                return name
+        time.sleep(0.2)
+    return None
+
+
+def send_ep0_request(usb, device, code):
+    """Sends the switch request on EP0 with this code in wValue.
 
     Returns True when the firmware accepted it, or when the result is not
     known and the switch can be in progress. Returns False on a stall.
     Raises usb.core.USBError when the request did not go out.
     """
     try:
-        device.ctrl_transfer(SWITCH_REQUEST_TYPE, SWITCH_REQUEST, PERSONALITIES[target][0], 0, None, TIMEOUT_MS)
+        device.ctrl_transfer(SWITCH_REQUEST_TYPE, SWITCH_REQUEST, code, 0, None, TIMEOUT_MS)
     except usb.core.USBError as error:
         if is_stall(error):
             return False
@@ -602,7 +623,7 @@ def command_switch(usb, args):
         return 1
     serial = get_string(usb, device, device.iSerialNumber)
     try:
-        if not send_ep0_request(usb, device, args.personality):
+        if not send_ep0_request(usb, device, PERSONALITIES[args.personality][0]):
             if active == "wch-link":
                 print("The firmware refused the switch: %s" % refusal(args.personality), file=sys.stderr)
                 return 1
@@ -634,6 +655,38 @@ def command_switch(usb, args):
         print("The dongle runs the bootloader")
     else:
         print("The dongle has the %s personality" % args.personality)
+    return 0
+
+
+def command_reset(usb, args):
+    devices = find_selected(usb, args)
+    if not devices:
+        print("No dongle found", file=sys.stderr)
+        return 1
+    if len(devices) > 1:
+        print("More than one dongle: select one with --serial", file=sys.stderr)
+        return 1
+    active, device = devices[0]
+    if active == BOOTLOADER:
+        print("The dongle runs the bootloader, which has no reset request", file=sys.stderr)
+        return 1
+    serial = get_string(usb, device, device.iSerialNumber)
+    location = (device.bus, device.address)
+    try:
+        if not send_ep0_request(usb, device, RESET_CODE):
+            print("The firmware refused the reset: it is from before the reset code. Unplug the dongle to reset it", file=sys.stderr)
+            return 1
+    except (usb.core.USBError, NotImplementedError) as error:
+        report_send_error(error)
+        return 1
+    finally:
+        usb.util.dispose_resources(device)
+    print("Resetting the dongle ...")
+    name = wait_for_reset(usb, serial, args.id, location, ENUMERATION_TIMEOUT_S)
+    if name is None:
+        print("The dongle did not enumerate again", file=sys.stderr)
+        return 1
+    print("The dongle has the %s personality" % name)
     return 0
 
 
@@ -686,9 +739,10 @@ def main(argv=None, usb=None):
     power = commands.add_parser("power", help="switch the 3.3 V target supply or read the target voltage (CMSIS-DAP personality)")
     power.add_argument("operation", choices=tuple(POWER_OPS))
     adapter = commands.add_parser("adapter", help="show the firmware version, the board revision and the adapter (CMSIS-DAP personality)")
+    reset = commands.add_parser("reset", help="reset the dongle")
     # The options also work after the command. SUPPRESS keeps a value from
     # before the command.
-    for subparser in (show, switch, bridge, power, adapter):
+    for subparser in (show, switch, bridge, power, adapter, reset):
         add_selection_options(subparser, argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.active is not None and (args.id is None or personality_of(*args.id) is not None):
@@ -697,7 +751,7 @@ def main(argv=None, usb=None):
         parser.error("the stored mode is stored already: use --store with off, on or auto")
     if usb is None:
         usb = import_usb()
-    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power, "adapter": command_adapter}[args.command](usb, args)
+    return {"show": command_show, "switch": command_switch, "bridge": command_bridge, "power": command_power, "adapter": command_adapter, "reset": command_reset}[args.command](usb, args)
 
 
 if __name__ == "__main__":

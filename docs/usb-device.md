@@ -262,9 +262,12 @@ python3 tools/mupp_probe.py switch cmsis-dap
 python3 tools/mupp_probe.py switch wch-link
 python3 tools/mupp_probe.py switch versaloon
 python3 tools/mupp_probe.py switch bootloader
+python3 tools/mupp_probe.py reset
 ```
 
 `switch bootloader` starts `openmupp-bootloader` (see [Bootloader code](firmware-update.md#bootloader-code)).
+`reset` resets the dongle and keeps its personality (see [Switch request on EP0](#switch-request-on-ep0)).
+After the request, the tool waits 10 s until the dongle with the same serial number enumerates again at a new USB address.
 
 The tool finds the dongle by the VID:PID of each personality.
 `--id VID:PID` selects the dongle by this ID instead, without the product string check.
@@ -384,6 +387,7 @@ The probe then starts with its stored personality and the stored bridge mode.
 The start-up turns off the target supply and VPP.
 `SWITCH_PERSONALITY` and `ID_DAP_Vendor0` do not accept the reset code.
 Firmware from before the reset code stalls it.
+`tools/mupp_probe.py reset` sends the reset code (see [Multi image](#multi-image)).
 The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
 An image with one personality stalls the request for each personality code.
 It accepts the bootloader code, when it is an `app-8k` image or an image of the STM32H5, and the reset code.
