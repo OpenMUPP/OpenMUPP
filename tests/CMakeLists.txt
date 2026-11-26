@@ -82,6 +82,7 @@ add_executable(mupp-tests
         TestDapTargetPower.cpp
         TestDapIdReport.cpp
         TestDapVppSetting.cpp
+        TestDapUartWire.cpp
         TestTargetPower.cpp
         TestAvrIsp.cpp
         TestAvrIspScope.cpp
