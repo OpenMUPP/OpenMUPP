@@ -70,13 +70,34 @@ class DelayedRequest {
       return requested_;
    }
 
+   // The key must stay up for this time before the reset, as for the
+   // personality switch (PersonalitySwitch::releaseDebounceMs): a bounce
+   // must not look like a key that is down at the reset.
+   static constexpr uint32_t releaseDebounceMs = 50;
+
    // True when the main loop must run the request at the uptime nowMs.
-   [[nodiscard]] bool isDue(uint64_t nowMs) {
+   // keyDown: the key is down. When the key was down after the request, the
+   // key must stay up for releaseDebounceMs, because a key that is down at
+   // the reset starts the bootloader.
+   [[nodiscard]] bool isDue(uint64_t nowMs, bool keyDown = false) {
       if(!requested_) {
          return false;
       }
       if(!dueMs_) {
          dueMs_ = nowMs + replyDelayMs;
+      }
+      if(keyDown) {
+         keyUpSinceMs_.reset();
+         keyWasDown_ = true;
+         return false;
+      }
+      if(keyWasDown_) {
+         if(!keyUpSinceMs_) {
+            keyUpSinceMs_ = nowMs;
+         }
+         if(nowMs - *keyUpSinceMs_ < releaseDebounceMs) {
+            return false;
+         }
       }
       return nowMs >= *dueMs_;
    }
@@ -84,6 +105,8 @@ class DelayedRequest {
    private:
    bool requested_ = false;
    std::optional<uint64_t> dueMs_;
+   bool keyWasDown_ = false;
+   std::optional<uint64_t> keyUpSinceMs_;
 };
 
 class BootloaderEntry final : public DelayedRequest {};

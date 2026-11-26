@@ -267,7 +267,7 @@ python3 tools/mupp_probe.py reset
 
 `switch bootloader` starts `openmupp-bootloader` (see [Bootloader code](firmware-update.md#bootloader-code)).
 `reset` resets the dongle and keeps its personality (see [Switch request on EP0](#switch-request-on-ep0)).
-After the request, the tool waits 10 s until the dongle with the same serial number enumerates again at a new USB address.
+After the request, the tool waits for a maximum of 10 s until the dongle with the same serial number enumerates again at a new USB address.
 
 The tool finds the dongle by the VID:PID of each personality.
 `--id VID:PID` selects the dongle by this ID instead, without the product string check.
@@ -361,7 +361,8 @@ Findings:
 
 #### Switch request on EP0
 
-An image with more than one personality accepts a USB vendor request on the control endpoint (EP0) in each personality.
+Each image accepts a USB vendor request on the control endpoint (EP0) in each personality.
+An image with more than one personality uses it to switch the personality.
 The request has no data stage:
 
 | Field | Value |
@@ -380,17 +381,24 @@ The firmware stalls the request in these conditions:
 - `wIndex` or `wLength` is not `0`, or the direction is device to host.
 
 A stall means that the firmware does not switch.
-Each image accepts the reset code `0xB1` (`boot::resetCode`), also an image with one personality.
-After the status stage and the 10 ms, the firmware disconnects from USB and resets.
-When the key is down, the reset waits until you release the key, because a key that is down at the reset starts the bootloader.
-The probe then starts with its stored personality and the stored bridge mode.
-The start-up turns off the target supply and VPP.
-`SWITCH_PERSONALITY` and `ID_DAP_Vendor0` do not accept the reset code.
-Firmware from before the reset code stalls it.
-`tools/mupp_probe.py reset` sends the reset code (see [Multi image](#multi-image)).
 The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
 An image with one personality stalls the request for each personality code.
-It accepts the bootloader code, when it is an `app-8k` image or an image of the STM32H5, and the reset code.
+It accepts the reset code.
+It accepts the bootloader code only in an `app-8k` image or an image of the STM32H5.
+
+##### Reset code
+
+Each image accepts the reset code `0xB1` (`boot::resetCode`), also an image with one personality.
+After the status stage and a 10 ms delay, the firmware disconnects from USB and resets.
+The probe then starts with its stored personality and the stored bridge mode.
+The start-up turns off the target supply and VPP.
+
+- When the key is down, the reset waits until you release the key. The key must then stay up for 50 ms. A key that is down at the reset starts the bootloader, and the 50 ms prevent a contact bounce from doing this.
+- When a personality switch is pending, for example after the key gesture, the firmware does the switch and not the reset. The switch also resets the probe.
+- `SWITCH_PERSONALITY` and `ID_DAP_Vendor0` do not accept the reset code.
+- Firmware from before the reset code stalls it.
+
+`tools/mupp_probe.py reset` sends the reset code (see [Multi image](#multi-image)).
 
 With libusb, the call is:
 

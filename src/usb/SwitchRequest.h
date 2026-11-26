@@ -98,9 +98,10 @@ class SwitchRequestHandler final : public art::usb::VendorRequestHandler {
       return art::span<const uint8_t>();
    }
 
-   // True when the main loop must reset the probe at the uptime nowMs
-   [[nodiscard]] bool isResetDue(uint64_t nowMs) {
-      return reset_.isDue(nowMs);
+   // True when the main loop must reset the probe at the uptime nowMs.
+   // keyDown: the key is down (DelayedRequest::isDue()).
+   [[nodiscard]] bool isResetDue(uint64_t nowMs, bool keyDown = false) {
+      return reset_.isDue(nowMs, keyDown);
    }
 
    [[nodiscard]] bool isResetRequested() const {
