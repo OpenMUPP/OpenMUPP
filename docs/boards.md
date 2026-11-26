@@ -596,9 +596,9 @@ It refuses a level above the limit of the target family and above the limit of t
 
 | Adapter | Limit |
 |---|---|
-| Slot 8 (AVR high-voltage adapter) | 13 V, the absolute maximum of the AVR `RESET` pin. |
-| Slot 9 (PIC high-voltage adapter) | 14.7 V. The limits of the PIC parts are different, so a PIC protocol gives its own lower limit. |
-| No adapter, with the setting "VPP without an adapter" on | 14.7 V. |
+| Slot 8 (AVR high-voltage adapter) | 12.5 V. This is a margin below 13 V, the absolute maximum of the AVR `RESET` pin. |
+| Slot 9 (PIC high-voltage adapter) | 13.5 V. This is the typical maximum of VIHH, the programming voltage on the `MCLR` pin of the PIC parts. It stays until the firmware has a limit for each part. |
+| No adapter, with the setting "VPP without an adapter" on | 14.7 V, the hardware maximum. |
 
 The host control uses no family limit, only the limit of the adapter.
 

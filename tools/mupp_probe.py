@@ -76,9 +76,10 @@ ID_DAP_Vendor5 of the CMSIS-DAP personality on interface 0:
        0 = done, 1 = refused, 2 = no level in 2 s, 3 = short on pin 19
 
 The firmware accepts 5000 mV to 14700 mV. It refuses VPP when the adapter
-does not allow it: only slot 8 (13 V at most), slot 9, and no adapter with
-the setting "VPP without an adapter" on. VPP stays on after the script
-ends, until "vpp off", a USB reset or a suspend of the dongle.
+does not allow it: only slot 8 (12.5 V at most), slot 9 (13.5 V at most),
+and no adapter with the setting "VPP without an adapter" on. VPP stays on
+after the script ends, until "vpp off", a USB reset or a suspend of the
+dongle.
 See docs/cmsis-dap.md, "VPP control".
 
 "reset" resets the dongle: the switch request on EP0 with the reset code
