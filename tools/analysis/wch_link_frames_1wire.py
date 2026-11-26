@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Decode the 41-pulse frames of the WCH-LinkE one-wire interface (CH32V003).

@@ -313,6 +313,8 @@ The Python scripts in `tools/` need Python 3. The folder has these parts:
 - `tools/analysis/`: the decoders of logic analyzer exports and USB captures (`usbpcap/`).
 - `tools/tests/`: the unit tests of the scripts. They need no hardware.
 
+Each script is executable, for example `tools/mupp_probe.py show`. On Windows, start it with `py`.
+
 
 | Script | Function | Needs |
 |---|---|---|
