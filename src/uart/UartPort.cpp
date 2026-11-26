@@ -120,14 +120,15 @@ constexpr std::size_t maxTxBlock = 256;
 // UART_TX_DIR of a board with a TX shifter (single-wire mode)
 constexpr bool hasTxDir = board::current.shifters.has_value();
 
-void configureTxPin(bool uart) {
-   if(uart) {
-      board::gpioPin(uartPins.tx)
-      .configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull, hw::GpioPin::Pull::None, hw::GpioPin::Speed::High);
-   } else {
-      // The shifter drives the pin. The external pull-up (R53 on OpenMUPP v1) keeps it high while the shifter turns.
-      board::gpioPin(uartPins.tx).configure(hw::GpioPin::Mode::Input);
-   }
+// HDSEL, half-duplex mode (RM V2.5 18.10.6). The CH32V30x header does not define it.
+constexpr uint32_t ctlr3Hdsel = 0x0008;
+
+void configureTxPin(bool pushPull) {
+   // Open drain: the shifter drives the pin, and the UART reads it in half-duplex mode. The external pull-up (R53 on
+   // OpenMUPP v1) keeps it high while the shifter turns.
+   board::gpioPin(uartPins.tx)
+   .configure(hw::GpioPin::Mode::Alternate, pushPull ? hw::GpioPin::OutputType::PushPull : hw::GpioPin::OutputType::OpenDrain,
+              hw::GpioPin::Pull::None, hw::GpioPin::Speed::High);
 }
 #endif
 
@@ -186,8 +187,16 @@ void UartPort::LinePins::driveTarget(bool on) {
    }
 }
 
-void UartPort::LinePins::connectTx(bool on) {
+void UartPort::LinePins::pushPullTx(bool on) {
    configureTxPin(on);
+}
+
+void UartPort::LinePins::halfDuplex(bool on) {
+   if(on) {
+      usart.usart.CTLR3 |= ctlr3Hdsel;
+   } else {
+      usart.usart.CTLR3 &= ~ctlr3Hdsel;
+   }
 }
 
 void UartPort::LinePins::enableReceiver(bool on) {

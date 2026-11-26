@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The direction logic of the single-wire UART (uart/SingleWireLine.h), on
-// fake pins that record each change in order.
+// fake pins that record each change in order (issues #148 and #152).
 
 #include "uart/SingleWireLine.h"
 
@@ -14,17 +14,23 @@ namespace {
 using Log = std::vector<std::string>;
 
 // The state after the start-up: the shifter drives the target, the TX pin
-// is the UART output, the receiver is on.
+// is push-pull, the UART is not half duplex, the receiver is on.
 struct FakePins {
    void driveTarget(bool on) {
       drive = on;
       log.push_back(on ? "drive" : "release");
       contended = contended || contention();
+      // A released line without HDSEL: the receiver reads the RX pin, not the line.
+      deaf = deaf || (!on && !hdsel);
    }
-   void connectTx(bool on) {
+   void pushPullTx(bool on) {
       tx = on;
-      log.push_back(on ? "tx-uart" : "tx-input");
+      log.push_back(on ? "tx-push-pull" : "tx-open-drain");
       contended = contended || contention();
+   }
+   void halfDuplex(bool on) {
+      hdsel = on;
+      log.push_back(on ? "hdsel-on" : "hdsel-off");
    }
    void enableReceiver(bool on) {
       receiver = on;
@@ -38,9 +44,12 @@ struct FakePins {
 
    bool drive = true;
    bool tx = true;
+   bool hdsel = false;
    bool receiver = true;
    // Set when a change gave contention, also for a short time
    bool contended = false;
+   // Set when the shifter released the target without half-duplex mode
+   bool deaf = false;
    Log log;
 };
 
@@ -65,7 +74,8 @@ TEST_CASE("Single-wire line: the switch releases the target, TX pin first") {
    l.line.setSingleWire(true, false);
    CHECK(l.line.singleWire());
    CHECK_FALSE(l.line.sending());
-   CHECK(l.pins.log == Log{ "tx-input", "release", "rx-on" });
+   CHECK(l.pins.log == Log{ "hdsel-on", "tx-open-drain", "release", "rx-on" });
+   CHECK(l.pins.hdsel);
    CHECK_FALSE(l.pins.contention());
 }
 
@@ -76,7 +86,7 @@ TEST_CASE("Single-wire line: a transmission drives the line with the receiver of
 
    l.line.txStart();
    CHECK(l.line.sending());
-   CHECK(l.pins.log == Log{ "rx-off", "drive", "tx-uart" });
+   CHECK(l.pins.log == Log{ "rx-off", "drive", "tx-push-pull" });
    CHECK(l.pins.drive);
    CHECK_FALSE(l.pins.receiver);
 
@@ -87,7 +97,7 @@ TEST_CASE("Single-wire line: a transmission drives the line with the receiver of
 
    l.line.txComplete();
    CHECK_FALSE(l.line.sending());
-   CHECK(l.pins.log == Log{ "tx-input", "release", "rx-on" });
+   CHECK(l.pins.log == Log{ "tx-open-drain", "release", "rx-on" });
    CHECK_FALSE(l.pins.drive);
    CHECK(l.pins.receiver);
 
@@ -97,7 +107,7 @@ TEST_CASE("Single-wire line: a transmission drives the line with the receiver of
    CHECK(l.pins.log.empty());
 }
 
-TEST_CASE("Single-wire line: no pin change gives contention") {
+TEST_CASE("Single-wire line: no pin change gives contention or a released line without HDSEL") {
    Line l;
    l.line.setSingleWire(true, false);
    l.line.txStart();
@@ -109,6 +119,7 @@ TEST_CASE("Single-wire line: no pin change gives contention") {
    l.line.setSingleWire(false, true);
    l.line.txComplete();
    CHECK_FALSE(l.pins.contended);
+   CHECK_FALSE(l.pins.deaf);
 }
 
 TEST_CASE("Single-wire line: the switch back to normal drives the target") {
@@ -117,7 +128,8 @@ TEST_CASE("Single-wire line: the switch back to normal drives the target") {
    l.pins.log.clear();
    l.line.setSingleWire(false, false);
    CHECK_FALSE(l.line.singleWire());
-   CHECK(l.pins.log == Log{ "drive", "tx-uart" });
+   CHECK(l.pins.log == Log{ "drive", "tx-push-pull", "hdsel-off" });
+   CHECK_FALSE(l.pins.hdsel);
    CHECK(l.pins.drive);
    CHECK(l.pins.tx);
    CHECK(l.pins.receiver);
@@ -141,7 +153,7 @@ TEST_CASE("Single-wire line: a switch while the UART sends waits for the end") {
    CHECK(l.line.sending());
    CHECK(l.pins.log.empty());
    l.line.txComplete();
-   CHECK(l.pins.log == Log{ "tx-input", "release", "rx-on" });
+   CHECK(l.pins.log == Log{ "hdsel-on", "tx-open-drain", "release", "rx-on" });
 }
 
 TEST_CASE("Single-wire line: a switch to normal while the line sends turns the receiver on at the end") {
@@ -153,7 +165,7 @@ TEST_CASE("Single-wire line: a switch to normal while the line sends turns the r
    CHECK(l.pins.log.empty());
    CHECK(l.line.sending());
    l.line.txComplete();
-   CHECK(l.pins.log == Log{ "rx-on" });
+   CHECK(l.pins.log == Log{ "hdsel-off", "rx-on" });
    CHECK(l.pins.drive);
    CHECK(l.pins.tx);
    CHECK(l.pins.receiver);
@@ -172,5 +184,16 @@ TEST_CASE("Single-wire line: off and on again while the line sends releases it a
    l.line.setSingleWire(true, true);
    l.pins.log.clear();
    l.line.txComplete();
-   CHECK(l.pins.log == Log{ "tx-input", "release", "rx-on" });
+   CHECK(l.pins.log == Log{ "tx-open-drain", "release", "rx-on" });
+}
+
+TEST_CASE("Single-wire line: on and off again while the UART sends in normal mode keeps normal mode") {
+   Line l;
+   l.line.setSingleWire(true, true);
+   l.line.setSingleWire(false, true);
+   l.line.txComplete();
+   CHECK(l.pins.log == Log{ "rx-on" });
+   CHECK_FALSE(l.pins.hdsel);
+   CHECK(l.pins.drive);
+   CHECK(l.pins.tx);
 }

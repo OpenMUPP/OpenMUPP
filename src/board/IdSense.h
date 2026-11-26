@@ -72,9 +72,10 @@ constexpr IdReading idReadingOf(uint32_t raw) {
 }
 
 // The board ID of the revisions that this firmware knows: revision 1 is
-// slot 1 (R3 1 kOhm, x = 0.091).
+// slot 1 (R3 1 kOhm, x = 0.091). Revision 2 is slot 2 (R3 2.4 kOhm,
+// x = 0.194): it adds the pull-up on UART TX (openmupp-v1 issue #10).
 constexpr bool isKnownBoardRevision(IdReading reading) {
-   return reading == IdReading{ IdKind::Slot, 1 };
+   return reading == IdReading{ IdKind::Slot, 1 } || reading == IdReading{ IdKind::Slot, 2 };
 }
 
 using protocol::TargetProtocol;

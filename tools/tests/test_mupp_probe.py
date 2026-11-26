@@ -836,13 +836,17 @@ class IdReportLinesTest(unittest.TestCase):
         lines = mp.id_report_lines(bytes([0x84, 0, 1, 1, 2, 0, 0]))
         self.assertEqual(lines[1:], ["Adapter:  fault: pin shorted to GND", "Connect:  refused: adapter fault"])
 
+    def test_board_revision_2_has_the_tx_pull_up(self):
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 2, 1, 5, 1]))
+        self.assertEqual(lines, ["Board:    OpenMUPP v1, revision 2 (pull-up on UART TX)", "Adapter:  slot 5, pin-header adapter", "Connect:  allowed"])
+
     def test_unknown_board_revision_refuses(self):
-        lines = mp.id_report_lines(bytes([0x84, 0, 1, 2, 1, 4, 0]))
-        self.assertEqual(lines[0], "Board:    unknown revision (slot 2, unknown)")
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 3, 1, 4, 0]))
+        self.assertEqual(lines[0], "Board:    unknown revision (slot 3, unknown)")
         self.assertEqual(lines[2], "Connect:  refused: unknown board revision")
 
     def test_adapter_fault_on_an_unknown_board_gives_the_adapter_fault(self):
-        lines = mp.id_report_lines(bytes([0x84, 0, 1, 2, 2, 0, 0]))
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 3, 2, 0, 0]))
         self.assertEqual(lines[2], "Connect:  refused: adapter fault")
 
     def test_board_fault_names_the_adc(self):

@@ -59,6 +59,8 @@ TEST_CASE("The ID resistors of the slot table read as their slot") {
    }
    // Board revision 1: R3 1 kOhm, R49 10 kOhm, x = 0.091
    CHECK(board::isKnownBoardRevision(idReadingOf(board::adcMaxRaw * 1000 / 11000)));
+   // Board revision 2: R3 2.4 kOhm, x = 0.194
+   CHECK(board::isKnownBoardRevision(idReadingOf(board::adcMaxRaw * 2400 / 12400)));
 }
 
 TEST_CASE("The free slots are unknown adapters") {
@@ -67,9 +69,10 @@ TEST_CASE("The free slots are unknown adapters") {
    CHECK(idReadingOf(board::adcMaxRaw * 8 / 10).kind == IdKind::Slot);
 }
 
-TEST_CASE("Only board ID slot 1 is a known revision") {
+TEST_CASE("Only board ID slots 1 and 2 are known revisions") {
    CHECK(board::isKnownBoardRevision({ IdKind::Slot, 1 }));
-   CHECK_FALSE(board::isKnownBoardRevision({ IdKind::Slot, 2 }));
+   CHECK(board::isKnownBoardRevision({ IdKind::Slot, 2 }));
+   CHECK_FALSE(board::isKnownBoardRevision({ IdKind::Slot, 3 }));
    CHECK_FALSE(board::isKnownBoardRevision({ IdKind::Unknown, 6 }));
    CHECK_FALSE(board::isKnownBoardRevision({ IdKind::Fault, 0 }));
    CHECK_FALSE(board::isKnownBoardRevision({ IdKind::None, 0 }));

@@ -93,8 +93,9 @@ ID_DAP_Vendor6 on interface 0:
     [0x86][0] normal (two wires), [0x86][1] single wire, [0x86][2] only read
     -> response [0x86][status][mode], 0 = done
 
-Single-wire mode needs a link from J4 pin 13 (TX) to pin 14 (RX). The mode
-stays after the script ends, until a reset of the probe or the next command.
+Single-wire mode uses only J4 pin 13 (TX). The line needs a pull-up to
+VTREF: board revision 2 has it, on revision 1 the target or the adapter
+must have it (15 kOhm or less). The mode stays after the script ends, until a reset of the probe or the next command.
 Only a board with UART_TX_DIR (OpenMUPP v1) has the command. See
 docs/uart-bridge.md, "Single-wire mode".
 
@@ -205,7 +206,7 @@ UART_MODES = {0: "normal (two wires)", 1: "single wire"}
 # The kind codes of ID_DAP_Vendor4
 ID_OPEN, ID_SLOT, ID_FAULT, ID_FREE_SLOT = 0, 1, 2, 3
 # The board revisions that the firmware knows, by board ID slot
-BOARD_REVISIONS = {1: "OpenMUPP v1, revision 1"}
+BOARD_REVISIONS = {1: "OpenMUPP v1, revision 1", 2: "OpenMUPP v1, revision 2 (pull-up on UART TX)"}
 # The adapters by adapter ID slot (README of the openmupp-v1 repository)
 ADAPTERS = {
     1: "AVR adapter, variant A (JTAG, ISP, debugWIRE)",

@@ -461,7 +461,7 @@ The firmware must follow these rules when it adds these functions:
 |---|---|---|
 | Direction of the level shifters | `DIR_OUT` PB10, `DIR_SWDIO` PC3 | External pull-downs keep the target side high-impedance at reset. Set `DIR_OUT` high only while an engine runs or a gpio request drives a pin of its group. |
 | One-wire SWDIO | `DIR_SWDIO` PC3 (TIM10_CH3), SWDIO PC11 | The one-wire engine changes the direction in each bit with TIM10_CH3. Do not enable the DMA request of TIM10_CH3: it is on DMA2 channel 9, which UART7 RX uses. The SWDIO pull-up to `VTREF` is 2.2 kΩ. |
-| UART TX direction | `UART_TX_DIR` PC9 | High (pull-up) drives the target. Set it low to read the line. While it is low, U6 drives PA6, so PA6 must be an input. Single-wire mode of the UART uses it (see [Single-wire mode](uart-bridge.md#single-wire-mode)). |
+| UART TX direction | `UART_TX_DIR` PC9 | High (pull-up) drives the target. Set it low to read the line. While it is low, U6 drives PA6, so PA6 must be an input or an open-drain output. Single-wire mode of the UART uses it (see [Single-wire mode](uart-bridge.md#single-wire-mode)). |
 | Target power, 3.3 V | `TARGET_PWR_EN` PB8 | The limit is about 300 mA. With both switches off, `VTREF_SENSE` (PB0) shows half of the target voltage. |
 | Target power, 5 V | `TARGET_5V_EN` PB5 | The limit is about 300 mA. See the sequence below. |
 | Power faults | `3V3_OUT_FAULT` PA11, `5V_OUT_FAULT` PA12 | Open-drain, active low, no external pull-up. Turn on the internal pull-ups. Turn off the switch when its fault line goes low. Keep USBFS off: PA11 and PA12 are its pins. |
@@ -489,6 +489,7 @@ The slot table is in the README of the [openmupp-v1](https://github.com/OpenMUPP
 
 **Board ID.** The firmware reads the board ID (PC2) once at start-up.
 Revision 1 is slot 1 (R3 1 kΩ, x = 0.091).
+Revision 2 is slot 2 (R3 2.4 kΩ, x = 0.194). Revision 2 adds a 10 kΩ pull-up from `T_UART_TX` to `VTREF` (see [Single-wire mode](uart-bridge.md#single-wire-mode)).
 **Adapter ID.** The firmware reads the adapter ID (PB1) at start-up and again at each connect, because a user can change the adapter while the probe runs.
 These commands are a connect:
 

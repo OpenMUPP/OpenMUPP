@@ -23,6 +23,7 @@
 //   gives the DMA the next contiguous block of tx, and at the end of the
 //   block it commits the block and starts the next one.
 // - Single-wire mode (setSingleWire(), only on a board with UART_TX_DIR):
+//   the half-duplex mode of UART7 (HDSEL) on the TX pin.
 //   uart/SingleWireLine.h sets the pins. The TX channel interrupt calls
 //   txStart() before each block. After the last block, it enables the
 //   transfer complete interrupt (TC) of UART7, and that interrupt calls
@@ -91,7 +92,8 @@ class UartPort {
    struct LinePins {
       hw::Usart &usart;
       void driveTarget(bool on);
-      void connectTx(bool on);
+      void pushPullTx(bool on);
+      void halfDuplex(bool on);
       void enableReceiver(bool on);
    };
 

@@ -754,6 +754,7 @@ The response is `[0x86][status u8][mode u8]`.
 | `mode` | The mode after the command: `0` normal, `1` single wire. |
 
 The mode applies to the UART bridge and to the `DAP_UART_*` commands.
+Single-wire mode uses the half-duplex mode of UART7 on J4 pin 13 (UART TX). The line needs a pull-up to `VTREF`: board revision 2 has it, and on revision 1 the target or the adapter must supply it.
 When the UART sends at the time of the command, the new mode takes effect after the last stop bit.
 The mode stays when the host goes away. A reset of the probe sets normal mode.
 
