@@ -318,12 +318,12 @@ def check_id_reply(reply):
         raise ProbeError("unexpected response %s" % reply.hex())
 
 
-def describe_id(kind, slot, names, open_text):
+def describe_id(kind, slot, names, open_text, fault_text="fault: pin shorted to GND"):
     """The text of an ID reading: kind and slot of ID_DAP_Vendor4."""
     if kind == ID_OPEN:
         return open_text
     if kind == ID_FAULT:
-        return "fault: pin shorted to GND"
+        return fault_text
     if kind == ID_FREE_SLOT:
         return "slot %d, unknown (free slot)" % slot
     if kind == ID_SLOT:
@@ -340,7 +340,8 @@ def id_report_lines(reply):
     if board_kind == ID_SLOT and board_slot in BOARD_REVISIONS:
         board = BOARD_REVISIONS[board_slot]
     else:
-        board = "unknown revision (%s)" % describe_id(board_kind, board_slot, {}, "no board ID resistor")
+        # The firmware also gives a fault when the ADC failed at start-up
+        board = "unknown revision (%s)" % describe_id(board_kind, board_slot, {}, "no board ID resistor", "fault: pin shorted to GND, or the ADC failed")
     if status != 0:
         adapter = "the ADC failed"
     else:
@@ -349,10 +350,11 @@ def id_report_lines(reply):
         connect = "allowed"
     elif status != 0:
         connect = "refused: the ADC failed"
-    elif not (board_kind == ID_SLOT and board_slot in BOARD_REVISIONS):
-        connect = "refused: unknown board revision"
-    else:
+    elif adapter_kind == ID_FAULT:
         connect = "refused: adapter fault"
+    else:
+        # The firmware refuses only an ADC failure, an adapter fault or a board revision that it does not know
+        connect = "refused: unknown board revision"
     return ["Board:    " + board, "Adapter:  " + adapter, "Connect:  " + connect]
 
 

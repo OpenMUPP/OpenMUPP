@@ -716,6 +716,14 @@ class IdReportLinesTest(unittest.TestCase):
         self.assertEqual(lines[0], "Board:    unknown revision (slot 2, unknown)")
         self.assertEqual(lines[2], "Connect:  refused: unknown board revision")
 
+    def test_adapter_fault_on_an_unknown_board_gives_the_adapter_fault(self):
+        lines = mp.id_report_lines(bytes([0x84, 0, 1, 2, 2, 0, 0]))
+        self.assertEqual(lines[2], "Connect:  refused: adapter fault")
+
+    def test_board_fault_names_the_adc(self):
+        lines = mp.id_report_lines(bytes([0x84, 0, 2, 0, 1, 5, 0]))
+        self.assertEqual(lines[0], "Board:    unknown revision (fault: pin shorted to GND, or the ADC failed)")
+
     def test_failed_adc(self):
         lines = mp.id_report_lines(bytes([0x84, 0xFF, 1, 1, 0, 0, 0]))
         self.assertEqual(lines[1:], ["Adapter:  the ADC failed", "Connect:  refused: the ADC failed"])
@@ -747,6 +755,25 @@ class CommandAdapterTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out.splitlines(), ["Firmware: v0.13.0", "Board:    OpenMUPP v1, revision 1", "Adapter:  slot 4, Arm adapter", "Connect:  allowed"])
         self.assertEqual([data for _, data in device.writes], [bytes([0x00, 0x09]), bytes([0x84])])
+
+    def test_old_firmware_prints_the_version(self):
+        def replies(request):
+            return bytes([0xFF]) if request == bytes([0x84]) else self.replies(request)
+
+        device = FakeDevice(0x1209, 0x0001, product="OpenMUPP CMSIS-DAP", reply=replies)
+        code, out = self.run_adapter(device)
+        self.assertEqual(code, 0)
+        lines = out.splitlines()
+        self.assertEqual(lines[0], "Firmware: v0.13.0")
+        self.assertIn("no board ID", lines[1])
+
+    def test_short_id_reply_fails(self):
+        def replies(request):
+            return bytes([0x84, 0]) if request == bytes([0x84]) else self.replies(request)
+
+        device = FakeDevice(0x1209, 0x0001, product="OpenMUPP CMSIS-DAP", reply=replies)
+        code, _ = self.run_adapter(device)
+        self.assertEqual(code, 1)
 
     def test_no_reply_fails(self):
         device = FakeDevice(0x1209, 0x0001, product="OpenMUPP CMSIS-DAP")
