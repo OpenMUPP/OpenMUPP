@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <cmsis_device.h>
+#if defined(__riscv)
+#include <peripherals/CycleCounter.h>
+#endif
 #include <delaybusywait.h>
 #include <utils/Timekeeping.h>
 
@@ -238,16 +241,8 @@ class DapPlatform final : public cmsisdap::Platform {
    uint32_t nowUs() override {
 #if defined(__riscv)
       // The SysTick counter of the CH32V307 runs free at the core clock from SysTick_Config() on (64 bits,
-      // utils/Timekeeping.h), so it is the uptime in cycles. CNTH, CNT, CNTH again: a carry between the two
-      // reads shows as a changed high word.
-      uint32_t high;
-      uint32_t low;
-      do {
-         high = SysTick->CNTH;
-         low = SysTick->CNT;
-      } while(high != SysTick->CNTH);
-      const uint64_t cycles = (static_cast<uint64_t>(high) << 32) | low;
-      return static_cast<uint32_t>(cycles / (SystemCoreClock / 1000000u));
+      // utils/Timekeeping.h), so it is the uptime in cycles.
+      return static_cast<uint32_t>(hw::CycleCounter::count64() / (SystemCoreClock / 1000000u));
 #else
       const uint32_t primask = __get_PRIMASK();
       __disable_irq();
