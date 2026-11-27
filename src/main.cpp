@@ -653,7 +653,10 @@ void pollReset(uint64_t nowMs) {
 void beforeUsbPoll(uint64_t nowMs) {
    // Only the images with the bootloader entry link boot::enterBootloader()
    if constexpr(hasBootloaderEntry) {
-      if(bootloaderEntry.isDue(nowMs)) {
+      // On OpenMUPP v1 the key is on BOOT0: a key that is down at the reset
+      // starts the ROM ISP of WCH, not openmupp-bootloader.
+      const auto key = board::current.key;
+      if(bootloaderEntry.isDue(nowMs, key && board::isAsserted(*key))) {
          boot::enterBootloader();
       }
    }
