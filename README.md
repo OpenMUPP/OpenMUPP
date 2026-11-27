@@ -302,7 +302,7 @@ The dongle keeps the personality after a power cycle and after a firmware update
 The WCH-Link personality has no switch command: use the switch request on EP0 or the key (see [docs/usb-device.md](docs/usb-device.md#switch-request-on-ep0)).
 See [docs/usb-device.md](docs/usb-device.md#multi-image).
 
-The power LED shows the target power. The state LED flashes for each command of the host, and gives a double flash after a JTAG or SWD error. The USB LED shows the USB state.
+The power LED shows the target power. The state LED flashes for each command of the host, and gives a double flash after a JTAG or SWD error. On OpenMUPP v1, the state LED is continuously on when the firmware refuses the target, for example on an adapter fault. The USB LED shows the USB state.
 See [docs/boards.md](docs/boards.md#start-up-and-leds) for the meaning of the LEDs.
 
 ## Tools

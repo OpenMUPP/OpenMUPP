@@ -740,6 +740,26 @@ uint32_t probeErrorCount() {
 #endif
 }
 
+// True while the target gate refuses the target: a board ID that is not a
+// known revision, an ADC that fails, or an adapter fault (pin 16 shorted to
+// GND). It reads the adapter ID each gateFaultIntervalMs, also between
+// the connects, so the state LED shows a short when it occurs.
+constexpr uint32_t gateFaultIntervalMs = 100; // docs/boards.md
+bool isGateFault(uint64_t nowMs) {
+   if constexpr(!hasTargetGate) {
+      return false;
+   }
+   static bool fault = false;
+   static bool read = false;
+   static uint64_t lastMs = 0;
+   if(!read || nowMs >= lastMs + gateFaultIntervalMs) {
+      read = true;
+      lastMs = nowMs;
+      fault = !board::isTargetAllowed(targetGate.isBoardKnown(), targetGate.readAdapterNow());
+   }
+   return fault;
+}
+
 constexpr Heartbeat clockFaultBlink{ Heartbeat::clockFault };
 ActivityLed activityLed;
 ErrorLed errorLed;
@@ -763,11 +783,14 @@ void updateLeds(uint64_t nowMs, bool clockFromCrystal) {
    activityLed.update(nowMs, usbStack.commandCount());
    errorLed.update(nowMs, probeErrorCount());
    board::setLed(board::Led::Power, targetPowerLed.isOn());
-   // A probe error replaces the activity for some time (ErrorLed.h).
+   // A probe error replaces the activity for some time (ErrorLed.h). A
+   // gate fault keeps the state LED on.
    using board::StateShow;
    StateShow show = activityLed.isOn() ? StateShow::Activity : StateShow::Idle;
    if(!clockFromCrystal) {
       show = clockFaultBlink.isOn(nowMs) ? StateShow::Fault : StateShow::Idle;
+   } else if(isGateFault(nowMs)) {
+      show = StateShow::Fault;
    } else if(errorLed.isActive()) {
       show = errorLed.isOn() ? StateShow::Fault : StateShow::Idle;
    }
