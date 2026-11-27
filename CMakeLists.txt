@@ -442,8 +442,9 @@ if (CMAKE_CROSSCOMPILING)
         target_link_options(${_target} PUBLIC -Wl,-Map,${_name}.map)
         # The memory script comes before libs.ld and sections.ld of
         # LINKER_OPTIONS: the options of the target come first.
+        target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit})
         if (NOT MUPP_MCU_VENDOR STREQUAL "CH32")
-            target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit} -T${_ldscript})
+            target_link_options(${_target} PUBLIC -T${_ldscript})
         endif ()
         # FW_UPDATE enters the bootloader only behind openmupp-bootloader.
         # The Versaloon bootloaders do not know the boot request
@@ -513,6 +514,7 @@ if (CMAKE_CROSSCOMPILING)
                     -DTOOL=${PROJECT_SOURCE_DIR}/tools/mupp_combine_images.py
                     -DBOOTLOADER=${MUPP_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin
                     -DAPP=openmupp-app-8k.bin -DAPP_OFFSET=${MUPP_APP_OFFSET_app-8k}
+                    -DFLASH_SIZE=${MUPP_FLASH_SIZE}
                     -DIMAGE=${_name} -DCOPY=${_file}
                     -P ${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake
                 DEPENDS openmupp-bootloader openmupp-app-8k.elf

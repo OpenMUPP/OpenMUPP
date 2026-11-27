@@ -4,7 +4,7 @@
 # openmupp-with-bootloader.
 #
 #   cmake -DPYTHON=<python3> -DTOOL=<mupp_combine_images.py> -DBOOTLOADER=<bin>
-#         -DAPP=<bin> -DAPP_OFFSET=<bytes> -DIMAGE=<name> -DCOPY=<name>
+#         -DAPP=<bin> -DAPP_OFFSET=<bytes> [-DFLASH_SIZE=<bytes>] -DIMAGE=<name> -DCOPY=<name>
 #         -P CombinedImage.cmake
 #
 # The script writes <IMAGE>.bin and .hex, and copies them to <COPY>.bin and
@@ -26,8 +26,15 @@ if (NOT EXISTS "${APP}")
     return()
 endif ()
 
+# Without FLASH_SIZE, the tool uses its default (64 KB, the STM32F103x8).
+set(_flash_size_args "")
+if (DEFINED FLASH_SIZE)
+    set(_flash_size_args --flash-size ${FLASH_SIZE})
+endif ()
+
 execute_process(
         COMMAND "${PYTHON}" "${TOOL}" --bootloader "${BOOTLOADER}" --app "${APP}" --app-offset ${APP_OFFSET}
+            ${_flash_size_args}
             --bin "${IMAGE}.bin" --hex "${IMAGE}.hex"
         COMMAND_ERROR_IS_FATAL ANY)
 file(COPY_FILE "${IMAGE}.bin" "${COPY}.bin")

@@ -6,6 +6,9 @@ See [Install the bootloader](#install-the-bootloader).
 `openmupp-bootloader` is a USB CDC serial port with the ID `0483:5740`.
 It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
 
+OpenMUPP v1 (CH32V307) runs the `app-8k` image behind the DFU bootloader of `openmupp-bootloader`.
+See [OpenMUPP v1: DFU bootloader](#openmupp-v1-dfu-bootloader).
+
 The WeAct STM32H523 core board (STM32H5) has no bootloader in flash.
 The firmware starts the USB DFU (Device Firmware Upgrade) of the ROM bootloader in system memory.
 See [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu).
@@ -169,6 +172,40 @@ On Linux, `dfu-util` needs access to the device.
 
 The write erases only the sectors of the image.
 Thus a multi image or an image with the RISC-V bridge keeps the stored personality and the bridge mode in the last sector of bank 2, at `0x0803E000` on the STM32H523CC.
+
+## OpenMUPP v1: DFU bootloader
+
+On OpenMUPP v1, `openmupp-bootloader` is a USB DFU 1.1 device with the ID `1209:0001` and the product string `OpenMUPP Bootloader`.
+The firmware uses the same pid.codes test ID, so the tools also compare the product string.
+The serial number is the chip UID, as in the firmware.
+The bootloader is not an AN3155 device, so use `dfu-util`, not `stm32flash`.
+
+### Start the DFU bootloader
+
+- Send a switch command with the bootloader code `0xB0`: `python3 tools/mupp_probe.py switch bootloader`.
+  The tool waits for `1209:0001` with the product string `OpenMUPP Bootloader`.
+- The firmware writes the boot request `0xB007` to `BKP_DATAR1` and resets the MCU (`src/boot/BootloaderV30x.cpp`).
+
+The key of OpenMUPP v1 is on BOOT0.
+A key that is down at a reset starts the ROM ISP bootloader of WCH (`4348:55e0`, `wchisp`), not `openmupp-bootloader`.
+Use the ROM bootloader when `openmupp-bootloader` is damaged.
+
+### Write the firmware with dfu-util
+
+```sh
+dfu-util -d 1209:0001 -D openmupp-app-8k.bin
+```
+
+- The bootloader writes the image from `0x08002000`. The host cannot select an address.
+- After the download, the bootloader checks the image header and starts the firmware.
+  With an image that is not valid, it reports `errVERIFY` and stays in DFU mode.
+- The bootloader erases 4 KB sectors, up to the end of the 256 KB zero-wait flash.
+  The settings page of the firmware is behind this area, so a download keeps the settings.
+- On Linux, `dfu-util` and `mupp_probe.py` need access to the device.
+  `etc/70-openmupp-bootloader.rules` has a udev rule for `1209:0001` with the product string `OpenMUPP Bootloader`.
+
+The `app-8k` image of OpenMUPP v1 links at `0x00002000`, the flash alias of `0x08002000`, because the bootloader jumps to the alias.
+The build also makes `openmupp-with-bootloader.bin`: the bootloader and the `app-8k` image in one file from `0x08000000`, for a new board and a debug probe.
 
 ## Install the bootloader
 
