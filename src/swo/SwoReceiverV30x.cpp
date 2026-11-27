@@ -92,8 +92,12 @@ uint32_t timerClock() {
    return (RCC->CFGR0 & RCC_PPRE1_DIV2) != 0 ? pclk1 * 2 : pclk1; // the high bit of PPRE1
 }
 
+uint32_t manchesterBaud(uint32_t baud) {
+   return swo::manchesterBaud(baud, SwoReceiver::maxManchesterBaud);
+}
+
 std::optional<ManchesterTiming> manchesterTimingFor(uint32_t baud) {
-   return manchesterTiming(timerClock(), std::min(baud, SwoReceiver::maxManchesterBaud));
+   return manchesterTiming(timerClock(), manchesterBaud(baud) / 2);
 }
 
 // Counts the HT and TC flags of a circular channel. Clears only the flag
@@ -178,7 +182,7 @@ ManchesterEdges<SwoReceiver::edgeBufferSize> &SwoReceiver::edges() {
 
 uint32_t SwoReceiver::realBaud(uint8_t mode, uint32_t baud) const {
    if(mode == manchester) {
-      return manchesterTimingFor(baud) ? std::min(baud, maxManchesterBaud) : 0;
+      return manchesterTimingFor(baud) ? manchesterBaud(baud) : 0;
    }
    if(mode != uart) {
       return 0;
@@ -286,7 +290,7 @@ uint32_t SwoReceiver::startManchester(uint32_t baud) {
    decoder_.reset(high, 0);
    t.enableCounter();
    active_ = true;
-   return std::min(baud, maxManchesterBaud);
+   return manchesterBaud(baud);
 }
 
 uint32_t SwoReceiver::setBaud(uint32_t baud) {
@@ -305,7 +309,7 @@ uint32_t SwoReceiver::setBaud(uint32_t baud) {
       t.generateUpdate();
       decoder_.configure(*timing);
       decoder_.reset(edges().lineHigh(), static_cast<uint16_t>(t.getCounter()));
-      return std::min(baud, maxManchesterBaud);
+      return manchesterBaud(baud);
    }
    const hw::Usart port = usart();
    baud = limited(port.getClockFrequency(), baud);

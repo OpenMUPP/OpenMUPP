@@ -153,6 +153,38 @@ TEST_CASE("Manchester timing: the prescaler gives 16 to 32 ticks per bit") {
    }
 }
 
+TEST_CASE("Manchester baud rate: the TPIU clock, two times the bit rate") {
+   constexpr uint32_t max = 1'000'000;
+   // Below 138 Hz (69 bit/s), the 16-bit prescaler is too small
+   for(const uint32_t baud : { 0U, 1U, 137U }) {
+      CHECK_FALSE(swo::manchesterTiming(clock, swo::manchesterBaud(baud, max) / 2).has_value());
+   }
+   CHECK(swo::manchesterBaud(138, max) == 138);
+   {
+      const auto t = swo::manchesterTiming(clock, swo::manchesterBaud(138, max) / 2);
+      const auto expected = swo::manchesterTiming(clock, 69);
+      REQUIRE(t.has_value());
+      REQUIRE(expected.has_value());
+      CHECK(t->prescaler == expected->prescaler);
+      CHECK(t->maxBit == expected->maxBit);
+   }
+   // An odd clock gives the even clock below it
+   CHECK(swo::manchesterBaud(139, max) == 138);
+   CHECK(swo::manchesterBaud(250'001, max) == 250'000);
+   CHECK(swo::manchesterBaud(1'000'000, max) == 1'000'000);
+   {
+      const auto t = swo::manchesterTiming(clock, swo::manchesterBaud(1'000'000, max) / 2);
+      const auto expected = swo::manchesterTiming(clock, 500'000);
+      REQUIRE(t.has_value());
+      REQUIRE(expected.has_value());
+      CHECK(t->prescaler == expected->prescaler);
+      CHECK(t->maxBit == expected->maxBit);
+   }
+   // Above the maximum: the maximum
+   CHECK(swo::manchesterBaud(1'000'001, max) == 1'000'000);
+   CHECK(swo::manchesterBaud(UINT32_MAX, max) == 1'000'000);
+}
+
 TEST_CASE("Manchester decoder: one frame gives its bytes") {
    Bench b(1'000'000, 100);
    Encoder enc(b.ticksPerBit, 200);

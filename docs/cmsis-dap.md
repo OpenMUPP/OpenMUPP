@@ -47,7 +47,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
   Else the next scan has an extra TCK edge or a missing TCK edge.
   The idle level is high on the boards with the SPI fast path (the Mini and the STM32H5 boards), and low on the ST-Link/V2-1 and the mini clone.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
-- SWO only on the CH32V307 boards, through `DAP_SWO_Data` or the SWO trace endpoint. UART (NRZ) mode up to 9 Mbaud, Manchester mode up to 500 kbit/s. See [SWO commands](#swo-commands).
+- SWO only on the CH32V307 boards, through `DAP_SWO_Data` or the SWO trace endpoint. UART (NRZ) mode up to 9 Mbaud, Manchester mode up to 500 kbit/s (a baud rate of 1 MHz, see [SWO Manchester mode](#swo-manchester-mode)). See [SWO commands](#swo-commands).
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
 - A `MUPP_DEBUG_CDC` build has no UART bridge and no `DAP_UART_*` commands.
 - On JTAG, `DAP_TransferAbort` stops a transfer command only between two transfers. It does not stop the WAIT retries of one JTAG transfer. On SWD, it also stops the WAIT retries. It does not stop other commands, for example `DAP_Delay`.
@@ -444,7 +444,7 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 | `0x16` | `DAP_JTAG_IDCODE` | Reads IDCODE of the device of the index. Replies an error when JTAG is not connected or the device is not in the chain. |
 | `0x17` | `DAP_SWO_Transport` | `0` none, `1` `DAP_SWO_Data`, `2` SWO trace endpoint. See [SWO commands](#swo-commands). |
 | `0x18` | `DAP_SWO_Mode` | `0` off, `1` UART, `2` Manchester. Stops the capture. |
-| `0x19` | `DAP_SWO_Baudrate` | UART: the response has the real baud rate of the USART divider, or 0. Above 9 Mbaud: 9 Mbaud. Manchester: the bit rate, or 0. Above 500 kbit/s: 500 kbit/s. |
+| `0x19` | `DAP_SWO_Baudrate` | UART: the response has the real baud rate of the USART divider, or 0. Above 9 Mbaud: 9 Mbaud. Manchester: the TPIU clock, two times the bit rate, as an even number, or 0. Above 1 MHz: 1 MHz. |
 | `0x1A` | `DAP_SWO_Control` | Bit 0: start or stop the capture. |
 | `0x1B` | `DAP_SWO_Status` | The trace status and the number of bytes in the trace buffer. |
 | `0x1C` | `DAP_SWO_Data` | The trace status and up to packet size - 4 bytes of trace data. |
@@ -822,14 +822,14 @@ The receiver is `swo::SwoReceiver` (`src/swo/SwoReceiver.h`). It has two modes:
 - UART mode: USART2 receives on PA3 (8N1, receiver only). A circular DMA on DMA1 channel 6 writes into a trace buffer of 4 KB.
   The baud rate is 144 MHz / (16 × divider). The range is 2198 baud to 9 Mbaud.
 - Manchester mode: TIM5 captures the edges on PA3, and the CPU decodes them into the same trace buffer.
-  The range is 69 bit/s to 500 kbit/s. See [SWO Manchester mode](#swo-manchester-mode).
+  The range is 69 bit/s to 500 kbit/s, a baud rate of 138 Hz to 1 MHz. See [SWO Manchester mode](#swo-manchester-mode).
 - PB14 (TDO) stays an input while the capture runs.
 
 Use this sequence to start a capture:
 
 1. `DAP_SWO_Transport` `1` (`DAP_SWO_Data`) or `2` (SWO trace endpoint).
 2. `DAP_SWO_Mode` `1` (UART) or `2` (Manchester).
-3. `DAP_SWO_Baudrate` with the baud rate of the target. In Manchester mode, this is the bit rate. The response has the real baud rate, for example 6857143 for 7 Mbaud in UART mode.
+3. `DAP_SWO_Baudrate` with the baud rate of the target. In Manchester mode, this is the TPIU clock: two times the bit rate. The response has the real baud rate, for example 6857143 for 7 Mbaud in UART mode.
 4. `DAP_SWO_Control` `1`.
 
 Then read the data with `DAP_SWO_Data` (transport `1`) or from the SWO trace endpoint (transport `2`).
@@ -842,8 +842,8 @@ Rules:
 - `DAP_SWO_Mode` stops the capture and clears the baud rate. Thus send `DAP_SWO_Baudrate` after `DAP_SWO_Mode`.
   Another mode than `0`, `1` and `2` replies an error and sets mode off.
 - `DAP_SWO_Baudrate` replies the real baud rate and stores it. In UART mode, a baud rate above 9 Mbaud gives 9 Mbaud.
-  In Manchester mode, a bit rate above 500 kbit/s gives 500 kbit/s.
-  It replies 0 in mode off, and for a baud rate below the minimum (2198 baud UART, 69 bit/s Manchester). It then stores 0 and stops the capture.
+  In Manchester mode, a baud rate above 1 MHz gives 1 MHz.
+  It replies 0 in mode off, and for a baud rate below the minimum (2198 baud UART, 138 Hz Manchester). It then stores 0 and stops the capture.
 - While the capture runs, `DAP_SWO_Baudrate` changes the baud rate at once. The capture goes on, and the trace buffer stays.
 - A start needs a mode and a baud rate. Else `DAP_SWO_Control` replies an error.
 - A start empties the trace buffer and clears the errors. A start while the capture runs does nothing.
@@ -870,6 +870,14 @@ The TPIU Manchester format has these properties:
 - The line is low when it is idle.
 - Each bit has two halves. A 1 is high, then low. A 0 is low, then high. Thus each bit has an edge in its middle.
 - A frame starts with a start bit (a 1). One or more bytes follow, with the least significant bit first. After the frame, the line stays low for at least one bit time.
+- The bytes of a frame have no start bit and no gap between them. The frame ends only when the trace FIFO of the target is empty.
+- The TPIU clock gives one half of a bit. Thus the bit rate is half of the TPIU clock (TRACECLKIN / (`TPIU_ACPR` + 1) / 2).
+
+The baud rate of `DAP_SWO_Baudrate` in Manchester mode is the TPIU clock, two times the bit rate.
+The CMSIS-DAP documentation does not tell if the value is the bit rate or the clock.
+OpenOCD sets `TPIU_ACPR` from TRACECLKIN / baud rate, and it sends the same baud rate to the probe.
+Thus the firmware uses the clock, and OpenOCD works with the probe.
+A test on a Nucleo-F401RE target decoded the OpenOCD captures at 50, 250 and 500 kbit/s with no lost lines.
 
 The capture on the CH32V307:
 
@@ -884,10 +892,11 @@ The capture on the CH32V307:
 The decoder (`src/swo/ManchesterDecoder.h`):
 
 - It uses only the 16-bit difference of two capture times. Thus the wrap of the timer has no effect inside a frame.
-- An edge in the middle of a bit is valid from 0.75 to 1.25 bit times after the middle of the bit before. Thus the bit time of the target can be from about 15 % shorter to 25 % longer than the bit time of `DAP_SWO_Baudrate`, less the jitter of the edges.
+- An edge in the middle of a bit is valid from 0.75 to 1.25 bit times after the middle of the bit before. Thus the bit time of the target can be from about 15 % shorter to 25 % longer than the nominal bit time, less the jitter of the edges. The nominal bit time is two TPIU clocks of `DAP_SWO_Baudrate`.
   The limit for a shorter bit time is smaller, because a start bit after the shortest gap between two frames (1.5 bit times after the last bit middle) must come after the window of a bit middle.
 - A frame ends at a rising edge that is too late for the middle of a bit, or when the line stays low for more than 1.5 bit times.
 - A bit time out of range, a glitch, or a frame that does not end at a byte boundary sets the error bit of the trace status. The decoder then waits for a low line of more than 1.5 bit times before the next frame.
+- Limit: the decoder starts only at the start bit of a frame. A capture that starts in a frame waits for the end of that frame. A target that sends with no pause keeps one frame open, and the capture gives no data and no error. Start the capture before the target sends, for example: start the capture, then reset the target.
 - The decoder runs in the main loop, in the serial service of a long command, and before each read of the trace data or the status. The DMA interrupts of the edge buffers end the sleep of the main loop.
 - Limit: a gap of more than one timer period (65536 ticks) between two edges looks like the gap modulo 65536. The main loop must see the end of a frame within one timer period. The main loop runs at least each millisecond, so this is true up to the maximum bit rate.
 
