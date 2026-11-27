@@ -165,8 +165,8 @@ protocol::TargetPower targetPower{ boardPower, busyWaitDelay };
 #endif
 
 // The bootloader entry of FW_UPDATE and of the bootloader code of the switch
-// commands, in every personality. On the STM32F1 only the app-8k image
-// enters the bootloader, behind openmupp-bootloader. On the STM32H5 the
+// commands, in every personality. On the STM32F1 and the CH32V307 only the
+// app-8k image enters the bootloader, behind openmupp-bootloader. On the STM32H5 the
 // standalone image enters the ROM bootloader. CMake defines
 // MUPP_HAS_BOOTLOADER_ENTRY for this file of these images only
 // (mupp_add_app_image() in CMakeLists.txt). The other sources are shared by

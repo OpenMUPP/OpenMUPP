@@ -325,9 +325,9 @@ if (CMAKE_CROSSCOMPILING)
     # __flash_offset and __flash_length, and on STM32 the memory script
     # (mupp_add_app_image): the app-32k image uses the script of a larger part.
     if (MUPP_MCU_VENDOR STREQUAL "CH32")
-        # The scripts of ch32v00x-system (no flash offset yet). The settings
-        # page is behind their FLASH region (the zero-wait area), so the link
-        # only gets its address.
+        # The scripts of ch32v00x-system. The settings page is behind their
+        # FLASH region (the zero-wait area), so the link only gets its
+        # address.
         if (DEFINED _mupp_settings_start)
             set(_mupp_settings_symbol -Wl,--defsym=__flash_reserved_start=${_mupp_settings_start})
         endif ()

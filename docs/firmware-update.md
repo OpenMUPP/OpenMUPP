@@ -62,6 +62,7 @@ Then the tool sends `VERSALOON_FW_UPDATE` in the Versaloon personality, and `ID_
 After the request, the tool waits 10 s for the bootloader.
 It finds `openmupp-bootloader` by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
 Other devices use the ID `0483:5740` too, so the tool also compares the product string.
+It finds the DFU bootloader of OpenMUPP v1 by the ID `1209:0001`, the product string `OpenMUPP Bootloader` and the serial number.
 It finds the ROM USB DFU of the STM32H5 by the ID `0483:df11` only.
 The ROM DFU has its own serial number, so the wait for the bootloader does not compare it.
 Thus any STM32 device in ROM DFU mode ends the wait, also a different board.
@@ -199,7 +200,8 @@ dfu-util -d 1209:0001 -D openmupp-app-8k.bin
 - The bootloader writes the image from `0x08002000`. The host cannot select an address.
 - After the download, the bootloader checks the image header and starts the firmware.
   With an image that is not valid, it reports `errVERIFY` and stays in DFU mode.
-- The bootloader erases 4 KB sectors, up to the end of the 256 KB zero-wait flash.
+- The bootloader erases only the 4 KB sectors of the image.
+  The write area ends at the end of the 256 KB zero-wait flash, so the `app-8k` image can be up to 248 KB (253952 bytes).
   The settings page of the firmware is behind this area, so a download keeps the settings.
 - On Linux, `dfu-util` and `mupp_probe.py` need access to the device.
   `etc/70-openmupp-bootloader.rules` has a udev rule for `1209:0001` with the product string `OpenMUPP Bootloader`.
@@ -335,7 +337,8 @@ The bootloader uses the start of the flash, and the application uses the rest:
 | `app-8k` | `openmupp-bootloader` or Versaloon bootloader, 8 KB | `0x08002000` | 56 KB | 55 KB |
 | `app-32k` | Versaloon bootloader, 32 KB | `0x08008000` | 96 KB | 95 KB |
 
-The limits are hard limits for all boards.
+The limits are hard limits for all STM32F1 boards.
+OpenMUPP v1 has other limits: `standalone` 256 KB, `app-8k` at `0x08002000` with 248 KB (see [OpenMUPP v1: DFU bootloader](#openmupp-v1-dfu-bootloader)).
 The `app-8k` limit is the smallest. CI checks each image against its limit (see [Continuous integration](development.md#continuous-integration)).
 
 - The FLASH region of the link (`__flash_length`) goes from the start of the application to the settings page, or to the end of the flash (64 KB, or 128 KB for `app-32k`). With `MUPP_STRICT_SIZE=ON`, the link of an image fails when the application is too large. The CI build jobs set this option.
