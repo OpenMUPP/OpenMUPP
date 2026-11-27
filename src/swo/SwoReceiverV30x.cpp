@@ -89,8 +89,7 @@ uint32_t limited(uint32_t clock, uint32_t baud) {
 // (RM figure 3-3).
 uint32_t timerClock() {
    const uint32_t pclk1 = Rcc::getAPBClock();
-   constexpr uint32_t divided = 4U << 8; // the high bit of PPRE1
-   return (RCC->CFGR0 & divided) != 0 ? pclk1 * 2 : pclk1;
+   return (RCC->CFGR0 & RCC_PPRE1_DIV2) != 0 ? pclk1 * 2 : pclk1; // the high bit of PPRE1
 }
 
 std::optional<ManchesterTiming> manchesterTimingFor(uint32_t baud) {
