@@ -9,9 +9,7 @@
 #include <cmsis_device.h>
 #include <delaybusywait.h>
 #include <peripherals/GpioPin.h>
-#if !defined(CH32V30x_D8C)
 #include <peripherals/Rcc.h>
-#endif
 
 #include "Hardware.h"
 #include "board/Board.h"
@@ -26,19 +24,12 @@ namespace {
 bool clockFromCrystal = false;
 
 #if defined(CH32V30x_D8C)
-// RCC bits that ch32v30x.h does not define (CH32FV2x_V3xRM 3.4.5, 3.4.6,
-// 3.4.8, 3.4.11): the clock enable and the reset of USBFS (USBOTG_FS) and
-// of the DAC.
-constexpr uint32_t rccOtgFs = 1ul << 12; // RCC_AHBPCENR, RCC_AHBRSTR
-constexpr uint32_t rccDac = 1ul << 29;   // RCC_APB1PCENR, RCC_APB1PRSTR
-
 // USBFS off: the firmware uses USBHS, and a board can use the USBFS pins
 // PA11 and PA12 (board::reservedPins()). The reset also releases the pins
 // when a bootloader used USBFS.
 void disableUsbFs() {
-   RCC->AHBRSTR |= rccOtgFs;
-   RCC->AHBRSTR &= ~rccOtgFs;
-   RCC->AHBPCENR &= ~rccOtgFs;
+   Rcc::resetOTGFS();
+   Rcc::disableOTGFSClock();
 }
 #endif
 
@@ -52,11 +43,11 @@ void configureClocks() {
    // set SYSCLK to 144 MHz from the crystal through the PLL. On failure the
    // clock stayed on HSI, so the PLL as SYSCLK source means the crystal runs.
    SystemCoreClockUpdate();
-   clockFromCrystal = (RCC->CFGR0 & RCC_CFGR0_SWS_MASK) == RCC_CFGR0_SWS_PLL;
+   clockFromCrystal = Rcc::getSystemClockSource() == Rcc::SystemClockSource::PLL;
    // PCLK2 = HCLK (144 MHz): the GPIO accesses of the bit-bang engines stall less. The ADC needs PCLK2 /
    // 2, so BoardPower.cpp sets it only while the ADC runs. Before any USART or ADC setup: hw::Usart reads
    // the prescaler when it sets the baud rate.
-   RCC->CFGR0 &= ~RCC_CFGR0_PPRE2_MASK;
+   Rcc::setAPB2Prescaler(Rcc::APBPrescaler::div1);
 #else
    // SYSCLK 250 MHz from the crystal (HSE_VALUE, board/BoardChecks.cpp).
    // On failure the clock stays on HSI. USB runs from the HSI48 and the
@@ -126,9 +117,8 @@ void configurePins() {
       board::configureOutput({ def.vpp->on, board::Active::High }, false);
       board::configureOutput({ def.vpp->pullDown, board::Active::High }, false);
 #if defined(CH32V30x_D8C)
-      RCC->APB1PRSTR |= rccDac;
-      RCC->APB1PRSTR &= ~rccDac;
-      RCC->APB1PCENR &= ~rccDac;
+      Rcc::resetDAC();
+      Rcc::disableDACClock();
 #endif
    }
 

@@ -6,6 +6,7 @@
 #include <utils/Interrupt.h>
 #if defined(CH32V30x_D8C)
 #include <cmsis_device.h>
+#include <peripherals/Rcc.h>
 #include <utils/GpioInterrupt.h>
 #endif
 
@@ -59,14 +60,14 @@ class AdcClockWindow {
    public:
    AdcClockWindow() {
       Interrupt::CriticalSection cs;
-      RCC->CFGR0 = (RCC->CFGR0 & ~RCC_CFGR0_PPRE2_MASK) | (4ul << 11);
+      Rcc::setAPB2Prescaler(Rcc::APBPrescaler::div2);
       Adc::enableClock();
    }
 
    ~AdcClockWindow() {
       Interrupt::CriticalSection cs;
       Adc::disableClock();
-      RCC->CFGR0 &= ~RCC_CFGR0_PPRE2_MASK;
+      Rcc::setAPB2Prescaler(Rcc::APBPrescaler::div1);
    }
 
    AdcClockWindow(const AdcClockWindow &) = delete;
