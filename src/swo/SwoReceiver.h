@@ -38,8 +38,12 @@
 // - The decoder runs in poll(), in the main loop and in the serial service
 //   of a long command, and before each read() and status(). Each call
 //   decodes all edges in the rings.
-// - The bit rate is at most maxManchesterBaud. That limit comes from the
-//   CPU time of the decoder (docs/cmsis-dap.md, "SWO Manchester mode").
+// - The baud rate of DAP_SWO_Baudrate is the TPIU SWO clock, as OpenOCD
+//   sends it (TPIU_ACPR = TRACECLKIN / clock). One clock is one half of a
+//   bit, so the bit rate is half the baud rate.
+// - The baud rate is at most maxManchesterBaud (1 MHz, 500 kbit/s). The limit
+//   comes from the CPU time of the decoder (docs/cmsis-dap.md, "SWO
+//   Manchester mode").
 //
 // Both modes:
 //
@@ -65,8 +69,9 @@ class SwoReceiver final : public cmsisdap::DapSwo {
    public:
    static constexpr std::size_t bufferSize = 4096;
    static constexpr std::size_t edgeBufferSize = 1024;
-   // The highest Manchester bit rate (docs/cmsis-dap.md)
-   static constexpr uint32_t maxManchesterBaud = 500'000;
+   // The highest Manchester baud rate: the TPIU clock, 2 x the bit rate
+   // (docs/cmsis-dap.md)
+   static constexpr uint32_t maxManchesterBaud = 1'000'000;
 
    SwoReceiver() = default;
    SwoReceiver(const SwoReceiver &) = delete;
@@ -80,8 +85,8 @@ class SwoReceiver final : public cmsisdap::DapSwo {
    }
    // The baud rate that start() gives for a request, without a start.
    // UART: 0 below 2198 baud at 144 MHz, the maximum (9 Mbaud) above it.
-   // Manchester: the bit rate, 0 below 69 bit/s, maxManchesterBaud above
-   // it.
+   // Manchester: the TPIU clock (2 x the bit rate) as an even number, 0
+   // below 138 Hz, maxManchesterBaud above it.
    [[nodiscard]] uint32_t realBaud(uint8_t mode, uint32_t baud) const override;
 
    // Starts the receiver in a mode. UART: 8N1 at the divider nearest to
