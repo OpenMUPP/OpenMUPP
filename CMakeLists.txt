@@ -277,7 +277,7 @@ if (CMAKE_CROSSCOMPILING)
         list(APPEND _mupp_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp" "src/board/BoardRvSwdH5\\.cpp")
     endif ()
     if (NOT CH32_FAMILY STREQUAL "CH32V30X")
-        list(APPEND _mupp_dropped_files "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp"
+        list(APPEND _mupp_dropped_files "src/boot/BootloaderV30x\\.cpp" "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp"
                 "src/board/BoardIspV30x\\.cpp" "src/board/BoardDebugWireV30x\\.cpp" "src/swo/SwoReceiverV30x\\.cpp")
     endif ()
     foreach (_file ${_mupp_dropped_files})
@@ -325,9 +325,9 @@ if (CMAKE_CROSSCOMPILING)
     # __flash_offset and __flash_length, and on STM32 the memory script
     # (mupp_add_app_image): the app-32k image uses the script of a larger part.
     if (MUPP_MCU_VENDOR STREQUAL "CH32")
-        # The scripts of ch32v00x-system (no flash offset yet). The settings
-        # page is behind their FLASH region (the zero-wait area), so the link
-        # only gets its address.
+        # The scripts of ch32v00x-system. The settings page is behind their
+        # FLASH region (the zero-wait area), so the link only gets its
+        # address.
         if (DEFINED _mupp_settings_start)
             set(_mupp_settings_symbol -Wl,--defsym=__flash_reserved_start=${_mupp_settings_start})
         endif ()
@@ -442,8 +442,9 @@ if (CMAKE_CROSSCOMPILING)
         target_link_options(${_target} PUBLIC -Wl,-Map,${_name}.map)
         # The memory script comes before libs.ld and sections.ld of
         # LINKER_OPTIONS: the options of the target come first.
+        target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit})
         if (NOT MUPP_MCU_VENDOR STREQUAL "CH32")
-            target_link_options(${_target} PUBLIC -Wl,--defsym=__flash_offset=${_offset} -Wl,--defsym=__flash_length=${_link_limit} -T${_ldscript})
+            target_link_options(${_target} PUBLIC -T${_ldscript})
         endif ()
         # FW_UPDATE enters the bootloader only behind openmupp-bootloader.
         # The Versaloon bootloaders do not know the boot request
@@ -513,6 +514,7 @@ if (CMAKE_CROSSCOMPILING)
                     -DTOOL=${PROJECT_SOURCE_DIR}/tools/mupp_combine_images.py
                     -DBOOTLOADER=${MUPP_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}.bin
                     -DAPP=openmupp-app-8k.bin -DAPP_OFFSET=${MUPP_APP_OFFSET_app-8k}
+                    -DFLASH_SIZE=${MUPP_FLASH_SIZE}
                     -DIMAGE=${_name} -DCOPY=${_file}
                     -P ${PROJECT_SOURCE_DIR}/cmake/CombinedImage.cmake
                 DEPENDS openmupp-bootloader openmupp-app-8k.elf

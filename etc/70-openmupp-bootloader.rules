@@ -10,5 +10,9 @@
 # The ST virtual COM port uses the same ID, so the rule also checks the
 # product string.
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", ATTRS{product}=="Bootloader", MODE="0660", TAG+="uaccess"
+# The DFU bootloader of OpenMUPP v1 (CH32V307), for mupp_probe.py and
+# dfu-util. The pid.codes test ID is shared, so the rule also checks the
+# product string.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0001", ATTRS{product}=="OpenMUPP Bootloader", MODE="0660", TAG+="uaccess"
 # The ROM USB DFU of the STM32 devices
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="df11", MODE="0660", TAG+="uaccess"

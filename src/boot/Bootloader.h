@@ -6,13 +6,15 @@
 // boot/BootloaderEntry.h has the contract with the bootloader.
 //
 // STM32F1 (boot/Bootloader.cpp): openmupp-bootloader, app-8k image only.
+// CH32V307 (boot/BootloaderV30x.cpp): the DFU bootloader of
+// openmupp-bootloader, app-8k image only.
 // STM32H5 (boot/RomBootloader.cpp): the USB DFU of the ROM bootloader in
 // system memory (ST AN2606), standalone image.
 
 namespace boot {
 
 // Writes bootRequest to a backup register and resets the MCU: BKP->DR1 on
-// the STM32F1, TAMP->BKP0R on the STM32H5. Call it only in an image with
+// the STM32F1, BKP->DATAR1 on the CH32V307, TAMP->BKP0R on the STM32H5. Call it only in an image with
 // the bootloader entry (hasBootloaderEntry in src/main.cpp).
 [[noreturn]] void enterBootloader();
 

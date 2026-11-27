@@ -205,6 +205,12 @@ class FindDevicesTest(unittest.TestCase):
         other = FakeDevice(0x0483, 0x5740, "STM32 Virtual ComPort")
         self.assertEqual(mp.find_devices(fake_usb([ours, other])), [("bootloader", ours)])
 
+    def test_dfu_bootloader_shares_the_test_id(self):
+        # The DFU bootloader of OpenMUPP v1 has the pid.codes test ID of the firmware
+        bootloader = FakeDevice(0x1209, 0x0001, "OpenMUPP Bootloader")
+        dap = FakeDevice(0x1209, 0x0001, "OpenMUPP CMSIS-DAP")
+        self.assertEqual(mp.find_devices(fake_usb([bootloader, dap])), [("cmsis-dap", dap), ("bootloader", bootloader)])
+
     def test_rom_dfu_needs_no_product_string(self):
         dfu = FakeDevice(0x0483, 0xDF11, "DFU in FS Mode", serial="ROM")
         self.assertEqual(mp.find_devices(fake_usb([dfu])), [("bootloader", dfu)])

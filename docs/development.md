@@ -28,7 +28,7 @@ The `app-32k` image uses the script of a part with 128 KB flash or more, `mem-F1
 CMake gives each image the start of the application with `-Wl,--defsym=__flash_offset=<bytes>`, and the FLASH length with `__flash_length`.
 The settings page is the reserved flash at the end (`__flash_reserved_end`, `__flash_reserved_start`).
 For these parameters, see "Linker scripts" in `docs/building.md` of system-stm32.
-The CH32 boards use the memory linker scripts of ch32v00x-system. They do not have these parameters.
+The CH32 boards use the memory linker scripts of ch32v00x-system. Their `mem-ch32v307.ld` has the same `__flash_offset` and `__flash_length` parameters (see "Linker scripts" in `docs/building.md` of ch32v00x-system).
 The FLASH region of the link is the zero-wait area.
 The settings page is the last page of the full flash (`MUPP_FLASH_TOTAL_<board>` in `cmake/Boards.cmake`), behind that region.
 CMake gives its address with `-Wl,--defsym=__flash_reserved_start=<address>`.

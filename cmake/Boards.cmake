@@ -48,7 +48,7 @@ set(MUPP_BOARD_openmuppv1  CH32V30X CH32V30x_D8C 8000000 mem-ch32v307.ld 262144)
 set(MUPP_FLASH_TOTAL_ydch32v307 491520)
 set(MUPP_FLASH_TOTAL_openmuppv1 491520)
 # Boards that openmupp-bootloader supports (cmake/Bootloader.cmake)
-set(MUPP_BOOTLOADER_BOARDS mini otheruse stlinkv21 stlinkv2miniclone)
+set(MUPP_BOOTLOADER_BOARDS mini otheruse stlinkv21 stlinkv2miniclone openmuppv1)
 # Boards that also ship with the 32 KB Versaloon bootloader: the newer
 # Versaloon Mini, with an STM32F103 with 128 KB flash. They get the
 # app-32k image. MUPP_BOOTLOADER_32K_<board> gives the memory linker script

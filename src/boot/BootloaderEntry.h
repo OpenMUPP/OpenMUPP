@@ -3,7 +3,8 @@
 #pragma once
 
 // Entry into the bootloader from the running firmware: openmupp-bootloader
-// on the STM32F1, the ROM bootloader (USB DFU) on the STM32H5.
+// on the STM32F1 and the CH32V307, the ROM bootloader (USB DFU) on the
+// STM32H5.
 // Hardware-independent: the host unit tests check it.
 //
 // These commands call request(): VERSALOON_FW_UPDATE, and the personality
@@ -38,8 +39,8 @@ namespace boot {
 // src/boot/BootDecision.h of openmupp-bootloader).
 inline constexpr uint16_t bootRequest = 0xB007;
 
-// Only the app-8k image of the STM32F1 and the standalone image of the
-// STM32H5 enter the bootloader (hasBootloaderEntry in src/main.cpp). The
+// Only the app-8k image of the STM32F1 and the CH32V307, and the standalone
+// image of the STM32H5 enter the bootloader (hasBootloaderEntry in src/main.cpp). The
 // other images refuse FW_UPDATE and bootloaderCode.
 
 // The code in the personality switch commands that starts the bootloader

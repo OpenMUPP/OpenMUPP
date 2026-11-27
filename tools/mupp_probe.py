@@ -32,7 +32,9 @@ code. Each personality of an app-8k image or of an STM32H5 image accepts it,
 also in an image with one personality. After a stall, the Versaloon
 personality gets VERSALOON_FW_UPDATE [0x0F][0xAA], which older firmware also
 knows. The script then waits for openmupp-bootloader (0483:5740, product
-"Bootloader") or for the ROM DFU of the STM32H5 (0483:df11). See
+"Bootloader" on the STM32F1 boards; 1209:0001, product "OpenMUPP
+Bootloader", the DFU bootloader of OpenMUPP v1) or for the ROM DFU of the
+STM32H5 (0483:df11). See
 docs/firmware-update.md, "Bootloader code".
 
 "bridge" sets the mode of the RISC-V bridge of the CMSIS-DAP personality. An
@@ -158,15 +160,16 @@ import sys
 import time
 
 # Personality name -> (code, ((VID, PID), ...)). "bootloader" is not a
-# personality: its code starts openmupp-bootloader (0483:5740) or the ROM
-# DFU of the STM32H5 (0483:df11), and it has no switch command.
+# personality: its code starts openmupp-bootloader (0483:5740 on the STM32F1,
+# 1209:0001 on the CH32V307) or the ROM DFU of the STM32H5 (0483:df11), and
+# it has no switch command.
 BOOTLOADER = "bootloader"
 PERSONALITIES = {
     "versaloon": (0, ((0x0483, 0xA038),)),
     # 0403:9b3c: firmware before the pid.codes ID
     "cmsis-dap": (1, ((0x1209, 0x0001), (0x0403, 0x9B3C))),
     "wch-link": (2, ((0x1209, 0x0001), (0x1A86, 0x8010))),
-    BOOTLOADER: (0xB0, ((0x0483, 0x5740), (0x0483, 0xDF11))),
+    BOOTLOADER: (0xB0, ((0x0483, 0x5740), (0x1209, 0x0001), (0x0483, 0xDF11))),
 }
 
 # Other devices use these USB IDs too (the pid.codes test ID, the real
@@ -179,6 +182,7 @@ PRODUCT_STRINGS = {
     ("wch-link", 0x1209, 0x0001): ("OpenMUPP WCH-Link", "Versaloon WCH-Link"),
     ("wch-link", 0x1A86, 0x8010): ("OpenMUPP WCH-Link", "Versaloon WCH-Link", "WCH-Link"),
     (BOOTLOADER, 0x0483, 0x5740): ("Bootloader",),
+    (BOOTLOADER, 0x1209, 0x0001): ("OpenMUPP Bootloader",),
 }
 
 # The WCH ID build has the product "WCH-Link" of the real WCH-LinkE, because
@@ -736,7 +740,7 @@ def command_switch(usb, args):
         report_unreadable(unreadable)
         if args.personality == BOOTLOADER:
             # The tool reads the product string and the serial number, which needs access to the device
-            print("If the bootloader runs, check the access to 0483:5740: etc/70-openmupp-bootloader.rules", file=sys.stderr)
+            print("If the bootloader runs, check the access to 0483:5740 or 1209:0001: etc/70-openmupp-bootloader.rules", file=sys.stderr)
         return 1
     if args.personality == BOOTLOADER:
         print("The dongle runs the bootloader")

@@ -6,8 +6,9 @@
 # The bootloader has its own CMake build. It runs as an ExternalProject, so
 # the compile flags of the firmware (cmake/gcc_arm.cmake, CMAKE_BUILD_TYPE)
 # do not change the bootloader image. The bootloader uses its own toolchain
-# file with the compiler of this build, and the system-stm32 submodule of
-# this project, so both images use the same library commit. The install
+# file with the compiler of this build, and the system-stm32 (STM32) or
+# ch32v00x-system (CH32V307) submodule of this project, so both images use
+# the same library commit. The install
 # step copies openmupp-bootloader-<board>.elf, .hex and .bin to
 # MUPP_BOOTLOADER_DIR.
 
@@ -33,6 +34,19 @@ function(mupp_add_bootloader)
 
     set(_out "${MUPP_BOOTLOADER_DIR}/openmupp-bootloader-${BOARD}")
 
+    if (MUPP_MCU_VENDOR STREQUAL "CH32")
+        # The DFU bootloader of the CH32V307 selects its build with BOARD.
+        set(_board_args
+                -DCMAKE_TOOLCHAIN_FILE=${_src_dir}/cmake/gcc_riscv.cmake
+                -DBOARD=${BOARD}
+                -DMUPP_CH32V00X_SYSTEM_DIR=${PROJECT_SOURCE_DIR}/dependencies/ch32v00x-system)
+    else ()
+        set(_board_args
+                -DCMAKE_TOOLCHAIN_FILE=${_src_dir}/cmake/gcc_arm.cmake
+                -DOPENMUPP_BOOTLOADER_BOARDS=${BOARD}
+                -DMUPP_SYSTEM_STM32_DIR=${PROJECT_SOURCE_DIR}/dependencies/system-stm32)
+    endif ()
+
     # The bootloader build finds the changed sources itself, so it runs on
     # each build.
     ExternalProject_Add(openmupp-bootloader
@@ -40,13 +54,11 @@ function(mupp_add_bootloader)
             BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/openmupp-bootloader-build"
             INSTALL_DIR "${MUPP_BOOTLOADER_DIR}"
             CMAKE_ARGS
-                -DCMAKE_TOOLCHAIN_FILE=${_src_dir}/cmake/gcc_arm.cmake
+                ${_board_args}
                 -DGCC_TOOLCHAIN_PREFIX=${_toolchain_root}
-                -DOPENMUPP_BOOTLOADER_BOARDS=${BOARD}
                 # The bootloader area ends where the app-8k image starts. One
                 # value sets both, so they cannot disagree.
                 -DOPENMUPP_BOOTLOADER_AREA_SIZE=${MUPP_APP_OFFSET_app-8k}
-                -DMUPP_SYSTEM_STM32_DIR=${PROJECT_SOURCE_DIR}/dependencies/system-stm32
                 -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
             BUILD_ALWAYS ON
             BUILD_BYPRODUCTS "${_out}.elf" "${_out}.hex" "${_out}.bin"
