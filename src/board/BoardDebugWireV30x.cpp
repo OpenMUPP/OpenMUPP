@@ -78,7 +78,7 @@ bool DebugWirePins::rxEnable(uint32_t baud) {
 }
 
 void DebugWirePins::rxDisable() {
-   if((RCC->APB1PCENR & RCC_USART3EN) != 0) {
+   if(Rcc::isUSART3ClockEnabled()) {
       usart().disable();
    }
 }

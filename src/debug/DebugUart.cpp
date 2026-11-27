@@ -38,8 +38,8 @@ hw::Usart usart() {
 
 void DebugUart::start() {
    // Port D has the RX pin. The clock of port C is on (initialize_hardware.cpp).
-   RCC->APB2PCENR |= RCC_IOPDEN;
-   RCC->APB1PCENR |= RCC_UART5EN;
+   Rcc::enableGPIODClock();
+   Rcc::enableUART5Clock();
    Rcc::enableDMA2Clock();
    board::gpioPin(pins.tx).configure(hw::GpioPin::Mode::Alternate, hw::GpioPin::OutputType::PushPull,
                                      hw::GpioPin::Pull::None, hw::GpioPin::Speed::High);

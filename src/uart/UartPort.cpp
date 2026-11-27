@@ -78,7 +78,7 @@ static_assert(uartPins.tx == peripheral.tx && uartPins.rx == peripheral.rx, "the
 
 void enableClock() {
 #if defined(__riscv)
-   RCC->APB1PCENR |= RCC_UART7EN;
+   Rcc::enableUART7Clock();
    if constexpr(uart7Remap) {
       hw::Afio::remapUsart7(hw::Afio::Usart7Remap::Remap1);
    }
