@@ -742,8 +742,9 @@ uint32_t probeErrorCount() {
 
 // True while the target gate refuses the target: a board ID that is not a
 // known revision, an ADC that fails, or an adapter fault (pin 16 shorted to
-// GND). It reads the adapter ID each TargetPowerLed::intervalMs, also
-// between the connects, so the state LED shows a short when it occurs.
+// GND). It reads the adapter ID each gateFaultIntervalMs, also between
+// the connects, so the state LED shows a short when it occurs.
+constexpr uint32_t gateFaultIntervalMs = 100; // docs/boards.md
 bool isGateFault(uint64_t nowMs) {
    if constexpr(!hasTargetGate) {
       return false;
@@ -751,7 +752,7 @@ bool isGateFault(uint64_t nowMs) {
    static bool fault = false;
    static bool read = false;
    static uint64_t lastMs = 0;
-   if(!read || nowMs >= lastMs + TargetPowerLed::intervalMs) {
+   if(!read || nowMs >= lastMs + gateFaultIntervalMs) {
       read = true;
       lastMs = nowMs;
       fault = !board::isTargetAllowed(targetGate.isBoardKnown(), targetGate.readAdapterNow());
