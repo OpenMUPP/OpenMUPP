@@ -892,7 +892,7 @@ The capture on the CH32V307:
 The decoder (`src/swo/ManchesterDecoder.h`):
 
 - It uses only the 16-bit difference of two capture times. Thus the wrap of the timer has no effect inside a frame.
-- An edge in the middle of a bit is valid from 0.75 to 1.25 bit times after the middle of the bit before. Thus the bit time of the target can be from about 15 % shorter to 25 % longer than the bit time of `DAP_SWO_Baudrate`, less the jitter of the edges.
+- An edge in the middle of a bit is valid from 0.75 to 1.25 bit times after the middle of the bit before. Thus the bit time of the target can be from about 15 % shorter to 25 % longer than the nominal bit time, less the jitter of the edges. The nominal bit time is two TPIU clocks of `DAP_SWO_Baudrate`.
   The limit for a shorter bit time is smaller, because a start bit after the shortest gap between two frames (1.5 bit times after the last bit middle) must come after the window of a bit middle.
 - A frame ends at a rising edge that is too late for the middle of a bit, or when the line stays low for more than 1.5 bit times.
 - A bit time out of range, a glitch, or a frame that does not end at a byte boundary sets the error bit of the trace status. The decoder then waits for a low line of more than 1.5 bit times before the next frame.
