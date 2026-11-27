@@ -277,7 +277,7 @@ if (CMAKE_CROSSCOMPILING)
         list(APPEND _mupp_dropped_files "src/boot/RomBootloader\\.cpp" "src/board/BoardJtagFastH5\\.cpp" "src/board/BoardRvSwdH5\\.cpp")
     endif ()
     if (NOT CH32_FAMILY STREQUAL "CH32V30X")
-        list(APPEND _mupp_dropped_files "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp"
+        list(APPEND _mupp_dropped_files "src/boot/BootloaderV30x\\.cpp" "src/board/BoardJtagFastV30x\\.cpp" "src/board/BoardRvSwdV30x\\.cpp"
                 "src/board/BoardIspV30x\\.cpp" "src/board/BoardDebugWireV30x\\.cpp" "src/swo/SwoReceiverV30x\\.cpp")
     endif ()
     foreach (_file ${_mupp_dropped_files})
