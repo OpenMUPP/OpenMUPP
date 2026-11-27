@@ -63,13 +63,9 @@ void configureClocks() {
    // The STM32F1 boards have a 48-pin package: ports A to C. Port D has
    // only the crystal pins. The WeAct STM32H523 and the CH32V307 pin map
    // (plan D10) use ports A to C too.
-#if defined(CH32V30x_D8C)
-   RCC->APB2PCENR |= RCC_IOPAEN | RCC_IOPBEN | RCC_IOPCEN;
-#else
    Rcc::enableGPIOAClock();
    Rcc::enableGPIOBClock();
    Rcc::enableGPIOCClock();
-#endif
 }
 
 // Puts the board pins into a safe state. The JTAG, SWD, UART and Vref pins
