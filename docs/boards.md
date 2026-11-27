@@ -167,10 +167,11 @@ Thus the dongle shows that the firmware runs: the idle state is a lit LED, not a
 The activity state uses the analog mode of the pin, not a digital input.
 With a digital input, the red LED of the mini clone glows a little. In analog mode, both LEDs are off.
 
-Three fault and event patterns replace the normal function:
+Four fault and event patterns replace the normal function:
 
 | LED | Pattern | Meaning |
 |---|---|---|
+| State | Continuously on | The firmware refuses the target (OpenMUPP v1 only): the board ID is not a known revision, the ADC fails, or pin 16 of the adapter is shorted to GND (adapter fault). The firmware reads the adapter ID each 100 ms, also between the connects. The LED goes back to the normal function when the fault is removed. While it is on, the state LED does not show the command activity or the double flash. |
 | State | Double flash: two flashes of 60 ms, each 600 ms | A JTAG or SWD transfer failed. The pattern starts at the first error and stops 2 s after the last error. Each new error restarts the 2 s. During the pattern, the state LED does not show the command activity. |
 | State | Fast flash, five times each second | The crystal or the PLL did not start. The clock is HSI (8 MHz) and USB cannot work. The power LED still shows the target voltage. |
 | All | Three flashes in 0.6 s, then on | The key has been down for 3 s: the dongle switches the personality of a multi image. After the flashes, all LEDs stay on until you release the key. The dongle then resets. |
@@ -506,6 +507,7 @@ The firmware refuses the connect in these cases:
 - The ADC fails.
 
 A refused connect does not drive the target pins, and the target power stays off.
+While one of these cases is present, the state LED (red) is continuously on (see [Start-up and LEDs](#start-up-and-leds)).
 A supply that is on goes off in the next main loop iteration, also after a refused connect of a protocol.
 The refusal is an error in the debug log.
 The host sees the refusal as follows:
