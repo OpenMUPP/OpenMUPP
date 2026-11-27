@@ -36,6 +36,7 @@
 // bit after the shortest gap (1.5 bit times after the last middle) must
 // come after the window of a middle (1.25 nominal bit times).
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -81,6 +82,13 @@ constexpr std::optional<ManchesterTiming> manchesterTiming(uint32_t clock, uint3
       return static_cast<uint16_t>((count * clock + quarterDivisor * 2) / (quarterDivisor * 4));
    };
    return ManchesterTiming{ static_cast<uint16_t>(divider - 1), quarters(1), quarters(3), quarters(5), quarters(6) };
+}
+
+// The baud rate of DAP_SWO_Baudrate in Manchester mode is the TPIU clock,
+// as OpenOCD sends it: one clock is one half of a bit. Gives the real baud
+// rate for a request: even, at most `max`. The bit rate is half of it.
+constexpr uint32_t manchesterBaud(uint32_t baud, uint32_t max) {
+   return std::min(baud, max) / 2 * 2;
 }
 
 class ManchesterDecoder {

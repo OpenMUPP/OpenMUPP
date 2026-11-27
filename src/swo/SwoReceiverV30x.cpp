@@ -92,9 +92,8 @@ uint32_t timerClock() {
    return (RCC->CFGR0 & RCC_PPRE1_DIV2) != 0 ? pclk1 * 2 : pclk1; // the high bit of PPRE1
 }
 
-// The Manchester baud rate is the TPIU clock: one clock is one half of a bit.
 uint32_t manchesterBaud(uint32_t baud) {
-   return std::min(baud, SwoReceiver::maxManchesterBaud) / 2 * 2;
+   return swo::manchesterBaud(baud, SwoReceiver::maxManchesterBaud);
 }
 
 std::optional<ManchesterTiming> manchesterTimingFor(uint32_t baud) {
