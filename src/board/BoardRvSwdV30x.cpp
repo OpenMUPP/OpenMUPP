@@ -107,8 +107,8 @@ Dma::Channel sampleDma() {
 constexpr uint32_t sampleRequest = TIM_CC1DE << (oneWire.sampleChannel - 1);
 constexpr uint32_t sampleFlag = TIM_CC1IF << (oneWire.sampleChannel - 1);
 
-volatile uint32_t &ccr(TIM_TypeDef &tim, uint32_t channel) {
-   return (&tim.CH1CVR)[channel - 1];
+void setCompare(TIM_TypeDef &tim, uint32_t channel, uint32_t value) {
+   hw::Timer(&tim).setCompare(static_cast<hw::Timer::Channel>(channel - 1), value);
 }
 
 // ATRLR, the low time, the sample compare and the direction compare of a
@@ -185,7 +185,7 @@ void initOneWire() {
 
    const Dma::Channel update = updateDma();
    update.disable();
-   update.configure(const_cast<uint32_t *>(&tim.DMAADR), table.data(), Dma::DataSize::Size16Bits,
+   update.configure(const_cast<uint16_t *>(&tim.DMAADR), table.data(), Dma::DataSize::Size16Bits,
                     Dma::DataSize::Size16Bits, Dma::Direction::MemoryToPeripheral, true, false);
    update.setPriority(Dma::ChannelPriority::very_high);
    const Dma::Channel samples = sampleDma();
@@ -232,11 +232,11 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    // The lead-in: CVR 0 keeps the line high while SWDIO becomes the timer
    // output, so the first edge comes from the timer.
    tim.ATRLR = ticks.lead - 1u;
-   ccr(tim, oneWire.channel) = 0;
-   ccr(tim, oneWire.sampleChannel) = ticks.sample;
+   setCompare(tim, oneWire.channel, 0);
+   setCompare(tim, oneWire.sampleChannel, ticks.sample);
    // The direction pin stays high in the lead-in and in bit 0 (a write bit)
    if constexpr(hasDirSwdio) {
-      ccr(tim, dirChannel) = rvswd::oneWireDriveAlways;
+      setCompare(tim, dirChannel, rvswd::oneWireDriveAlways);
    }
    tim.CNT = 0;
    // URS: the update generation loads the registers without a DMA request.
@@ -244,9 +244,9 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
    std::array<uint16_t, burstWords> first{};
    fillBit(first.data(), bits, count, readFrom, 0);
    tim.ATRLR = first[0];
-   ccr(tim, oneWire.channel) = first[1 + oneWire.channel];
+   setCompare(tim, oneWire.channel, first[1 + oneWire.channel]);
    if constexpr(hasDirSwdio) {
-      ccr(tim, dirChannel) = first[1 + dirChannel];
+      setCompare(tim, dirChannel, first[1 + dirChannel]);
    }
 
    uint32_t entries = 0;
@@ -286,7 +286,7 @@ bool RvSwdPins::oneWireFrame(uint64_t bits, uint32_t count, uint32_t readFrom, u
       }
       OneWireOut::setConfig<afOpenDrain>();
       // The compare of bit readFrom-1 is before this point.
-      tim.INTFR = ~sampleFlag;
+      tim.INTFR = static_cast<uint16_t>(~sampleFlag);
       tim.DMAINTENR |= sampleRequest;
    }
    while(cycleCount() - start < times.endAt) {

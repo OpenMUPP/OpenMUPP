@@ -76,8 +76,6 @@ constexpr uint32_t cc3p = 1U << 9; // falling edge
 constexpr uint32_t cc4e = 1U << 12;
 constexpr uint32_t cc3de = 1U << 11;
 constexpr uint32_t cc4de = 1U << 12;
-// The reset bit of TIM5 in APB1PRSTR has the position of its clock enable bit.
-constexpr uint32_t tim5Reset = RCC_TIM5EN;
 
 constexpr board::Pin rxPin = board::current.swo->rx;
 
@@ -91,8 +89,7 @@ uint32_t limited(uint32_t clock, uint32_t baud) {
 // (RM figure 3-3).
 uint32_t timerClock() {
    const uint32_t pclk1 = Rcc::getAPBClock();
-   constexpr uint32_t divided = 4U << 8; // the high bit of PPRE1
-   return (RCC->CFGR0 & divided) != 0 ? pclk1 * 2 : pclk1;
+   return (RCC->CFGR0 & RCC_PPRE1_DIV2) != 0 ? pclk1 * 2 : pclk1; // the high bit of PPRE1
 }
 
 std::optional<ManchesterTiming> manchesterTimingFor(uint32_t baud) {
@@ -247,8 +244,8 @@ uint32_t SwoReceiver::startManchester(uint32_t baud) {
    if(!timing || !board::dma2Channel2.takeForCapture(&SwoReceiver::releaseForJtag)) {
       return 0;
    }
-   Rcc::detail::enableClock(RCC->APB1PCENR, RCC_TIM5EN);
-   Rcc::detail::resetPeripheral(RCC->APB1PRSTR, tim5Reset);
+   Rcc::enableTIM5Clock();
+   Rcc::resetTIM5();
    Rcc::enableDMA2Clock();
    instance_ = this;
    mode_ = manchester;
@@ -325,7 +322,7 @@ uint32_t SwoReceiver::setBaud(uint32_t baud) {
 }
 
 void SwoReceiver::stop() {
-   if((RCC->APB1PCENR & RCC_USART2EN) != 0) {
+   if(Rcc::isUSART2ClockEnabled()) {
       usart().disable();
    }
    if(!active_) {
@@ -351,8 +348,8 @@ void SwoReceiver::releaseForJtag() {
 void SwoReceiver::stopManchester() {
    board::dma2Channel2.releaseFromCapture();
    // The reset stops the DMA requests of TIM5 on DMA2 channel 2.
-   Rcc::detail::resetPeripheral(RCC->APB1PRSTR, tim5Reset);
-   RCC->APB1PCENR &= ~RCC_TIM5EN;
+   Rcc::resetTIM5();
+   Rcc::disableTIM5Clock();
    stopCircular(risingDma(), risingIrq);
    stopCircular(fallingDma(), fallingIrq);
 }
