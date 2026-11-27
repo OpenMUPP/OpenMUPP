@@ -4,6 +4,7 @@
 
 #if defined(CH32V30x_D8C)
 #include <cmsis_device.h>
+#include <peripherals/Rcc.h>
 #endif
 
 #include "board/Board.h"
@@ -17,25 +18,9 @@ namespace {
 static_assert(!current.vpp || current.family == Family::Ch32V30x, "BoardVpp has the DAC code of the CH32V307 only");
 
 #if defined(CH32V30x_D8C)
-// The DAC of the CH32V307 (CH32FV2x_V3xRM chapter 17): the header of
-// ch32v00x-system has no definitions for it.
-struct DacRegisters {
-   volatile uint32_t CTLR;
-   volatile uint32_t SWTR;
-   volatile uint32_t R12BDHR1;
-   volatile uint32_t L12BDHR1;
-   volatile uint32_t R8BDHR1;
-   volatile uint32_t R12BDHR2;
-};
-constexpr uintptr_t dacBase = 0x40007400;
-constexpr uint32_t rccDacEn = 1ul << 29;
-// Channel 2 (PA5) on, with the output buffer (0 V to 3.29 V, CH32V307DS0
-// table 4-46), no trigger: a write goes to the output in one PCLK1 cycle.
-constexpr uint32_t dacEn2 = 1ul << 16;
-
-DacRegisters &dac() {
-   return *reinterpret_cast<DacRegisters *>(dacBase);
-}
+// The DAC of the CH32V307 (CH32FV2x_V3xRM chapter 17). Channel 2 (PA5) on,
+// with the output buffer (0 V to 3.29 V, CH32V307DS0 table 4-46), no
+// trigger: a write goes to the output in one PCLK1 cycle.
 #endif
 
 } // namespace
@@ -50,10 +35,10 @@ void BoardVpp::setDac([[maybe_unused]] uint16_t code) {
       return;
    }
    gpioPin(current.vpp->dac).configure(hw::GpioPin::Mode::Analog);
-   RCC->APB1PCENR |= rccDacEn;
+   Rcc::enableDACClock();
    // The data first, so the channel starts at the new level
-   dac().R12BDHR2 = code & 0xFFFu;
-   dac().CTLR |= dacEn2;
+   DAC->R12BDHR2 = code & 0xFFFu;
+   DAC->CTLR |= DAC_EN2;
 #endif
 }
 
@@ -63,8 +48,8 @@ void BoardVpp::dacOff() {
       return;
    }
    // The pin stays analog: high-impedance, VPP 11.4 V with VPP_EN high
-   dac().CTLR &= ~dacEn2;
-   RCC->APB1PCENR &= ~rccDacEn;
+   DAC->CTLR &= ~DAC_EN2;
+   Rcc::disableDACClock();
 #endif
 }
 
