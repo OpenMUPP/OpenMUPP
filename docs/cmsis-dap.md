@@ -896,6 +896,7 @@ The decoder (`src/swo/ManchesterDecoder.h`):
   The limit for a shorter bit time is smaller, because a start bit after the shortest gap between two frames (1.5 bit times after the last bit middle) must come after the window of a bit middle.
 - A frame ends at a rising edge that is too late for the middle of a bit, or when the line stays low for more than 1.5 bit times.
 - A bit time out of range, a glitch, or a frame that does not end at a byte boundary sets the error bit of the trace status. The decoder then waits for a low line of more than 1.5 bit times before the next frame.
+- Limit: the decoder starts only at the start bit of a frame. A capture that starts in a frame waits for the end of that frame. A target that sends with no pause keeps one frame open, and the capture gives no data and no error. Start the capture before the target sends, for example: start the capture, then reset the target.
 - The decoder runs in the main loop, in the serial service of a long command, and before each read of the trace data or the status. The DMA interrupts of the edge buffers end the sleep of the main loop.
 - Limit: a gap of more than one timer period (65536 ticks) between two edges looks like the gap modulo 65536. The main loop must see the end of a frame within one timer period. The main loop runs at least each millisecond, so this is true up to the maximum bit rate.
 
