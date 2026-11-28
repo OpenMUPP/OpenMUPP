@@ -1,26 +1,22 @@
 # OpenMUPP
 
-OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is the firmware of the OpenMUPP v1 probe.
-OpenMUPP v1 is an open hardware USB debug probe with a CH32V307 MCU.
-It has level shifters for targets from 1.2 V to 5 V, a target power supply and a high-voltage (VPP) supply.
+OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is the firmware for the OpenMUPP v1 probe.
+OpenMUPP v1 is an open hardware USB debug probe usding a CH32V307 MCU.
+It has level shifters for targets from 1.2 V to 5 V, a target power supply of 3.3V or 5V and a high-voltage (VPP) supply for programming old MCUs like AVR and PIC.
 The schematics are in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1).
-The firmware debugs and programs target chips of more than one architecture.
-Today it supports Arm Cortex-M (SWD and JTAG) and WCH RISC-V (CH32V).
-The name OpenMUPP stands for more than these two: the goal is one probe for many architectures (see [Planned targets](#planned-targets)).
+The probe can debug and program target chips of multiple architectures.
+Today it supports Arm Cortex-M (SWD and JTAG), WCH RISC-V (CH32V) and some AVR chips (programming & debugging).
+The name OpenMUPP stands for more than these three: the goal is one probe for many architectures (see [Planned targets](#planned-targets)).
 
 The OpenMUPP v1 probe is the main target of this project.
-The firmware has no board definition for it yet (see [Boards](#boards)).
-Until then, the WeAct STM32H523 core board is the test board for the same MCU.
 The firmware also builds for older probe hardware: the Versaloon Mini, the ST-Link/V2-1 of the Nucleo-64 boards and the ST-Link/V2 mini clone (STM32F103 or compatible chip).
 These boards are secondary targets. They help to develop and test the code, and you can use them as probes.
-The ST-Link/V2 mini clone has a hardware test of the USB personalities, the LEDs and SWD to a target.
-The ST-Link/V2-1 has a hardware test of the WCH-Link personality on one wire (CH32V006) only.
 Each firmware image has one of these personalities:
 
 | Personality | USB ID | Debug tools | Target chips |
 |---|---|---|---|
-| Versaloon (original protocol) | `0483:a038` | Unmodified OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M, SWD and JTAG |
-| CMSIS-DAP v2 (the default) | `1209:0001` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M, SWD and JTAG (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
+| CMSIS-DAP v2 (the default) | `1209:0001` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M, SWD and JTAG and WCH RISC-V (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
+| Versaloon (original protocol) | `0483:a038` | OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M, SWD and JTAG |
 | WCH-Link | `1209:0001` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
 
 The Versaloon personality is an independent implementation of the Versaloon USB protocol. It contains no code of the original Versaloon project. OpenMUPP is not related to that project or its author.
@@ -28,12 +24,9 @@ The Versaloon personality is an independent implementation of the Versaloon USB 
 `wlink` and `minichlink` find only the WCH ID `1a86:8010`.
 Build the WCH-Link image with `MUPP_WCH_LINK_WCH_USB_ID` for personal use only (see [docs/wch-link.md](docs/wch-link.md#usb-id)).
 
-The Versaloon and CMSIS-DAP personalities also have a USB-CDC serial port.
+The firmware also supports a a USB-CDC serial port.
 The firmware bridges it to a UART of the board.
-The WCH-Link personality has no serial port.
-A multi image has more than one personality, and you select one at run time.
-The firmware drives the LEDs for the target power, the command activity and the USB state.
-The key starts the bootloader, and the Versaloon personality also starts it on request (see [Flash the firmware](#flash-the-firmware)).
+A multi image has more than one personality, and you can select one at run time.
 
 The [status](docs/status.md) document lists what the firmware does and what the hardware tests cover.
 
@@ -44,19 +37,19 @@ These targets are planned. None of them works yet.
 
 | Target | Protocols | State |
 |---|---|---|
-| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The first release does not cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | The firmware has ISP programming for the YD-CH32V307VCT6 board (see [docs/avr.md](docs/avr.md)). ISP passed a hardware test on an ATmega32U4. debugWIRE programming and debug (avrdude `jtagice3_dw`, Bloom with avr-gdb) passed a hardware test on an ATtiny85. JTAG programming of the megaAVR chips with a JTAG port (avrdude `jtagice3`) passed a hardware test on an ATmega32U4. JTAG debug with Bloom or AVaRICE and avr-gdb (hardware breakpoints, software breakpoints and data breakpoints) passed a hardware test on an ATmega32U4 and an ATmega2560. |
+| AVR | ISP (SPI) programming and debugWIRE debug, with the EDBG protocol of Microchip. The current firmware does not yet cover high-voltage programming, PDI, TPI, UPDI and aWire. High-voltage programming will use the VPP supply of the board. | The firmware has ISP programming for the YD-CH32V307VCT6 board (see [docs/avr.md](docs/avr.md)). ISP passed a hardware test on an ATmega32U4. debugWIRE programming and debug (avrdude `jtagice3_dw`, Bloom with avr-gdb) passed a hardware test on an ATtiny85. JTAG programming of the megaAVR chips with a JTAG port (avrdude `jtagice3`) passed a hardware test on an ATmega32U4. JTAG debug with Bloom or AVaRICE and avr-gdb (hardware breakpoints, software breakpoints and data breakpoints) passed a hardware test on an ATmega32U4 and an ATmega2560. |
 | PIC | Programming. High-voltage programming uses the VPP supply of the board. | Planned. No design yet. |
 | STM8 | SWIM (single-wire debug and programming interface) | Planned. No design yet. |
 
-The AVR personality will run at the same time as the CMSIS-DAP personality, in one image for the STM32H523 boards.
-The planned protocols need the OpenMUPP v1 hardware: the level shifters, the split nRESET path and the VPP supply.
-An adapter board maps the target connector to the pinout of each target.
-All adapters are passive, also the high-voltage adapters. The VPP supply is on the OpenMUPP v1 board.
+The AVR personality runs at the same time as the CMSIS-DAP personality.
+Most of the planned protocols need the OpenMUPP v1 hardware: the level shifters, the split nRESET path and the VPP supply.
+An adapter can map the target connector to the pinout of each target.
+Adapters are passive, also the high-voltage adapters. The VPP supply is on the OpenMUPP v1 board.
 Each adapter has an ID resistor. The firmware applies VPP only when the ID shows a high-voltage adapter (see [VPP sequence](docs/boards.md#vpp-sequence)).
 
 ## Boards
 
-OpenMUPP v1 is the main target. The other boards are for development, tests and use as a probe.
+OpenMUPP v1 is the main target. The other boards are mostly for development and testing, versaloon and stlink variants can also be used as a limited probe.
 
 | `BOARD` | Hardware | Crystal | Role | Status |
 |---|---|---|---|---|
@@ -69,7 +62,7 @@ OpenMUPP v1 is the main target. The other boards are for development, tests and 
 
 [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
 The board layer does not use the power functions yet.
-The YD-CH32V307VCT6 board uses the same MCU family as the OpenMUPP v1 probe.
+The YD-CH32V307VCT6 board uses the same MCU family as the OpenMUPP v1 probe, and has been used for firmware development before the first version of the OpenMUPP v1 was available. 
 The WeAct STM32H523 core board uses an STM32H523CC.
 On the WeAct STM32H523 core board, the WCH-Link personality needs an external pull-up on SWDIO for one-wire targets.
 See [WeAct STM32H523 core board](docs/boards.md#weact-stm32h523-core-board) in docs/boards.md for its limits and the wiring to the target.
@@ -98,7 +91,7 @@ The submodules are:
 
 ## Requirements
 
-- CMake 3.20 or later. The `openmupp-bootloader` build and the CMake presets (`CMakePresets.json`) need CMake 3.21 or later.
+- CMake 3.21 or later.
 - The Arm GNU Toolchain (`arm-none-eabi`), for example 14.3.rel1 as in CI.
 - For the CH32 boards only: the xPack RISC-V GCC (`riscv-none-elf`), for example 15.2.0-1 as in CI.
 - A host C++ compiler with C++23 support, for the unit tests.
