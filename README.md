@@ -61,7 +61,8 @@ The board has a CH32V307RCT6 and an 8 MHz crystal.
 The firmware on OpenMUPP v1 has these functions:
 
 - The debug engines and the UART bridge reach the target through the level shifters.
-- The target supply switches on at 3.3 V or 5 V. The firmware reacts to the power fault inputs.
+- The target supply switches on at 3.3 V or 5 V.
+- On an overcurrent in the target supply, the firmware turns the supply off at once. It reports the fault to the host and shows it on the state LED (see [Target power on OpenMUPP v1](docs/boards.md#target-power-on-openmupp-v1)).
 - The firmware reads the adapter ID and the board ID. It refuses the target on an adapter fault or an unknown board revision.
 - USB runs at high speed (480 Mbit/s) in the CMSIS-DAP image.
 - The DFU bootloader `openmupp-bootloader` updates the firmware over USB (see [Flash the firmware](#flash-the-firmware)).
@@ -219,7 +220,7 @@ The firmware also builds for these boards. They help to develop and test the cod
 | `BOARD` | Hardware | MCU | Use |
 |---|---|---|---|
 | `ydch32v307` | YD-CH32V307VCT6 development board, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board) | CH32V307VCT6 | Development board with the MCU family of OpenMUPP v1. It was used for development before OpenMUPP v1 was available. No level shifters, 3.3 V targets only. |
-| `mini` | Versaloon Mini | STM32F103x8 or STM32F103xB | Probe with fewer functions. |
+| `mini` | Versaloon Mini | STM32F103x8 or STM32F103xB | The first development board. The CMSIS-DAP personality and some of the WCH-Link code were developed on it. Probe with fewer functions. |
 | `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | STM32F103xB | Probe with fewer functions. SWD only (no JTAG pins). |
 | `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | STM32F103 compatible | Probe with fewer functions. SWD only (no JTAG pins). |
 
