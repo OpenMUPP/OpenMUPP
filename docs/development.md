@@ -33,13 +33,14 @@ The FLASH region of the link is the zero-wait area.
 The settings page is the last page of the full flash (`MUPP_FLASH_TOTAL_<board>` in `cmake/Boards.cmake`), behind that region.
 CMake gives its address with `-Wl,--defsym=__flash_reserved_start=<address>`.
 
-For the STM32F1 boards (`MUPP_BOOTLOADER_BOARDS` in `cmake/Boards.cmake`), the build also makes `openmupp-bootloader` for the same board.
+For the boards in `MUPP_BOOTLOADER_BOARDS` (`cmake/Boards.cmake`), the build also makes `openmupp-bootloader` for the same board.
+These boards are the STM32F1 boards and OpenMUPP v1. On OpenMUPP v1, the bootloader is a DFU device, built with the RISC-V GCC of the build.
 The target is `openmupp-bootloader`.
 `cmake/Bootloader.cmake` builds the submodule with its own CMake build, as an `ExternalProject`.
 Thus the firmware options and the build type do not change the bootloader image.
 The bootloader build uses the compiler of the firmware build.
 Only the boards with the 32 KB Versaloon bootloader (`MUPP_BOOTLOADER_32K_BOARDS`: the Mini) get the `app-32k` image.
-There is no bootloader for the WeAct STM32H523 core board, and no bootloader when `MUPP_BUILD_BOOTLOADER` is `OFF`.
+There is no bootloader for the YD-CH32V307VCT6 board, and no bootloader when `MUPP_BUILD_BOOTLOADER` is `OFF`.
 
 ## Unit tests
 
@@ -219,7 +220,7 @@ The jobs:
   CI builds no image with the Versaloon personality.
 - `build-mini-cmsis-dap-no-rv-bridge`: release build of the Mini with `MUPP_PERSONALITIES=cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF`, plus the size check.
   This job keeps no artifacts.
-- `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, with the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
+- `build-weacth523`: a `parallel:matrix` job for the WeAct STM32H523 core board, an earlier development board that is not an active target. It builds the presets `weacth523-cmsis-dap`, `weacth523-dual` and `weacth523-debug`, plus the size check.
   The limit of a multi image or an image with the RISC-V bridge is 8 KB smaller, because the last flash sector holds the stored personality and the bridge mode.
 - `build-weacth523-hid`: build of the dual image of the WeAct STM32H523 core board with the CMSIS-DAP v1 (HID) interface (`weacth523-dual-hid` preset), plus the size check. This job keeps no artifacts.
 - `build-ydch32v307-cmsis-dap`: build of the firmware image of the YD-CH32V307VCT6 board with the `ydch32v307-cmsis-dap` preset and the RISC-V GCC, plus the size check.
@@ -236,7 +237,7 @@ The jobs:
 - `build-openmuppv1-debug`: build of the same board with the `openmuppv1-debug` preset, plus the size check.
   It builds the debug log on the CDC port and on UART5. This job keeps no artifacts.
 
-The build jobs of the Mini, the WeAct STM32H523 core board and the YD-CH32V307VCT6 board run in each pipeline.
+The build jobs of the Mini, the WeAct STM32H523 core board, the YD-CH32V307VCT6 board and OpenMUPP v1 run in each pipeline.
 The build jobs of the ST-Link boards are manual: start them in the pipeline view of GitLab.
 A manual job can fail and not block the pipeline or the merge request (MR).
 On a tag, all build jobs run.
