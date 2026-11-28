@@ -1,7 +1,7 @@
 # Boards
 
 This document describes the board support of the firmware: the board definitions, the start-up and the LEDs.
-The README describes the main boards. `MUPP_BOARDS` in `cmake/Boards.cmake` is the full list of boards, and [MCU family](#mcu-family) gives the MCU of each board.
+The README describes the main boards. `MUPP_BOARDS` in `cmake/Boards.cmake` is the full list of boards, with the MCU of each board.
 The main target is the [OpenMUPP v1 probe board](#openmupp-v1-probe-board).
 The other boards are for development and tests, or they are older probe hardware.
 

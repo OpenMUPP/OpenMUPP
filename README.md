@@ -20,7 +20,7 @@ A personality is the USB interface that a set of host tools uses:
 | Personality | USB ID | Host tools | Target chips |
 |---|---|---|---|
 | CMSIS-DAP v2 (the default) | `1209:0001` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M (SWD and JTAG), WCH RISC-V through the RISC-V bridge (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
-| AVR (EDBG), in the CMSIS-DAP image | `1209:0001` | avrdude. Bloom and AVaRICE with avr-gdb need the medbg build or a patched Bloom (see [docs/avr.md](docs/avr.md#bloom)). | AVR: ISP programming, debugWIRE programming and debug, JTAG programming and debug (see [docs/avr.md](docs/avr.md)) |
+| AVR (EDBG), in the CMSIS-DAP image | `1209:0001` | avrdude. Bloom with avr-gdb needs the medbg build or a patched Bloom. AVaRICE with avr-gdb needs the medbg build (see [docs/avr.md](docs/avr.md#bloom)). | AVR: ISP programming, debugWIRE programming and debug, JTAG programming and debug (see [docs/avr.md](docs/avr.md)) |
 | WCH-Link | `1209:0001` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
 | Versaloon (original protocol) | `0483:a038` | OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M (SWD and JTAG) |
 
@@ -189,7 +189,7 @@ The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cm
 On Linux, the udev rules in `etc/` give access to the probe.
 
 - **AVR:** avrdude finds the probe through the HID interface.
-  Bloom has no tool class for the ID `1209:0001`, so Bloom and AVaRICE need the medbg build or a patched Bloom.
+  Bloom has no tool class for the ID `1209:0001`. Bloom needs the medbg build or a patched Bloom. AVaRICE needs the medbg build.
   The medbg build gives the probe the USB ID of the Atmel Xplained Mini (`03eb:2145`). Add `-DMUPP_AVR_USB_ID=medbg` to the preset `openmuppv1-cmsis-dap`, and use the image for personal use only.
   See [docs/avr.md](docs/avr.md) for the wiring, the avrdude commands and the Bloom setup.
 - **Serial port:** the probe has a serial port (`/dev/ttyACM*` on Linux, a COM port on Windows).
