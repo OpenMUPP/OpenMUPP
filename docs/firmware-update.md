@@ -40,7 +40,7 @@ Send the bootloader code `0xB0` (`boot::bootloaderCode`) instead of a personalit
 
 The WCH-Link protocol has no switch command, so use the switch request on EP0.
 The commands also work in an image with one personality.
-An image other than `app-8k` refuses the code.
+An image other than `app-8k` refuses the code. The exception is the `standalone` image of the WeAct STM32H523, an earlier development board: it starts the ROM USB DFU of the STM32H5.
 The switch request on EP0 then stalls, and `SWITCH_PERSONALITY` replies status `1`.
 A multi image replies status `0xFF` to `ID_DAP_Vendor0`.
 A CMSIS-DAP image with one personality replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.

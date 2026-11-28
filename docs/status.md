@@ -43,8 +43,7 @@ The Versaloon personality has the USB identity of the original Versaloon firmwar
   The Mini and the CH32V307 boards have a fast path with SPI and DMA, up to 9 MHz TCK.
   The other bits and speeds use GPIO bit-bang.
   On the CH32V307, the fast path needs a link from TCK (PB13) to PC10 (see [JTAG fast path](usb-device.md#jtag-fast-path)).
-  OpenMUPP v1 has this link on the board, through R10.
-  On the YD-CH32V307VCT6, the fast path is tested with OpenOCD and pyOCD with a wire as the link. With a resistor as the link, its JTAG-DP transfers fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
+  OpenMUPP v1 has this link on the board, through R10. With a resistor as the link, JTAG-DP transfers fail on the YD-CH32V307VCT6 ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 - It runs SWD transfers with GPIO bit-bang through the `SWD` block, at the SWCLK frequencies of the OpenOCD `vsllink` driver.
 - It switches the 3.3 V target supply through the `POWER` block, and replies the target voltage to `GET_TVCC`. It refuses to switch on a target that has its own supply.
 
@@ -81,13 +80,18 @@ These tests passed on OpenMUPP v1 with the `openmuppv1-cmsis-dap` image:
   - Manchester mode at 250 and 500 kbit/s with `DAP_SWO_Data` and the trace endpoint, and with OpenOCD at 50, 250 and 500 kbit/s: no lost lines.
   - The host tools OpenOCD and pyOCD at 1 Mbaud in UART mode: no lost lines. probe-rs decoded the capture, with one bad spot near the start.
 - `tools/mupp_probe.py switch bootloader`: the probe enumerates as `OpenMUPP Bootloader` with the same serial number.
+- The firmware update with `dfu-util -D openmupp-app-8k.bin`: the download takes about 4.4 s, the firmware starts, and a read-back with `dfu-util -U` agrees with the image ([openmupp-bootloader issue #8](https://github.com/OpenMUPP/openmupp-bootloader/issues/8)).
 
 These hardware tests on OpenMUPP v1 are open:
 
 - The VPP driver ([issue #154](https://github.com/OpenMUPP/OpenMUPP/issues/154)).
 - The single-wire mode of the UART ([issue #151](https://github.com/OpenMUPP/OpenMUPP/issues/151)).
 - The TCK link of the JTAG fast path ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
-- SWO at low target voltages through the level shifter ([issue #5](https://github.com/OpenMUPP/OpenMUPP/issues/5)).
+- SWO at low target voltages through the level shifter ([issue #167](https://github.com/OpenMUPP/OpenMUPP/issues/167)).
+- The switch-off of the target supply on a power fault ([PR #138](https://github.com/OpenMUPP/OpenMUPP/pull/138)).
+- The state LED while the firmware refuses the target ([PR #161](https://github.com/OpenMUPP/OpenMUPP/pull/161)).
+- `tools/mupp_probe.py reset` in the Versaloon and WCH-Link personalities ([PR #146](https://github.com/OpenMUPP/OpenMUPP/pull/146)).
+- The wait of `tools/mupp_probe.py switch bootloader` for the DFU bootloader, with the current tool ([issue #160](https://github.com/OpenMUPP/OpenMUPP/issues/160)).
 - The functions that need a target or an adapter: JTAG, the one-wire RISC-V engine, AVR ISP, debugWIRE and AVR JTAG.
   The same functions passed on the YD-CH32V307VCT6 board (see below).
 
@@ -97,7 +101,7 @@ The YD-CH32V307VCT6 board has the MCU family of OpenMUPP v1, but no level shifte
 These tests passed on it:
 
 - The JTAG fast path with OpenOCD from 1125 to 9000 kHz, and JTAG-DP transfers with pyOCD at 2250, 4500 and 9000 kHz, with a wire as the TCK link (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
-- The UART bridge loopback from 9600 baud to 6 Mbaud, and the `DAP_UART_*` loopback up to 2 Mbaud (see [YD-CH32V307VCT6 development board](boards.md#yd-ch32v307vct6-development-board)).
+- The UART bridge loopback: all formats from 9600 baud to 2 Mbaud, and the formats 8N, 8E, 7E and 7O at 3, 4 and 6 Mbaud. The `DAP_UART_*` loopback: all formats up to 2 Mbaud (see [YD-CH32V307VCT6 development board](boards.md#yd-ch32v307vct6-development-board)).
 - AVR: ISP programming and JTAG programming on an ATmega32U4. JTAG debug with hardware breakpoints, software breakpoints and data breakpoints on an ATmega32U4 and an ATmega2560. debugWIRE on an ATtiny85 (see [avr.md](avr.md#hardware-test) and [JTAG debug hardware test](avr.md#jtag-debug-hardware-test)).
 - The WCH-Link personality with a CH32V003 on one wire: wlink (status, dump, regs, halt, resume, reset, erase, flash, protect, unprotect) and minichlink (info, read, write) (see [wch-link.md](wch-link.md#ch32v003-on-the-yd-ch32v307vct6-one-wire)).
 
@@ -125,4 +129,4 @@ The WeAct STM32H523 core board was an earlier development board. These tests als
 
 - Windows, also the driverless WinUSB binding.
 - The key switch on the STM32F1 boards.
-- The WCH-Link personality of a multi image.
+- The WCH-Link personality of a multi image with a target. The switch to WCH-Link and back passed on the ST-Link/V2 mini clone.

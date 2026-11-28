@@ -306,7 +306,7 @@ If the flash write fails, the firmware starts again with the old personality.
 `tools/hwtest/probe_hw_test.py` tests the Versaloon and the CMSIS-DAP personalities of a multi image on an STM32F1 target.
 Connect the target on SWD and JTAG, and connect the UART TX pin to the UART RX pin.
 The script runs SWD before JTAG with each tool.
-On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, and passed with them (see the record of that board below).
+On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, and passed with them (see [WeAct STM32H523 record](#weact-stm32h523-record)).
 The script switches to the Versaloon personality and runs the serial loopback test and OpenOCD with the `vsllink` driver.
 It then switches to the CMSIS-DAP personality and runs the serial and `DAP_UART_*` loopback tests, OpenOCD, pyOCD and probe-rs.
 Each tool runs on SWD and JTAG, at each speed of `--swd-speeds` and `--jtag-speeds`.
@@ -359,14 +359,15 @@ Findings:
   Now INIT and CONFIG of the Versaloon SWD block set the Versaloon rules again.
 - The test did not cover the key switch, the old switch commands, the WCH-Link personality and Windows.
 
+##### WeAct STM32H523 record
+
 The WeAct STM32H523 core board was an earlier development board (STM32H523CC, no level shifters, 3.3 V targets only).
-The test also ran on it:
+The test also ran on it.
 
 TMS, TCK, TDI, TDO, TRST, SRST and GND connected the board to the JTAG connector of the target.
 The board had a wire from PA6 to PB12 (SWDIO), and a wire from PB13 to PB3 (the TCK link of the JTAG fast path).
 A wire from PA9 to PA10 made the UART loopback.
 
-The script runs SWD before JTAG with each tool.
 The first run had no TRST and no SRST wire.
 All SWD steps passed, and all JTAG steps failed with `JTAG scan chain interrogation failed: all ones`.
 The TDI and TDO wires were correct: a GPIO test checked them.
@@ -423,14 +424,14 @@ The firmware sends the status stage (ACK), and then waits 10 ms, as for the othe
 The firmware stalls the request in these conditions:
 
 - The code is not a personality of the image.
-- The code is the bootloader code, and the image has no bootloader entry. Only the `app-8k` image has one.
+- The code is the bootloader code, and the image has no bootloader entry. Only the `app-8k` image has one, and the `standalone` image of the WeAct STM32H523 (an earlier development board), which starts the ROM USB DFU of the STM32H5.
 - `wIndex` or `wLength` is not `0`, or the direction is device to host.
 
 A stall means that the firmware does not switch.
 The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
 An image with one personality stalls the request for each personality code.
 It accepts the reset code.
-It accepts the bootloader code only in an `app-8k` image.
+It accepts the bootloader code only in an `app-8k` image, or in the `standalone` image of the WeAct STM32H523.
 
 ##### Reset code
 
@@ -763,7 +764,7 @@ A wrong payload size gets `INVALID_PARA`, and a port index other than 0 gets `IN
 
 ### JTAG fast path
 
-On the Mini, the WeAct STM32H523 and the YD-CH32V307VCT6, two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
+On the Mini, OpenMUPP v1, the YD-CH32V307VCT6 and the WeAct STM32H523 (an earlier development board), two SPI peripherals and DMA shift the whole bytes of an `IN_OUT` (`src/jtag/JtagFastPath.h`).
 The STM32F1 driver is `src/board/BoardJtagFast.cpp` (SPI and DMA1). The STM32H5 driver is `src/board/BoardJtagFastH5.cpp` (SPI v2 and GPDMA1).
 The CH32V307 driver is `src/board/BoardJtagFastV30x.cpp` (SPI2, SPI3, DMA1 and DMA2). With a wire as the TCK link, it is tested with OpenOCD and pyOCD at 2250, 4500 and 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)). With a resistor as the link, its JTAG-DP transfers fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 The bit-bang engine shifts the remaining bits, and all bits at a bit-bang speed.
