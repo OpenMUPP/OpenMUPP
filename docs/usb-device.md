@@ -424,7 +424,7 @@ The firmware sends the status stage (ACK), and then waits 10 ms, as for the othe
 The firmware stalls the request in these conditions:
 
 - The code is not a personality of the image.
-- The code is the bootloader code, and the image has no bootloader entry. Only the `app-8k` image has one, and the `standalone` image of the WeAct STM32H523 (an earlier development board), which starts the ROM USB DFU of the STM32H5.
+- The code is the bootloader code, and the image has no bootloader entry. Two images have one: the `app-8k` image, and the `standalone` image of the WeAct STM32H523 (an earlier development board), which starts the ROM USB DFU of the STM32H5.
 - `wIndex` or `wLength` is not `0`, or the direction is device to host.
 
 A stall means that the firmware does not switch.

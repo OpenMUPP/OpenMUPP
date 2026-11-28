@@ -40,10 +40,11 @@ Send the bootloader code `0xB0` (`boot::bootloaderCode`) instead of a personalit
 
 The WCH-Link protocol has no switch command, so use the switch request on EP0.
 The commands also work in an image with one personality.
-An image other than `app-8k` refuses the code. The exception is the `standalone` image of the WeAct STM32H523, an earlier development board: it starts the ROM USB DFU of the STM32H5.
+An image other than `app-8k` refuses the code.
 The switch request on EP0 then stalls, and `SWITCH_PERSONALITY` replies status `1`.
 A multi image replies status `0xFF` to `ID_DAP_Vendor0`.
 A CMSIS-DAP image with one personality replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
+The exception is the `standalone` image of the WeAct STM32H523, an earlier development board: it accepts the code and starts the ROM USB DFU of the STM32H5.
 After the reply, the firmware does the same steps as for `VERSALOON_FW_UPDATE` (see [Reply and steps](#reply-and-steps)).
 
 `tools/mupp_probe.py` sends the bootloader code from the host:
