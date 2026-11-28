@@ -140,7 +140,7 @@ See [docs/development.md](docs/development.md#build-outputs) for all build outpu
 
 ## Flash the firmware
 
-`openmupp-bootloader` is a USB DFU 1.1 device (Device Firmware Upgrade) with the ID `1209:0001` and the product string `OpenMUPP Bootloader`.
+On OpenMUPP v1, `openmupp-bootloader` is a USB DFU 1.1 device (Device Firmware Upgrade) with the ID `1209:0001` and the product string `OpenMUPP Bootloader`.
 It runs the `app-8k` image at `0x08002000`.
 The bootloader checks the application image header (see [docs/firmware-update.md](docs/firmware-update.md#application-image-header)) and starts only a valid image.
 
@@ -249,8 +249,18 @@ On the STM32F1 boards, the flash is small, so the bootloader and the image sizes
 A multi image or an image with the RISC-V bridge has 1 KB (one flash page) less, because the end of the flash holds the stored personality and the bridge mode.
 Write `openmupp-with-bootloader.hex` with a debug probe on the SWD pins of the board MCU, for example with OpenOCD.
 On an ST-Link/V2-1 or a mini clone with its original firmware, remove the read protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
-Then write the `app-8k` image with `dfu-util`, as on OpenMUPP v1.
-A Mini can also keep its Versaloon bootloader: hold the key (PB9) down while you connect the board to USB, and write the image with `stm32flash` (see [docs/firmware-update.md](docs/firmware-update.md#write-the-firmware)).
+On the STM32F1 boards, `openmupp-bootloader` is not a DFU device.
+It is a USB CDC serial port with the ID `0483:5740`, and it uses the STM32 serial bootloader protocol (ST AN3155).
+Start it with `tools/mupp_probe.py switch bootloader` or with the key of the board.
+Then write the `app-8k` image with `stm32flash`:
+
+```sh
+stm32flash -w openmupp-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
+```
+
+A Mini can also keep its Versaloon bootloader.
+To start it, hold the key (PB9) down while you connect the board to USB.
+Then write the image with `stm32flash` (see [docs/firmware-update.md](docs/firmware-update.md#write-the-firmware)).
 On the Mini, the serial port is bridged to PA9 (TX) and PA10 (RX).
 
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
