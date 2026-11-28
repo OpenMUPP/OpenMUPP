@@ -529,6 +529,7 @@ The pins on the dongle:
 | Mini | PB13 | PB4 | PB6 | PB11 |
 | ST-Link/V2-1 | PA5 | PB14 | PB12 | PB0 |
 | ST-Link/V2 mini clone | PA5 | PB14 | PB12 | PB6 |
+| OpenMUPP v1, YD-CH32V307VCT6 | PB13 | PC11 | PC11 | PB12 (OpenMUPP v1: the gate of a FET, active high) |
 
 The one-wire interface of the CH32V003 uses the SWDIO signal. SWCLK stays unused. No new pin is needed.
 

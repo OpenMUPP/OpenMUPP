@@ -32,7 +32,7 @@ The `cmsis-dap` image has these properties:
 - The CDC-ACM serial port, the UART bridge, the debug log and the LEDs are as in the Versaloon image.
 - The image does not link the Versaloon command buffers, the `USB_TO_XXX` blocks and the power block.
 - The SWD engine, the JTAG engine and the debug connector pins (`DAP_SWJ_Pins`) are the same ones as in the Versaloon image.
-  On the Mini, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more. On the STM32H5 boards, it uses the fast path at a TCK of 3906 kHz or more.
+  On the Mini and the CH32V307 boards, the JTAG engine uses the SPI and DMA fast path at a TCK of 1125 kHz or more.
 
 A `cmsis-dap` image has only this personality.
 A multi image has `cmsis-dap` and other personalities, for example `MUPP_PERSONALITIES=versaloon,cmsis-dap`.
@@ -45,7 +45,7 @@ The switch request on EP0 and the request of the MS OS 2.0 descriptor set use th
 - A JTAG chain has up to 8 devices. The IR length of a device is 1 to 32 bits.
 - On JTAG, `DAP_SWJ_Pins` must not leave TCK at a level that is not the idle level of the JTAG engine.
   Else the next scan has an extra TCK edge or a missing TCK edge.
-  The idle level is high on the boards with the SPI fast path (the Mini and the STM32H5 boards), and low on the ST-Link/V2-1 and the mini clone.
+  The idle level is high on the boards with the SPI fast path (the Mini and the CH32V307 boards), and low on the ST-Link/V2-1 and the mini clone.
 - pyOCD 0.45.1 configures a JTAG chain with one device of IR length 4. A target with more than one TAP, for example the STM32F1, needs another chain setting (see [JTAG hardware test](#jtag-hardware-test)).
 - SWO only on the CH32V307 boards, through `DAP_SWO_Data` or the SWO trace endpoint. UART (NRZ) mode up to 9 Mbaud, Manchester mode up to 500 kbit/s (a baud rate of 1 MHz, see [SWO Manchester mode](#swo-manchester-mode)). See [SWO commands](#swo-commands).
 - The `DAP_UART_*` commands use the UART of the UART bridge. Only one side has the UART at a time: the CDC-ACM serial port or the DAP commands. See [UART commands](#uart-commands).
@@ -455,7 +455,7 @@ avrdude then sends `DAP_Connect` and `DAP_HostStatus`, the sign-on, the AVR8 par
 | `0x21` | `DAP_UART_Transfer` | Sends and receives UART data. Up to 59 bytes to send and 58 bytes to receive in one packet. |
 | `0x22` | `DAP_UART_Control` | Enables, disables and flushes the receiver and the transmitter. |
 | `0x23` | `DAP_UART_Status` | The status bits, the bytes in the receive buffer and the bytes not sent yet. |
-| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image without the bootloader entry replies `0xFF` to it. An image with one personality and without the bootloader entry replies `ID_DAP_Invalid` to each code. Only the `app-8k` image and the images of the STM32H5 have the bootloader entry. See [Multi image](usb-device.md#multi-image). |
+| `0x80` | `ID_DAP_Vendor0` | Switches the USB personality of a multi image: `[0x80][personality u8]`. The personality is the code of a personality in the image: `0` (Versaloon), `1` (CMSIS-DAP) or `2` (WCH-Link). The response is `[0x80][status u8]`: `0` when the firmware accepts the switch, `0xFF` for a code that is not in the image. The firmware then stores the personality and resets. The bootloader code `0xB0` starts the bootloader, also in an image with one personality (see [Bootloader code](firmware-update.md#bootloader-code)). A multi image without the bootloader entry replies `0xFF` to it. An image with one personality and without the bootloader entry replies `ID_DAP_Invalid` to each code. Two images have the bootloader entry: the `app-8k` image, and the `standalone` image of the WeAct STM32H523 (an earlier development board). See [Multi image](usb-device.md#multi-image). |
 | `0x81` | `ID_DAP_Vendor1` | Only in an image with `MUPP_CMSIS_DAP_RV_BRIDGE`: sets the mode of the RISC-V bridge, `[0x81][mode u8]`, `0` off, `1` on, `2` auto, `3` the stored mode. Bit 7 of the mode also stores the mode. The response is `[0x81][status u8]`: `0` when the mode is set, `0xFF` for another value or a failed store. An image without the bridge replies `ID_DAP_Invalid`. See [Bridge switch](#bridge-switch). |
 | `0x82` | `ID_DAP_Vendor2` | Switches the supply of the target and reads the target voltage (Vref): `[0x82][op u8]`. Op `0` switches the supply off, `1` switches it on at 3.3 V, `2` only reads. `[0x82][3][mV u16]` switches it on at 3.3 V or 5 V. The response is `[0x82][status u8][mV u16][state u8]`. See [Target power](#target-power). |
 | `0x83` | `ID_DAP_Vendor3` | Only on a board with an adapter ID (OpenMUPP v1), in an image with the RISC-V bridge (`MUPP_CMSIS_DAP_RV_BRIDGE`): reads and writes the setting "VPP without an adapter", `[0x83][op u8]`. Op `0` stores off, `1` stores on, `2` only reads. The response is `[0x83][status u8][setting u8]`. Other boards and images reply `ID_DAP_Invalid`. See [VPP without an adapter](#vpp-without-an-adapter). |
@@ -958,7 +958,7 @@ A Versaloon-only image has no `RetryStop`.
 `DAP_Connect` with port 2 releases the SWD pins and selects the JTAG engine. The JTAG engine starts at the first JTAG command.
 The JTAG engine is the one of the Versaloon image (`board::BoardJtag`).
 On the boards with the fast path, it shifts whole bytes with SPI and DMA when the SPI rate is not above the request and is at least the bit-bang rate (see `src/jtag/JtagFastPath.h`).
-This starts at a TCK of 1125 kHz on the Mini, and at 3906 kHz on the STM32H5 boards. The other bits, and the slower rates, use GPIO bit-bang.
+This starts at a TCK of 1125 kHz on the Mini and the CH32V307 boards. The other bits, and the slower rates, use GPIO bit-bang.
 `DAP_SWJ_Clock` sets TCK in kHz, rounded down, and at least 1 kHz.
 
 `DAP_JTAG_Configure` gives the device chain: the IR length of each device.
@@ -1011,8 +1011,7 @@ The CMake option `MUPP_CMSIS_DAP_RV_BRIDGE` (default `ON`) adds the bridge to th
 Each image with `cmsis-dap` has the bridge, also a multi image, for example `versaloon,cmsis-dap,wch-link`.
 In a multi image, only the active personality sets up the pins and the timer of the wire engine. A personality switch resets the MCU.
 An image without `cmsis-dap` ignores the option.
-An image with the bridge has the settings page, also an image with one personality: 1 KB less flash on the STM32F103, 8 KB less on the STM32H5. On the CH32V307 the page is outside the flash of the image (see [Stored mode](#stored-mode)).
-The STM32H5 boards also build the bridge.
+An image with the bridge has the settings page, also an image with one personality: 1 KB less flash on the STM32F103. On the CH32V307 the page is outside the flash of the image (see [Stored mode](#stored-mode)).
 The bridge is the default, so it adds no image tag. An image with `cmsis-dap` and `MUPP_CMSIS_DAP_RV_BRIDGE=OFF` has the tag `-no-rv-bridge`, for example `openmupp-mini-cmsis-dap-no-rv-bridge-app-8k-Release-<version>.bin`.
 The `cmsis-dap` and `dual` presets build the bridge:
 

@@ -1,17 +1,13 @@
 # Firmware update
 
-The Mini runs the firmware behind a bootloader: `openmupp-bootloader` (8 KB) or a Versaloon bootloader (8 KB, or 32 KB on the newer Mini).
-The ST-Link/V2-1 and the ST-Link/V2 mini clone run it behind `openmupp-bootloader`.
-See [Install the bootloader](#install-the-bootloader).
-`openmupp-bootloader` is a USB CDC serial port with the ID `0483:5740`.
-It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
-
 OpenMUPP v1 (CH32V307) runs the `app-8k` image behind the DFU bootloader of `openmupp-bootloader`.
 See [OpenMUPP v1: DFU bootloader](#openmupp-v1-dfu-bootloader).
 
-The WeAct STM32H523 core board (STM32H5) has no bootloader in flash.
-The firmware starts the USB DFU (Device Firmware Upgrade) of the ROM bootloader in system memory.
-See [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu).
+The Mini runs the firmware behind a bootloader: `openmupp-bootloader` (8 KB) or a Versaloon bootloader (8 KB, or 32 KB on the newer Mini).
+The ST-Link/V2-1 and the ST-Link/V2 mini clone run it behind `openmupp-bootloader`.
+See [Install the bootloader](#install-the-bootloader).
+On these STM32F1 boards, `openmupp-bootloader` is a USB CDC serial port with the ID `0483:5740`.
+It uses the STM32 serial bootloader protocol (ST AN3155), so `stm32flash` can write the firmware.
 
 ## Start the bootloader
 
@@ -27,8 +23,8 @@ To start `openmupp-bootloader`, use one of these methods:
   On an MB1136 Nucleo that is not broken off, SWO also connects to PB3 of the target MCU through SB15. If the target drives PB3 low, open SB15. Other Nucleo boards use other bridges. Read the user manual of your board.
 
 Only the `app-8k` image accepts the commands.
+On OpenMUPP v1, the key does not start `openmupp-bootloader`: it starts the ROM ISP bootloader of WCH (see [Start the DFU bootloader](#start-the-dfu-bootloader)).
 Behind the 8 KB Versaloon bootloader, the firmware only starts again, because that bootloader does not know the boot request.
-On the STM32H5, the commands and the key start the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
 To start a Versaloon bootloader, hold the key (PB9) down while you connect the board to USB.
 
 ### Bootloader code
@@ -44,10 +40,11 @@ Send the bootloader code `0xB0` (`boot::bootloaderCode`) instead of a personalit
 
 The WCH-Link protocol has no switch command, so use the switch request on EP0.
 The commands also work in an image with one personality.
-An image other than `app-8k` refuses the code, except on the STM32H5.
+An image other than `app-8k` refuses the code.
 The switch request on EP0 then stalls, and `SWITCH_PERSONALITY` replies status `1`.
 A multi image replies status `0xFF` to `ID_DAP_Vendor0`.
 A CMSIS-DAP image with one personality replies `ID_DAP_Invalid` to `ID_DAP_Vendor0`.
+The exception is the `standalone` image of the WeAct STM32H523, an earlier development board: it accepts the code and starts the ROM USB DFU of the STM32H5.
 After the reply, the firmware does the same steps as for `VERSALOON_FW_UPDATE` (see [Reply and steps](#reply-and-steps)).
 
 `tools/mupp_probe.py` sends the bootloader code from the host:
@@ -63,10 +60,6 @@ After the request, the tool waits 10 s for the bootloader.
 It finds `openmupp-bootloader` by the ID `0483:5740`, the product string `Bootloader` and the serial number of the dongle.
 Other devices use the ID `0483:5740` too, so the tool also compares the product string.
 It finds the DFU bootloader of OpenMUPP v1 by the ID `1209:0001`, the product string `OpenMUPP Bootloader` and the serial number.
-It finds the ROM USB DFU of the STM32H5 by the ID `0483:df11` only.
-The ROM DFU has its own serial number, so the wait for the bootloader does not compare it.
-Thus any STM32 device in ROM DFU mode ends the wait, also a different board.
-The other commands compare the serial number of the ROM DFU, so `--serial` does not select a device in ROM DFU mode.
 `python3 tools/mupp_probe.py show` also lists a dongle that runs the bootloader.
 
 The tool must open the bootloader to read its strings.
@@ -99,8 +92,6 @@ The firmware replies to `VERSALOON_FW_UPDATE` with one status byte:
 | `0x00` | Accepted. The firmware starts the bootloader. Behind the 8 KB Versaloon bootloader, the firmware only starts again, because that bootloader does not know the boot request. |
 | `0x01` | Refused. The second byte is not the key `0xAA`, or the image is not `app-8k`. On the STM32F1, the `standalone` image has no bootloader. The 32 KB Versaloon bootloader of the `app-32k` image does not know the boot request. The firmware continues to run. |
 
-The `standalone` image of the WeAct STM32H523 core board accepts the command and starts the ROM USB DFU (see [STM32H5: ROM USB DFU](#stm32h5-rom-usb-dfu)).
-
 On the STM32F1, after the reply, the firmware does these steps:
 
 1. It waits 10 ms, so the host can read the reply. The firmware does not wait for the host to read the reply.
@@ -111,68 +102,6 @@ On the STM32F1, after the reply, the firmware does these steps:
 After the reset, the bootloader finds the boot request, clears it and stays in bootloader mode.
 The next reset starts the firmware again.
 `src/boot/BootloaderEntry.h` and `src/boot/Bootloader.cpp` have the code.
-
-## STM32H5: ROM USB DFU
-
-The STM32H5 has a bootloader in system memory (ST AN2606, section 56).
-On the STM32H523 and the STM32H533, it starts at `0x0BF97000`.
-It has a USB DFU interface on PA11 and PA12 (the USB connector of the WeAct board), with the ID `0483:df11`.
-The DFU uses the HSI48 clock, so it needs no crystal.
-
-### Start the ROM DFU
-
-The `standalone` image of the STM32H5 has the bootloader entry.
-To start the ROM DFU, use one of these methods:
-
-- Send `VERSALOON_FW_UPDATE` or a switch command with the bootloader code `0xB0` (see [Bootloader code](#bootloader-code)).
-  `python3 tools/mupp_probe.py switch bootloader` does this and waits for `0483:df11`.
-- Hold the key (KEY, PA0 on the WeAct board) down and reset the board.
-
-The firmware does not jump to the ROM bootloader from the running firmware.
-After the reply to the command, the firmware does these steps:
-
-1. It waits 10 ms, so the host can read the reply.
-2. It enables the RTC APB clock and the write access to the backup domain (`PWR_DBPCR.DBP`).
-3. It writes the boot request `0xB007` to the backup register `TAMP->BKP0R`.
-4. It resets the MCU with `NVIC_SystemReset()`. The host sees a USB disconnect.
-
-A system reset keeps the backup registers.
-After the reset, the start-up code reads `TAMP->BKP0R` before the clock set-up, and clears it.
-When it finds the boot request, it jumps to the ROM bootloader.
-At this point, the clocks, the PLL, the ICACHE and the interrupts are still in their reset state, as AN2606 section 4.1 requires.
-Before the jump, the firmware sets `VTOR` to the ROM bootloader, clears `MSPLIM`, loads `MSP` from `0x0BF97000` and jumps to the reset vector at `0x0BF97004`.
-The next reset starts the firmware again.
-
-A key that is down at the reset gives the same boot request and reset.
-`src/boot/RomBootloader.cpp` and `src/initialize_hardware.cpp` have the code.
-
-The jump skips the secure firmware (SFSP) of the boot model Boot_V3_2 (AN2606 section 4.10).
-This is correct only with TrustZone disabled (`TZEN` off), the default of a new STM32H5.
-If the jump fails on a board, set the boot address in the option bytes instead.
-
-### Write the firmware with dfu-util
-
-1. Start the ROM DFU (see above). `dfu-util -l` shows the device `0483:df11` with the alternate setting 0 `@Internal Flash`.
-2. Write the `.bin` file of the `standalone` image at `0x08000000`:
-
-   ```sh
-   dfu-util -a 0 -s 0x08000000:leave -D openmupp-standalone.bin
-   ```
-
-3. With `:leave`, the bootloader starts the firmware after the write.
-   Without it, reset the board.
-
-STM32CubeProgrammer can also write the firmware through the ROM DFU:
-
-```sh
-STM32_Programmer_CLI -c port=usb1 -w openmupp-standalone.bin 0x08000000 -v -s 0x08000000
-```
-
-On Linux, `dfu-util` needs access to the device.
-`etc/70-openmupp-bootloader.rules` has a udev rule for `0483:df11` (see [Bootloader code](#bootloader-code)).
-
-The write erases only the sectors of the image.
-Thus a multi image or an image with the RISC-V bridge keeps the stored personality and the bridge mode in the last sector of bank 2, at `0x0803E000` on the STM32H523CC.
 
 ## OpenMUPP v1: DFU bootloader
 
