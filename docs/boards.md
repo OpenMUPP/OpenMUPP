@@ -13,8 +13,8 @@ The Mini and the ST-Link/V2-1 use an STM32F103x8 or STM32F103xB (family STM32F1)
 The ST-Link/V2 mini clone uses an STM32F103 compatible MCU, with the same family.
 The ST-Link/V2 mini clone has its own document with the measured pin map: [ST-Link/V2 mini clone](stlinkv2-mini-clone.md).
 CMSIS has one device define (`STM32F103xB`) for both parts.
-The WeAct STM32H523 core board uses an STM32H523CC (family STM32H5, see [WeAct STM32H523 core board](#weact-stm32h523-core-board)).
-The YD-CH32V307VCT6 board uses a CH32V307VCT6 (family CH32V30X, see [YD-CH32V307VCT6 development board](#yd-ch32v307vct6-development-board)).
+The YD-CH32V307VCT6 board uses a CH32V307VCT6, and OpenMUPP v1 uses a CH32V307RCT6 (family CH32V30X, see [YD-CH32V307VCT6 development board](#yd-ch32v307vct6-development-board)).
+The STM32H5 code is from the WeAct STM32H523 core board (STM32H523CC), an earlier development board. It is not an active target.
 
 `cmake/Boards.cmake` has one line for each board, with these values:
 
@@ -193,141 +193,6 @@ A target power fault is also a probe error, in the Versaloon and CMSIS-DAP perso
 The reset of the switch waits until the key is up for 50 ms, because a key that is down at the reset starts the bootloader.
 The bootloader (openmupp-bootloader) keeps its own LED patterns, and the patterns of this firmware do not change them.
 A build with `MUPP_DEBUG_SWD` has no USB LED on the Mini.
-
-## WeAct STM32H523 core board
-
-The board `weacth523` is the WeAct Studio STM32H523 core board V1.0, in the "Black Pill" form.
-It has an STM32H523CCU6 or an STM32H523CCT6, and an 8 MHz crystal.
-The STM32H523CC has 256 KB flash in two banks of 128 KB.
-The schematics are in the WeAct repository [WeActStudio.STM32H523CoreBoard](https://github.com/WeActStudio/WeActStudio.STM32H523CoreBoard), in `Hardware/`.
-
-The pin map follows the board and its headers:
-
-- The state LED is the on-board LED (PC13, active low).
-- The key is the on-board KEY button (PA0, active low).
-- RTCK is PA8, because PA0 is the key.
-- SWDIO in is PB12, on the header pin next to SWCLK.
-- SRST is PB5. Thus all target signals except Vref are on header P2.
-
-The board has no level shifters and no target power switch.
-Connect only targets with a 3.3 V supply.
-The board and the target must have a common ground.
-
-The firmware on the board has these limits:
-
-- The personalities Versaloon, CMSIS-DAP and WCH-Link, alone or in a multi image. A multi image or an image with the RISC-V bridge keeps the last 8 KB flash sector of bank 2 for the stored personality and the bridge mode (see [Multi image](usb-device.md#multi-image)).
-- A one-wire target (WCH-Link, CH32V00x) needs an external pull-up of 2.2 kΩ from SWDIO to 3.3 V. The internal pull-ups are too slow for the read bits (see [One-wire timer](wch-link.md#one-wire-timer)).
-- Only the `standalone` image at `0x08000000`. `VERSALOON_FW_UPDATE`, the bootloader code `0xB0` and the key at the reset start the ROM USB DFU (see [STM32H5: ROM USB DFU](firmware-update.md#stm32h5-rom-usb-dfu)).
-- The JTAG fast path needs a wire from PB13 to PB3 (see [Wiring to the target](#wiring-to-the-target)).
-- The UART bridge supports 3815 baud to 15.6 Mbaud. USART1 runs from the 250 MHz bus clock, and the firmware does not use the USART prescaler. The bridge refuses a lower baud rate, for example 2400 baud.
-
-PC13 is in the backup domain.
-It can sink only 3 mA, and its speed is low.
-Thus PC13 is good for the LED, but do not use it for a target signal.
-
-### Wiring to the target
-
-![Pinout of the WeAct STM32H523 core board](images/weacth523-pinout.svg)
-
-| Signal | Pin | Header | Note |
-|---|---|---|---|
-| TMS, SWDIO (input) | PB12 | P2 pin 1 | Connect the target here. For a one-wire target, add a 2.2 kΩ pull-up to 3.3 V. |
-| TCK, SWCLK | PB13 | P2 pin 2 | |
-| TDO | PB14 | P2 pin 3 | |
-| TDI | PB15 | P2 pin 4 | |
-| RTCK | PA8 | P2 pin 5 | Optional |
-| UART TX (to target RX) | PA9 | P2 pin 6 | USART1 of the serial bridge |
-| UART RX (from target TX) | PA10 | P2 pin 7 | |
-| TRST | PB4 | P2 pin 12 | Optional. See [Hardware test](#hardware-test) for JTAG after SWD. |
-| TCK link | PB3 | P2 pin 11 | For the JTAG fast path: connect a wire from PB13 (P2 pin 2) to PB3. Do not connect the target. |
-| SRST | PB5 | P2 pin 13 | |
-| GND | GND | P2 pin 17 or 19 | |
-| TMS, SWDIO (output) | PA6 | P1 pin 9 | Connect a wire from PA6 to PB12 (P2 pin 1). |
-| Vref sense | PB0 | P1 pin 7 | Optional. Connect the target supply, 3.3 V maximum. No divider. |
-
-The last four pins of P2 are GND, 5 V, GND and 3.3 V (pins 17 to 20).
-Without the wire from PB13 to PB3, JTAG fails at the speeds of the fast path (see [JTAG fast path](usb-device.md#jtag-fast-path)).
-P2 pin 8 is PA11 (USB D-). Do not connect the TCK link there.
-
-The board has these other signals:
-
-| Signal | Pin | Note |
-|---|---|---|
-| State LED | PC13 | Blue LED, active low. The board has no power LED and no USB LED. |
-| Key | PA0 | KEY button, active low. The firmware sets the pull-up of the pin. |
-| USB | PA11, PA12 | USB Type-C connector. The D+ pull-up is in the STM32H5. |
-| SWD of the dongle MCU | PA13, PA14 | SWD header P3: SWDIO on pin 2, SWCLK on pin 3. The firmware does not use these pins. |
-
-Without a Vref connection, the Vref value of the Versaloon personality is not valid.
-
-### Flash the firmware
-
-The board has no on-board debug probe.
-Use the USB DFU (Device Firmware Upgrade) bootloader in the system memory of the STM32H5.
-To write the firmware, do these steps:
-
-1. Hold the BOOT0 button down.
-2. Push and release the NRST button.
-3. Release the BOOT0 button. The board shows as the USB device `0483:df11`.
-4. Write the `standalone` image with `dfu-util`:
-
-   ```sh
-   dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D openmupp-standalone.bin
-   ```
-
-5. Disconnect the board and connect it again. The firmware starts.
-
-The `:leave` request does not start the firmware on this board, so step 5 is necessary.
-After the `:leave` request, `dfu-util` can show `Error during download get_status`.
-This message has no effect: the write is complete.
-
-A debug probe on the SWD header P3 can also write the `standalone` image at `0x08000000`.
-
-### Hardware test
-
-`tools/hwtest/probe_hw_test.py` tests the multi image with the Versaloon and the CMSIS-DAP personalities on an STM32F1 target (see [Multi image hardware test](usb-device.md#multi-image-hardware-test)).
-Connect TMS, TCK, TDI, TDO, TRST, SRST and GND to the JTAG connector of the target.
-Connect the wire from PA6 to PB12, and the wire from PB13 to PB3.
-Connect PA9 to PA10 for the UART loopback.
-
-The script runs SWD before JTAG with each tool.
-The first run had no TRST and no SRST wire.
-All SWD steps passed, and all JTAG steps failed with `JTAG scan chain interrogation failed: all ones`.
-The TDI and TDO wires were correct: a GPIO test checked them.
-After the SWD-to-JTAG switch sequence, OpenOCD found the two TAPs of the target on JTAG.
-With TRST and SRST wired, all JTAG steps passed.
-The test did not show which of the two signals is necessary.
-
-Status: the test passed on 2026-10-25.
-Probe: WeAct STM32H523 core board.
-Image: `VSL_PERSONALITIES=versaloon,cmsis-dap` (the `weacth523-dual` preset of that time), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
-Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
-Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
-
-| Check | Versaloon | CMSIS-DAP |
-|---|---|---|
-| Switch with the switch request on EP0 | pass | pass |
-| Switch with the key (3 s), also after a reset of the board | pass | pass |
-| Serial loopback, quick set (3 baud rates, 8N and 8E, 1 and 2 stop bits) | pass | pass |
-| `DAP_UART_*` loopback | - | pass |
-| OpenOCD SWD, 1000 and 2000 kHz | pass | pass |
-| OpenOCD JTAG, 1000 and 9000 kHz | pass | pass |
-| pyOCD SWD, 1000 and 2000 kHz | - | pass |
-| pyOCD JTAG, 1000 and 9000 kHz | - | pass |
-| probe-rs SWD, 1000 and 2000 kHz | - | pass |
-| probe-rs JTAG, 1000 kHz | - | pass |
-
-Findings:
-
-- One run of the script failed on OpenOCD JTAG with the `vsllink` driver.
-  At 1000 kHz, the read back of the flash had 10 bytes with one wrong bit each. Each wrong bit was 0 in the image and 1 in the read back.
-  The verify step calculates a CRC on the target, and it passed. Thus the error was in the read path, not in the flash.
-  At 9000 kHz, the flash write stopped with `Invalid ACK (6) in DAP response`.
-  This run came directly after a change to the wires.
-  Five more runs of the script passed: two runs of the Versaloon steps, two runs of the Versaloon and UART steps, and one full run.
-  Three more read backs of the 32 KiB image with OpenOCD and the `vsllink` driver on JTAG at 1000 kHz had no errors.
-  The cause is not known.
-- The test did not cover `--full-uart`, the old switch commands, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.
 
 ## ST-Link/V2-1
 
@@ -633,7 +498,7 @@ VPP goes off in these cases:
 
 The board `ydch32v307` is the YD-CH32V307VCT6 development board V1.0.
 It has a CH32V307VCT6 (LQFP100), an 8 MHz crystal and a 32.768 kHz crystal.
-It is the test board for the port of the firmware to the CH32V307.
+It is the development board for the port of the firmware to the CH32V307, before OpenMUPP v1 was available.
 The board start-up of the firmware (see [Start-up and LEDs](#start-up-and-leds)) sets the clock (144 MHz from the crystal), the 1 ms SysTick and the safe state of the board pins.
 If the crystal or the PLL does not start, the clock stays on HSI and the state LED (`LED2`, PB4) flashes fast (the clock fault pattern).
 
@@ -650,7 +515,7 @@ This image builds and links (37 KB).
 On the YD board, USB, JTAG connect and SWD connect work.
 The CMSIS-DAP image runs USB at high speed with 512-byte packets (see [High speed](usb-device.md#high-speed-ch32v307)).
 The WCH-Link image runs USB at full speed.
-These parts are known to be incomplete:
+Notes on the parts and their tests:
 
 - The JTAG and SWD engines use the bit-bang code with the SysTick cycle counter (`SysTick->CNT`).
   The SWD timing is measured: timed up to 2 MHz, untimed with NOP pads above 2 MHz, 9.6 MHz at most (see [CH32V307 padded untimed engine](clock-pacing.md#ch32v307-padded-untimed-engine)).
@@ -668,11 +533,11 @@ These parts are known to be incomplete:
 - The JTAG fast path (SPI and DMA) passes with OpenOCD from 1125 to 9000 kHz (see [CH32V307 JTAG](clock-pacing.md#ch32v307-jtag)).
   JTAG-DP transfers (pyOCD, `DAP_Transfer`) pass at 2250, 4500 and 9000 kHz with a wire as the TCK link. With a resistor, they fail ([issue #16](https://github.com/OpenMUPP/OpenMUPP/issues/16)).
 - The one-wire engine (TIM10 and DMA2) passes with wlink and minichlink on a CH32V003 (see [CH32V003 on the YD-CH32V307VCT6](wch-link.md#ch32v003-on-the-yd-ch32v307vct6-one-wire)).
-- There is no bootloader entry: `FW_UPDATE` and the bootloader code of the switch commands are not available, and openmupp-bootloader does not support the board.
+- There is no bootloader entry: `VERSALOON_FW_UPDATE` and the bootloader code of the switch commands are not available, and openmupp-bootloader does not support the board.
 - The settings page (multi image, stored bridge mode) builds.
 
 The board definition is `src/board/boards/YdCh32V307.h`.
-The pin map uses only pins that the LQFP64 and QFN68 packages also have, because a future probe uses one of these packages.
+The pin map uses only pins that the LQFP64 and QFN68 packages also have. OpenMUPP v1 uses the LQFP64 package and the same pins for JTAG, SWD and debugWIRE.
 All signals are 3.3 V. The board has no level shifters and no target power switch.
 
 ![Pinout of the YD-CH32V307VCT6 development board](images/ydch32v307-pinout.svg)

@@ -306,7 +306,7 @@ If the flash write fails, the firmware starts again with the old personality.
 `tools/hwtest/probe_hw_test.py` tests the Versaloon and the CMSIS-DAP personalities of a multi image on an STM32F1 target.
 Connect the target on SWD and JTAG, and connect the UART TX pin to the UART RX pin.
 The script runs SWD before JTAG with each tool.
-On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, and passed with them (see [Hardware test](boards.md#hardware-test)).
+On the WeAct STM32H523 core board, all JTAG steps failed without TRST and SRST, and passed with them (see the record of that board below).
 The script switches to the Versaloon personality and runs the serial loopback test and OpenOCD with the `vsllink` driver.
 It then switches to the CMSIS-DAP personality and runs the serial and `DAP_UART_*` loopback tests, OpenOCD, pyOCD and probe-rs.
 Each tool runs on SWD and JTAG, at each speed of `--swd-speeds` and `--jtag-speeds`.
@@ -359,6 +359,52 @@ Findings:
   Now INIT and CONFIG of the Versaloon SWD block set the Versaloon rules again.
 - The test did not cover the key switch, the old switch commands, the WCH-Link personality and Windows.
 
+The WeAct STM32H523 core board was an earlier development board (STM32H523CC, no level shifters, 3.3 V targets only).
+The test also ran on it:
+
+TMS, TCK, TDI, TDO, TRST, SRST and GND connected the board to the JTAG connector of the target.
+The board had a wire from PA6 to PB12 (SWDIO), and a wire from PB13 to PB3 (the TCK link of the JTAG fast path).
+A wire from PA9 to PA10 made the UART loopback.
+
+The script runs SWD before JTAG with each tool.
+The first run had no TRST and no SRST wire.
+All SWD steps passed, and all JTAG steps failed with `JTAG scan chain interrogation failed: all ones`.
+The TDI and TDO wires were correct: a GPIO test checked them.
+After the SWD-to-JTAG switch sequence, OpenOCD found the two TAPs of the target on JTAG.
+With TRST and SRST wired, all JTAG steps passed.
+The test did not show which of the two signals is necessary.
+
+Status: the test passed on 2026-10-25.
+Probe: WeAct STM32H523 core board.
+Image: `VSL_PERSONALITIES=versaloon,cmsis-dap` (the `weacth523-dual` preset of that time), `Release` build, `v0.12.0-19-gdb50fde`, `standalone` image.
+Target: STM32F103ZE (device ID `0x414`, 512 KiB flash).
+Host: Linux, OpenOCD 0.12.0+dev-01355-gcba596a3e, pyOCD 0.45.1, probe-rs 0.32.0.
+
+| Check | Versaloon | CMSIS-DAP |
+|---|---|---|
+| Switch with the switch request on EP0 | pass | pass |
+| Switch with the key (3 s), also after a reset of the board | pass | pass |
+| Serial loopback, quick set (3 baud rates, 8N and 8E, 1 and 2 stop bits) | pass | pass |
+| `DAP_UART_*` loopback | - | pass |
+| OpenOCD SWD, 1000 and 2000 kHz | pass | pass |
+| OpenOCD JTAG, 1000 and 9000 kHz | pass | pass |
+| pyOCD SWD, 1000 and 2000 kHz | - | pass |
+| pyOCD JTAG, 1000 and 9000 kHz | - | pass |
+| probe-rs SWD, 1000 and 2000 kHz | - | pass |
+| probe-rs JTAG, 1000 kHz | - | pass |
+
+Findings:
+
+- One run of the script failed on OpenOCD JTAG with the `vsllink` driver.
+  At 1000 kHz, the read back of the flash had 10 bytes with one wrong bit each. Each wrong bit was 0 in the image and 1 in the read back.
+  The verify step calculates a CRC on the target, and it passed. Thus the error was in the read path, not in the flash.
+  At 9000 kHz, the flash write stopped with `Invalid ACK (6) in DAP response`.
+  This run came directly after a change to the wires.
+  Five more runs of the script passed: two runs of the Versaloon steps, two runs of the Versaloon and UART steps, and one full run.
+  Three more read backs of the 32 KiB image with OpenOCD and the `vsllink` driver on JTAG at 1000 kHz had no errors.
+  The cause is not known.
+- The test did not cover `--full-uart`, the old switch commands, the WCH-Link personality, Windows and a target with a supply other than 3.3 V.
+
 #### Switch request on EP0
 
 Each image accepts a USB vendor request on the control endpoint (EP0) in each personality.
@@ -377,14 +423,14 @@ The firmware sends the status stage (ACK), and then waits 10 ms, as for the othe
 The firmware stalls the request in these conditions:
 
 - The code is not a personality of the image.
-- The code is the bootloader code, and the image has no bootloader entry. Only the `app-8k` image and the images of the STM32H5 have one.
+- The code is the bootloader code, and the image has no bootloader entry. Only the `app-8k` image has one.
 - `wIndex` or `wLength` is not `0`, or the direction is device to host.
 
 A stall means that the firmware does not switch.
 The firmware accepts the request in the Address and Configured states, so a host can send it before `SET_CONFIGURATION`.
 An image with one personality stalls the request for each personality code.
 It accepts the reset code.
-It accepts the bootloader code only in an `app-8k` image or an image of the STM32H5.
+It accepts the bootloader code only in an `app-8k` image.
 
 ##### Reset code
 
