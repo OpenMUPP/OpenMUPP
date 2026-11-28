@@ -240,7 +240,7 @@ A board with a Versaloon bootloader can continue to use it.
 To change a board to `openmupp-bootloader`, write the new bootloader one time with a debug probe.
 Then write the `app-8k` image, or write the combined image to do both in one step.
 
-The firmware build makes the combined image `openmupp-with-bootloader.hex` (see [Build the firmware](../README.md#build-the-firmware)).
+The firmware build makes the combined image `openmupp-with-bootloader.hex` (see [Other boards](../README.md#other-boards)).
 It has the bootloader at `0x08000000` and the `app-8k` image at `0x08002000`.
 Write it with a debug probe on the SWD pins of the dongle MCU, for example with OpenOCD:
 
@@ -261,7 +261,7 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
 ```
 
 `stm32f1x unlock 0` erases the option bytes and removes all write protection.
-The bootloader document [STM32F1 boards](https://github.com/OpenMUPP/openmupp-bootloader/blob/master/docs/stm32f1.md#flash-protection) has the full rules.
+The bootloader document [STM32F1 boards](https://github.com/OpenMUPP/openmupp-bootloader/blob/master/README.md#flash-protection) has the full rules.
 
 The Versaloon bootloader does not set write protection or read protection.
 Thus the debug probe can write the combined image over it without `stm32f1x unlock 0`.
@@ -274,7 +274,7 @@ If the write fails, the option bytes of the board were changed: run `stm32f1x un
 2. Write the `.bin` file of the image for the bootloader:
 
    ```sh
-   # openmupp-bootloader (8 KB)
+   # openmupp-bootloader or Versaloon bootloader (8 KB)
    stm32flash -w openmupp-app-8k.bin -v -S 0x08002000 /dev/ttyACM0
    # Versaloon bootloader (32 KB)
    stm32flash -w openmupp-app-32k.bin -v -S 0x08008000 /dev/ttyACM0

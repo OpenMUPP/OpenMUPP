@@ -2,7 +2,8 @@
 
 OpenMUPP (Open Multi-architecture Universal Programmer & Probe) is the firmware for the OpenMUPP v1 probe.
 OpenMUPP v1 is an open hardware USB debug probe with a CH32V307 MCU.
-It has level shifters for targets from 1.2 V to 5 V, a target power supply of 3.3 V or 5 V, and a high-voltage (VPP) supply to program old MCUs, for example AVR and PIC.
+It has level shifters for targets from 1.2 V to 5 V and a target power supply of 3.3 V or 5 V.
+It also has a high-voltage (VPP) supply to program old MCUs, for example AVR and PIC.
 The schematics are in the repository [openmupp-v1](https://github.com/OpenMUPP/openmupp-v1).
 
 The probe can debug and program target chips of more than one architecture.
@@ -19,7 +20,7 @@ A personality is the USB interface that a set of host tools uses:
 | Personality | USB ID | Host tools | Target chips |
 |---|---|---|---|
 | CMSIS-DAP v2 (the default) | `1209:0001` | OpenOCD, pyOCD, probe-rs | Arm Cortex-M (SWD and JTAG), WCH RISC-V through the RISC-V bridge (see [docs/cmsis-dap.md](docs/cmsis-dap.md)) |
-| AVR (EDBG), in the CMSIS-DAP image | `1209:0001` | avrdude, Bloom and AVaRICE with avr-gdb | AVR: ISP programming, debugWIRE programming and debug, JTAG programming and debug (see [docs/avr.md](docs/avr.md)) |
+| AVR (EDBG), in the CMSIS-DAP image | `1209:0001` | avrdude. Bloom and AVaRICE with avr-gdb need the medbg build or a patched Bloom (see [docs/avr.md](docs/avr.md#bloom)). | AVR: ISP programming, debugWIRE programming and debug, JTAG programming and debug (see [docs/avr.md](docs/avr.md)) |
 | WCH-Link | `1209:0001` | `wlink`, `minichlink` | WCH RISC-V chips (CH32V), see [docs/wch-link.md](docs/wch-link.md) |
 | Versaloon (original protocol) | `0483:a038` | OpenOCD (`interface/vsllink.cfg`) | Arm Cortex-M (SWD and JTAG) |
 
@@ -67,7 +68,7 @@ The firmware on OpenMUPP v1 has these functions:
 - USB runs at high speed (480 Mbit/s) in the CMSIS-DAP image.
 - The DFU bootloader `openmupp-bootloader` updates the firmware over USB (see [Flash the firmware](#flash-the-firmware)).
 
-The AVR and PIC high-voltage protocols do not use VPP yet. A host control sets VPP for the hardware test.
+No AVR or PIC high-voltage protocol exists yet. `tools/mupp_probe.py vpp` sets VPP for the hardware test (see [docs/cmsis-dap.md](docs/cmsis-dap.md#vpp-control)).
 [docs/boards.md](docs/boards.md#openmupp-v1-probe-board) lists the pins of OpenMUPP v1 and the rules for its power functions.
 
 ## Get the source code
@@ -86,7 +87,7 @@ The submodules are:
 - `libArT`: core library (streams, logging, USB device stack).
 - `ch32v00x-system`: start-up code, device headers and peripheral drivers of the WCH CH32V00x, CH32V20x and CH32V30x. Only the CH32 boards (`openmuppv1`, `ydch32v307`) use it. Its `main` branch has the CH32V30x support. The primary repository is https://github.com/armint/ch32v00x-system.
 - `ch32v00x-art`: the libArT adapters for the CH32V30x (the USB device controller). Only the CH32 boards use it. Its default branch is `dev`, not `main`. The primary repository is https://github.com/armint/ch32v00x-art.
-- `openmupp-bootloader`: the USB DFU bootloader (https://github.com/OpenMUPP/openmupp-bootloader). Its `master` branch has the CMake build.
+- `openmupp-bootloader`: the USB bootloader (https://github.com/OpenMUPP/openmupp-bootloader). It is a DFU device on OpenMUPP v1, and a CDC serial port with the STM32 serial bootloader protocol on the STM32F1 boards. Its `master` branch has the CMake build.
 - `system-stm32`: start-up code, CMSIS and peripheral drivers of the STM32. Only the STM32 boards use it. The primary repository is https://github.com/armint/system-stm32.
 - `libart-stm32`: the libArT adapters for the STM32. Only the STM32 boards use it. The primary repository is https://github.com/armint/libart-stm32.
 
@@ -122,7 +123,7 @@ These presets build OpenMUPP v1:
 All personalities build for OpenMUPP v1.
 For another set of personalities, add `-DMUPP_PERSONALITIES=<list>` (see [CMake options](docs/cmake.md#cmake-options)).
 For example, `-DMUPP_PERSONALITIES=cmsis-dap,wch-link` builds a multi image with the CMSIS-DAP and the WCH-Link personalities.
-`MUPP_DEFAULT_PERSONALITY` selects the personality of a multi image when no personality is stored. The default is `cmsis-dap`.
+`MUPP_DEFAULT_PERSONALITY` selects the personality of a multi image when no personality is stored. When the image has `cmsis-dap`, the default is `cmsis-dap`.
 
 Some sets of personalities do not fit each image.
 The build skips an image that does not fit, shows a warning and makes the other images.
@@ -187,7 +188,10 @@ The default image shows as a USB device with the ID `1209:0001` and the product 
 The debug tools find it as a CMSIS-DAP v2 probe (see [docs/cmsis-dap.md](docs/cmsis-dap.md#use-the-probe)).
 On Linux, the udev rules in `etc/` give access to the probe.
 
-- **AVR:** avrdude, Bloom and AVaRICE find the probe through the HID interface. See [docs/avr.md](docs/avr.md) for the wiring, the avrdude commands and the Bloom setup.
+- **AVR:** avrdude finds the probe through the HID interface.
+  Bloom has no tool class for the ID `1209:0001`, so Bloom and AVaRICE need the medbg build or a patched Bloom.
+  The medbg build gives the probe the USB ID of the Atmel Xplained Mini (`03eb:2145`). Add `-DMUPP_AVR_USB_ID=medbg` to the preset `openmuppv1-cmsis-dap`, and use the image for personal use only.
+  See [docs/avr.md](docs/avr.md) for the wiring, the avrdude commands and the Bloom setup.
 - **Serial port:** the probe has a serial port (`/dev/ttyACM*` on Linux, a COM port on Windows).
   On OpenMUPP v1, the port is bridged to UART7: PA6 (TX) and PA7 (RX), through the level shifters.
   Open it with a terminal program, for example `picocom /dev/ttyACM0`.
@@ -219,13 +223,14 @@ The firmware also builds for these boards. They help to develop and test the cod
 
 | `BOARD` | Hardware | MCU | Use |
 |---|---|---|---|
-| `ydch32v307` | YD-CH32V307VCT6 development board, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board) | CH32V307VCT6 | Development board with the MCU family of OpenMUPP v1. It was used for development before OpenMUPP v1 was available. No level shifters, 3.3 V targets only. |
-| `mini` | Versaloon Mini | STM32F103x8 or STM32F103xB | The first development board. The CMSIS-DAP personality and some of the WCH-Link code were developed on it. Probe with fewer functions. |
+| `ydch32v307` | YD-CH32V307VCT6 development board, see [docs/boards.md](docs/boards.md#yd-ch32v307vct6-development-board) | CH32V307VCT6 | Development board with the MCU family of OpenMUPP v1. The project used it for development before OpenMUPP v1 was available. No level shifters, 3.3 V targets only. |
+| `mini` | Versaloon Mini | STM32F103x8 or STM32F103xB | The first development board. The project developed the CMSIS-DAP personality and some of the WCH-Link code on it. Probe with fewer functions. |
 | `stlinkv21` | ST-Link/V2-1 of the Nucleo-64 boards (MB1136, MB1360), see [docs/boards.md](docs/boards.md#st-linkv2-1) | STM32F103xB | Probe with fewer functions. SWD only (no JTAG pins). |
 | `stlinkv2miniclone` | ST-Link/V2 mini clone (USB stick), see [docs/stlinkv2-mini-clone.md](docs/stlinkv2-mini-clone.md) | STM32F103 compatible | Probe with fewer functions. SWD only (no JTAG pins). |
 
 The AVR personality, SWO and the CMSIS-DAP v1 (HID) interface are only on the CH32V307 boards.
 The presets `ydch32v307`, `ydch32v307-cmsis-dap`, `ydch32v307-dual`, `ydch32v307-all` and `ydch32v307-wch-link` build the YD-CH32V307VCT6 board with the RISC-V GCC.
+The preset `ydch32v307-cmsis-dap-avr-medbg` builds the medbg image for Bloom (see [docs/avr.md](docs/avr.md#bloom)).
 
 The STM32F1 boards (`mini`, `stlinkv21`, `stlinkv2miniclone`) need the Arm GNU Toolchain:
 
@@ -247,12 +252,13 @@ On the STM32F1 boards, the flash is small, so the bootloader and the image sizes
 | `app-8k` | `0x08002000` | 56 KB | Behind the 8 KB `openmupp-bootloader` or the 8 KB Versaloon bootloader. |
 | `app-32k` | `0x08008000` | 96 KB | Mini only: behind the 32 KB Versaloon bootloader of the newer Mini, with 128 KB flash. |
 
-A multi image or an image with the RISC-V bridge has 1 KB (one flash page) less, because the end of the flash holds the stored personality and the bridge mode.
+A multi image or an image with the RISC-V bridge has 1 KB (one flash page) less.
+The end of the flash holds the stored personality and the bridge mode.
 Write `openmupp-with-bootloader.hex` with a debug probe on the SWD pins of the board MCU, for example with OpenOCD.
 On an ST-Link/V2-1 or a mini clone with its original firmware, remove the read protection first (see [Install the bootloader](docs/firmware-update.md#install-the-bootloader)).
 On the STM32F1 boards, `openmupp-bootloader` is not a DFU device.
 It is a USB CDC serial port with the ID `0483:5740`, and it uses the STM32 serial bootloader protocol (ST AN3155).
-Start it with `tools/mupp_probe.py switch bootloader` or with the key of the board.
+Start it with `tools/mupp_probe.py switch bootloader`, or with the key or the key pin of the board (see [Start the bootloader](docs/firmware-update.md#start-the-bootloader)).
 Then write the `app-8k` image with `stm32flash`:
 
 ```sh
@@ -261,7 +267,7 @@ stm32flash -w openmupp-app-8k.bin -v -g 0x08002000 -S 0x08002000 /dev/ttyACM0
 
 A Mini can also keep its Versaloon bootloader.
 To start it, hold the key (PB9) down while you connect the board to USB.
-Then write the image with `stm32flash` (see [docs/firmware-update.md](docs/firmware-update.md#write-the-firmware)).
+Then write the `app-8k` image (8 KB bootloader) or the `app-32k` image (32 KB bootloader) with `stm32flash` (see [docs/firmware-update.md](docs/firmware-update.md#write-the-firmware)).
 On the Mini, the serial port is bridged to PA9 (TX) and PA10 (RX).
 
 See [docs/boards.md](docs/boards.md) for the board definitions and how to add a board.
@@ -273,7 +279,7 @@ Each script is executable, for example `tools/mupp_probe.py show`. On Windows, s
 
 | Script | Function | Needs |
 |---|---|---|
-| `tools/mupp_probe.py` | `show` lists the probes and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. `switch bootloader` starts the bootloader. `bridge off`, `on`, `auto` and `stored` set the mode of the RISC-V bridge of a CMSIS-DAP image. `bridge --store` also stores the mode: the mode after a USB reset and at power-up (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). `power on`, `off` and `status` switch the target supply of a CMSIS-DAP image and show the target voltage (see [docs/cmsis-dap.md](docs/cmsis-dap.md#target-power)). `uart normal`, `single` and `status` set or show the wire mode of the UART on OpenMUPP v1 (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-wire-mode)). `adapter` shows the firmware version, the board revision and the adapter of a CMSIS-DAP image (see [docs/cmsis-dap.md](docs/cmsis-dap.md#board-id-and-adapter-id)). `reset` resets the probe in each personality (see [docs/usb-device.md](docs/usb-device.md#switch-request-on-ep0)). `--id VID:PID` selects a probe by its USB ID. | `pyusb` |
+| `tools/mupp_probe.py` | `show` lists the probes and their personality. `switch <personality>` switches a multi image to `versaloon`, `cmsis-dap` or `wch-link`. `switch bootloader` starts the bootloader. `bridge off`, `on`, `auto` and `stored` set the mode of the RISC-V bridge of a CMSIS-DAP image. `bridge --store` also stores the mode: the mode after a USB reset and at power-up (see [docs/cmsis-dap.md](docs/cmsis-dap.md#bridge-switch)). `power on` switches the target supply of a CMSIS-DAP image on at 3.3 V, `off` switches it off, and `status` shows the target voltage (see [docs/cmsis-dap.md](docs/cmsis-dap.md#target-power)). `vpp on <mV>`, `off` and `status` set or show VPP on OpenMUPP v1, for the hardware test (see [docs/cmsis-dap.md](docs/cmsis-dap.md#vpp-control)). `uart normal`, `single` and `status` set or show the wire mode of the UART on OpenMUPP v1 (see [docs/cmsis-dap.md](docs/cmsis-dap.md#uart-wire-mode)). `adapter` shows the firmware version, the board revision and the adapter of a CMSIS-DAP image (see [docs/cmsis-dap.md](docs/cmsis-dap.md#board-id-and-adapter-id)). `reset` resets the probe in each personality (see [docs/usb-device.md](docs/usb-device.md#switch-request-on-ep0)). `--id VID:PID` selects a probe by its USB ID. | `pyusb` |
 | `tools/mupp_combine_images.py` | Combines the bootloader and an application image into one flash image from `0x08000000`, for a new board. The build uses it to make `openmupp-with-bootloader.bin`. | none |
 
 [docs/test-tools.md](docs/test-tools.md) describes the hardware tests, the benchmarks and the decoders in `tools/hwtest/` and `tools/analysis/`.
