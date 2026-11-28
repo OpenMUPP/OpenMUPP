@@ -10,7 +10,7 @@ These options select the board, the personality and the debug features:
 
 | Option | Default | Description |
 |---|---|---|
-| `BOARD` | `mini` | Board to build for (see [the README](../README.md#boards)). |
+| `BOARD` | `mini` | Board to build for (see [Board definitions](boards.md#board-definitions)). |
 | `MUPP_BUILD_BOOTLOADER` | `ON` | Build `openmupp-bootloader` for the board. Only for the STM32F1 boards and OpenMUPP v1 (`openmuppv1`, the DFU bootloader with the RISC-V GCC of the build). |
 | `MUPP_PERSONALITIES` | empty (`cmsis-dap`) | USB personalities of the image: one or more of `versaloon`, `cmsis-dap` and `wch-link`. Separate them with `;` or `,`, for example `versaloon,cmsis-dap`. The order does not matter. The `cmsis-dap` personality has the CMSIS-DAP v2 interface, `1209:0001` (see [cmsis-dap.md](cmsis-dap.md)). The `wch-link` personality has the WCH-Link interface, `1209:0001`, and no serial port (see [wch-link.md](wch-link.md)). The other personalities have the serial port and the UART bridge. An image with more than one personality is a multi image: one personality is active after each start (see [usb-device.md](usb-device.md#multi-image)). |
 | `MUPP_DEFAULT_PERSONALITY` | empty | Only for a multi image: the personality when no personality is stored. It must be in `MUPP_PERSONALITIES`. Empty: `cmsis-dap` when the image has it, else the first one in the order `versaloon`, `cmsis-dap`, `wch-link`. |
